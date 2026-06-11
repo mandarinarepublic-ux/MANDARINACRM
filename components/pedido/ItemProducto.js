@@ -6,15 +6,18 @@ const AREAS = [
   'ESTAMPADO','SUBLIMACION','BORDADO',
   'ESTAMPADO + SUBLIMACION','ESTAMPADO + BORDADO',
   'SUBLIMACION + BORDADO','ESTAMPADO + SUBLIMACION + BORDADO',
+  'PRODUCTO SIN DISEÑO',
 ]
 
 export default function ItemProducto({ item, index, onChange, onRemove }) {
   const [expanded, setExpanded] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  const subtotal = (parseFloat(item.precioUnit || 0) * parseInt(item.cantidad || 1)).toFixed(2)
-  const cantidadValida = parseInt(item.cantidad || 0) >= 1
-  const precioValido = parseFloat(item.precioUnit || 0) >= 0
+  const cantidad = parseInt(item.cantidad || 0)
+  const precio = parseFloat(item.precioUnit !== '' && item.precioUnit !== undefined ? item.precioUnit : -1)
+  const subtotal = (Math.max(precio, 0) * Math.max(cantidad, 0)).toFixed(2)
+  const cantidadValida = cantidad >= 1
+  const precioValido = precio >= 0
 
   function handleFoto(key, file) {
     if (!file) return
@@ -34,7 +37,8 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-white truncate">{item.productoNombre}</div>
           <div className="text-xs text-gray-500">{item.talla} · {item.area}</div>
-          <div className="text-xs text-mandarina-400 font-medium">${subtotal}</div>
+          {cantidadValida && precioValido && <div className="text-xs text-mandarina-400 font-medium">${subtotal}</div>}
+          {(!cantidadValida || !precioValido) && <div className="text-xs text-yellow-400">⚠️ Completa cantidad y precio</div>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={() => setExpanded(e => !e)} className="text-gray-500 hover:text-white p-1 text-xs">
@@ -47,8 +51,7 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
               <button onClick={() => setConfirmDelete(false)} className="text-xs bg-gray-700 text-white px-2 py-0.5 rounded-lg">No</button>
             </div>
           ) : (
-            <button onClick={() => setConfirmDelete(true)}
-              className="text-gray-600 hover:text-red-400 p-1 text-sm transition-colors">✕</button>
+            <button onClick={() => setConfirmDelete(true)} className="text-gray-600 hover:text-red-400 p-1 text-sm transition-colors">✕</button>
           )}
         </div>
       </div>
@@ -73,7 +76,7 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
               <label className="label">Cantidad *</label>
               <input type="number" min="1"
                 className={`input text-sm py-2 ${!cantidadValida ? 'border-red-500' : ''}`}
-                placeholder="1" value={item.cantidad || ''}
+                placeholder="1" value={item.cantidad !== undefined ? item.cantidad : ''}
                 onChange={e => onChange({...item, cantidad: e.target.value})} />
               {!cantidadValida && <p className="text-red-400 text-xs mt-0.5">Mín. 1</p>}
             </div>
@@ -81,8 +84,9 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
               <label className="label">Precio $ *</label>
               <input type="number" min="0" step="0.5"
                 className={`input text-sm py-2 ${!precioValido ? 'border-red-500' : ''}`}
-                placeholder="0.00" value={item.precioUnit || ''}
+                placeholder="0.00" value={item.precioUnit !== undefined ? item.precioUnit : ''}
                 onChange={e => onChange({...item, precioUnit: e.target.value})} />
+              {!precioValido && <p className="text-red-400 text-xs mt-0.5">Ingresa precio</p>}
             </div>
             <div className="col-span-2">
               <label className="label">Área</label>
@@ -99,35 +103,36 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
             </div>
           </div>
 
-          {/* Fotos editables */}
-          <div>
-            <label className="label">Fotos del diseño</label>
-            <div className="grid grid-cols-2 gap-2">
-              {[['fotoPecho','Pecho'],['fotoEspalda','Espalda'],['fotoMangaD','Manga derecha'],['fotoMangaI','Manga izquierda']].map(([key, label]) => (
-                <div key={key}>
-                  <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all
-                    ${item[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}`}>
-                    <input type="file" accept="image/*" className="hidden"
-                      onChange={e => handleFoto(key, e.target.files[0])} />
-                    {item[key]
-                      ? <img src={item[key]} className="w-full h-full object-cover" />
-                      : <span className="text-xs text-gray-500 text-center px-2">{label}</span>}
-                  </label>
-                  {item[key] && (
-                    <button onClick={() => onChange({...item, [key]: null})}
-                      className="text-xs text-red-400 mt-0.5 w-full text-center">✕ quitar</button>
-                  )}
-                </div>
-              ))}
+          {item.area !== 'PRODUCTO SIN DISEÑO' && (
+            <div>
+              <label className="label">Fotos del diseño</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[['fotoPecho','Pecho'],['fotoEspalda','Espalda'],['fotoMangaD','Manga derecha'],['fotoMangaI','Manga izquierda']].map(([key, label]) => (
+                  <div key={key}>
+                    <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all
+                      ${item[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}`}>
+                      <input type="file" accept="image/*" className="hidden"
+                        onChange={e => handleFoto(key, e.target.files[0])} />
+                      {item[key]
+                        ? <img src={item[key]} className="w-full h-full object-cover" />
+                        : <span className="text-xs text-gray-500 text-center px-2">{label}</span>}
+                    </label>
+                    {item[key] && (
+                      <button onClick={() => onChange({...item, [key]: null})}
+                        className="text-xs text-red-400 mt-0.5 w-full text-center">✕ quitar</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <label className="mt-2 flex items-center gap-2 border border-dashed border-gray-700 rounded-xl p-3 cursor-pointer hover:border-gray-500">
+                <input type="file" accept=".ai,.psd,.pdf,.jpg,.png" className="hidden"
+                  onChange={e => handleFoto('archivoDiseno', e.target.files[0])} />
+                <span className="text-gray-500 text-sm">
+                  {item.archivoDiseno ? '✓ Archivo — click para cambiar' : '📎 Subir archivo AI/PSD/PDF'}
+                </span>
+              </label>
             </div>
-            <label className="mt-2 flex items-center gap-2 border border-dashed border-gray-700 rounded-xl p-3 cursor-pointer hover:border-gray-500 transition-all">
-              <input type="file" accept=".ai,.psd,.pdf,.jpg,.png" className="hidden"
-                onChange={e => handleFoto('archivoDiseno', e.target.files[0])} />
-              <span className="text-gray-500 text-sm">
-                {item.archivoDiseno ? '✓ Archivo — click para cambiar' : '📎 Subir archivo AI/PSD/PDF'}
-              </span>
-            </label>
-          </div>
+          )}
         </div>
       )}
     </div>

@@ -3,13 +3,17 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+const ESTADO_LABELS = {
+  'PENDIENTE_FABRICA': 'PENDIENTE ENVIAR A FÁBRICA',
+  'EN_FABRICA': 'EN PRODUCCIÓN',
+}
+
 export default function ProduccionPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [filtroArea, setFiltroArea] = useState('TODAS')
-  const [filtroSubestado, setFiltroSubestado] = useState('SOLICITADO')
   const [busqueda, setBusqueda] = useState('')
 
   useEffect(() => {
@@ -26,14 +30,19 @@ export default function ProduccionPage() {
     try {
       const res = await fetch('/api/pedidos?rol=ADMIN')
       const data = await res.json()
+      // Only show items that are NOT listo — para evitar confusión
       const allItems = (data.pedidos || [])
         .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA' || p.ESTADO_PEDIDO === 'PENDIENTE_FABRICA')
-        .flatMap(p => (p.items || []).map(item => ({
-          ...item,
-          pedidoId: p.PEDIDO_ID,
-          tiendaId: p.TIENDA_ID,
-          fechaEntrega: p.FECHA_ENTREGA_PROMETIDA,
-        })))
+        .flatMap(p => (p.items || [])
+          .filter(item => item.SUBESTADO !== 'LISTO') // Only pending/in-process
+          .map(item => ({
+            ...item,
+            pedidoId: p.PEDIDO_ID,
+            tiendaId: p.TIENDA_ID,
+            estadoPedido: p.ESTADO_PEDIDO,
+            fechaEntrega: p.FECHA_ENTREGA_PROMETIDA,
+          }))
+        )
       setItems(allItems)
     } finally { setLoading(false) }
   }
@@ -51,7 +60,6 @@ export default function ProduccionPage() {
 
   const filtered = items.filter(i => {
     if (filtroArea !== 'TODAS' && !i.AREA?.includes(filtroArea)) return false
-    if (filtroSubestado !== 'TODOS' && i.SUBESTADO !== filtroSubestado) return false
     if (busqueda) {
       const q = busqueda.toLowerCase()
       if (!i.pedidoId?.toLowerCase().includes(q) && !i.PRODUCTO_NOMBRE?.toLowerCase().includes(q)) return false
@@ -66,16 +74,21 @@ export default function ProduccionPage() {
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
-      {/* Sticky header */}
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-display font-bold text-white">Producción</h1>
-            <span className="text-gray-500 text-sm">{filtered.length} ítems</span>
+            <div>
+              <h1 className="text-xl font-display font-bold text-white">Producción</h1>
+              <p className="text-xs text-gray-500">{filtered.length} ítem(s) pendientes</p>
+            </div>
+            <Link href="/dashboard/impresion"
+              className="btn-secondary text-sm px-3 py-2 flex items-center gap-2">
+              🖨️ Imprimir pedidos
+            </Link>
           </div>
           <input className="input mb-3" placeholder="Buscar por pedido o producto..."
             value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          <div className="flex gap-2 overflow-x-auto pb-1 mb-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {areas.map(a => (
               <button key={a} onClick={() => setFiltroArea(a)}
                 className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0
@@ -84,24 +97,14 @@ export default function ProduccionPage() {
               </button>
             ))}
           </div>
-          <div className="flex gap-2">
-            {['TODOS','SOLICITADO','EN_PROCESO','LISTO'].map(s => (
-              <button key={s} onClick={() => setFiltroSubestado(s)}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all flex-shrink-0
-                  ${filtroSubestado === s ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
-                {s === 'TODOS' ? 'Todos' : s === 'SOLICITADO' ? '⏳ Solicitado' : s === 'EN_PROCESO' ? '🔧 En proceso' : '✅ Listo'}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           {urgentes.length > 0 && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4">
-              <div className="text-red-400 font-semibold text-sm">🚨 {urgentes.length} urgente(s) — entrega en 2 días o menos</div>
+              <div className="text-red-400 font-semibold text-sm">🚨 {urgentes.length} ítem(s) urgente(s) — entrega en 2 días o menos</div>
             </div>
           )}
 
@@ -110,7 +113,11 @@ export default function ProduccionPage() {
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : filtered.length === 0 ? (
-            <div className="card p-8 text-center text-gray-600"><div className="text-3xl mb-3">🏭</div>No hay ítems con estos filtros</div>
+            <div className="card p-8 text-center text-gray-600">
+              <div className="text-3xl mb-3">✅</div>
+              <div className="font-medium text-gray-400">No hay ítems pendientes</div>
+              <div className="text-sm text-gray-600 mt-1">Todos los productos están listos o no hay pedidos en producción</div>
+            </div>
           ) : (
             <div className="space-y-3">
               {filtered.map(item => {
@@ -121,15 +128,17 @@ export default function ProduccionPage() {
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <Link href={`/dashboard/pedido/${item.pedidoId}`} className="font-mono text-xs text-mandarina-400 hover:underline">{item.pedidoId}</Link>
+                          <Link href={`/dashboard/pedido/${item.pedidoId}`}
+                            className="font-mono text-xs text-mandarina-400 hover:underline">{item.pedidoId}</Link>
                           {urgente && <span className="badge bg-red-500/20 text-red-400 text-xs">🚨 Urgente</span>}
+                          <span className="text-xs text-gray-600">{ESTADO_LABELS[item.estadoPedido] || item.estadoPedido}</span>
                         </div>
                         <div className="font-medium text-white text-sm">{item.PRODUCTO_NOMBRE}</div>
                         <div className="text-xs text-gray-500">{item.COLOR} · {item.TALLA} · {item.CANTIDAD} uni · <span className="text-mandarina-400">{item.AREA}</span></div>
                       </div>
                       {diasR !== null && (
-                        <div className={`text-right text-xs ${urgente ? 'text-red-400' : 'text-gray-500'}`}>
-                          <div className="font-bold">{diasR}d</div>
+                        <div className={`text-right text-xs flex-shrink-0 ${urgente ? 'text-red-400' : 'text-gray-500'}`}>
+                          <div className="font-bold text-lg">{diasR}d</div>
                           <div>restantes</div>
                         </div>
                       )}
@@ -150,15 +159,19 @@ export default function ProduccionPage() {
                       </div>
                     )}
                     <div className="flex gap-2">
-                      {['SOLICITADO','EN_PROCESO','LISTO'].map(s => (
+                      {['SOLICITADO','EN_PROCESO'].map(s => (
                         <button key={s} onClick={() => updateSubestado(item.ITEM_ID, s)}
                           className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all
                             ${item.SUBESTADO === s
-                              ? s === 'LISTO' ? 'bg-green-500 text-white' : s === 'EN_PROCESO' ? 'bg-blue-500 text-white' : 'bg-yellow-500 text-white'
+                              ? s === 'EN_PROCESO' ? 'bg-blue-500 text-white' : 'bg-yellow-500 text-white'
                               : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
-                          {s === 'SOLICITADO' ? '⏳' : s === 'EN_PROCESO' ? '🔧' : '✅'} {s.replace('_',' ')}
+                          {s === 'SOLICITADO' ? '⏳ Solicitado' : '🔧 En proceso'}
                         </button>
                       ))}
+                      <button onClick={() => updateSubestado(item.ITEM_ID, 'LISTO')}
+                        className="flex-1 py-2 rounded-xl text-xs font-semibold bg-gray-800 text-gray-500 hover:bg-green-500 hover:text-white transition-all">
+                        ✅ Marcar listo
+                      </button>
                     </div>
                   </div>
                 )
