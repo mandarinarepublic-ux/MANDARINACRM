@@ -2,5 +2,16 @@
   "framework": "nextjs",
   "buildCommand": "next build",
   "outputDirectory": ".next",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "env": {
+    "GOOGLE_SERVICE_ACCOUNT_EMAIL": "@google-service-account-email",
+    "GOOGLE_PRIVATE_KEY": "@google-private-key",
+    "SHEET_ID": "@sheet-id",
+    "NEXT_PUBLIC_GOOGLE_MAPS_KEY": "@google-maps-key",
+    "SHOPIFY_MANDARINA_STORE": "@shopify-mandarina-store",
+    "SHOPIFY_MANDARINA_TOKEN": "@shopify-mandarina-token",
+    "SHOPIFY_INDSTORE_STORE": "@shopify-indstore-store",
+    "SHOPIFY_INDSTORE_TOKEN": "@shopify-indstore-token",
+    "DRIVE_ROOT_FOLDER_ID": "@drive-root-folder-id"
+  }
 }

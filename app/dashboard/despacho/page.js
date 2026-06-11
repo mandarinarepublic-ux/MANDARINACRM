@@ -1,0 +1,158 @@
+'use client'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+
+export default function DespachosPage() {
+  const router = useRouter()
+  const [user, setUser] = useState(null)
+  const [pedidos, setPedidos] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selectedPedido, setSelectedPedido] = useState(null)
+  const [guia, setGuia] = useState({ numero: '', transportista: 'SERVIENTREGA', foto: null })
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('mp_user')
+    if (!stored) { router.push('/'); return }
+    setUser(JSON.parse(stored))
+    loadPedidos()
+  }, [])
+
+  async function loadPedidos() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/pedidos?rol=ADMIN')
+      const data = await res.json()
+      const listos = (data.pedidos || []).filter(p =>
+        p.ESTADO_PEDIDO === 'DESPACHO' ||
+        (p.items || []).every(i => i.SUBESTADO === 'LISTO')
+      )
+      setPedidos(listos)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleFotoGuia(file) {
+    const reader = new FileReader()
+    reader.onload = e => setGuia(g => ({...g, foto: e.target.result}))
+    reader.readAsDataURL(file)
+  }
+
+  async function registrarDespacho(pedidoId) {
+    setSaving(true)
+    try {
+      // Upload guia photo to Drive via API
+      const res = await fetch('/api/pedidos/' + pedidoId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ESTADO_PEDIDO: 'DESPACHO',
+          guia: guia,
+        }),
+      })
+      setSelectedPedido(null)
+      setGuia({ numero: '', transportista: 'SERVIENTREGA', foto: null })
+      loadPedidos()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="p-4 max-w-3xl mx-auto">
+      <div className="mb-6 pt-2">
+        <h1 className="text-xl font-display font-bold text-white">Despachos</h1>
+        <p className="text-gray-500 text-sm">{pedidos.length} pedido(s) listos para despachar</p>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : pedidos.length === 0 ? (
+        <div className="card p-8 text-center text-gray-600">
+          <div className="text-3xl mb-3">🚚</div>
+          No hay pedidos listos para despachar
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {pedidos.map(p => (
+            <div key={p.PEDIDO_ID} className="card p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</div>
+                  <div className="text-xs text-gray-500">
+                    {p.items?.length || 0} prendas ·{' '}
+                    {p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'} {p.TIENDA_ID}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {p.ESTADO_PEDIDO === 'DESPACHO' ? (
+                    <span className="badge status-despacho">Despachado</span>
+                  ) : (
+                    <button onClick={() => setSelectedPedido(p.PEDIDO_ID === selectedPedido ? null : p.PEDIDO_ID)}
+                      className="btn-primary text-xs py-1.5 px-3">
+                      Registrar guía
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Items listos */}
+              <div className="flex flex-wrap gap-1 mb-2">
+                {(p.items || []).map(item => (
+                  <span key={item.ITEM_ID}
+                    className={`text-xs px-2 py-0.5 rounded-full ${item.SUBESTADO === 'LISTO' ? 'bg-green-500/20 text-green-400' : 'bg-gray-800 text-gray-500'}`}>
+                    {item.TALLA} · {item.AREA?.slice(0,3)}
+                  </span>
+                ))}
+              </div>
+
+              {/* Guia form */}
+              {selectedPedido === p.PEDIDO_ID && (
+                <div className="border-t border-gray-800 pt-4 mt-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Número de guía</label>
+                      <input className="input" placeholder="123456789"
+                        value={guia.numero} onChange={e => setGuia(g => ({...g, numero: e.target.value}))} />
+                    </div>
+                    <div>
+                      <label className="label">Transportista</label>
+                      <select className="input" value={guia.transportista}
+                        onChange={e => setGuia(g => ({...g, transportista: e.target.value}))}>
+                        {['SERVIENTREGA','TRAMACO','LAAR','RETIRO_TIENDA'].map(t => <option key={t}>{t}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Foto de la guía *</label>
+                    <label className={`flex items-center gap-3 border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all
+                      ${guia.foto ? 'border-mandarina-500 bg-mandarina-500/10' : 'border-gray-700 hover:border-gray-500'}`}>
+                      <input type="file" accept="image/*" className="hidden" onChange={e => handleFotoGuia(e.target.files[0])} />
+                      {guia.foto ? (
+                        <div className="flex items-center gap-3">
+                          <img src={guia.foto} className="w-12 h-12 rounded-lg object-cover" />
+                          <span className="text-mandarina-400 text-sm">Foto cargada ✓</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500 text-sm">📷 Foto de la guía Servientrega</span>
+                      )}
+                    </label>
+                  </div>
+                  <button onClick={() => registrarDespacho(p.PEDIDO_ID)}
+                    disabled={saving || !guia.numero}
+                    className="btn-primary w-full">
+                    {saving ? '⏳ Guardando...' : '🚚 Confirmar despacho'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

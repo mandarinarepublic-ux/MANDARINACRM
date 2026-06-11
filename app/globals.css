@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --mandarina: #FF6B00;
+    --indstore: #1A1A2E;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: var(--font-inter), system-ui, sans-serif; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-mandarina-500 hover:bg-mandarina-600 text-white font-semibold py-2.5 px-5 rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-gray-800 hover:bg-gray-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-150;
+  }
+  .btn-ghost {
+    @apply text-gray-400 hover:text-white hover:bg-gray-800 font-medium py-2 px-4 rounded-lg transition-all duration-150;
+  }
+  .input {
+    @apply w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-500 rounded-xl px-4 py-3 focus:outline-none focus:border-mandarina-500 focus:ring-1 focus:ring-mandarina-500 transition-colors;
+  }
+  .card {
+    @apply bg-gray-900 border border-gray-800 rounded-2xl;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .label {
+    @apply block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wide;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #111827; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+
+/* Status colors */
+.status-pendiente_fabrica { @apply bg-yellow-500/20 text-yellow-400; }
+.status-en_fabrica { @apply bg-blue-500/20 text-blue-400; }
+.status-despacho { @apply bg-purple-500/20 text-purple-400; }
+.status-entregado { @apply bg-green-500/20 text-green-400; }
+.status-cancelado { @apply bg-red-500/20 text-red-400; }
+.status-pagado { @apply bg-green-500/20 text-green-400; }
+.status-abono { @apply bg-yellow-500/20 text-yellow-400; }
+.status-pendiente { @apply bg-red-500/20 text-red-400; }
