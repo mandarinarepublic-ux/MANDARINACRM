@@ -1,22 +1,38 @@
 'use client'
 import { useState } from 'react'
 
+const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL','ÚNICA']
+const AREAS = [
+  'ESTAMPADO','SUBLIMACION','BORDADO',
+  'ESTAMPADO + SUBLIMACION','ESTAMPADO + BORDADO',
+  'SUBLIMACION + BORDADO','ESTAMPADO + SUBLIMACION + BORDADO',
+]
+
 export default function ItemProducto({ item, index, onChange, onRemove }) {
   const [expanded, setExpanded] = useState(true)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const subtotal = (parseFloat(item.precioUnit || 0) * parseInt(item.cantidad || 1)).toFixed(2)
 
+  function handleFoto(key, file) {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = e => onChange({ ...item, [key]: e.target.result })
+    reader.readAsDataURL(file)
+  }
+
+  function handleRemoveFoto(key) {
+    onChange({ ...item, [key]: null })
+  }
+
   return (
     <div className="card overflow-hidden">
-      {/* Header */}
       <div className="flex items-center gap-3 p-4">
-        {item.imagen ? (
-          <img src={item.imagen} className="w-10 h-10 rounded-lg object-cover" />
-        ) : (
-          <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-lg">
-            {item.esPersonalizado ? '✏️' : '👕'}
-          </div>
-        )}
+        {item.imagen
+          ? <img src={item.imagen} className="w-10 h-10 rounded-lg object-cover" />
+          : <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-lg">
+              {item.esPersonalizado ? '✏️' : '👕'}
+            </div>}
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-white truncate">{item.productoNombre}</div>
           <div className="text-xs text-gray-500">{item.talla} · {item.area} · ${subtotal}</div>
@@ -25,11 +41,18 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
           <button onClick={() => setExpanded(e => !e)} className="text-gray-500 hover:text-white p-1 text-xs">
             {expanded ? '▲' : '▼'}
           </button>
-          <button onClick={onRemove} className="text-gray-600 hover:text-red-400 p-1 text-sm transition-colors">✕</button>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-red-400">¿Eliminar?</span>
+              <button onClick={onRemove} className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-lg">Sí</button>
+              <button onClick={() => setConfirmDelete(false)} className="text-xs bg-gray-700 text-white px-2 py-0.5 rounded-lg">No</button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} className="text-gray-600 hover:text-red-400 p-1 text-sm transition-colors">✕</button>
+          )}
         </div>
       </div>
 
-      {/* Expandable details */}
       {expanded && (
         <div className="px-4 pb-4 pt-0 space-y-3 border-t border-gray-800">
           <div className="grid grid-cols-3 gap-2 mt-3">
@@ -42,7 +65,8 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
               <label className="label">Talla</label>
               <select className="input text-sm py-2" value={item.talla}
                 onChange={e => onChange({...item, talla: e.target.value})}>
-                {['XS','S','M','L','XL','XXL','ÚNICA'].map(t => <option key={t}>{t}</option>)}
+                <option value="">-</option>
+                {TALLAS.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div>
@@ -59,35 +83,44 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
               <label className="label">Área</label>
               <select className="input text-sm py-2" value={item.area}
                 onChange={e => onChange({...item, area: e.target.value})}>
-                {['ESTAMPADO','SUBLIMACION','BORDADO'].map(a => <option key={a}>{a}</option>)}
+                {AREAS.map(a => <option key={a}>{a}</option>)}
               </select>
             </div>
-          </div>
-
-          {item.detalle && (
-            <div>
+            <div className="col-span-3">
               <label className="label">Detalle</label>
               <textarea className="input resize-none text-sm" rows={2} value={item.detalle}
                 onChange={e => onChange({...item, detalle: e.target.value})} />
             </div>
-          )}
+          </div>
 
-          {/* Fotos uploaded */}
-          {(item.fotoPecho || item.fotoEspalda || item.fotoMangaD || item.fotoMangaI) && (
-            <div>
-              <label className="label">Fotos cargadas</label>
-              <div className="flex gap-2">
-                {[['fotoPecho','P'],['fotoEspalda','E'],['fotoMangaD','MD'],['fotoMangaI','MI']].map(([key,label]) =>
-                  item[key] ? (
-                    <div key={key} className="relative">
-                      <img src={item[key]} className="w-14 h-14 rounded-lg object-cover border border-gray-700" />
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-center text-xs py-0.5 rounded-b-lg">{label}</div>
-                    </div>
-                  ) : null
-                )}
-              </div>
+          {/* Fotos editables */}
+          <div>
+            <label className="label">Fotos del diseño</label>
+            <div className="grid grid-cols-4 gap-2">
+              {[['fotoPecho','Pecho'],['fotoEspalda','Espalda'],['fotoMangaD','M.Der'],['fotoMangaI','M.Izq']].map(([key, label]) => (
+                <div key={key} className="flex flex-col items-center gap-1">
+                  <label className={`relative w-full h-16 rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all
+                    ${item[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}`}>
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={e => handleFoto(key, e.target.files[0])} />
+                    {item[key]
+                      ? <img src={item[key]} className="w-full h-full object-cover" />
+                      : <div className="flex items-center justify-center h-full text-xs text-gray-500">{label}</div>}
+                  </label>
+                  {item[key] && (
+                    <button onClick={() => handleRemoveFoto(key)} className="text-xs text-red-400 hover:text-red-300">✕</button>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
+            <label className="mt-2 flex items-center gap-2 border border-dashed border-gray-700 rounded-xl p-3 cursor-pointer hover:border-gray-500 transition-all">
+              <input type="file" accept=".ai,.psd,.pdf,.jpg,.png" className="hidden"
+                onChange={e => handleFoto('archivoDiseno', e.target.files[0])} />
+              <span className="text-gray-500 text-sm">
+                {item.archivoDiseno ? '✓ Archivo — click para cambiar' : '📎 Subir archivo AI/PSD/PDF'}
+              </span>
+            </label>
+          </div>
         </div>
       )}
     </div>
