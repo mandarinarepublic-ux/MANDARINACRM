@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import MapaPicker from '@/components/maps/MapaPicker'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
@@ -8,15 +8,40 @@ import BuscadorCliente from '@/components/pedido/BuscadorCliente'
 import SeccionPago from '@/components/pedido/SeccionPago'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE']
-const TALLAS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'ÚNICA']
+
+function validarCedulaRUC(valor) {
+  if (!valor) return 'Campo requerido'
+  const v = valor.trim()
+  if (!/^\d+$/.test(v)) return 'Solo números'
+  if (v.length === 10) {
+    const prov = parseInt(v.substring(0, 2))
+    if (prov < 1 || prov > 24) return 'Provincia inválida'
+    const d = v.split('').map(Number)
+    let suma = 0
+    for (let i = 0; i < 9; i++) {
+      let val = d[i] * (i % 2 === 0 ? 2 : 1)
+      if (val > 9) val -= 9
+      suma += val
+    }
+    const verificador = suma % 10 === 0 ? 0 : 10 - (suma % 10)
+    if (verificador !== d[9]) return 'Cédula inválida'
+    return null
+  }
+  if (v.length === 13) {
+    if (v.substring(10) !== '001') return 'RUC inválido (debe terminar en 001)'
+    return null
+  }
+  return 'Debe tener 10 (cédula) o 13 dígitos (RUC)'
+}
 
 export default function NuevoPedidoPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
-
-  // Form state
   const [tienda, setTienda] = useState('MANDARINA')
   const [cliente, setCliente] = useState({ nombre: '', cedula: '', celular: '', email: '', ciudad: 'Quito', direccion: '' })
+  const [cedulaError, setCedulaError] = useState('')
+  const [emitirFactura, setEmitirFactura] = useState(true)
+  const [usarMapa, setUsarMapa] = useState(false)
   const [items, setItems] = useState([])
   const [pago, setPago] = useState({ tipo: 'EFECTIVO', monto: 0, notas: '' })
   const [direccionTexto, setDireccionTexto] = useState('')
@@ -27,7 +52,7 @@ export default function NuevoPedidoPage() {
   const [notasVendedor, setNotasVendedor] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [step, setStep] = useState(1) // 1=cliente, 2=productos, 3=pago+entrega, 4=confirmar
+  const [step, setStep] = useState(1)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -35,18 +60,19 @@ export default function NuevoPedidoPage() {
     setUser(JSON.parse(stored))
   }, [])
 
-  // Recalc delivery days when items change
   useEffect(() => {
     if (items.length === 0) return
-    const areas = items.map(i => i.area).filter(Boolean)
-    if (areas.length === 0) return
-    const unique = [...new Set(areas)].sort()
+    const areas = [...new Set(items.map(i => i.area).filter(Boolean))].sort()
     const combos = {
-      'ESTAMPADO': 3, 'SUBLIMACION': 4, 'BORDADO': 5,
-      'ESTAMPADO,SUBLIMACION': 6, 'BORDADO,ESTAMPADO': 6,
-      'BORDADO,SUBLIMACION': 7, 'BORDADO,ESTAMPADO,SUBLIMACION': 8,
+      'BORDADO': 5,
+      'ESTAMPADO': 3,
+      'SUBLIMACION': 4,
+      'BORDADO,ESTAMPADO': 6,
+      'BORDADO,SUBLIMACION': 7,
+      'ESTAMPADO,SUBLIMACION': 6,
+      'BORDADO,ESTAMPADO,SUBLIMACION': 8,
     }
-    const key = unique.join(',')
+    const key = areas.join(',')
     const dias = combos[key] || 4
     setDiasCalculado(dias)
     if (!diasPrometido) setDiasPrometido(dias)
@@ -55,15 +81,38 @@ export default function NuevoPedidoPage() {
   const montoTotal = items.reduce((s, i) => s + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
   const montoPendiente = montoTotal - parseFloat(pago.monto || 0)
 
+  function handleCedulaChange(val) {
+    setCliente(p => ({...p, cedula: val}))
+    setCedulaError(validarCedulaRUC(val) || '')
+  }
+
+  function buildDireccionTexto() {
+    if (usarMapa) return direccionTexto
+    const parts = []
+    if (cliente.ciudad) parts.push(`${cliente.ciudad}`)
+    if (cliente.direccion) parts.push(cliente.direccion)
+    return parts.join(': ')
+  }
+
+  function canGoToStep(s) {
+    if (s === 1) return true
+    if (s === 2) return cliente.nombre && cliente.cedula && !cedulaError && cliente.celular
+    if (s === 3) return items.length > 0
+    if (s === 4) return items.length > 0
+    return true
+  }
+
   async function handleSubmit() {
-    if (!cliente.nombre || !cliente.cedula || !cliente.celular) {
-      setError('Completa los datos del cliente'); setStep(1); return
+    const errCedula = validarCedulaRUC(cliente.cedula)
+    if (!cliente.nombre || errCedula || !cliente.celular) {
+      setError(errCedula || 'Completa los datos del cliente'); setStep(1); return
     }
     if (items.length === 0) {
       setError('Agrega al menos un producto'); setStep(2); return
     }
     setLoading(true)
     setError('')
+    const dirFinal = buildDireccionTexto()
     try {
       const res = await fetch('/api/pedidos', {
         method: 'POST',
@@ -72,9 +121,13 @@ export default function NuevoPedidoPage() {
           tiendaId: tienda,
           vendedorId: user.id,
           vendedorCodigo: user.codigo,
-          cliente, items, pago,
+          cliente: { ...cliente, direccion: dirFinal },
+          items, pago,
+          emitirFactura,
           diasEntregaPrometido: diasPrometido,
-          notasVendedor, direccionTexto, latitud, longitud,
+          notasVendedor,
+          direccionTexto: dirFinal,
+          latitud, longitud,
         }),
       })
       const data = await res.json()
@@ -94,7 +147,6 @@ export default function NuevoPedidoPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 pb-32">
-      {/* Header */}
       <div className="flex items-center gap-3 mb-6 pt-2">
         <button onClick={() => router.back()} className="text-gray-500 hover:text-white p-1">←</button>
         <h1 className="text-xl font-display font-bold text-white">Nueva Venta</h1>
@@ -103,27 +155,27 @@ export default function NuevoPedidoPage() {
       {/* Tienda selector */}
       <div className="flex gap-2 mb-6">
         {TIENDAS.map(t => (
-          <button key={t}
-            onClick={() => setTienda(t)}
+          <button key={t} onClick={() => setTienda(t)}
             className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all border
-              ${tienda === t
-                ? 'text-white border-transparent'
-                : 'bg-transparent text-gray-500 border-gray-700 hover:border-gray-500'}`}
+              ${tienda === t ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700 hover:border-gray-500'}`}
             style={tienda === t ? { backgroundColor: tiendaColor, borderColor: tiendaColor } : {}}>
             {t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}
           </button>
         ))}
       </div>
 
-      {/* Step indicator */}
+      {/* Step indicator - clickable */}
       <div className="flex items-center gap-2 mb-8">
         {steps.map((s, i) => (
           <div key={s} className="flex items-center gap-2 flex-1">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all
-              ${step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'text-white' : 'bg-gray-800 text-gray-500'}`}
+            <button
+              onClick={() => canGoToStep(i + 1) && setStep(i + 1)}
+              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all
+                ${step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'text-white' : 'bg-gray-800 text-gray-500'}
+                ${canGoToStep(i + 1) ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed opacity-50'}`}
               style={step === i + 1 ? { backgroundColor: tiendaColor } : {}}>
               {step > i + 1 ? '✓' : i + 1}
-            </div>
+            </button>
             <span className={`text-xs hidden sm:block ${step === i + 1 ? 'text-white' : 'text-gray-600'}`}>{s}</span>
             {i < steps.length - 1 && <div className={`flex-1 h-px ${step > i + 1 ? 'bg-green-500' : 'bg-gray-800'}`} />}
           </div>
@@ -140,7 +192,7 @@ export default function NuevoPedidoPage() {
       {step === 1 && (
         <div className="space-y-4">
           <h2 className="font-semibold text-white mb-4">Datos del cliente</h2>
-          <BuscadorCliente onSelect={c => setCliente(c)} />
+          <BuscadorCliente onSelect={c => { setCliente(c); setCedulaError('') }} />
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="label">Nombre completo *</label>
@@ -149,8 +201,10 @@ export default function NuevoPedidoPage() {
             </div>
             <div>
               <label className="label">Cédula / RUC *</label>
-              <input className="input" placeholder="1712345678" value={cliente.cedula}
-                onChange={e => setCliente(p => ({...p, cedula: e.target.value}))} />
+              <input className={`input ${cedulaError ? 'border-red-500' : ''}`}
+                placeholder="1712345678" value={cliente.cedula}
+                onChange={e => handleCedulaChange(e.target.value)} />
+              {cedulaError && <p className="text-red-400 text-xs mt-1">{cedulaError}</p>}
             </div>
             <div>
               <label className="label">Celular *</label>
@@ -164,18 +218,54 @@ export default function NuevoPedidoPage() {
             </div>
           </div>
 
-          {/* Mapa dirección */}
+          {/* Emitir factura */}
+          <label className="flex items-center gap-3 card p-4 cursor-pointer hover:border-gray-600 transition-all">
+            <input type="checkbox" checked={emitirFactura} onChange={e => setEmitirFactura(e.target.checked)}
+              className="w-5 h-5 accent-orange-500" />
+            <div>
+              <div className="text-white text-sm font-medium">Emitir factura electrónica</div>
+              <div className="text-gray-500 text-xs">Se enviará al SRI via Dátil</div>
+            </div>
+          </label>
+
+          {/* Dirección */}
           <div>
-            <label className="label">Dirección de entrega</label>
-            <MapaPicker
-              onSelect={(addr, lat, lng) => {
-                setDireccionTexto(addr)
-                setLatitud(lat)
-                setLongitud(lng)
-                setCliente(p => ({...p, direccion: addr}))
-              }}
-              initialAddress={direccionTexto}
-            />
+            <div className="flex items-center justify-between mb-2">
+              <label className="label mb-0">Dirección de entrega</label>
+              <button onClick={() => setUsarMapa(!usarMapa)}
+                className={`text-xs px-3 py-1 rounded-full border transition-all ${usarMapa ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-500'}`}>
+                {usarMapa ? '📍 Mapa activo' : '📍 Usar mapa'}
+              </button>
+            </div>
+
+            {!usarMapa ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Ciudad</label>
+                  <input className="input" placeholder="Quito" value={cliente.ciudad}
+                    onChange={e => setCliente(p => ({...p, ciudad: e.target.value}))} />
+                </div>
+                <div className="col-span-2">
+                  <label className="label">Calle principal y secundaria</label>
+                  <input className="input" placeholder="Av. República E7-65 y Diego de Almagro" value={cliente.direccion}
+                    onChange={e => setCliente(p => ({...p, direccion: e.target.value}))} />
+                </div>
+                {(cliente.ciudad || cliente.direccion) && (
+                  <div className="col-span-2 bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
+                    📋 PDF: <span className="text-white">{buildDireccionTexto()}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <MapaPicker
+                onSelect={(addr, lat, lng) => {
+                  setDireccionTexto(addr)
+                  setLatitud(lat)
+                  setLongitud(lng)
+                }}
+                initialAddress={direccionTexto}
+              />
+            )}
           </div>
         </div>
       )}
@@ -185,7 +275,6 @@ export default function NuevoPedidoPage() {
         <div className="space-y-4">
           <h2 className="font-semibold text-white mb-4">Productos del pedido</h2>
           <BuscadorProductos tienda={tienda} onAdd={item => setItems(p => [...p, item])} />
-
           {items.length > 0 && (
             <div className="space-y-3 mt-4">
               {items.map((item, idx) => (
@@ -206,7 +295,6 @@ export default function NuevoPedidoPage() {
       {/* STEP 3: Entrega y Pago */}
       {step === 3 && (
         <div className="space-y-6">
-          {/* Días entrega */}
           <div className="card p-5">
             <h3 className="font-semibold text-white mb-4">📅 Fecha de entrega</h3>
             <div className="flex items-center gap-3 mb-3">
@@ -230,18 +318,10 @@ export default function NuevoPedidoPage() {
               </span>
             </div>
           </div>
-
-          {/* Pago */}
-          <SeccionPago
-            pago={pago}
-            onChange={setPago}
-            montoTotal={montoTotal}
-          />
-
-          {/* Notas */}
+          <SeccionPago pago={pago} onChange={setPago} montoTotal={montoTotal} />
           <div>
             <label className="label">Notas internas (opcional)</label>
-            <textarea className="input resize-none" rows={3} placeholder="Instrucciones especiales, urgencias..."
+            <textarea className="input resize-none" rows={3} placeholder="Instrucciones especiales..."
               value={notasVendedor} onChange={e => setNotasVendedor(e.target.value)} />
           </div>
         </div>
@@ -251,62 +331,38 @@ export default function NuevoPedidoPage() {
       {step === 4 && (
         <div className="space-y-4">
           <h2 className="font-semibold text-white mb-4">Confirmar pedido</h2>
-
           <div className="card p-5 space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Tienda</span>
-              <span className="text-white font-medium">{tienda}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Cliente</span>
-              <span className="text-white font-medium">{cliente.nombre}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Celular</span>
-              <span className="text-white">{cliente.celular}</span>
-            </div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Tienda</span><span className="text-white font-medium">{tienda}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Cliente</span><span className="text-white font-medium">{cliente.nombre}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Cédula/RUC</span><span className="text-white">{cliente.cedula}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Celular</span><span className="text-white">{cliente.celular}</span></div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Dirección</span>
-              <span className="text-white text-right max-w-xs">{direccionTexto || cliente.direccion || '-'}</span>
+              <span className="text-white text-right max-w-xs text-xs">{buildDireccionTexto() || '-'}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Factura</span>
+              <span className={emitirFactura ? 'text-green-400' : 'text-gray-500'}>{emitirFactura ? '✅ Sí' : '❌ No'}</span>
             </div>
             <hr className="border-gray-800" />
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Productos</span>
-              <span className="text-white">{items.length} ítems</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Total</span>
-              <span className="text-white font-bold text-lg">${montoTotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Abono</span>
-              <span className="text-green-400">${parseFloat(pago.monto||0).toFixed(2)}</span>
-            </div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Productos</span><span className="text-white">{items.length} ítems</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Total</span><span className="text-white font-bold text-lg">${montoTotal.toFixed(2)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Abono</span><span className="text-green-400">${parseFloat(pago.monto||0).toFixed(2)}</span></div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Pendiente</span>
-              <span className={montoPendiente > 0 ? 'text-yellow-400' : 'text-green-400'}>
-                ${montoPendiente.toFixed(2)}
-              </span>
+              <span className={montoPendiente > 0 ? 'text-yellow-400' : 'text-green-400'}>${montoPendiente.toFixed(2)}</span>
             </div>
             <hr className="border-gray-800" />
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Entrega en</span>
-              <span className="text-white">{diasPrometido || diasCalculado} días</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Tipo de pago</span>
-              <span className="text-white">{pago.tipo}</span>
-            </div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Entrega en</span><span className="text-white">{diasPrometido || diasCalculado} días</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Tipo de pago</span><span className="text-white">{pago.tipo}</span></div>
           </div>
         </div>
       )}
 
-      {/* Navigation buttons - fixed bottom */}
+      {/* Navigation buttons */}
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-3">
         {step > 1 && (
-          <button onClick={() => setStep(s => s - 1)} className="btn-secondary flex-1">
-            ← Atrás
-          </button>
+          <button onClick={() => setStep(s => s - 1)} className="btn-secondary flex-1">← Atrás</button>
         )}
         {step < 4 ? (
           <button onClick={() => setStep(s => s + 1)} className="btn-primary flex-1"
