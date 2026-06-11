@@ -13,6 +13,9 @@ export async function POST(req) {
     return Response.json({ user })
   } catch (e) {
     console.error('Login error:', e)
-    return Response.json({ error: 'Error del servidor' }, { status: 500 })
+    return Response.json({ 
+      error: e.message || 'Error del servidor',
+      details: e.toString()
+    }, { status: 500 })
   }
 }
