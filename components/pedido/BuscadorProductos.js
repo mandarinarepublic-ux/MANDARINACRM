@@ -1,10 +1,10 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 
-const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL','ÚNICA']
+const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const AREAS = [
   'ESTAMPADO',
-  'SUBLIMACION', 
+  'SUBLIMACION',
   'BORDADO',
   'ESTAMPADO + SUBLIMACION',
   'ESTAMPADO + BORDADO',
@@ -35,46 +35,6 @@ export default function BuscadorProductos({ tienda, onAdd }) {
     } finally {
       setLoading(false)
     }
-  }
-
-  function addProduct(producto, variant, talla, area, detalle, cantidad, color, fotos) {
-    onAdd({
-      productoNombre: producto.title,
-      shopifyVariantId: variant?.id || '',
-      color: color || '',
-      talla: talla || '',
-      cantidad: cantidad || 1,
-      precioUnit: parseFloat(variant?.price || 0),
-      area: area || 'ESTAMPADO',
-      detalle: detalle || '',
-      esPersonalizado: false,
-      imagen: producto.image,
-      ...fotos,
-    })
-    setSelected(null)
-    setQuery('')
-    setProductos([])
-  }
-
-  function addPersonalizado(data) {
-    onAdd({
-      productoNombre: data.nombre,
-      shopifyVariantId: '',
-      color: data.color,
-      talla: data.talla,
-      cantidad: data.cantidad,
-      precioUnit: parseFloat(data.precio),
-      area: data.area,
-      detalle: data.detalle,
-      esPersonalizado: true,
-      imagen: null,
-      fotoPecho: data.fotoPecho,
-      fotoEspalda: data.fotoEspalda,
-      fotoMangaD: data.fotoMangaD,
-      fotoMangaI: data.fotoMangaI,
-      archivoDiseno: data.archivoDiseno,
-    })
-    setShowPersonalizado(false)
   }
 
   return (
@@ -111,8 +71,30 @@ export default function BuscadorProductos({ tienda, onAdd }) {
         </div>
       )}
 
-      {selected && <ProductoDetail producto={selected} onAdd={addProduct} onCancel={() => setSelected(null)} />}
-      {showPersonalizado && <ProductoPersonalizado onAdd={addPersonalizado} onCancel={() => setShowPersonalizado(false)} />}
+      {selected && (
+        <ProductoDetail producto={selected}
+          onAdd={(prod, variant, talla, area, detalle, cantidad, color, fotos) => {
+            onAdd({
+              productoNombre: prod.title,
+              shopifyVariantId: variant?.id || '',
+              color, talla,
+              cantidad: cantidad || 1,
+              precioUnit: parseFloat(variant?.price || 0),
+              area, detalle,
+              esPersonalizado: false,
+              imagen: prod.image,
+              ...fotos,
+            })
+            setSelected(null); setQuery(''); setProductos([])
+          }}
+          onCancel={() => setSelected(null)} />
+      )}
+
+      {showPersonalizado && (
+        <ProductoPersonalizado
+          onAdd={data => { onAdd(data); setShowPersonalizado(false) }}
+          onCancel={() => setShowPersonalizado(false)} />
+      )}
     </div>
   )
 }
@@ -125,24 +107,30 @@ function FotoUploader({ fotos, onChange }) {
     reader.readAsDataURL(file)
   }
 
+  const slots = [
+    ['fotoPecho', 'Pecho'],
+    ['fotoEspalda', 'Espalda'],
+    ['fotoMangaD', 'Manga derecha'],
+    ['fotoMangaI', 'Manga izquierda'],
+  ]
+
   return (
     <div className="space-y-2">
       <label className="label">Fotos del diseño</label>
-      <div className="grid grid-cols-4 gap-2">
-        {[['fotoPecho','Pecho'],['fotoEspalda','Espalda'],['fotoMangaD','M.Der'],['fotoMangaI','M.Izq']].map(([key, label]) => (
-          <div key={key} className="flex flex-col items-center gap-1">
-            <label className={`relative flex flex-col items-center justify-center w-full h-16 rounded-xl border-2 border-dashed cursor-pointer transition-all
-              ${fotos[key] ? 'border-mandarina-500 bg-mandarina-500/10' : 'border-gray-700 hover:border-gray-500'}`}>
-              <input type="file" accept="image/*" className="hidden" onChange={e => handleFoto(key, e.target.files[0])} />
-              {fotos[key] ? (
-                <img src={fotos[key]} className="w-full h-full object-cover rounded-xl" />
-              ) : (
-                <span className="text-xs text-gray-500">{label}</span>
-              )}
+      <div className="grid grid-cols-2 gap-2">
+        {slots.map(([key, label]) => (
+          <div key={key} className="flex flex-col gap-1">
+            <label className={`relative flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer transition-all overflow-hidden
+              ${fotos[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}`}>
+              <input type="file" accept="image/*" className="hidden"
+                onChange={e => handleFoto(key, e.target.files[0])} />
+              {fotos[key]
+                ? <img src={fotos[key]} className="w-full h-full object-cover" />
+                : <span className="text-xs text-gray-500 text-center px-2">{label}</span>}
             </label>
             {fotos[key] && (
               <button onClick={() => onChange({ ...fotos, [key]: null })}
-                className="text-xs text-red-400 hover:text-red-300">✕ quitar</button>
+                className="text-xs text-red-400 hover:text-red-300 text-center">✕ quitar</button>
             )}
           </div>
         ))}
@@ -157,7 +145,7 @@ function FotoUploader({ fotos, onChange }) {
             reader.readAsDataURL(file)
           }} />
         <span className="text-gray-500 text-sm">
-          {fotos.archivoDiseno ? '✓ Archivo subido — click para cambiar' : '📎 Subir archivo AI/PSD/PDF'}
+          {fotos.archivoDiseno ? '✓ Archivo — click para cambiar' : '📎 Subir archivo AI/PSD/PDF'}
         </span>
       </label>
     </div>
@@ -177,13 +165,12 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
     <div className="card p-4 space-y-3 mt-2">
       <div className="flex items-center gap-3">
         {producto.image && <img src={producto.image} className="w-12 h-12 rounded-xl object-cover" />}
-        <div>
+        <div className="flex-1">
           <div className="font-medium text-white text-sm">{producto.title}</div>
           <div className="text-xs text-gray-500">${parseFloat(variant?.price||0).toFixed(2)}</div>
         </div>
-        <button onClick={onCancel} className="ml-auto text-gray-600 hover:text-white">✕</button>
+        <button onClick={onCancel} className="text-gray-600 hover:text-white p-1">✕</button>
       </div>
-
       <div className="grid grid-cols-2 gap-3">
         {producto.variants?.length > 1 && (
           <div className="col-span-2">
@@ -196,7 +183,7 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
         )}
         <div>
           <label className="label">Color</label>
-          <input className="input" placeholder="Celeste/blanco" value={color}
+          <input className="input" placeholder="Ej: Celeste/blanco" value={color}
             onChange={e => setColor(e.target.value)} />
         </div>
         <div>
@@ -223,32 +210,67 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
             value={detalle} onChange={e => setDetalle(e.target.value)} />
         </div>
       </div>
-
       <FotoUploader fotos={fotos} onChange={setFotos} />
-
       <button onClick={() => onAdd(producto, variant, talla, area, detalle, cantidad, color, fotos)}
-        className="btn-primary w-full">
-        + Agregar al pedido
-      </button>
+        className="btn-primary w-full">+ Agregar al pedido</button>
     </div>
   )
 }
 
 function ProductoPersonalizado({ onAdd, onCancel }) {
-  const [data, setData] = useState({ nombre: '', color: '', talla: 'M', cantidad: 1, precio: 15, area: 'ESTAMPADO', detalle: '' })
+  const [catalogoProductos, setCatalogoProductos] = useState([])
+  const [nombre, setNombre] = useState('')
+  const [nuevoNombre, setNuevoNombre] = useState('')
+  const [data, setData] = useState({ color: '', talla: 'M', cantidad: 1, precio: 15, area: 'ESTAMPADO', detalle: '' })
   const [fotos, setFotos] = useState({})
+  const [addingNew, setAddingNew] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/productos').then(r => r.json()).then(d => setCatalogoProductos(d.productos || []))
+  }, [])
+
+  async function agregarNuevoProducto() {
+    if (!nuevoNombre.trim()) return
+    await fetch('/api/productos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: nuevoNombre.trim().toUpperCase() }),
+    })
+    const r = await fetch('/api/productos')
+    const d = await r.json()
+    setCatalogoProductos(d.productos || [])
+    setNombre(nuevoNombre.trim().toUpperCase())
+    setNuevoNombre('')
+    setAddingNew(false)
+  }
 
   return (
     <div className="card p-4 space-y-3 mt-2">
       <div className="flex items-center justify-between">
         <div className="font-medium text-white text-sm">✏️ Producto personalizado</div>
-        <button onClick={onCancel} className="text-gray-600 hover:text-white">✕</button>
+        <button onClick={onCancel} className="text-gray-600 hover:text-white p-1">✕</button>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="label">Nombre del producto *</label>
-          <input className="input" placeholder="Camiseta Normal, Hoodie..." value={data.nombre}
-            onChange={e => setData(p => ({...p, nombre: e.target.value}))} />
+          <div className="flex gap-2">
+            <select className="input flex-1" value={nombre} onChange={e => {
+              if (e.target.value === '__nuevo__') { setAddingNew(true); return }
+              setNombre(e.target.value)
+            }}>
+              <option value="">Seleccionar...</option>
+              {catalogoProductos.map(p => <option key={p.NOMBRE}>{p.NOMBRE}</option>)}
+              <option value="__nuevo__">+ Agregar nuevo...</option>
+            </select>
+          </div>
+          {addingNew && (
+            <div className="flex gap-2 mt-2">
+              <input className="input flex-1" placeholder="Nombre del nuevo producto"
+                value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value.toUpperCase())} />
+              <button onClick={agregarNuevoProducto} className="btn-primary px-3 text-sm">Agregar</button>
+              <button onClick={() => setAddingNew(false)} className="btn-secondary px-3 text-sm">✕</button>
+            </div>
+          )}
         </div>
         <div>
           <label className="label">Color</label>
@@ -284,11 +306,9 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
             value={data.detalle} onChange={e => setData(p => ({...p, detalle: e.target.value}))} />
         </div>
       </div>
-
       <FotoUploader fotos={fotos} onChange={setFotos} />
-
-      <button onClick={() => onAdd({...data, ...fotos})} disabled={!data.nombre || !data.detalle}
-        className="btn-primary w-full">
+      <button onClick={() => onAdd({ productoNombre: nombre, ...data, ...fotos, esPersonalizado: true, imagen: null })}
+        disabled={!nombre || !data.detalle} className="btn-primary w-full">
         + Agregar al pedido
       </button>
     </div>
