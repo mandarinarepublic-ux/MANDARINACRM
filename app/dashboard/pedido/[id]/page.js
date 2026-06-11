@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -11,10 +11,10 @@ export default function PedidoDetailPage() {
   const [user, setUser] = useState(null)
   const [pedido, setPedido] = useState(null)
   const [items, setItems] = useState([])
-  const [pagos, setPagos] = useState([])
   const [cliente, setCliente] = useState(null)
   const [loading, setLoading] = useState(true)
   const [generatingPdf, setGeneratingPdf] = useState(false)
+  const [showPdfPreview, setShowPdfPreview] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -31,12 +31,13 @@ export default function PedidoDetailPage() {
       if (!p) return
       setPedido(p)
       setItems(p.items || [])
-      setPagos(p.pagos || [])
 
-      // Load client
-      const cr = await fetch(`/api/clientes?q=${p.CLIENTE_ID}`)
+      // Load client by CLIENTE_ID or search
+      const cr = await fetch(`/api/clientes?q=${encodeURIComponent(p.CLIENTE_ID || '')}`)
       const cd = await cr.json()
-      setCliente(cd.clientes?.[0] || null)
+      // Find exact match by ID or first result
+      const c = cd.clientes?.find(c => c.CLIENTE_ID === p.CLIENTE_ID) || cd.clientes?.[0] || null
+      setCliente(c)
     } finally {
       setLoading(false)
     }
@@ -46,28 +47,43 @@ export default function PedidoDetailPage() {
     setGeneratingPdf(true)
     try {
       const html2pdf = (await import('html2pdf.js')).default
-      const element = document.getElementById('pdf-content')
+      const element = document.getElementById('pdf-render')
+      if (!element) { alert('Error: contenido PDF no encontrado'); return }
       await html2pdf().set({
-        margin: [10, 10, 10, 10],
+        margin: [8, 8, 8, 8],
         filename: `${pedido.PEDIDO_ID}.pdf`,
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+        },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       }).from(element).save()
+    } catch(e) {
+      alert('Error generando PDF: ' + e.message)
     } finally {
       setGeneratingPdf(false)
     }
   }
 
-  async function sendWhatsApp() {
-    if (!cliente) return
-    const cel = cliente.CELULAR?.replace(/\D/g,'')
+  function sendWhatsApp() {
+    if (!cliente) { alert('No hay datos del cliente'); return }
+    const cel = (cliente.CELULAR || '').replace(/\D/g, '')
+    if (!cel) { alert('El cliente no tiene celular registrado'); return }
+    // Ecuador: remove leading 0, add 593
+    const num = cel.startsWith('0') ? '593' + cel.slice(1) : '593' + cel
+    const fecha = pedido.FECHA_ENTREGA_PROMETIDA
+      ? new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC', { day: 'numeric', month: 'long' })
+      : 'por confirmar'
     const msg = encodeURIComponent(
-      `Hola ${cliente.NOMBRE} 👋\n\nTu pedido *${pedido.PEDIDO_ID}* ha sido registrado.\n\n` +
-      `Total: $${parseFloat(pedido.MONTO_TOTAL||0).toFixed(2)}\n` +
-      `Entrega estimada: ${new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC', {day:'numeric',month:'long'})}\n\n` +
-      `¡Gracias por tu compra! 🍊`
+      `Hola ${cliente.NOMBRE} 👋\n\n` +
+      `¡Tu pedido *${pedido.PEDIDO_ID}* ha sido registrado! 🎉\n\n` +
+      `💰 Total: $${parseFloat(pedido.MONTO_TOTAL || 0).toFixed(2)}\n` +
+      `📅 Entrega estimada: ${fecha}\n\n` +
+      `Gracias por tu compra. Cualquier consulta estamos aquí. 🍊`
     )
-    window.open(`https://wa.me/593${cel?.replace(/^0/,'')}?text=${msg}`, '_blank')
+    window.open(`https://wa.me/${num}?text=${msg}`, '_blank')
   }
 
   async function updateEstado(nuevoEstado) {
@@ -91,27 +107,48 @@ export default function PedidoDetailPage() {
   const montoPendiente = montoTotal - montoAbonado
 
   return (
-    <div className="max-w-2xl mx-auto p-4 pb-24">
+    <div className="max-w-2xl mx-auto p-4 pb-28">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6 pt-2">
-        <button onClick={() => router.back()} className="text-gray-500 hover:text-white p-1">←</button>
+        <button onClick={() => router.push('/dashboard/historial')} className="text-gray-500 hover:text-white p-1">←</button>
         <div>
           <h1 className="text-xl font-display font-bold text-white">{pedido.PEDIDO_ID}</h1>
           <div className="text-gray-500 text-xs">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊 Mandarina Republic' : '🏪 Indstore'}</div>
         </div>
-        {isNew && (
-          <span className="ml-auto badge bg-green-500/20 text-green-400">✅ Creado</span>
-        )}
+        {isNew && <span className="ml-auto badge bg-green-500/20 text-green-400">✅ Creado</span>}
       </div>
+
+      {/* NEW: Completion banner for new orders */}
+      {isNew && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4 mb-4">
+          <div className="font-semibold text-green-400 mb-2">🎉 Pedido creado exitosamente</div>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={sendWhatsApp}
+              className="flex items-center gap-2 bg-green-500 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-600 transition-all">
+              📱 Enviar WhatsApp al cliente
+            </button>
+            <button onClick={generatePDF} disabled={generatingPdf}
+              className="flex items-center gap-2 bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-gray-600 transition-all">
+              {generatingPdf ? '⏳ Generando...' : '📄 Descargar PDF'}
+            </button>
+            <Link href="/dashboard/nuevo-pedido"
+              className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white transition-all">
+              ➕ Nuevo pedido
+            </Link>
+            <Link href="/dashboard"
+              className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white transition-all">
+              🏠 Ir al inicio
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Status */}
       <div className="card p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm text-gray-400">Estado del pedido</span>
-          <select
-            className="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-1"
-            value={pedido.ESTADO_PEDIDO}
-            onChange={e => updateEstado(e.target.value)}>
+          <select className="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-1"
+            value={pedido.ESTADO_PEDIDO} onChange={e => updateEstado(e.target.value)}>
             {['PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','ENTREGADO','CANCELADO'].map(e => (
               <option key={e}>{e}</option>
             ))}
@@ -147,7 +184,7 @@ export default function PedidoDetailPage() {
             {pedido.DIRECCION_TEXTO && (
               <div className="flex justify-between gap-4">
                 <span className="text-gray-500 shrink-0">Dirección</span>
-                <span className="text-white text-right">{pedido.DIRECCION_TEXTO}</span>
+                <span className="text-white text-right text-xs">{pedido.DIRECCION_TEXTO}</span>
               </div>
             )}
             {pedido.LATITUD && (
@@ -171,7 +208,7 @@ export default function PedidoDetailPage() {
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <div className="text-sm font-medium text-white">{item.PRODUCTO_NOMBRE}</div>
-                  <div className="text-xs text-gray-500">{item.COLOR} · {item.TALLA} · {item.AREA}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{item.COLOR} · {item.TALLA} · <span className="text-mandarina-400">{item.AREA}</span></div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-white">{item.CANTIDAD}x ${parseFloat(item.PRECIO_UNIT||0).toFixed(2)}</div>
@@ -181,15 +218,13 @@ export default function PedidoDetailPage() {
               {item.DETALLE_PERSONALIZADO && (
                 <div className="text-xs text-gray-400 bg-gray-800/50 rounded-lg px-3 py-2 mb-2">{item.DETALLE_PERSONALIZADO}</div>
               )}
-              {/* Fotos */}
-              {(item.FOTO_PECHO_URL || item.FOTO_ESPALDA_URL) && (
-                <div className="flex gap-2 mt-2">
-                  {[['FOTO_PECHO_URL','P'],['FOTO_ESPALDA_URL','E'],['FOTO_MANGA_D_URL','MD'],['FOTO_MANGA_I_URL','MI']].map(([key,label]) =>
+              {(item.FOTO_PECHO_URL || item.FOTO_ESPALDA_URL || item.FOTO_MANGA_D_URL || item.FOTO_MANGA_I_URL) && (
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {[['FOTO_PECHO_URL','Pecho'],['FOTO_ESPALDA_URL','Espalda'],['FOTO_MANGA_D_URL','Manga Der.'],['FOTO_MANGA_I_URL','Manga Izq.']].map(([key,label]) =>
                     item[key] ? (
-                      <a key={key} href={item[key]} target="_blank"
-                        className="w-12 h-12 rounded-lg overflow-hidden border border-gray-700 relative">
-                        <img src={item[key]} className="w-full h-full object-cover" />
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-center text-xs">{label}</div>
+                      <a key={key} href={item[key]} target="_blank" className="flex flex-col items-center gap-1">
+                        <img src={item[key]} className="w-14 h-14 rounded-lg object-cover border border-gray-700" />
+                        <span className="text-xs text-gray-500">{label}</span>
                       </a>
                     ) : null
                   )}
@@ -220,10 +255,6 @@ export default function PedidoDetailPage() {
         <h3 className="text-sm font-semibold text-white mb-3">📦 Entrega</h3>
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between">
-            <span className="text-gray-500">Días prometidos</span>
-            <span className="text-white">{pedido.DIAS_ENTREGA_PROMETIDO} días</span>
-          </div>
-          <div className="flex justify-between">
             <span className="text-gray-500">Fecha comprometida</span>
             <span className="text-white">
               {pedido.FECHA_ENTREGA_PROMETIDA
@@ -237,19 +268,47 @@ export default function PedidoDetailPage() {
         </div>
       </div>
 
-      {/* Hidden PDF content */}
-      <div id="pdf-content" style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-        <PdfContent pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
-      </div>
+      {/* PDF content - visible for rendering */}
+      {showPdfPreview && (
+        <div className="fixed inset-0 bg-black/80 z-50 overflow-auto p-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-semibold">Vista previa PDF</h3>
+              <div className="flex gap-2">
+                <button onClick={generatePDF} disabled={generatingPdf}
+                  className="btn-primary text-sm px-4 py-2">
+                  {generatingPdf ? '⏳...' : '⬇️ Descargar'}
+                </button>
+                <button onClick={() => setShowPdfPreview(false)} className="btn-secondary text-sm px-4 py-2">✕ Cerrar</button>
+              </div>
+            </div>
+            <div id="pdf-render" className="bg-white rounded-xl">
+              <PdfContent pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden PDF for direct download */}
+      {!showPdfPreview && (
+        <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '794px' }}>
+          <div id="pdf-render" className="bg-white">
+            <PdfContent pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
+          </div>
+        </div>
+      )}
 
       {/* Actions - fixed bottom */}
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-2">
         <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">
           📱 WhatsApp
         </button>
-        <button onClick={generatePDF} disabled={generatingPdf} className="btn-primary flex-1 text-sm"
-          style={{ backgroundColor: tiendaColor }}>
-          {generatingPdf ? '⏳ Generando...' : '📄 PDF'}
+        <button onClick={() => { setShowPdfPreview(true) }} className="btn-secondary flex-1 text-sm">
+          👁️ Ver PDF
+        </button>
+        <button onClick={generatePDF} disabled={generatingPdf}
+          className="btn-primary flex-1 text-sm" style={{ backgroundColor: tiendaColor }}>
+          {generatingPdf ? '⏳...' : '📄 PDF'}
         </button>
       </div>
     </div>
@@ -258,104 +317,122 @@ export default function PedidoDetailPage() {
 
 function PdfContent({ pedido, items, cliente, tiendaColor }) {
   const esMandarina = pedido?.TIENDA_ID === 'MANDARINA'
+  const montoTotal = parseFloat(pedido?.MONTO_TOTAL || 0)
+  const montoPendiente = parseFloat(pedido?.MONTO_PENDIENTE || 0)
+  const montoAbonado = parseFloat(pedido?.MONTO_ABONADO || 0)
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', color: '#000', backgroundColor: '#fff', width: '190mm', padding: '5mm' }}>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-        <div style={{ backgroundColor: tiendaColor, height: '8px', marginBottom: '12px', borderRadius: '4px' }} />
-        <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>
+    <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', color: '#000', backgroundColor: '#fff', padding: '15mm', width: '100%', fontSize: '11px' }}>
+      {/* Color bar */}
+      <div style={{ backgroundColor: tiendaColor, height: '6px', marginBottom: '12px', borderRadius: '3px' }} />
+      
+      {/* Brand header */}
+      <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+        <h2 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 'bold', color: tiendaColor }}>
           {esMandarina ? 'MANDARINA REPUBLIC' : 'INDSTORE'}
         </h2>
         {esMandarina && (
-          <p style={{ margin: '6px 0', fontSize: '12px', color: '#555' }}>
-            Hola {cliente?.NOMBRE}<br/>
-            <strong>¡Gracias por tu compra! 🎉</strong><br/>
-            <span style={{ fontSize: '11px' }}>Cada prenda que hacemos está pensada para gente única como tú.</span><br/>
-            <span style={{ fontSize: '11px' }}>Síguenos en @mandarinarepublicec y descubre más diseños.</span><br/>
-            <strong style={{ color: tiendaColor }}>💛 Tu confianza nos inspira 💛</strong>
-          </p>
+          <>
+            <p style={{ margin: '4px 0', fontSize: '13px', fontWeight: 'bold' }}>Hola {cliente?.NOMBRE || ''}</p>
+            <p style={{ margin: '4px 0', fontSize: '13px', fontWeight: 'bold' }}>¡Gracias por tu compra! 🎉</p>
+            <p style={{ margin: '2px 0', fontSize: '11px', color: '#444' }}>Cada prenda que hacemos está pensada para gente única como tú.</p>
+            <p style={{ margin: '2px 0', fontSize: '11px', color: '#444' }}>Síguenos en @mandarinarepublicec y descubre más diseños.</p>
+            <p style={{ margin: '6px 0', fontSize: '12px', fontWeight: 'bold', color: tiendaColor }}>💛 Tu confianza nos inspira 💛</p>
+          </>
         )}
       </div>
 
-      {/* Pedido info table */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px', fontSize: '11px' }}>
+      {/* Pedido info */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
         <tbody>
           <tr>
-            <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 'bold', backgroundColor: '#f5f5f5', width: '25%' }}>NUM FACTURA</td>
-            <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{pedido?.PEDIDO_ID}</td>
-            <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 'bold', backgroundColor: '#f5f5f5', width: '20%' }}>VENDEDOR</td>
-            <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{pedido?.VENDEDOR_ID}</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f0f0f0', width: '22%' }}>NUM FACTURA</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px' }}>{pedido?.PEDIDO_ID}</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f0f0f0', width: '20%' }}>VENDEDOR</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px' }}>{pedido?.VENDEDOR_ID || '-'}</td>
           </tr>
           <tr>
-            <td colSpan={4} style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 'bold' }}>
-              ESTADO PAGO: {pedido?.ESTADO_PAGO === 'ABONO'
-                ? `🔴 Abono, monto pendiente $${parseFloat(pedido?.MONTO_PENDIENTE||0).toFixed(2)}`
-                : pedido?.ESTADO_PAGO === 'PAGADO' ? '🟢 Pagado' : '🔴 Pendiente'}
+            <td colSpan={4} style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold' }}>
+              ESTADO PAGO: {
+                pedido?.ESTADO_PAGO === 'PAGADO' ? '🟢 Pagado completo' :
+                pedido?.ESTADO_PAGO === 'ABONO' ? `🔴 Abono $${montoAbonado.toFixed(2)}, monto pendiente $${montoPendiente.toFixed(2)}` :
+                '🔴 Pendiente $' + montoTotal.toFixed(2)
+              }
             </td>
           </tr>
           <tr>
-            <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>NOMBRE CLIENTE</td>
-            <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{cliente?.NOMBRE}</td>
-            <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>CANTIDAD</td>
-            <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{items.reduce((s,i) => s + parseInt(i.CANTIDAD||1), 0)}</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>NOMBRE CLIENTE</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px' }}>{cliente?.NOMBRE || '-'}</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>CANTIDAD</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px' }}>{items.reduce((s, i) => s + parseInt(i.CANTIDAD || 1), 0)}</td>
           </tr>
           <tr>
-            <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>CÉDULA</td>
-            <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{cliente?.CEDULA}</td>
-            <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>NÚMERO CELULAR</td>
-            <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{cliente?.CELULAR}</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>CÉDULA</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px' }}>{cliente?.CEDULA || '-'}</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>NÚMERO CELULAR</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px' }}>{cliente?.CELULAR || '-'}</td>
           </tr>
           <tr>
-            <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>DIRECCIÓN ENTREGA</td>
-            <td colSpan={3} style={{ border: '1px solid #000', padding: '4px 8px' }}>{pedido?.DIRECCION_TEXTO || cliente?.DIRECCION}</td>
+            <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>DIRECCIÓN ENTREGA</td>
+            <td colSpan={3} style={{ border: '1px solid #000', padding: '4px 6px' }}>{pedido?.DIRECCION_TEXTO || cliente?.DIRECCION || '-'}</td>
           </tr>
         </tbody>
       </table>
 
-      {/* Productos */}
-      <h4 style={{ textAlign: 'center', margin: '10px 0', fontSize: '12px', fontWeight: 'bold' }}>
+      {/* Products */}
+      <h4 style={{ textAlign: 'center', margin: '10px 0 8px', fontSize: '11px', fontWeight: 'bold' }}>
         Detalle de los productos solicitados
       </h4>
-      {items.map((item, idx) => (
-        <table key={idx} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '10px' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#e0e0e0' }}>
-              <th style={{ border: '1px solid #000', padding: '3px', width: '20%' }}>PRODUCTO</th>
-              <th style={{ border: '1px solid #000', padding: '3px', width: '15%' }}>COLOR</th>
-              <th style={{ border: '1px solid #000', padding: '3px', width: '8%' }}>CANT.</th>
-              <th style={{ border: '1px solid #000', padding: '3px', width: '8%' }}>TALLA</th>
-              <th style={{ border: '1px solid #000', padding: '3px' }}>DISEÑO PECHO</th>
-              <th style={{ border: '1px solid #000', padding: '3px' }}>DISEÑO ESPALDA</th>
-              <th style={{ border: '1px solid #000', padding: '3px' }}>MANGA DER.</th>
-              <th style={{ border: '1px solid #000', padding: '3px' }}>MANGA IZQ.</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={{ border: '1px solid #000', padding: '4px', verticalAlign: 'top' }}>
-                {item.PRODUCTO_NOMBRE}<br/>
-                <span style={{ color: tiendaColor, fontSize: '9px' }}>{item.AREA}</span>
-              </td>
-              <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{item.COLOR}</td>
-              <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{item.CANTIDAD}</td>
-              <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>{item.TALLA}</td>
-              {[item.FOTO_PECHO_URL, item.FOTO_ESPALDA_URL, item.FOTO_MANGA_D_URL, item.FOTO_MANGA_I_URL].map((url, i) => (
-                <td key={i} style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', width: '50px', height: '50px' }}>
-                  {url ? <img src={url} style={{ maxWidth: '45px', maxHeight: '45px', objectFit: 'contain' }} crossOrigin="anonymous" /> : ''}
-                </td>
-              ))}
-            </tr>
-            {item.DETALLE_PERSONALIZADO && (
-              <tr>
-                <td colSpan={8} style={{ border: '1px solid #000', padding: '4px', fontSize: '9px' }}>
-                  <strong>Detalles:</strong> {item.DETALLE_PERSONALIZADO}
-                </td>
+
+      {(items || []).map((item, idx) => (
+        <div key={idx} style={{ marginBottom: '10px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#e8e8e8' }}>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', width: '22%' }}>PRODUCTO</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '14%' }}>COLOR</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '8%' }}>CANT.</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '8%' }}>TALLA</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>DISEÑO PECHO</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>DISEÑO ESPALDA</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>MANGA DERECHA</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>MANGA IZQUIERDA</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ border: '1px solid #000', padding: '4px', verticalAlign: 'top' }}>
+                  {item.PRODUCTO_NOMBRE}<br/>
+                  <span style={{ color: tiendaColor, fontSize: '9px' }}>{item.AREA}</span>
+                </td>
+                <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{item.COLOR}</td>
+                <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>{item.CANTIDAD}</td>
+                <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>{item.TALLA}</td>
+                {[item.FOTO_PECHO_URL, item.FOTO_ESPALDA_URL, item.FOTO_MANGA_D_URL, item.FOTO_MANGA_I_URL].map((url, i) => (
+                  <td key={i} style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', width: '52px', height: '52px', verticalAlign: 'middle' }}>
+                    {url
+                      ? <img src={url} style={{ maxWidth: '48px', maxHeight: '48px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                      : <span style={{ color: '#ccc', fontSize: '8px' }}>—</span>}
+                  </td>
+                ))}
+              </tr>
+              {item.DETALLE_PERSONALIZADO && (
+                <tr>
+                  <td colSpan={8} style={{ border: '1px solid #000', padding: '4px', fontSize: '9px' }}>
+                    <strong>Detalles:</strong> {item.DETALLE_PERSONALIZADO}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       ))}
+
+      {/* Footer */}
+      <div style={{ marginTop: '12px', borderTop: '1px solid #ccc', paddingTop: '8px', textAlign: 'center', fontSize: '9px', color: '#666' }}>
+        Fecha del pedido: {pedido?.FECHA_PEDIDO ? new Date(pedido.FECHA_PEDIDO).toLocaleDateString('es-EC') : '-'} · 
+        Entrega estimada: {pedido?.FECHA_ENTREGA_PROMETIDA ? new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC', {day:'numeric',month:'long',year:'numeric'}) : '-'}
+      </div>
     </div>
   )
 }
