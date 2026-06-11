@@ -9,9 +9,8 @@ import SeccionPago from '@/components/pedido/SeccionPago'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE']
 
-function validarCedulaRUC(valor) {
-  if (!valor) return 'Campo requerido'
-  const v = valor.trim()
+function validarCedulaRUC(v) {
+  if (!v) return 'Requerido'
   if (!/^\d+$/.test(v)) return 'Solo números'
   if (v.length === 10) {
     const prov = parseInt(v.substring(0, 2))
@@ -23,23 +22,43 @@ function validarCedulaRUC(valor) {
       if (val > 9) val -= 9
       suma += val
     }
-    const verificador = suma % 10 === 0 ? 0 : 10 - (suma % 10)
-    if (verificador !== d[9]) return 'Cédula inválida'
+    const ver = suma % 10 === 0 ? 0 : 10 - (suma % 10)
+    if (ver !== d[9]) return 'Cédula inválida'
     return null
   }
   if (v.length === 13) {
-    if (v.substring(10) !== '001') return 'RUC inválido (debe terminar en 001)'
+    if (v.substring(10) !== '001') return 'RUC debe terminar en 001'
     return null
   }
   return 'Debe tener 10 (cédula) o 13 dígitos (RUC)'
+}
+
+function validarCelular(v) {
+  if (!v) return 'Requerido'
+  if (!/^0\d{9}$/.test(v)) return 'Formato: 0987654321 (10 dígitos, empieza en 0)'
+  return null
+}
+
+// Get min date: 3 business days from today
+function getMinFecha() {
+  const d = new Date()
+  let count = 0
+  while (count < 3) {
+    d.setDate(d.getDate() + 1)
+    const day = d.getDay()
+    if (day !== 0 && day !== 6) count++
+  }
+  return d.toISOString().split('T')[0]
 }
 
 export default function NuevoPedidoPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [tienda, setTienda] = useState('MANDARINA')
-  const [cliente, setCliente] = useState({ nombre: '', cedula: '', celular: '', email: '', ciudad: 'Quito', direccion: '' })
+  const [clienteId, setClienteId] = useState(null) // existing client ID for updates
+  const [cliente, setCliente] = useState({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' })
   const [cedulaError, setCedulaError] = useState('')
+  const [celularError, setCelularError] = useState('')
   const [emitirFactura, setEmitirFactura] = useState(true)
   const [usarMapa, setUsarMapa] = useState(false)
   const [items, setItems] = useState([])
@@ -47,7 +66,7 @@ export default function NuevoPedidoPage() {
   const [direccionTexto, setDireccionTexto] = useState('')
   const [latitud, setLatitud] = useState(null)
   const [longitud, setLongitud] = useState(null)
-  const [diasPrometido, setDiasPrometido] = useState(null)
+  const [fechaEntrega, setFechaEntrega] = useState(getMinFecha())
   const [diasCalculado, setDiasCalculado] = useState(4)
   const [notasVendedor, setNotasVendedor] = useState('')
   const [loading, setLoading] = useState(false)
@@ -64,55 +83,93 @@ export default function NuevoPedidoPage() {
     if (items.length === 0) return
     const areas = [...new Set(items.map(i => i.area).filter(Boolean))].sort()
     const combos = {
-      'BORDADO': 5,
-      'ESTAMPADO': 3,
-      'SUBLIMACION': 4,
-      'BORDADO,ESTAMPADO': 6,
-      'BORDADO,SUBLIMACION': 7,
-      'ESTAMPADO,SUBLIMACION': 6,
-      'BORDADO,ESTAMPADO,SUBLIMACION': 8,
+      'BORDADO': 5, 'ESTAMPADO': 3, 'SUBLIMACION': 4,
+      'BORDADO,ESTAMPADO': 6, 'BORDADO,SUBLIMACION': 7,
+      'ESTAMPADO,SUBLIMACION': 6, 'BORDADO,ESTAMPADO,SUBLIMACION': 8,
     }
-    const key = areas.join(',')
-    const dias = combos[key] || 4
-    setDiasCalculado(dias)
-    if (!diasPrometido) setDiasPrometido(dias)
+    // Normalize area keys (remove spaces around +)
+    const normalizedAreas = areas.map(a => a.replace(/\s*\+\s*/g, ',').split(',').map(x => x.trim()).join(','))
+    const uniqueAreas = [...new Set(normalizedAreas.join(',').split(',').map(x => x.trim()))].sort()
+    const key = uniqueAreas.join(',')
+    setDiasCalculado(combos[key] || 4)
   }, [items])
 
   const montoTotal = items.reduce((s, i) => s + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
-  const montoPendiente = montoTotal - parseFloat(pago.monto || 0)
 
   function handleCedulaChange(val) {
     setCliente(p => ({...p, cedula: val}))
     setCedulaError(validarCedulaRUC(val) || '')
   }
 
+  function handleCelularChange(val) {
+    setCliente(p => ({...p, celular: val}))
+    setCelularError(validarCelular(val) || '')
+  }
+
+  function handleClienteSelect(c) {
+    setClienteId(c.id || null)
+    setCliente({
+      nombre: c.nombre || c.NOMBRE || '',
+      cedula: c.cedula || c.CEDULA || '',
+      celular: c.celular || c.CELULAR || '',
+      email: c.email || c.EMAIL || '',
+      ciudad: c.ciudad || c.CIUDAD || '',
+      direccion: c.direccion || c.DIRECCION || '',
+    })
+    setCedulaError('')
+    setCelularError('')
+  }
+
   function buildDireccionTexto() {
     if (usarMapa) return direccionTexto
     const parts = []
-    if (cliente.ciudad) parts.push(`${cliente.ciudad}`)
+    if (cliente.ciudad) parts.push(cliente.ciudad)
     if (cliente.direccion) parts.push(cliente.direccion)
     return parts.join(': ')
   }
 
   function canGoToStep(s) {
-    if (s === 1) return true
-    if (s === 2) return cliente.nombre && cliente.cedula && !cedulaError && cliente.celular
-    if (s === 3) return items.length > 0
-    if (s === 4) return items.length > 0
+    if (s <= 1) return true
+    if (s === 2) return !!(cliente.nombre && cliente.cedula && !cedulaError && cliente.celular && !celularError)
+    if (s >= 3) return items.length > 0
     return true
+  }
+
+  function goToStep(s) {
+    if (!canGoToStep(s)) return
+    setStep(s)
   }
 
   async function handleSubmit() {
     const errCedula = validarCedulaRUC(cliente.cedula)
-    if (!cliente.nombre || errCedula || !cliente.celular) {
-      setError(errCedula || 'Completa los datos del cliente'); setStep(1); return
+    const errCelular = validarCelular(cliente.celular)
+    if (!cliente.nombre || errCedula || errCelular) {
+      setError(errCedula || errCelular || 'Completa los datos del cliente')
+      setStep(1); return
     }
-    if (items.length === 0) {
-      setError('Agrega al menos un producto'); setStep(2); return
+    if (items.length === 0) { setError('Agrega al menos un producto'); setStep(2); return }
+    if (!buildDireccionTexto()) { setError('La dirección es obligatoria'); setStep(1); return }
+
+    setLoading(true); setError('')
+
+    // Update existing client if fields changed
+    if (clienteId) {
+      await fetch(`/api/clientes/${clienteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          NOMBRE: cliente.nombre, CEDULA: cliente.cedula,
+          CELULAR: cliente.celular, EMAIL: cliente.email,
+          CIUDAD: cliente.ciudad, DIRECCION: buildDireccionTexto(),
+        }),
+      })
     }
-    setLoading(true)
-    setError('')
+
     const dirFinal = buildDireccionTexto()
+    const hoy = new Date()
+    const entrega = new Date(fechaEntrega)
+    const diasPrometido = Math.ceil((entrega - hoy) / 86400000)
+
     try {
       const res = await fetch('/api/pedidos', {
         method: 'POST',
@@ -122,9 +179,9 @@ export default function NuevoPedidoPage() {
           vendedorId: user.id,
           vendedorCodigo: user.codigo,
           cliente: { ...cliente, direccion: dirFinal },
-          items, pago,
-          emitirFactura,
+          items, pago, emitirFactura,
           diasEntregaPrometido: diasPrometido,
+          fechaEntregaPrometida: fechaEntrega,
           notasVendedor,
           direccionTexto: dirFinal,
           latitud, longitud,
@@ -157,42 +214,39 @@ export default function NuevoPedidoPage() {
         {TIENDAS.map(t => (
           <button key={t} onClick={() => setTienda(t)}
             className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all border
-              ${tienda === t ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700 hover:border-gray-500'}`}
-            style={tienda === t ? { backgroundColor: tiendaColor, borderColor: tiendaColor } : {}}>
+              ${tienda === t ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
+            style={tienda === t ? { backgroundColor: tiendaColor } : {}}>
             {t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}
           </button>
         ))}
       </div>
 
       {/* Step indicator - clickable */}
-      <div className="flex items-center gap-2 mb-8">
+      <div className="flex items-center gap-1 mb-8">
         {steps.map((s, i) => (
-          <div key={s} className="flex items-center gap-2 flex-1">
-            <button
-              onClick={() => canGoToStep(i + 1) && setStep(i + 1)}
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all
+          <div key={s} className="flex items-center gap-1 flex-1">
+            <button onClick={() => goToStep(i + 1)}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all
                 ${step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'text-white' : 'bg-gray-800 text-gray-500'}
-                ${canGoToStep(i + 1) ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed opacity-50'}`}
+                ${canGoToStep(i + 1) ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed opacity-40'}`}
               style={step === i + 1 ? { backgroundColor: tiendaColor } : {}}>
               {step > i + 1 ? '✓' : i + 1}
             </button>
-            <span className={`text-xs hidden sm:block ${step === i + 1 ? 'text-white' : 'text-gray-600'}`}>{s}</span>
-            {i < steps.length - 1 && <div className={`flex-1 h-px ${step > i + 1 ? 'bg-green-500' : 'bg-gray-800'}`} />}
+            <span className={`text-xs hidden sm:block truncate ${step === i + 1 ? 'text-white' : 'text-gray-600'}`}>{s}</span>
+            {i < steps.length - 1 && <div className={`flex-1 h-px min-w-2 ${step > i + 1 ? 'bg-green-500' : 'bg-gray-800'}`} />}
           </div>
         ))}
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4">
-          {error}
-        </div>
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4">{error}</div>
       )}
 
       {/* STEP 1: Cliente */}
       {step === 1 && (
         <div className="space-y-4">
-          <h2 className="font-semibold text-white mb-4">Datos del cliente</h2>
-          <BuscadorCliente onSelect={c => { setCliente(c); setCedulaError('') }} />
+          <h2 className="font-semibold text-white mb-2">Datos del cliente</h2>
+          <BuscadorCliente onSelect={handleClienteSelect} />
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="label">Nombre completo *</label>
@@ -208,8 +262,10 @@ export default function NuevoPedidoPage() {
             </div>
             <div>
               <label className="label">Celular *</label>
-              <input className="input" placeholder="0991234567" value={cliente.celular}
-                onChange={e => setCliente(p => ({...p, celular: e.target.value}))} />
+              <input className={`input ${celularError ? 'border-red-500' : ''}`}
+                placeholder="0987654321" value={cliente.celular}
+                onChange={e => handleCelularChange(e.target.value)} />
+              {celularError && <p className="text-red-400 text-xs mt-1">{celularError}</p>}
             </div>
             <div className="col-span-2">
               <label className="label">Email (opcional)</label>
@@ -218,7 +274,7 @@ export default function NuevoPedidoPage() {
             </div>
           </div>
 
-          {/* Emitir factura */}
+          {/* Factura */}
           <label className="flex items-center gap-3 card p-4 cursor-pointer hover:border-gray-600 transition-all">
             <input type="checkbox" checked={emitirFactura} onChange={e => setEmitirFactura(e.target.checked)}
               className="w-5 h-5 accent-orange-500" />
@@ -231,40 +287,34 @@ export default function NuevoPedidoPage() {
           {/* Dirección */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="label mb-0">Dirección de entrega</label>
+              <label className="label mb-0">Dirección de entrega *</label>
               <button onClick={() => setUsarMapa(!usarMapa)}
-                className={`text-xs px-3 py-1 rounded-full border transition-all ${usarMapa ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-500'}`}>
+                className={`text-xs px-3 py-1 rounded-full border transition-all ${usarMapa ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
                 {usarMapa ? '📍 Mapa activo' : '📍 Usar mapa'}
               </button>
             </div>
-
             {!usarMapa ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 <div>
                   <label className="label">Ciudad</label>
-                  <input className="input" placeholder="Quito" value={cliente.ciudad}
+                  <input className="input" placeholder="Ej: Quito, Guayaquil..." value={cliente.ciudad}
                     onChange={e => setCliente(p => ({...p, ciudad: e.target.value}))} />
                 </div>
-                <div className="col-span-2">
-                  <label className="label">Calle principal y secundaria</label>
-                  <input className="input" placeholder="Av. República E7-65 y Diego de Almagro" value={cliente.direccion}
+                <div>
+                  <label className="label">Calle principal y secundaria *</label>
+                  <input className="input" placeholder="Av. República E7-65 y Diego de Almagro, Edif. Torre X, piso 3"
+                    value={cliente.direccion}
                     onChange={e => setCliente(p => ({...p, direccion: e.target.value}))} />
                 </div>
                 {(cliente.ciudad || cliente.direccion) && (
-                  <div className="col-span-2 bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
-                    📋 PDF: <span className="text-white">{buildDireccionTexto()}</span>
+                  <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
+                    📋 En PDF: <span className="text-white">{buildDireccionTexto()}</span>
                   </div>
                 )}
               </div>
             ) : (
-              <MapaPicker
-                onSelect={(addr, lat, lng) => {
-                  setDireccionTexto(addr)
-                  setLatitud(lat)
-                  setLongitud(lng)
-                }}
-                initialAddress={direccionTexto}
-              />
+              <MapaPicker onSelect={(addr, lat, lng) => { setDireccionTexto(addr); setLatitud(lat); setLongitud(lng) }}
+                initialAddress={direccionTexto} />
             )}
           </div>
         </div>
@@ -273,15 +323,14 @@ export default function NuevoPedidoPage() {
       {/* STEP 2: Productos */}
       {step === 2 && (
         <div className="space-y-4">
-          <h2 className="font-semibold text-white mb-4">Productos del pedido</h2>
+          <h2 className="font-semibold text-white mb-2">Productos del pedido</h2>
           <BuscadorProductos tienda={tienda} onAdd={item => setItems(p => [...p, item])} />
           {items.length > 0 && (
             <div className="space-y-3 mt-4">
               {items.map((item, idx) => (
                 <ItemProducto key={idx} item={item} index={idx}
-                  onChange={(updated) => setItems(p => p.map((it, i) => i === idx ? updated : it))}
-                  onRemove={() => setItems(p => p.filter((_, i) => i !== idx))}
-                />
+                  onChange={updated => setItems(p => p.map((it, i) => i === idx ? updated : it))}
+                  onRemove={() => setItems(p => p.filter((_, i) => i !== idx))} />
               ))}
               <div className="card p-4 flex justify-between items-center">
                 <span className="text-gray-400 text-sm">{items.reduce((s,i) => s + parseInt(i.cantidad||1), 0)} productos</span>
@@ -297,31 +346,20 @@ export default function NuevoPedidoPage() {
         <div className="space-y-6">
           <div className="card p-5">
             <h3 className="font-semibold text-white mb-4">📅 Fecha de entrega</h3>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="bg-gray-800 rounded-xl px-4 py-3 text-sm text-gray-400">
-                Mínimo calculado: <span className="text-white font-semibold">{diasCalculado} días</span>
-              </div>
+            <div className="bg-gray-800 rounded-xl px-4 py-2 text-sm text-gray-400 mb-3">
+              Mínimo recomendado: <span className="text-white font-semibold">{diasCalculado} días hábiles</span>
             </div>
-            <label className="label">Días comprometidos con el cliente</label>
-            <input type="number" className="input" min="1" max="30"
-              value={diasPrometido || diasCalculado}
-              onChange={e => setDiasPrometido(parseInt(e.target.value))} />
-            {diasPrometido && diasPrometido < diasCalculado && (
-              <div className="mt-2 flex items-center gap-2 text-yellow-400 text-sm">
-                ⚠️ Estás prometiendo menos del mínimo recomendado
-              </div>
+            <label className="label">Fecha de entrega comprometida</label>
+            <input type="date" className="input" min={getMinFecha()} value={fechaEntrega}
+              onChange={e => setFechaEntrega(e.target.value)} />
+            {fechaEntrega && new Date(fechaEntrega) < new Date(Date.now() + diasCalculado * 86400000) && (
+              <div className="mt-2 text-yellow-400 text-xs">⚠️ Fecha por debajo del mínimo recomendado ({diasCalculado} días)</div>
             )}
-            <div className="mt-3 text-sm text-gray-500">
-              Fecha estimada: <span className="text-white">
-                {new Date(Date.now() + (diasPrometido || diasCalculado) * 86400000)
-                  .toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}
-              </span>
-            </div>
           </div>
           <SeccionPago pago={pago} onChange={setPago} montoTotal={montoTotal} />
           <div>
             <label className="label">Notas internas (opcional)</label>
-            <textarea className="input resize-none" rows={3} placeholder="Instrucciones especiales..."
+            <textarea className="input resize-none" rows={3} placeholder="Instrucciones especiales, urgencias..."
               value={notasVendedor} onChange={e => setNotasVendedor(e.target.value)} />
           </div>
         </div>
@@ -331,44 +369,47 @@ export default function NuevoPedidoPage() {
       {step === 4 && (
         <div className="space-y-4">
           <h2 className="font-semibold text-white mb-4">Confirmar pedido</h2>
-          <div className="card p-5 space-y-3">
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Tienda</span><span className="text-white font-medium">{tienda}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Cliente</span><span className="text-white font-medium">{cliente.nombre}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Cédula/RUC</span><span className="text-white">{cliente.cedula}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Celular</span><span className="text-white">{cliente.celular}</span></div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Dirección</span>
-              <span className="text-white text-right max-w-xs text-xs">{buildDireccionTexto() || '-'}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Factura</span>
-              <span className={emitirFactura ? 'text-green-400' : 'text-gray-500'}>{emitirFactura ? '✅ Sí' : '❌ No'}</span>
-            </div>
+          <div className="card p-5 space-y-2.5">
+            {[
+              ['Tienda', tienda],
+              ['Cliente', cliente.nombre],
+              ['Cédula/RUC', cliente.cedula],
+              ['Celular', cliente.celular],
+              ['Dirección', buildDireccionTexto()],
+              ['Factura', emitirFactura ? '✅ Sí' : '❌ No'],
+            ].map(([k, v]) => (
+              <div key={k} className="flex justify-between text-sm gap-4">
+                <span className="text-gray-500 shrink-0">{k}</span>
+                <span className="text-white text-right text-xs">{v || '-'}</span>
+              </div>
+            ))}
             <hr className="border-gray-800" />
             <div className="flex justify-between text-sm"><span className="text-gray-500">Productos</span><span className="text-white">{items.length} ítems</span></div>
             <div className="flex justify-between text-sm"><span className="text-gray-500">Total</span><span className="text-white font-bold text-lg">${montoTotal.toFixed(2)}</span></div>
             <div className="flex justify-between text-sm"><span className="text-gray-500">Abono</span><span className="text-green-400">${parseFloat(pago.monto||0).toFixed(2)}</span></div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Pendiente</span>
-              <span className={montoPendiente > 0 ? 'text-yellow-400' : 'text-green-400'}>${montoPendiente.toFixed(2)}</span>
+              <span className={(montoTotal - parseFloat(pago.monto||0)) > 0 ? 'text-yellow-400' : 'text-green-400'}>
+                ${(montoTotal - parseFloat(pago.monto||0)).toFixed(2)}
+              </span>
             </div>
             <hr className="border-gray-800" />
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Entrega en</span><span className="text-white">{diasPrometido || diasCalculado} días</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Tipo de pago</span><span className="text-white">{pago.tipo}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Fecha entrega</span>
+              <span className="text-white">{new Date(fechaEntrega).toLocaleDateString('es-EC', {day:'numeric',month:'long',year:'numeric'})}</span>
+            </div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Pago</span><span className="text-white">{pago.tipo}</span></div>
           </div>
         </div>
       )}
 
-      {/* Navigation buttons */}
+      {/* Navigation */}
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-3">
         {step > 1 && (
           <button onClick={() => setStep(s => s - 1)} className="btn-secondary flex-1">← Atrás</button>
         )}
         {step < 4 ? (
           <button onClick={() => setStep(s => s + 1)} className="btn-primary flex-1"
-            style={{ backgroundColor: tiendaColor }}>
-            Siguiente →
-          </button>
+            style={{ backgroundColor: tiendaColor }}>Siguiente →</button>
         ) : (
           <button onClick={handleSubmit} className="btn-primary flex-1" disabled={loading}
             style={{ backgroundColor: tiendaColor }}>
