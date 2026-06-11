@@ -10,6 +10,9 @@ export default function ImpresionPage() {
   const [selected, setSelected] = useState(new Set())
   const [printing, setPrinting] = useState(false)
   const [busqueda, setBusqueda] = useState('')
+  const [filtroTienda, setFiltroTienda] = useState('TODAS')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -26,8 +29,6 @@ export default function ImpresionPage() {
         p.ESTADO_PEDIDO === 'EN_FABRICA' || p.ESTADO_PEDIDO === 'PENDIENTE_FABRICA'
       )
       setPedidos(enFabrica)
-
-      // Load all clients
       const map = {}
       await Promise.all(enFabrica.map(async p => {
         if (!p.CLIENTE_ID || map[p.CLIENTE_ID]) return
@@ -42,8 +43,7 @@ export default function ImpresionPage() {
   function toggleSelect(id) {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
   }
@@ -53,15 +53,44 @@ export default function ImpresionPage() {
     else setSelected(new Set(filtered.map(p => p.PEDIDO_ID)))
   }
 
+  // Parse fecha from format "01Jun2026 23:59:00" or ISO
+  function parseFecha(str) {
+    if (!str) return null
+    if (str.includes('T') || str.match(/^\d{4}-/)) return new Date(str)
+    // Format: 01Jun2026 23:59:00
+    const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
+    const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
+    if (!m) return null
+    return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
+  }
+
+  const filtered = pedidos.filter(p => {
+    if (filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
+    if (fechaDesde) {
+      const fp = parseFecha(p.FECHA_PEDIDO)
+      if (fp && fp < new Date(fechaDesde)) return false
+    }
+    if (fechaHasta) {
+      const fp = parseFecha(p.FECHA_PEDIDO)
+      const hasta = new Date(fechaHasta)
+      hasta.setHours(23,59,59)
+      if (fp && fp > hasta) return false
+    }
+    if (busqueda) {
+      const q = busqueda.toLowerCase()
+      if (!p.PEDIDO_ID?.toLowerCase().includes(q) &&
+          !clientes[p.CLIENTE_ID]?.NOMBRE?.toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
   async function printSelected() {
     if (selected.size === 0) return
     setPrinting(true)
     const selectedPedidos = pedidos.filter(p => selected.has(p.PEDIDO_ID))
-    const clientesData = clientes
 
-    // Build print HTML
     const html = selectedPedidos.map(pedido => {
-      const cliente = clientesData[pedido.CLIENTE_ID] || {}
+      const cliente = clientes[pedido.CLIENTE_ID] || {}
       const items = pedido.items || []
       const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
       const esMandarina = pedido.TIENDA_ID === 'MANDARINA'
@@ -86,102 +115,75 @@ export default function ImpresionPage() {
             </thead>
             <tbody>
               <tr>
-                <td style="border:1px solid #000;padding:4px;vertical-align:top">
-                  ${item.PRODUCTO_NOMBRE}<br><span style="color:${tiendaColor};font-size:9px">${item.AREA}</span>
-                </td>
+                <td style="border:1px solid #000;padding:4px;vertical-align:top">${item.PRODUCTO_NOMBRE}<br><span style="color:${tiendaColor};font-size:9px">${item.AREA}</span></td>
                 <td style="border:1px solid #000;padding:4px;text-align:center;vertical-align:middle">${item.COLOR||''}</td>
                 <td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;vertical-align:middle">${item.CANTIDAD}</td>
                 <td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;vertical-align:middle">${item.TALLA||''}</td>
-                ${[item.FOTO_PECHO_URL, item.FOTO_ESPALDA_URL, item.FOTO_MANGA_D_URL, item.FOTO_MANGA_I_URL].map(url =>
+                ${[item.FOTO_PECHO_URL,item.FOTO_ESPALDA_URL,item.FOTO_MANGA_D_URL,item.FOTO_MANGA_I_URL].map(url =>
                   `<td style="border:1px solid #000;padding:2px;text-align:center;width:50px;height:50px;vertical-align:middle">
-                    ${url ? `<img src="${url}" style="max-width:46px;max-height:46px;object-fit:contain;display:block;margin:0 auto">` : '<span style="color:#ccc;font-size:8px">—</span>'}
+                    ${url?`<img src="${url}" style="max-width:46px;max-height:46px;object-fit:contain;display:block;margin:0 auto">`:'<span style="color:#ccc;font-size:8px">—</span>'}
                   </td>`
                 ).join('')}
               </tr>
-              ${item.DETALLE_PERSONALIZADO ? `<tr><td colspan="8" style="border:1px solid #000;padding:4px;font-size:9px"><strong>Detalles:</strong> ${item.DETALLE_PERSONALIZADO}</td></tr>` : ''}
+              ${item.DETALLE_PERSONALIZADO?`<tr><td colspan="8" style="border:1px solid #000;padding:4px;font-size:9px"><strong>Detalles:</strong> ${item.DETALLE_PERSONALIZADO}</td></tr>`:''}
             </tbody>
           </table>
-        </div>
-      `).join('')
+        </div>`).join('')
 
       return `
         <div style="page-break-after:always;font-family:Arial,sans-serif;padding:12mm;font-size:11px;color:#000;background:#fff">
           <div style="background:${tiendaColor};height:5px;margin-bottom:10px;border-radius:3px"></div>
           <div style="text-align:center;margin-bottom:10px">
-            <h2 style="margin:0 0 4px;font-size:15px;font-weight:bold;color:${tiendaColor}">${esMandarina ? 'MANDARINA REPUBLIC' : 'INDSTORE'}</h2>
-            ${esMandarina ? `
-              <p style="margin:3px 0;font-size:12px;font-weight:bold">Hola ${cliente.NOMBRE || ''}</p>
+            <h2 style="margin:0 0 4px;font-size:15px;font-weight:bold;color:${tiendaColor}">${esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</h2>
+            ${esMandarina?`
+              <p style="margin:3px 0;font-size:12px;font-weight:bold">Hola ${cliente.NOMBRE||''}</p>
               <p style="margin:2px 0;font-size:13px;font-weight:bold">¡Gracias por tu compra! 🎉</p>
               <p style="margin:2px 0;font-size:10px;color:#555">Cada prenda que hacemos está pensada para gente única como tú.</p>
               <p style="margin:2px 0;font-size:10px;color:#555">Síguenos en @mandarinarepublicec y descubre más diseños.</p>
-              <p style="margin:5px 0;font-size:11px;font-weight:bold;color:${tiendaColor}">💛 Tu confianza nos inspira 💛</p>
-            ` : ''}
+              <p style="margin:5px 0;font-size:11px;font-weight:bold;color:${tiendaColor}">💛 Tu confianza nos inspira 💛</p>`:''}
           </div>
           <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
             <tr>
               <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0;width:22%">NUM FACTURA</td>
               <td style="border:1px solid #000;padding:4px 6px">${pedido.PEDIDO_ID}</td>
               <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0;width:22%">VENDEDOR</td>
-              <td style="border:1px solid #000;padding:4px 6px">${pedido.VENDEDOR_ID || '-'}</td>
+              <td style="border:1px solid #000;padding:4px 6px">${pedido.VENDEDOR_ID||'-'}</td>
             </tr>
             <tr>
               <td colspan="4" style="border:1px solid #000;padding:4px 6px;font-weight:bold">
-                ESTADO PAGO: ${pedido.ESTADO_PAGO === 'PAGADO' ? '🟢 Pagado' : pedido.ESTADO_PAGO === 'ABONO' ? `🔴 Abono $${montoAbonado.toFixed(2)}, pendiente $${montoPendiente.toFixed(2)}` : `🔴 Pendiente $${montoTotal.toFixed(2)}`}
+                ESTADO PAGO: ${pedido.ESTADO_PAGO==='PAGADO'?'🟢 Pagado':pedido.ESTADO_PAGO==='ABONO'?`🔴 Abono $${montoAbonado.toFixed(2)}, pendiente $${montoPendiente.toFixed(2)}`:`🔴 Pendiente $${montoTotal.toFixed(2)}`}
               </td>
             </tr>
             <tr>
               <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">NOMBRE CLIENTE</td>
-              <td style="border:1px solid #000;padding:4px 6px">${cliente.NOMBRE || '-'}</td>
+              <td style="border:1px solid #000;padding:4px 6px">${cliente.NOMBRE||'-'}</td>
               <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">CANTIDAD</td>
               <td style="border:1px solid #000;padding:4px 6px">${items.reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)}</td>
             </tr>
             <tr>
               <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">CÉDULA</td>
-              <td style="border:1px solid #000;padding:4px 6px">${cliente.CEDULA || '-'}</td>
+              <td style="border:1px solid #000;padding:4px 6px">${cliente.CEDULA||'-'}</td>
               <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">NÚMERO CELULAR</td>
-              <td style="border:1px solid #000;padding:4px 6px">${cliente.CELULAR || '-'}</td>
+              <td style="border:1px solid #000;padding:4px 6px">${cliente.CELULAR||'-'}</td>
             </tr>
             <tr>
               <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">DIRECCIÓN ENTREGA</td>
-              <td colspan="3" style="border:1px solid #000;padding:4px 6px">${pedido.DIRECCION_TEXTO || cliente.DIRECCION || '-'}</td>
+              <td colspan="3" style="border:1px solid #000;padding:4px 6px">${pedido.DIRECCION_TEXTO||cliente.DIRECCION||'-'}</td>
             </tr>
           </table>
           <h4 style="text-align:center;margin:8px 0 6px;font-size:11px;font-weight:bold">Detalle de los productos solicitados</h4>
           ${productosHTML}
           <div style="margin-top:10px;border-top:1px solid #ddd;padding-top:6px;text-align:center;font-size:9px;color:#888">
-            Pedido: ${pedido.FECHA_PEDIDO?.split(' ')[0] || '-'} · Entrega: ${pedido.FECHA_ENTREGA_PROMETIDA ? new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'}) : '-'}
+            Pedido: ${pedido.FECHA_PEDIDO?.split(' ')[0]||'-'} · Entrega: ${pedido.FECHA_ENTREGA_PROMETIDA?new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'}):'-'}
           </div>
-        </div>
-      `
+        </div>`
     }).join('')
 
     const win = window.open('', '_blank')
-    win.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Pedidos para imprimir</title>
-          <style>
-            @media print { body { margin: 0; } }
-            body { margin: 0; background: white; }
-          </style>
-        </head>
-        <body>
-          ${html}
-          <script>window.onload = () => { window.print(); }<\/script>
-        </body>
-      </html>
-    `)
+    win.document.write(`<!DOCTYPE html><html><head><title>Pedidos</title><style>@media print{body{margin:0}}body{margin:0;background:white}</style></head><body>${html}<script>window.onload=()=>{window.print()}<\/script></body></html>`)
     win.document.close()
     setPrinting(false)
   }
-
-  const filtered = pedidos.filter(p => {
-    if (!busqueda) return true
-    const q = busqueda.toLowerCase()
-    return p.PEDIDO_ID?.toLowerCase().includes(q) ||
-      clientes[p.CLIENTE_ID]?.NOMBRE?.toLowerCase().includes(q)
-  })
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
@@ -190,18 +192,47 @@ export default function ImpresionPage() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h1 className="text-xl font-display font-bold text-white">🖨️ Imprimir Pedidos</h1>
-              <p className="text-xs text-gray-500">Pedidos en producción · Selecciona los que quieres imprimir</p>
+              <p className="text-xs text-gray-500">Pedidos en producción</p>
             </div>
             <button onClick={() => router.back()} className="text-gray-500 hover:text-white text-sm">← Volver</button>
           </div>
-          <input className="input mb-3" placeholder="Buscar por ID o cliente..."
+
+          {/* Filters */}
+          <input className="input mb-2" placeholder="Buscar por ID o cliente..."
             value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          <div className="flex items-center justify-between">
-            <button onClick={selectAll}
-              className="text-sm text-mandarina-400 hover:text-mandarina-300">
+
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <label className="label">Tienda</label>
+              <select className="input py-2 text-sm" value={filtroTienda} onChange={e => setFiltroTienda(e.target.value)}>
+                <option value="TODAS">Todas las tiendas</option>
+                <option value="MANDARINA">🍊 Mandarina Republic</option>
+                <option value="INDSTORE">🏪 Indstore</option>
+              </select>
+            </div>
+            <div className="col-span-1">
+              <label className="label">Desde</label>
+              <input type="date" className="input py-2 text-sm" value={fechaDesde}
+                onChange={e => setFechaDesde(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <label className="label">Hasta</label>
+              <input type="date" className="input py-2 text-sm" value={fechaHasta}
+                onChange={e => setFechaHasta(e.target.value)} />
+            </div>
+            <div className="flex items-end">
+              <button onClick={() => { setFechaDesde(''); setFechaHasta(''); setFiltroTienda('TODAS'); setBusqueda('') }}
+                className="btn-ghost text-xs w-full py-2.5">Limpiar filtros</button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mt-1">
+            <button onClick={selectAll} className="text-sm text-mandarina-400 hover:text-mandarina-300">
               {selected.size === filtered.length && filtered.length > 0 ? 'Deseleccionar todos' : 'Seleccionar todos'}
             </button>
-            <span className="text-xs text-gray-500">{selected.size} seleccionado(s)</span>
+            <span className="text-xs text-gray-500">{filtered.length} pedido(s) · {selected.size} seleccionado(s)</span>
           </div>
         </div>
       </div>
@@ -214,8 +245,7 @@ export default function ImpresionPage() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="card p-8 text-center text-gray-600">
-              <div className="text-3xl mb-3">🏭</div>
-              No hay pedidos en producción
+              <div className="text-3xl mb-3">🏭</div>No hay pedidos con estos filtros
             </div>
           ) : (
             <div className="space-y-2">
@@ -239,13 +269,11 @@ export default function ImpresionPage() {
                         </span>
                       </div>
                       <div className="text-xs text-gray-500">
-                        {cliente.NOMBRE || 'Cliente...'} · {p.items?.length || 0} prendas · ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
+                        {cliente.NOMBRE || '...'} · {p.items?.length || 0} prendas · ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
                       </div>
                     </div>
                     <div className="text-right text-xs text-gray-500 flex-shrink-0">
-                      {p.FECHA_ENTREGA_PROMETIDA
-                        ? new Date(p.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC', {day:'numeric',month:'short'})
-                        : '-'}
+                      {p.FECHA_PEDIDO?.split(' ')[0] || '-'}
                     </div>
                   </button>
                 )
@@ -255,16 +283,13 @@ export default function ImpresionPage() {
         </div>
       </div>
 
-      {/* Bottom bar */}
-      <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4">
+      <div className="fixed bottom-0 left-0 right-0 md:left-56 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4">
         <button onClick={printSelected} disabled={selected.size === 0 || printing}
           className="btn-primary w-full flex items-center justify-center gap-2"
           style={{ opacity: selected.size === 0 ? 0.5 : 1 }}>
           {printing ? '⏳ Preparando...' : `🖨️ Imprimir ${selected.size > 0 ? `${selected.size} pedido(s)` : ''}`}
         </button>
-        {selected.size === 0 && (
-          <p className="text-center text-gray-600 text-xs mt-2">Selecciona al menos un pedido</p>
-        )}
+        {selected.size === 0 && <p className="text-center text-gray-600 text-xs mt-2">Selecciona al menos un pedido</p>}
       </div>
     </div>
   )

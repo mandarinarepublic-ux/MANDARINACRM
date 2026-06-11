@@ -4,8 +4,20 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','ENTREGADO']
-const ESTADO_LABELS = { PENDIENTE_FABRICA:'Pendiente fábrica', EN_FABRICA:'En fábrica', DESPACHO:'Para despacho', ENTREGADO:'Entregado', CANCELADO:'Cancelado' }
-const ESTADO_COLORS = { PENDIENTE_FABRICA:'status-pendiente_fabrica', EN_FABRICA:'status-en_fabrica', DESPACHO:'status-despacho', ENTREGADO:'status-entregado', CANCELADO:'status-cancelado' }
+const ESTADO_LABELS = {
+  PENDIENTE_FABRICA: 'Pend. Fábrica',
+  EN_FABRICA: 'En Producción',
+  DESPACHO: 'Despacho',
+  ENTREGADO: 'Entregado',
+  CANCELADO: 'Cancelado',
+}
+const ESTADO_COLORS = {
+  PENDIENTE_FABRICA: 'status-pendiente_fabrica',
+  EN_FABRICA: 'status-en_fabrica',
+  DESPACHO: 'status-despacho',
+  ENTREGADO: 'status-entregado',
+  CANCELADO: 'status-cancelado',
+}
 
 export default function HistorialPage() {
   const router = useRouter()
@@ -66,7 +78,7 @@ export default function HistorialPage() {
           <div className="flex gap-2 mt-2">
             {['TODAS','MANDARINA','INDSTORE'].map(t => (
               <button key={t} onClick={() => setFiltroTienda(t)}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all flex-shrink-0
                   ${filtroTienda === t ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
                 {t === 'TODAS' ? 'Todas' : t === 'MANDARINA' ? '🍊' : '🏪'} {t}
               </button>
@@ -75,7 +87,7 @@ export default function HistorialPage() {
         </div>
       </div>
 
-      {/* Scrollable list */}
+      {/* Scrollable list - READ ONLY */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           <div className="text-xs text-gray-600 mb-3">{filtered.length} pedido(s)</div>
@@ -90,14 +102,16 @@ export default function HistorialPage() {
           ) : (
             <div className="space-y-2">
               {filtered.map(p => (
-                <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`}
-                  className="card p-4 flex items-center gap-4 hover:border-gray-700 transition-all block">
+                // READ ONLY - just a div, no link to edit
+                <div key={p.PEDIDO_ID} className="card p-4 flex items-center gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
                       <span className="text-gray-600 text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                     </div>
-                    <div className="text-xs text-gray-500">{p.items?.length || 0} prendas · {p.FECHA_PEDIDO?.split(' ')[0] || ''}</div>
+                    <div className="text-xs text-gray-500">
+                      {p.items?.length || 0} prendas · {p.FECHA_PEDIDO?.split(' ')[0] || ''}
+                    </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
                     <span className={`badge ${ESTADO_COLORS[p.ESTADO_PEDIDO] || 'bg-gray-800 text-gray-400'}`}>
@@ -107,7 +121,7 @@ export default function HistorialPage() {
                       ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
                     </span>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           )}

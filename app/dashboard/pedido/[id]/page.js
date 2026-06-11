@@ -72,7 +72,7 @@ export default function PedidoDetailPage() {
       : 'por confirmar'
     const msg = encodeURIComponent(
       `Hola ${cliente.NOMBRE} 👋\n\n¡Tu pedido *${pedido.PEDIDO_ID}* ha sido registrado! 🎉\n\n` +
-      `💰 Total: $${parseFloat(pedido.MONTO_TOTAL || 0).toFixed(2)}\n📅 Entrega: ${fecha}\n\nGracias por tu compra 🍊`
+      `💰 Total: $${parseFloat(pedido.MONTO_TOTAL || 0).toFixed(2)}\n\nGracias por tu compra 🍊`
     )
     window.open(`https://wa.me/${num}?text=${msg}`, '_blank')
   }
