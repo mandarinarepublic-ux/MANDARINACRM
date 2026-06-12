@@ -1,43 +1,16 @@
 export const dynamic = 'force-dynamic'
 
-import { readSheet } from '@/lib/sheets'
-
-// Catalog served from PRODUCTOS_CATALOGO sheet (populated via Shopify MCP)
+// Catalog served directly from hardcoded Shopify MCP data
 export async function GET(req) {
-  try {
-    const { searchParams } = new URL(req.url)
-    const tiendaId = searchParams.get('tienda') || 'MANDARINA'
-    const query = searchParams.get('q')?.toLowerCase() || ''
+  const { searchParams } = new URL(req.url)
+  const query = searchParams.get('q')?.toLowerCase() || ''
 
-    // Read from sheet
-    const rows = await readSheet('PRODUCTOS_CATALOGO')
-
-    let products = rows
-      .filter(r => r.ACTIVO !== 'FALSE' && r.NOMBRE)
-      .map(r => ({
-        id: r.SHOPIFY_ID || r.NOMBRE,
-        title: r.NOMBRE,
-        image: r.IMAGEN_URL || null,
-        price: r.PRECIO || '35.00',
-        variants: (r.TALLAS || '').split(',').map(t => t.trim()).filter(Boolean).map(t => ({
-          title: t, price: r.PRECIO || '35.00'
-        })),
-        tags: r.TAGS || '',
-      }))
-
-    if (query) {
-      products = products.filter(p =>
-        p.title.toLowerCase().includes(query) ||
-        p.tags.toLowerCase().includes(query)
-      )
-    }
-
-    return Response.json({ products })
-  } catch (e) {
-    console.error('Catalogo error:', e.message)
-    // Fallback to hardcoded catalog if sheet fails
-    return Response.json({ products: FALLBACK_CATALOG })
+  let products = FALLBACK_CATALOG
+  if (query) {
+    products = products.filter(p => p.title.toLowerCase().includes(query))
   }
+
+  return Response.json({ products })
 }
 
 // Fallback catalog from Shopify MCP - 50 productos Mandarina Republic
