@@ -131,6 +131,12 @@ export default function NuevoPedidoPage() {
     return null
   }
 
+  function validateStep3() {
+    const totalPagado = pagos.reduce((s, p) => s + parseFloat(p.monto || 0), 0)
+    if (totalPagado <= 0) return 'Debes registrar al menos una forma de pago (puede ser abono parcial)'
+    return null
+  }
+
   function canGoToStep(s) {
     if (s <= 1) return true
     if (s === 2) return !validateStep1()
@@ -149,6 +155,10 @@ export default function NuevoPedidoPage() {
         const err = validateStep2()
         if (err) { setError(err); return }
       }
+      if (step === 3) {
+        const err = validateStep3()
+        if (err) { setError(err); return }
+      }
     }
     setError('')
     setStep(s)
@@ -157,11 +167,14 @@ export default function NuevoPedidoPage() {
   async function handleSubmit() {
     const err1 = validateStep1()
     const err2 = validateStep2()
+    const err3 = validateStep3()
     if (err1) { setError(err1); setStep(1); return }
     if (err2) { setError(err2); setStep(2); return }
+    if (err3) { setError(err3); setStep(3); return }
 
     setLoading(true); setError('')
 
+    // Always update client data (new or existing) with latest direction
     if (clienteId) {
       await fetch(`/api/clientes/${clienteId}`, {
         method: 'PATCH',
@@ -170,8 +183,8 @@ export default function NuevoPedidoPage() {
           NOMBRE: cliente.nombre,
           CEDULA: String(cliente.cedula),
           CELULAR: String(cliente.celular),
-          EMAIL: cliente.email,
-          CIUDAD: cliente.ciudad,
+          EMAIL: cliente.email || '',
+          CIUDAD: cliente.ciudad || '',
           DIRECCION: buildDireccion(),
         }),
       })
@@ -383,11 +396,6 @@ export default function NuevoPedidoPage() {
                 )}
               </div>
               <SeccionPago pagos={pagos} onChange={setPagos} montoTotal={montoTotal} />
-              <div>
-                <label className="label">Notas internas</label>
-                <textarea className="input resize-none" rows={3} placeholder="Instrucciones especiales, urgencias..."
-                  value={notasVendedor} onChange={e => setNotasVendedor(e.target.value)} />
-              </div>
             </div>
           )}
 
@@ -420,6 +428,13 @@ export default function NuevoPedidoPage() {
                 <div className="flex justify-between"><span className="text-gray-500">Entrega</span>
                   <span className="text-white">{new Date(fechaEntrega).toLocaleDateString('es-EC', {day:'numeric',month:'long',year:'numeric'})}</span>
                 </div>
+              </div>
+
+              {/* Fix 4: Notas internas in step 4 */}
+              <div>
+                <label className="label">Notas internas</label>
+                <textarea className="input resize-none" rows={3} placeholder="Instrucciones especiales para fábrica, urgencias..."
+                  value={notasVendedor} onChange={e => setNotasVendedor(e.target.value)} />
               </div>
             </div>
           )}
