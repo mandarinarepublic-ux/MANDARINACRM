@@ -93,6 +93,7 @@ export default function PedidoDetailPage() {
   )
 
   const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
+  const readOnly = user?.rol === 'VENDEDOR'
   const montoTotal = parseFloat(pedido.MONTO_TOTAL || 0)
   const montoAbonado = parseFloat(pedido.MONTO_ABONADO || 0)
   const montoPendiente = montoTotal - montoAbonado
@@ -210,6 +211,7 @@ export default function PedidoDetailPage() {
                     </div>
                   )}
                   <div className="mt-2">
+                    {!readOnly && (
                     <select className="bg-gray-800 border border-gray-700 text-xs text-white rounded-lg px-2 py-1"
                       value={item.SUBESTADO}
                       onChange={async e => {
@@ -222,6 +224,7 @@ export default function PedidoDetailPage() {
                       }}>
                       {['SOLICITADO','EN_PROCESO','LISTO'].map(s => <option key={s}>{s}</option>)}
                     </select>
+                  )}
                   </div>
                 </div>
               ))}
