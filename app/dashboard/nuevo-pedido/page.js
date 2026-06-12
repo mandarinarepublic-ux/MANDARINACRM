@@ -174,7 +174,8 @@ export default function NuevoPedidoPage() {
 
     setLoading(true); setError('')
 
-    // Always update client data (new or existing) with latest direction
+    // Update existing client with latest data including new direccion
+    const direccionFinal = usarMapa ? direccionTexto : [cliente.ciudad, cliente.direccion].filter(Boolean).join(': ')
     if (clienteId) {
       await fetch(`/api/clientes/${clienteId}`, {
         method: 'PATCH',
@@ -185,7 +186,7 @@ export default function NuevoPedidoPage() {
           CELULAR: String(cliente.celular),
           EMAIL: cliente.email || '',
           CIUDAD: cliente.ciudad || '',
-          DIRECCION: buildDireccion(),
+          DIRECCION: direccionFinal,
         }),
       })
     }
@@ -202,14 +203,14 @@ export default function NuevoPedidoPage() {
           tiendaId: tienda,
           vendedorId: user.id,
           vendedorCodigo: user.codigo,
-          cliente: { ...cliente, cedula: String(cliente.cedula), celular: String(cliente.celular), direccion: buildDireccion() },
+          cliente: { ...cliente, cedula: String(cliente.cedula), celular: String(cliente.celular), direccion: direccionFinal },
           items,
           pagos,
           emitirFactura,
           diasEntregaPrometido: diasPrometido,
           fechaEntregaPrometida: fechaEntrega,
           notasVendedor,
-          direccionTexto: buildDireccion(),
+          direccionTexto: direccionFinal,
           latitud, longitud,
         }),
       })
