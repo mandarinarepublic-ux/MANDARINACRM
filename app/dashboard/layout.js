@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 
 const NAV = [
+  { href: '/dashboard',              label: 'Dashboard',    icon: '🏠', roles: ['ADMIN','VENDEDOR','DISEÑO','DESPACHO'] },
   { href: '/dashboard/nuevo-pedido', label: 'Nueva Venta',  icon: '➕', roles: ['ADMIN','VENDEDOR'] },
   { href: '/dashboard/historial',    label: 'Historial',    icon: '📋', roles: ['ADMIN','VENDEDOR'] },
   { href: '/dashboard/catalogo',     label: 'Catálogo',     icon: '🛍️', roles: ['ADMIN','VENDEDOR'] },
@@ -43,13 +44,13 @@ export default function DashboardLayout({ children }) {
     <div className="min-h-screen bg-gray-950 flex">
       {/* Sidebar desktop */}
       <aside className="hidden md:flex flex-col w-56 bg-gray-900 border-r border-gray-800 p-4 fixed h-full z-30">
-        <div className="flex items-center gap-3 mb-8 px-2">
+        <Link href="/dashboard" className="flex items-center gap-3 mb-8 px-2 hover:opacity-80 transition-opacity">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm bg-mandarina-500">M</div>
           <div>
             <div className="text-white font-display font-semibold text-sm">Mandarina Pro</div>
             <div className="text-gray-500 text-xs truncate">{user.nombre}</div>
           </div>
-        </div>
+        </Link>
         <nav className="flex-1 space-y-1">
           {navItems.map(item => (
             <Link key={item.href} href={item.href}
@@ -75,10 +76,10 @@ export default function DashboardLayout({ children }) {
 
       {/* Mobile header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <Link href="/dashboard" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-mandarina-500 flex items-center justify-center text-white font-bold text-xs">M</div>
           <span className="font-display font-semibold text-sm text-white">Mandarina Pro</span>
-        </div>
+        </Link>
         <button onClick={() => setMenuOpen(!menuOpen)} className="text-gray-400 p-1 text-xl">
           {menuOpen ? '✕' : '☰'}
         </button>
