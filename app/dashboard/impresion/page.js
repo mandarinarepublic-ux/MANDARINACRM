@@ -103,10 +103,11 @@ export default function ImpresionPage() {
           <table style="width:100%;border-collapse:collapse;font-size:10px">
             <thead>
               <tr style="background:#e8e8e8">
-                <th style="border:1px solid #000;padding:3px 4px;text-align:left;width:20%">PRODUCTO</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:13%">COLOR</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:7%">CANT.</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:7%">TALLA</th>
+                <th style="border:1px solid #000;padding:3px 4px;text-align:left;width:18%">PRODUCTO</th>
+                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:50px">FOTO</th>
+                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:11%">COLOR</th>
+                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:6%">CANT.</th>
+                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:6%">TALLA</th>
                 <th style="border:1px solid #000;padding:3px 4px;text-align:center">DISEÑO PECHO</th>
                 <th style="border:1px solid #000;padding:3px 4px;text-align:center">DISEÑO ESPALDA</th>
                 <th style="border:1px solid #000;padding:3px 4px;text-align:center">MANGA DERECHA</th>
@@ -116,6 +117,9 @@ export default function ImpresionPage() {
             <tbody>
               <tr>
                 <td style="border:1px solid #000;padding:4px;vertical-align:top">${item.PRODUCTO_NOMBRE}<br><span style="color:${tiendaColor};font-size:9px">${item.AREA}</span></td>
+                <td style="border:1px solid #000;padding:2px;text-align:center;vertical-align:middle;width:50px;height:50px">
+                  ${item.FOTO_PECHO_URL?`<img src="${item.FOTO_PECHO_URL}" style="max-width:46px;max-height:46px;object-fit:contain;display:block;margin:0 auto">`:'<span style="color:#ccc;font-size:8px">—</span>'}
+                </td>
                 <td style="border:1px solid #000;padding:4px;text-align:center;vertical-align:middle">${item.COLOR||''}</td>
                 <td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;vertical-align:middle">${item.CANTIDAD}</td>
                 <td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;vertical-align:middle">${item.TALLA||''}</td>
@@ -125,7 +129,7 @@ export default function ImpresionPage() {
                   </td>`
                 ).join('')}
               </tr>
-              ${item.DETALLE_PERSONALIZADO?`<tr><td colspan="8" style="border:1px solid #000;padding:4px;font-size:9px"><strong>Detalles:</strong> ${item.DETALLE_PERSONALIZADO}</td></tr>`:''}
+              ${item.DETALLE_PERSONALIZADO?`<tr><td colspan="9" style="border:1px solid #000;padding:4px;font-size:9px"><strong>Detalles:</strong> ${item.DETALLE_PERSONALIZADO}</td></tr>`:''}
             </tbody>
           </table>
         </div>`).join('')

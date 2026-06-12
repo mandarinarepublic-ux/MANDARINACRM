@@ -108,10 +108,14 @@ export async function POST(req) {
         async function processPhoto(data, name) {
           if (!data) return ''
           if (data.startsWith('http')) return data // already a URL, use as-is
-          const r = await uploadToCloudinary(data, name, cloudFolder)
-          return r.url
+          if (data.startsWith('data:')) {
+            const r = await uploadToCloudinary(data, name, cloudFolder)
+            return r.url
+          }
+          return ''
         }
-        fotoPecho   = await processPhoto(item.fotoPecho,   `${itemId}_pecho.jpg`)
+        // fotoPecho: use uploaded base64, or Shopify CDN URL directly
+        fotoPecho = await processPhoto(item.fotoPecho || item.imagenShopify || '', `${itemId}_pecho.jpg`)
         fotoEspalda = await processPhoto(item.fotoEspalda, `${itemId}_espalda.jpg`)
         fotoMangaD  = await processPhoto(item.fotoMangaD,  `${itemId}_manga_d.jpg`)
         fotoMangaI  = await processPhoto(item.fotoMangaI,  `${itemId}_manga_i.jpg`)

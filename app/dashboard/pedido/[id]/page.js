@@ -323,10 +323,11 @@ function PdfContent({ pedido, items, cliente, tiendaColor }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
             <thead>
               <tr style={{ backgroundColor: '#e8e8e8' }}>
-                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', width: '20%' }}>PRODUCTO</th>
-                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '13%' }}>COLOR</th>
-                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '7%' }}>CANT.</th>
-                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '7%' }}>TALLA</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', width: '18%' }}>PRODUCTO</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '50px' }}>FOTO</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '11%' }}>COLOR</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '6%' }}>CANT.</th>
+                <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', width: '6%' }}>TALLA</th>
                 <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>DISEÑO PECHO</th>
                 <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>DISEÑO ESPALDA</th>
                 <th style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>MANGA DERECHA</th>
@@ -337,6 +338,11 @@ function PdfContent({ pedido, items, cliente, tiendaColor }) {
               <tr>
                 <td style={{ border: '1px solid #000', padding: '4px', verticalAlign: 'top' }}>
                   {item.PRODUCTO_NOMBRE}<br/><span style={{ color: tiendaColor, fontSize: '9px' }}>{item.AREA}</span>
+                </td>
+                <td style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', verticalAlign: 'middle', width: '50px', height: '50px' }}>
+                  {item.FOTO_PECHO_URL
+                    ? <img src={item.FOTO_PECHO_URL} style={{ maxWidth: '46px', maxHeight: '46px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                    : <span style={{ color: '#ccc', fontSize: '8px' }}>—</span>}
                 </td>
                 <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{item.COLOR}</td>
                 <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>{item.CANTIDAD}</td>
@@ -349,7 +355,7 @@ function PdfContent({ pedido, items, cliente, tiendaColor }) {
               </tr>
               {item.DETALLE_PERSONALIZADO && (
                 <tr>
-                  <td colSpan={8} style={{ border: '1px solid #000', padding: '4px', fontSize: '9px' }}>
+                  <td colSpan={9} style={{ border: '1px solid #000', padding: '4px', fontSize: '9px' }}>
                     <strong>Detalles:</strong> {item.DETALLE_PERSONALIZADO}
                   </td>
                 </tr>
