@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { getTiendaConfig } from '@/lib/auth'
 
 export async function GET(req) {
@@ -15,11 +17,10 @@ export async function GET(req) {
       return Response.json({ error: 'Token no configurado', products: [] })
     }
 
-    // Log for debugging
-    console.log('Store:', config.shopifyStore)
-    console.log('Token prefix:', config.shopifyToken?.slice(0, 10))
-
     const shopifyUrl = `https://${config.shopifyStore}/admin/api/2024-10/products.json?limit=50${query ? `&title=${encodeURIComponent(query)}` : ''}`
+
+    console.log('Shopify store:', config.shopifyStore)
+    console.log('Token prefix:', config.shopifyToken?.slice(0, 8))
 
     const res = await fetch(shopifyUrl, {
       headers: {
@@ -29,31 +30,23 @@ export async function GET(req) {
     })
 
     const responseText = await res.text()
-    console.log('Shopify status:', res.status)
-    console.log('Shopify response:', responseText.slice(0, 500))
+    console.log('Status:', res.status)
+    console.log('Response preview:', responseText.slice(0, 300))
 
     if (!res.ok) {
-      return Response.json({ 
-        error: `Shopify ${res.status}`, 
-        detail: responseText,
-        products: [] 
-      })
+      return Response.json({ error: `Shopify ${res.status}`, detail: responseText, products: [] })
     }
 
     const data = JSON.parse(responseText)
-    console.log('Products count:', data.products?.length)
+    console.log('Products found:', data.products?.length)
 
     const products = (data.products || []).map(p => ({
       id: p.id,
       title: p.title,
       image: p.image?.src || p.images?.[0]?.src || null,
       variants: (p.variants || []).map(v => ({
-        id: v.id,
-        title: v.title,
-        price: v.price,
-        sku: v.sku,
-        option1: v.option1,
-        option2: v.option2,
+        id: v.id, title: v.title, price: v.price,
+        sku: v.sku, option1: v.option1, option2: v.option2,
       })),
       options: p.options,
       tags: p.tags,
@@ -61,7 +54,7 @@ export async function GET(req) {
 
     return Response.json({ products })
   } catch (e) {
-    console.error('Shopify API error:', e)
+    console.error('Shopify error:', e.message)
     return Response.json({ error: e.message, products: [] })
   }
 }
