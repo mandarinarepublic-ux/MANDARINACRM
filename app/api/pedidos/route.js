@@ -1,7 +1,9 @@
 import { readSheet, appendRow, findRow, fechaAhora } from '@/lib/sheets'
-import { generatePedidoId, generateItemId, calcularDiasEntrega } from '@/lib/pedidos'
+import { generatePedidoId, generateItemId, calcularDiasEntrega, subestadoInicial, logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
 import { v4 as uuid } from 'uuid'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(req) {
   try {
@@ -13,13 +15,15 @@ export async function GET(req) {
     let detalles = await readSheet('DETALLE_PEDIDO')
     let pagos = await readSheet('PAGOS')
 
-    if (rol === 'VENDEDOR' && vendedorId) {
+    // Vendors only see their own orders in "mis-pedidos" context
+    // For historial they see all
+    if (rol === 'VENDEDOR' && vendedorId && searchParams.get('scope') === 'mios') {
       pedidos = pedidos.filter(p => p.VENDEDOR_ID === vendedorId)
     }
 
     const result = pedidos.map(p => ({
       ...p,
-      items: detalles.filter(d => d.PEDIDO_ID === p.PEDIDO_ID),
+      items: detalles.filter(d => d.PEDIDO_ID === p.PEDIDO_ID && d.SUBESTADO !== 'ELIMINADO'),
       pagos: pagos.filter(pg => pg.PEDIDO_ID === p.PEDIDO_ID),
     }))
 
@@ -36,15 +40,13 @@ export async function POST(req) {
     const {
       tiendaId, vendedorId, vendedorCodigo,
       cliente, items, pagos: pagosInput,
-      emitirFactura,
-      diasEntregaPrometido, fechaEntregaPrometida,
+      emitirFactura, fechaEntregaPrometida,
       notasVendedor, direccionTexto, latitud, longitud,
     } = body
 
-    // 1. Generate pedido ID
     const pedidoId = await generatePedidoId(tiendaId, vendedorCodigo)
 
-    // 2. Handle cliente
+    // Handle cliente
     let clienteId
     const { row: existingCliente } = await findRow('CLIENTES', 'CEDULA', String(cliente.cedula))
     if (existingCliente) {
@@ -60,28 +62,23 @@ export async function POST(req) {
       ])
     }
 
-    // 3. Calculate totals
     const montoTotal = items.reduce((sum, i) => sum + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
-    const pagosArray = Array.isArray(pagosInput) ? pagosInput : (body.pago ? [body.pago] : [])
+    const pagosArray = Array.isArray(pagosInput) ? pagosInput : []
     const montoAbonado = pagosArray.reduce((sum, p) => sum + parseFloat(p.monto || 0), 0)
     const montoPendiente = montoTotal - montoAbonado
 
-    // 4. Calculate delivery
-    const areas = items.map(i => i.area || '')
+    const areas = items.map(i => i.area || '').filter(a => a !== 'ENTREGA EN TIENDA')
     const diasCalculado = calcularDiasEntrega(areas)
-    const diasPrometido = diasEntregaPrometido || diasCalculado
-    const alertaEntrega = fechaEntregaPrometida
-      ? new Date(fechaEntregaPrometida) < new Date(Date.now() + diasCalculado * 86400000)
-      : false
 
     const now = fechaAhora()
 
-    // 5. Save pedido
+    // Pedido nace directamente EN_FABRICA
     await appendRow('PEDIDOS', [
       pedidoId, tiendaId, vendedorId, clienteId,
       now, now, fechaEntregaPrometida || '',
-      String(diasCalculado), String(diasPrometido), alertaEntrega ? 'TRUE' : 'FALSE',
-      'PENDIENTE_FABRICA',
+      String(diasCalculado), String(diasCalculado),
+      'FALSE',
+      'EN_FABRICA', // <-- directo a fábrica
       montoAbonado >= montoTotal ? 'PAGADO' : montoAbonado > 0 ? 'ABONO' : 'PENDIENTE',
       String(montoTotal.toFixed(2)),
       String(montoAbonado.toFixed(2)),
@@ -93,15 +90,18 @@ export async function POST(req) {
       longitud ? String(longitud) : '',
     ])
 
-    // 6. Save items with Cloudinary photo upload
+    // Log creation
+    await logCambio(pedidoId, 'CREACION', '', 'EN_FABRICA', vendedorId)
+
+    // Save items
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
       const itemId = await generateItemId(pedidoId, i + 1)
       const cloudFolder = `mandarina-pro/pedidos/${pedidoId}`
+      const initSubestado = subestadoInicial(item.area)
 
       let fotoPecho = '', fotoEspalda = '', fotoMangaD = '', fotoMangaI = '', archivoDiseno = ''
 
-      // Upload photos to Cloudinary
       try {
         if (item.fotoPecho) {
           const r = await uploadToCloudinary(item.fotoPecho, `${itemId}_pecho.jpg`, cloudFolder)
@@ -125,7 +125,6 @@ export async function POST(req) {
         }
       } catch (uploadErr) {
         console.error('Photo upload error:', uploadErr.message)
-        // Don't fail the whole order if photos fail
       }
 
       await appendRow('DETALLE_PEDIDO', [
@@ -135,15 +134,16 @@ export async function POST(req) {
         String(item.cantidad || 1),
         String(item.precioUnit || 0),
         String((parseFloat(item.precioUnit || 0) * parseInt(item.cantidad || 1)).toFixed(2)),
-        item.area || '', 'SOLICITADO',
+        item.area || '', initSubestado,
         fotoPecho, fotoEspalda, fotoMangaD, fotoMangaI,
         archivoDiseno,
         item.shopifyVariantId || '',
         now,
+        '', // NOTAS_AREA
       ])
     }
 
-    // 7. Register payments
+    // Register payments
     for (const pago of pagosArray) {
       if (!pago || parseFloat(pago.monto || 0) <= 0) continue
       await appendRow('PAGOS', [
@@ -151,8 +151,7 @@ export async function POST(req) {
         String(parseFloat(pago.monto || 0).toFixed(2)),
         now,
         pago.tipo === 'LINK_PAGO' ? 'PENDIENTE' : 'PAGADO',
-        '', '', '',
-        pago.fotoComprobante || '',
+        '', '', '', pago.fotoComprobante || '',
         vendedorId, pago.notas || '',
       ])
     }

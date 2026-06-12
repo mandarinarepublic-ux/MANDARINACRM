@@ -4,14 +4,15 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 
 const NAV = [
-  { href: '/dashboard',              label: 'Dashboard',    icon: '🏠', roles: ['ADMIN','VENDEDOR','DISEÑO','DESPACHO'] },
-  { href: '/dashboard/nuevo-pedido', label: 'Nueva Venta',  icon: '➕', roles: ['ADMIN','VENDEDOR'] },
-  { href: '/dashboard/historial',    label: 'Historial',    icon: '📋', roles: ['ADMIN','VENDEDOR'] },
-  { href: '/dashboard/catalogo',     label: 'Catálogo',     icon: '🛍️', roles: ['ADMIN','VENDEDOR'] },
-  { href: '/dashboard/produccion',   label: 'Producción',   icon: '🏭', roles: ['ADMIN','DISEÑO'] },
-  { href: '/dashboard/impresion',    label: 'Imprimir',     icon: '🖨️', roles: ['ADMIN','DISEÑO'] },
-  { href: '/dashboard/despacho',     label: 'Despacho',     icon: '🚚', roles: ['ADMIN','DESPACHO'] },
-  { href: '/dashboard/usuarios',     label: 'Usuarios',     icon: '👥', roles: ['ADMIN'] },
+  { href: '/dashboard',                label: 'Dashboard',    icon: '🏠', roles: ['ADMIN','VENDEDOR','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'] },
+  { href: '/dashboard/nuevo-pedido',   label: 'Nueva Venta',  icon: '➕', roles: ['ADMIN','VENDEDOR'] },
+  { href: '/dashboard/mis-pedidos',    label: 'Mis Pedidos',  icon: '📦', roles: ['ADMIN','VENDEDOR'] },
+  { href: '/dashboard/historial',      label: 'Historial',    icon: '📋', roles: ['ADMIN','VENDEDOR','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'] },
+  { href: '/dashboard/catalogo',       label: 'Catálogo',     icon: '🛍️', roles: ['ADMIN','VENDEDOR'] },
+  { href: '/dashboard/produccion',     label: 'Producción',   icon: '🏭', roles: ['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO'] },
+  { href: '/dashboard/impresion',      label: 'Imprimir',     icon: '🖨️', roles: ['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO'] },
+  { href: '/dashboard/despacho',       label: 'Despacho',     icon: '🚚', roles: ['ADMIN','DESPACHO'] },
+  { href: '/dashboard/usuarios',       label: 'Usuarios',     icon: '👥', roles: ['ADMIN'] },
 ]
 
 export default function DashboardLayout({ children }) {
