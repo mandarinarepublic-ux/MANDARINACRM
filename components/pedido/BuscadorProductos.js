@@ -83,7 +83,9 @@ export default function BuscadorProductos({ tienda, onAdd }) {
               area, detalle,
               esPersonalizado: false,
               imagen: prod.image,
+              // fotoPecho: use manually uploaded photo first, fallback to Shopify URL
               ...fotos,
+              fotoPecho: fotos.fotoPecho || prod.image || null,
             })
             setSelected(null); setQuery(''); setProductos([])
           }}

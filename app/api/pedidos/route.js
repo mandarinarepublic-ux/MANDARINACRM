@@ -103,28 +103,26 @@ export async function POST(req) {
       let fotoPecho = '', fotoEspalda = '', fotoMangaD = '', fotoMangaI = '', archivoDiseno = ''
 
       try {
-        if (item.fotoPecho) {
-          const r = await uploadToCloudinary(item.fotoPecho, `${itemId}_pecho.jpg`, cloudFolder)
-          fotoPecho = r.url
+        // If photo is base64 → upload to Cloudinary
+        // If photo is already a URL (e.g. from Shopify CDN) → use directly
+        async function processPhoto(data, name) {
+          if (!data) return ''
+          if (data.startsWith('http')) return data // already a URL, use as-is
+          const r = await uploadToCloudinary(data, name, cloudFolder)
+          return r.url
         }
-        if (item.fotoEspalda) {
-          const r = await uploadToCloudinary(item.fotoEspalda, `${itemId}_espalda.jpg`, cloudFolder)
-          fotoEspalda = r.url
-        }
-        if (item.fotoMangaD) {
-          const r = await uploadToCloudinary(item.fotoMangaD, `${itemId}_manga_d.jpg`, cloudFolder)
-          fotoMangaD = r.url
-        }
-        if (item.fotoMangaI) {
-          const r = await uploadToCloudinary(item.fotoMangaI, `${itemId}_manga_i.jpg`, cloudFolder)
-          fotoMangaI = r.url
-        }
+        fotoPecho   = await processPhoto(item.fotoPecho,   `${itemId}_pecho.jpg`)
+        fotoEspalda = await processPhoto(item.fotoEspalda, `${itemId}_espalda.jpg`)
+        fotoMangaD  = await processPhoto(item.fotoMangaD,  `${itemId}_manga_d.jpg`)
+        fotoMangaI  = await processPhoto(item.fotoMangaI,  `${itemId}_manga_i.jpg`)
         if (item.archivoDiseno) {
           const r = await uploadFileToCloudinary(item.archivoDiseno, `${itemId}_diseno`, cloudFolder)
           archivoDiseno = r.url
         }
       } catch (uploadErr) {
         console.error('Photo upload error:', uploadErr.message)
+        // If Shopify URL was passed directly, still save it
+        if (item.fotoPecho?.startsWith('http')) fotoPecho = item.fotoPecho
       }
 
       await appendRow('DETALLE_PEDIDO', [
