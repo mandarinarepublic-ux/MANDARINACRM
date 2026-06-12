@@ -6,6 +6,7 @@ import Link from 'next/link'
 const NAV = [
   { href: '/dashboard/nuevo-pedido', label: 'Nueva Venta',  icon: '➕', roles: ['ADMIN','VENDEDOR'] },
   { href: '/dashboard/historial',    label: 'Historial',    icon: '📋', roles: ['ADMIN','VENDEDOR'] },
+  { href: '/dashboard/catalogo',     label: 'Catálogo',     icon: '🛍️', roles: ['ADMIN','VENDEDOR'] },
   { href: '/dashboard/produccion',   label: 'Producción',   icon: '🏭', roles: ['ADMIN','DISEÑO'] },
   { href: '/dashboard/impresion',    label: 'Imprimir',     icon: '🖨️', roles: ['ADMIN','DISEÑO'] },
   { href: '/dashboard/despacho',     label: 'Despacho',     icon: '🚚', roles: ['ADMIN','DESPACHO'] },
