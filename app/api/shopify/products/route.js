@@ -12,36 +12,36 @@ export async function GET(req) {
     if (!config) return Response.json({ error: 'Tienda no válida' }, { status: 400 })
 
     if (!config.shopifyToken) {
-      return Response.json({ error: 'Token de Shopify no configurado', products: [] }, { status: 200 })
+      return Response.json({ error: 'Token no configurado', products: [] })
     }
 
-    // Try 2024-10 API version
-    const shopifyUrl = `https://${config.shopifyStore}/admin/api/2024-10/products.json?limit=50${query ? `&title=${encodeURIComponent(query)}` : ''}`
+    // Log for debugging
+    console.log('Store:', config.shopifyStore)
+    console.log('Token prefix:', config.shopifyToken?.slice(0, 10))
 
-    console.log('Shopify URL:', shopifyUrl)
-    console.log('Token prefix:', config.shopifyToken?.slice(0, 8))
+    const shopifyUrl = `https://${config.shopifyStore}/admin/api/2024-10/products.json?limit=50${query ? `&title=${encodeURIComponent(query)}` : ''}`
 
     const res = await fetch(shopifyUrl, {
       headers: {
         'X-Shopify-Access-Token': config.shopifyToken,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
       },
     })
 
-    // Log full error
+    const responseText = await res.text()
+    console.log('Shopify status:', res.status)
+    console.log('Shopify response:', responseText.slice(0, 500))
+
     if (!res.ok) {
-      const errBody = await res.text()
-      console.error('Shopify error status:', res.status)
-      console.error('Shopify error body:', errBody)
       return Response.json({ 
-        error: `Shopify ${res.status}`,
-        detail: errBody,
+        error: `Shopify ${res.status}`, 
+        detail: responseText,
         products: [] 
-      }, { status: 200 }) // Return 200 so frontend shows error
+      })
     }
 
-    const data = await res.json()
+    const data = JSON.parse(responseText)
+    console.log('Products count:', data.products?.length)
 
     const products = (data.products || []).map(p => ({
       id: p.id,
@@ -62,6 +62,6 @@ export async function GET(req) {
     return Response.json({ products })
   } catch (e) {
     console.error('Shopify API error:', e)
-    return Response.json({ error: e.message, products: [] }, { status: 200 })
+    return Response.json({ error: e.message, products: [] })
   }
 }
