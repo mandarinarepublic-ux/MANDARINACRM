@@ -121,7 +121,9 @@ export default function DashboardPage() {
     </div>
   )
 
-  if (user.rol === 'DISEÑO') return <DashboardDiseno data={data} user={user} />
+  if (user.rol === 'DISEÑO' || user.rol === 'ESTAMPADO' || user.rol === 'SUBLIMACION' || user.rol === 'BORDADO')
+    return <DashboardDiseno data={data} user={user} />
+  if (user.rol === 'DESPACHO') return <DashboardDespacho data={data} user={user} />
   if (user.rol === 'VENDEDOR') return <DashboardVendedor data={data} user={user} />
   return <DashboardAdmin data={data} user={user} />
 }
@@ -322,6 +324,59 @@ function DashboardVendedor({ data, user }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+
+// ─── DESPACHO DASHBOARD ───────────────────────────────────────────────────────
+function DashboardDespacho({ data, user }) {
+  const listos = (data.pedidos || []).filter(p =>
+    p.ESTADO_PEDIDO === 'EN_FABRICA' &&
+    (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA').every(i => i.SUBESTADO === 'LISTO')
+    && (p.items || []).length > 0
+  )
+  const enDespacho = (data.pedidos || []).filter(p => p.ESTADO_PEDIDO === 'DESPACHO')
+  const hoy = new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })
+
+  return (
+    <div className="max-w-xl mx-auto px-4 pt-4 pb-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-display font-bold text-white">Hola, {user.nombre.split(' ')[0]} 👋</h1>
+        <p className="text-gray-500 text-sm capitalize">{hoy}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="card p-4 text-center">
+          <div className="text-3xl font-bold text-yellow-400">{listos.length}</div>
+          <div className="text-xs text-gray-500 mt-1">Listos para despacho</div>
+        </div>
+        <div className="card p-4 text-center">
+          <div className="text-3xl font-bold text-purple-400">{enDespacho.length}</div>
+          <div className="text-xs text-gray-500 mt-1">En despacho</div>
+        </div>
+      </div>
+      <Link href="/dashboard/despacho"
+        className="card p-4 flex items-center justify-between hover:border-gray-700 transition-all block mb-3">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">🚚</span>
+          <div>
+            <div className="text-white font-semibold text-sm">Módulo de despacho</div>
+            <div className="text-xs text-gray-500">Gestionar guías y entregas</div>
+          </div>
+        </div>
+        <span className="text-gray-600">→</span>
+      </Link>
+      <Link href="/dashboard/historial"
+        className="card p-4 flex items-center justify-between hover:border-gray-700 transition-all block">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">📋</span>
+          <div>
+            <div className="text-white font-semibold text-sm">Historial</div>
+            <div className="text-xs text-gray-500">Ver todos los pedidos</div>
+          </div>
+        </div>
+        <span className="text-gray-600">→</span>
+      </Link>
     </div>
   )
 }
