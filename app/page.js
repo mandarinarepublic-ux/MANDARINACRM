@@ -13,6 +13,11 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
+    // Safety timeout — never stay stuck loading more than 10s
+    const timeout = setTimeout(() => {
+      setLoading(false)
+      setError('El servidor tardó demasiado. Intenta de nuevo.')
+    }, 10000)
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -20,12 +25,15 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error); return }
+      clearTimeout(timeout)
+      if (!res.ok) { setError(data.error || 'Error al iniciar sesión'); setLoading(false); return }
       localStorage.setItem('mp_user', JSON.stringify(data.user))
       router.push('/dashboard')
     } catch (e) {
-      setError('Error de conexión')
+      clearTimeout(timeout)
+      setError('Error de conexión. Verifica tu internet.')
     } finally {
+      clearTimeout(timeout)
       setLoading(false)
     }
   }
