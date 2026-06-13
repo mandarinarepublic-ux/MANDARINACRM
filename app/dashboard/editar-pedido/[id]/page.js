@@ -165,6 +165,7 @@ export default function EditarPedidoPage() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [editingItem, setEditingItem] = useState(null)
   const [editingDireccion, setEditingDireccion] = useState(false)
+  const [showPago, setShowPago] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -420,43 +421,70 @@ export default function EditarPedidoPage() {
             </div>
           </div>
 
-          {/* Agregar pago */}
-          {montoPendiente > 0.01 && (
-            <div className="card p-4">
-              <h3 className="font-semibold text-white text-sm mb-3">💰 Registrar pago adicional</h3>
-              <div className="flex gap-2 mb-3">
-                {TIPOS_PAGO.map(t => (
-                  <button key={t} onClick={() => setNuevoPago(p => ({...p, tipo: t}))}
-                    className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all
-                      ${nuevoPago.tipo === t ? 'bg-mandarina-500 border-mandarina-500 text-white' : 'border-gray-700 text-gray-500'}`}>
-                    {t === 'EFECTIVO' ? '💵' : t === 'TRANSFERENCIA' ? '🏦' : '🔗'} {t.replace('_',' ')}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input type="number" step="0.50" min="0" max={montoPendiente}
-                  className="input flex-1" placeholder={`Máx. $${montoPendiente.toFixed(2)}`}
-                  value={nuevoPago.monto}
-                  onChange={e => setNuevoPago(p => ({...p, monto: e.target.value}))} />
-                <button onClick={addPago} disabled={saving || !nuevoPago.monto}
-                  className="btn-primary px-4 text-sm">
-                  {saving ? '⏳' : 'Registrar'}
-                </button>
-              </div>
-              {/* Historial pagos */}
-              {pagos.length > 0 && (
-                <div className="mt-3 space-y-1">
-                  <div className="text-xs text-gray-600 mb-1">Pagos registrados:</div>
-                  {pagos.map((p, i) => (
-                    <div key={i} className="flex justify-between text-xs text-gray-400">
-                      <span>{p.TIPO_PAGO} · {p.FECHA_PAGO?.split(' ')[0]}</span>
-                      <span className="text-white">${parseFloat(p.MONTO||0).toFixed(2)}</span>
-                    </div>
-                  ))}
+          {/* Pagos */}
+          <div className="card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-semibold text-white text-sm">💰 Pagos</h3>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  Abonado: <span className="text-green-400">${montoAbonado.toFixed(2)}</span>
+                  {montoPendiente > 0.01 && <> · Pendiente: <span className="text-yellow-400">${montoPendiente.toFixed(2)}</span></>}
                 </div>
+              </div>
+              {montoPendiente > 0.01 && (
+                <button onClick={() => setShowPago(s => !s)}
+                  className="text-xs text-mandarina-400 hover:underline">
+                  {showPago ? '✕ Cancelar' : '+ Agregar pago'}
+                </button>
               )}
             </div>
-          )}
+
+            {/* Historial pagos - siempre visible */}
+            {pagos.length > 0 && (
+              <div className="space-y-1.5 mb-3">
+                {pagos.map((p, i) => (
+                  <div key={i} className="flex justify-between text-xs bg-gray-800/50 rounded-lg px-3 py-2">
+                    <span className="text-gray-400">{p.TIPO_PAGO} · {p.FECHA_PAGO?.split(' ')[0]}</span>
+                    <span className="text-white font-medium">${parseFloat(p.MONTO||0).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Formulario - solo cuando showPago */}
+            {showPago && montoPendiente > 0.01 && (
+              <>
+                <div className="flex gap-2 mb-3">
+                  {TIPOS_PAGO.map(t => (
+                    <button key={t} onClick={() => setNuevoPago(p => ({...p, tipo: t}))}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all
+                        ${nuevoPago.tipo === t
+                          ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10'
+                          : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
+                      {t === 'EFECTIVO' ? '💵' : t === 'TRANSFERENCIA' ? '🏦' : '🔗'} {t.replace('_',' ')}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input type="number" step="0.50" min="0" max={montoPendiente}
+                    className="input flex-1" placeholder={`Máx. $${montoPendiente.toFixed(2)}`}
+                    value={nuevoPago.monto}
+                    onChange={e => setNuevoPago(p => ({...p, monto: e.target.value}))} />
+                  <button onClick={async () => { await addPago(); setShowPago(false) }}
+                    disabled={saving || !nuevoPago.monto}
+                    className="btn-primary px-4 text-sm">
+                    {saving ? '⏳' : 'Registrar'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {montoPendiente <= 0.01 && (
+              <div className="text-xs text-green-400 bg-green-500/10 rounded-lg px-3 py-2 text-center">
+                ✅ Pedido pagado completamente
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
