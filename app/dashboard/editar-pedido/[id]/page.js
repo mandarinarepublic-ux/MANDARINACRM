@@ -6,8 +6,6 @@ import BuscadorProductos from '@/components/pedido/BuscadorProductos'
 
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
-
-const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const AREAS = [
   'ESTAMPADO','SUBLIMACION','BORDADO',
   'ESTAMPADO + SUBLIMACION','ESTAMPADO + BORDADO',
