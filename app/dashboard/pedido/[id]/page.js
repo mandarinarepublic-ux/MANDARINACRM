@@ -193,8 +193,6 @@ export default function PedidoDetailPage() {
             <div className="divide-y divide-gray-800">
               {items.map(item => (
                 <ItemDetalle key={item.ITEM_ID} item={item} readOnly={readOnly} tiendaColor={tiendaColor} user={user} loadPedido={loadPedido} />
-                    </select>
-                  )}
               ))}
             </div>
           </div>
