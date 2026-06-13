@@ -68,6 +68,7 @@ export default function NuevoPedidoPage() {
   const [user, setUser] = useState(null)
   const [tienda, setTienda] = useState('MANDARINA')
   const [clienteId, setClienteId] = useState(null)
+  const [clienteKey, setClienteKey] = useState(0)
   const [cliente, setCliente] = useState({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' })
   const [cedulaError, setCedulaError] = useState('')
   const [celularError, setCelularError] = useState('')
@@ -293,9 +294,23 @@ export default function NuevoPedidoPage() {
               <BuscadorCliente onSelect={c => {
                 setClienteId(c.CLIENTE_ID || c.id || null)
                 setCliente({ nombre: c.NOMBRE||c.nombre||'', cedula: String(c.CEDULA||c.cedula||''), celular: String(c.CELULAR||c.celular||''), email: c.EMAIL||c.email||'', ciudad: c.CIUDAD||c.ciudad||'', direccion: c.DIRECCION||c.direccion||'' })
+                setClienteKey(k => k + 1)
+                setUsarMapa(false)
                 setCedulaError(''); setCelularError('')
               }} />
-              <div className="grid grid-cols-2 gap-3">
+              {clienteId && (
+                <div className="flex items-center justify-between bg-green-500/10 border border-green-500/30 rounded-xl px-3 py-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-400 text-sm">✅</span>
+                    <span className="text-green-400 text-xs font-medium">Cliente existente cargado</span>
+                  </div>
+                  <button onClick={() => { setClienteId(null); setClienteKey(k => k + 1); setCliente({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' }) }}
+                    className="text-xs text-gray-500 hover:text-red-400">
+                    ✕ Limpiar
+                  </button>
+                </div>
+              )}
+              <div key={clienteKey} className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="label">Nombre completo *</label>
                   <input className="input" placeholder="María García" value={cliente.nombre}
