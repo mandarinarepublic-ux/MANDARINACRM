@@ -227,8 +227,18 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
         </div>
       </div>
       <FotoUploader fotos={fotos} onChange={setFotos} />
-      <button onClick={() => onAdd(producto, variant, talla, area, detalle, cantidad, color, fotos)}
-        className="btn-primary w-full">+ Agregar al pedido</button>
+      {(!color || !talla || !area || !detalle) && (
+        <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2">
+          ⚠️ Completa: {[!color && 'Color', !talla && 'Talla', !area && 'Área', !detalle && 'Detalle'].filter(Boolean).join(', ')}
+        </div>
+      )}
+      <button onClick={() => {
+        if (!color) { alert('El color es obligatorio'); return }
+        if (!talla) { alert('La talla es obligatoria'); return }
+        if (!area) { alert('El área es obligatoria'); return }
+        if (!detalle) { alert('El detalle es obligatorio'); return }
+        onAdd(producto, variant, talla, area, detalle, cantidad, color, fotos)
+      }} className="btn-primary w-full">+ Agregar al pedido</button>
     </div>
   )
 }
@@ -323,8 +333,14 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
         </div>
       </div>
       <FotoUploader fotos={fotos} onChange={setFotos} />
+      {(!nombre || !data.color || !data.talla || !data.detalle) && (
+        <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2">
+          ⚠️ Obligatorio: {[!nombre && 'Nombre', !data.color && 'Color', !data.talla && 'Talla', !data.detalle && 'Detalle'].filter(Boolean).join(', ')}
+        </div>
+      )}
       <button onClick={() => onAdd({ productoNombre: nombre, ...data, ...fotos, esPersonalizado: true, imagen: null })}
-        disabled={!nombre || !data.detalle} className="btn-primary w-full">
+        disabled={!nombre || !data.color || !data.talla || !data.detalle}
+        className="btn-primary w-full disabled:opacity-50">
         + Agregar al pedido
       </button>
     </div>
