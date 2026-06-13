@@ -46,12 +46,18 @@ export default function DespachosPage() {
   }
 
   async function registrarDespacho(pedidoId) {
+    if (!guia.numero.trim()) { alert('El número de guía es obligatorio'); return }
     setSaving(true)
     try {
       await fetch(`/api/pedidos/${pedidoId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ESTADO_PEDIDO: 'DESPACHO' }),
+        body: JSON.stringify({
+          ESTADO_PEDIDO: 'DESPACHO',
+          GUIA_NUMERO: guia.numero.trim(),
+          GUIA_TRANSPORTISTA: guia.transportista,
+          _usuarioId: user?.id,
+        }),
       })
       setSelectedPedido(null)
       setGuia({ numero: '', transportista: 'SERVIENTREGA', foto: null })

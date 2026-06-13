@@ -315,10 +315,16 @@ export default function PedidoDetailPage() {
 
       {/* Bottom actions */}
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3 flex gap-2">
-        {user?.rol !== 'DISEÑO' && user?.rol !== 'ESTAMPADO' && user?.rol !== 'SUBLIMACION' && user?.rol !== 'BORDADO' && (
+        {user?.rol !== 'DISEÑO' && user?.rol !== 'ESTAMPADO' && user?.rol !== 'SUBLIMACION' && user?.rol !== 'BORDADO' && user?.rol !== 'DESPACHO' && (
           <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">📱 WhatsApp</button>
         )}
         <button onClick={() => setShowPdfPreview(true)} className="btn-secondary flex-1 text-sm">👁️ Ver PDF</button>
+        {user?.rol === 'DESPACHO' && pedido?.ESTADO_PEDIDO !== 'ENTREGADO' && (
+          <a href={`/dashboard/despacho`}
+            className="btn-primary flex-1 text-sm flex items-center justify-center gap-1" style={{ backgroundColor: '#7C3AED' }}>
+            🚚 Ir a despacho
+          </a>
+        )}
         {(user?.rol === 'ADMIN' || user?.rol === 'VENDEDOR') && (
           <button onClick={generatePDF} disabled={generatingPdf} className="btn-primary flex-1 text-sm" style={{ backgroundColor: tiendaColor }}>
             {generatingPdf ? '⏳...' : '⬇️ Descargar PDF'}

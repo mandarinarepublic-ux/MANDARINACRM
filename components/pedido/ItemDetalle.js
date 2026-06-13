@@ -81,7 +81,7 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
           </div>
 
           {/* Subestado */}
-          {readOnly ? (
+          {(readOnly || user?.rol === 'DESPACHO') ? (
             <span className={`badge text-xs ${SUBESTADO_COLORS[item.SUBESTADO] || 'bg-gray-500/20 text-gray-400'}`}>
               {item.SUBESTADO}
             </span>

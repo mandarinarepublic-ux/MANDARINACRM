@@ -38,6 +38,11 @@ export async function PATCH(req, { params }) {
     }
 
     if (body.NOTAS_VENDEDOR !== undefined) updated.NOTAS_VENDEDOR = body.NOTAS_VENDEDOR
+    if (body.GUIA_NUMERO) {
+      updated.GUIA_NUMERO = body.GUIA_NUMERO
+      changes.push({ campo: 'GUIA', antes: pedido.GUIA_NUMERO || '', despues: body.GUIA_NUMERO })
+    }
+    if (body.GUIA_TRANSPORTISTA) updated.GUIA_TRANSPORTISTA = body.GUIA_TRANSPORTISTA
     if (body.MONTO_TOTAL !== undefined) {
       updated.MONTO_TOTAL = String(body.MONTO_TOTAL)
       updated.MONTO_ABONADO = String(body.MONTO_ABONADO || pedido.MONTO_ABONADO)
