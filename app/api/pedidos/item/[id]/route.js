@@ -65,8 +65,25 @@ export async function PATCH(req, { params }) {
       updated.NOTAS_AREA || '',
     ])
 
+    // Log all changes
     if (body.SUBESTADO) {
-      await logCambio(updated.PEDIDO_ID, `ITEM_${id}_SUBESTADO`, item.SUBESTADO, body.SUBESTADO, usuarioId)
+      await logCambio(updated.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO, body.SUBESTADO, usuarioId)
+    }
+    if (body.PRODUCTO_NOMBRE && body.PRODUCTO_NOMBRE !== item.PRODUCTO_NOMBRE) {
+      await logCambio(updated.PEDIDO_ID, 'PRODUCTO_EDITADO', item.PRODUCTO_NOMBRE, body.PRODUCTO_NOMBRE, usuarioId)
+    }
+    // Log any field changes in a single entry
+    const cambios = []
+    if (body.COLOR !== undefined && body.COLOR !== item.COLOR) cambios.push(`Color: ${item.COLOR}→${body.COLOR}`)
+    if (body.TALLA !== undefined && body.TALLA !== item.TALLA) cambios.push(`Talla: ${item.TALLA}→${body.TALLA}`)
+    if (body.CANTIDAD !== undefined && String(body.CANTIDAD) !== String(item.CANTIDAD)) cambios.push(`Cant: ${item.CANTIDAD}→${body.CANTIDAD}`)
+    if (body.PRECIO_UNIT !== undefined && String(body.PRECIO_UNIT) !== String(item.PRECIO_UNIT)) cambios.push(`Precio: $${item.PRECIO_UNIT}→$${body.PRECIO_UNIT}`)
+    if (body.AREA !== undefined && body.AREA !== item.AREA) cambios.push(`Área: ${item.AREA}→${body.AREA}`)
+    if (cambios.length > 0) {
+      await logCambio(updated.PEDIDO_ID, `EDICION ${updated.PRODUCTO_NOMBRE}`, '', cambios.join(' | '), usuarioId)
+    }
+    if (body.NOTAS_AREA !== undefined && body.NOTAS_AREA !== item.NOTAS_AREA && body.NOTAS_AREA) {
+      await logCambio(updated.PEDIDO_ID, `NOTA ${updated.PRODUCTO_NOMBRE}`, '', body.NOTAS_AREA, usuarioId)
     }
 
     return Response.json({ ok: true })

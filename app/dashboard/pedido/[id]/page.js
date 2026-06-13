@@ -264,14 +264,20 @@ export default function PedidoDetailPage() {
                       <span className="text-mandarina-400 font-medium">{log.usuario}</span>
                     </div>
                     <div className="text-gray-300">
-                      {log.campo === 'CREACION' && '🆕 Pedido creado'}
-                      {log.campo === 'ESTADO_PEDIDO' && `📦 Estado: ${log.antes} → ${log.despues}`}
-                      {log.campo === 'DIRECCION' && `📍 Dirección actualizada`}
-                      {log.campo === 'ITEM_AGREGADO' && `➕ Producto agregado: ${log.despues}`}
-                      {log.campo === 'ITEM_ELIMINADO' && `❌ Producto eliminado: ${log.antes}`}
-                      {log.campo === 'PAGO_AGREGADO' && `💰 Pago registrado: ${log.despues}`}
-                      {log.campo.startsWith('ITEM_') && log.campo.includes('SUBESTADO') && `🔧 ${log.antes} → ${log.despues}`}
-                      {!['CREACION','ESTADO_PEDIDO','DIRECCION','ITEM_AGREGADO','ITEM_ELIMINADO','PAGO_AGREGADO'].includes(log.campo) && !log.campo.includes('SUBESTADO') && `${log.campo}: ${log.despues}`}
+                      {(() => {
+                        const c = log.campo
+                        if (c === 'CREACION') return '🆕 Pedido creado → EN PRODUCCIÓN'
+                        if (c === 'ESTADO_PEDIDO') return `📦 Estado: ${log.antes} → ${log.despues}`
+                        if (c === 'DIRECCION') return `📍 Dirección actualizada: ${log.despues}`
+                        if (c === 'ITEM_AGREGADO') return `➕ Producto agregado: ${log.despues}`
+                        if (c === 'ITEM_ELIMINADO') return `❌ Eliminado: ${log.antes}`
+                        if (c === 'PAGO_AGREGADO') return `💰 Pago: ${log.despues}`
+                        if (c.startsWith('SUBESTADO')) return `🔧 ${c}: ${log.antes} → ${log.despues}`
+                        if (c.startsWith('EDICION')) return `✏️ ${c}: ${log.despues}`
+                        if (c.startsWith('NOTA')) return `📝 ${c}: ${log.despues}`
+                        if (c.startsWith('PRODUCTO_EDITADO')) return `✏️ Producto: ${log.antes} → ${log.despues}`
+                        return `${c}: ${log.despues}`
+                      })()}
                     </div>
                   </div>
                 ))}
