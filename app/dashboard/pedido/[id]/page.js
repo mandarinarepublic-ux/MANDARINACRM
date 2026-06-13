@@ -25,6 +25,7 @@ export default function PedidoDetailPage() {
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [showPdfPreview, setShowPdfPreview] = useState(false)
   const [logs, setLogs] = useState([])
+  const [showBitacora, setShowBitacora] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -252,39 +253,6 @@ export default function PedidoDetailPage() {
             </div>
           )}
 
-          {/* Bitácora de cambios */}
-          {logs.length > 0 && (
-            <div className="card p-4">
-              <h3 className="text-sm font-semibold text-white mb-3">📋 Bitácora del pedido</h3>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {logs.map((log, i) => (
-                  <div key={i} className="text-xs border-l-2 border-gray-700 pl-3 py-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-gray-500">{log.fecha}</span>
-                      <span className="text-mandarina-400 font-medium">{log.usuario}</span>
-                    </div>
-                    <div className="text-gray-300">
-                      {(() => {
-                        const c = log.campo
-                        if (c === 'CREACION') return '🆕 Pedido creado → EN PRODUCCIÓN'
-                        if (c === 'ESTADO_PEDIDO') return `📦 Estado: ${log.antes} → ${log.despues}`
-                        if (c === 'DIRECCION') return `📍 Dirección actualizada: ${log.despues}`
-                        if (c === 'ITEM_AGREGADO') return `➕ Producto agregado: ${log.despues}`
-                        if (c === 'ITEM_ELIMINADO') return `❌ Eliminado: ${log.antes}`
-                        if (c === 'PAGO_AGREGADO') return `💰 Pago: ${log.despues}`
-                        if (c.startsWith('SUBESTADO')) return `🔧 ${c}: ${log.antes} → ${log.despues}`
-                        if (c.startsWith('EDICION')) return `✏️ ${c}: ${log.despues}`
-                        if (c.startsWith('NOTA')) return `📝 ${c}: ${log.despues}`
-                        if (c.startsWith('PRODUCTO_EDITADO')) return `✏️ Producto: ${log.antes} → ${log.despues}`
-                        return `${c}: ${log.despues}`
-                      })()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Entrega */}
           <div className="card p-4">
             <h3 className="text-sm font-semibold text-white mb-2">📦 Entrega</h3>
@@ -295,6 +263,61 @@ export default function PedidoDetailPage() {
                   : '-'}
               </span>
             </div>
+          </div>
+
+          {/* Bitácora colapsable */}
+          <div className="card overflow-hidden">
+            <button onClick={() => setShowBitacora(b => !b)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-all">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-white">📋 Bitácora del pedido</span>
+                {logs.length > 0 && (
+                  <span className="text-xs text-gray-500">{logs.length} evento(s)</span>
+                )}
+              </div>
+              <span className="text-gray-500 text-sm">{showBitacora ? '▲' : '▼'}</span>
+            </button>
+
+            {showBitacora && (
+              <div className="border-t border-gray-800 px-4 py-3">
+                {logs.length === 0 ? (
+                  <div className="text-xs text-gray-600 text-center py-4">
+                    No hay eventos registrados aún
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {logs.map((log, i) => (
+                      <div key={i} className="flex gap-3 text-xs">
+                        <div className="flex-shrink-0 w-1 bg-gray-700 rounded-full" />
+                        <div className="flex-1 pb-3 border-b border-gray-800/50 last:border-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-gray-600">{log.fecha?.split(' ')[0]}</span>
+                            <span className="text-gray-600">{log.fecha?.split(' ')[1]}</span>
+                            <span className="text-mandarina-400 font-medium">{log.usuario}</span>
+                          </div>
+                          <div className="text-gray-300">
+                            {(() => {
+                              const c = log.campo
+                              if (c === 'CREACION') return '🆕 Pedido creado → EN PRODUCCIÓN'
+                              if (c === 'ESTADO_PEDIDO') return `📦 Estado: ${log.antes} → ${log.despues}`
+                              if (c === 'DIRECCION') return `📍 Dirección: ${log.despues}`
+                              if (c === 'ITEM_AGREGADO') return `➕ Agregado: ${log.despues}`
+                              if (c === 'ITEM_ELIMINADO') return `❌ Eliminado: ${log.antes}`
+                              if (c === 'PAGO_AGREGADO') return `💰 Pago: ${log.despues}`
+                              if (c.startsWith('SUBESTADO')) return `🔧 ${c}: ${log.antes} → ${log.despues}`
+                              if (c.startsWith('EDICION')) return `✏️ ${c.replace('EDICION ','')} — ${log.despues}`
+                              if (c.startsWith('NOTA')) return `📝 Nota ${c.replace('NOTA ','')}: ${log.despues}`
+                              if (c === 'PRODUCTO_EDITADO') return `✏️ Renombrado: ${log.antes} → ${log.despues}`
+                              return `${c}: ${log.despues}`
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
