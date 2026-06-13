@@ -223,18 +223,25 @@ export default function PedidoDetailPage() {
                     </div>
                   )}
                   <div className="mt-2">
-                    {!readOnly && (
+                    {readOnly ? (
+                    <span className={`badge text-xs ${
+                      item.SUBESTADO === 'LISTO' ? 'bg-green-500/20 text-green-400' :
+                      item.SUBESTADO === 'EN_PROCESO' ? 'bg-blue-500/20 text-blue-400' :
+                      item.SUBESTADO === 'ENVIADO_APROBACION' ? 'bg-purple-500/20 text-purple-400' :
+                      'bg-yellow-500/20 text-yellow-400'
+                    }`}>{item.SUBESTADO}</span>
+                  ) : (
                     <select className="bg-gray-800 border border-gray-700 text-xs text-white rounded-lg px-2 py-1"
                       value={item.SUBESTADO}
                       onChange={async e => {
                         await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ SUBESTADO: e.target.value }),
+                          body: JSON.stringify({ SUBESTADO: e.target.value, _usuarioId: user?.id }),
                         })
                         loadPedido()
                       }}>
-                      {['SOLICITADO','EN_PROCESO','LISTO'].map(s => <option key={s}>{s}</option>)}
+                      {['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO'].map(s => <option key={s}>{s}</option>)}
                     </select>
                   )}
                   </div>
@@ -322,7 +329,30 @@ export default function PedidoDetailPage() {
         </div>
       </div>
 
-      {/* Hidden PDF */}
+      {/* PDF Preview Modal */}
+      {showPdfPreview && (
+        <div className="fixed inset-0 bg-black/90 z-50 overflow-auto p-4" onClick={e => e.target === e.currentTarget && setShowPdfPreview(false)}>
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold">Vista previa — {pedido.PEDIDO_ID}</h3>
+              <div className="flex gap-2">
+                {(user?.rol === 'ADMIN' || user?.rol === 'VENDEDOR') && (
+                  <button onClick={() => { setShowPdfPreview(false); generatePDF() }}
+                    disabled={generatingPdf} className="btn-primary text-sm px-4 py-2">
+                    {generatingPdf ? '⏳...' : '⬇️ Descargar'}
+                  </button>
+                )}
+                <button onClick={() => setShowPdfPreview(false)} className="btn-secondary text-sm px-4 py-2">✕ Cerrar</button>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl overflow-hidden">
+              <PdfContent pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden PDF for download */}
       <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '794px', backgroundColor: 'white' }}>
         <div id="pdf-render">
           <PdfContent pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
