@@ -21,6 +21,7 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
   const [fotoFullscreen, setFotoFullscreen] = useState(null)
   const [editingNota,    setEditingNota]   = useState(false)
   const [notaText,       setNotaText]      = useState(item.NOTAS_AREA || '')
+  const [notaGuardada,   setNotaGuardada]  = useState(item.NOTAS_AREA || '')
   const [savingNota,     setSavingNota]    = useState(false)
 
   async function saveNota() {
@@ -33,9 +34,8 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
       })
       const data = await res.json()
       if (!res.ok) { alert('Error al guardar nota: ' + (data.error || res.status)); return }
+      setNotaGuardada(notaText)
       setEditingNota(false)
-      // Update local state immediately so user sees it without waiting for reload
-      item.NOTAS_AREA = notaText
       loadPedido()
     } finally { setSavingNota(false) }
   }
@@ -111,21 +111,21 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
               </div>
             ) : (
               <div>
-                {item.NOTAS_AREA && (
+                {notaGuardada && (
                   <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">
-                    📝 {item.NOTAS_AREA}
+                    📝 {notaGuardada}
                   </div>
                 )}
-                <button onClick={() => { setEditingNota(true); setNotaText(item.NOTAS_AREA || '') }}
+                <button onClick={() => { setEditingNota(true); setNotaText(notaGuardada) }}
                   className="text-xs text-gray-600 hover:text-gray-400">
-                  {item.NOTAS_AREA ? '✏️ Editar nota' : '+ Agregar nota de área'}
+                  {notaGuardada ? '✏️ Editar nota' : '+ Agregar nota de área'}
                 </button>
               </div>
             )
           ) : (
-            item.NOTAS_AREA && (
+            notaGuardada && (
               <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
-                📝 {item.NOTAS_AREA}
+                📝 {notaGuardada}
               </div>
             )
           )}
