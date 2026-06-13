@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { areaAplica } from '@/lib/pedidos'
+import { areaAplica } from '@/lib/pedidos-client'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:          { label: '⏳ Solicitado',           color: 'bg-yellow-500' },
