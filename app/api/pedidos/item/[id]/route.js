@@ -68,6 +68,26 @@ async function updateItemRow(idx, updated) {
   })
 }
 
+async function writeNotaArea(itemId, nota) {
+  // Find and write ONLY the NOTAS_AREA cell by scanning for the item
+  const { auth, sheets, headers } = await getSheetHeaders('DETALLE_PEDIDO')
+  const sheetRow = await findItemSheetRow(itemId, auth, sheets)
+  if (!sheetRow) throw new Error(`Item ${itemId} not found in sheet`)
+  
+  // Find NOTAS_AREA column index
+  const colIdx = headers.findIndex(h => h === 'NOTAS_AREA')
+  if (colIdx === -1) throw new Error('NOTAS_AREA column not found. Headers: ' + headers.join(', '))
+  
+  const colLetter = String.fromCharCode(65 + colIdx)
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: process.env.SHEET_ID,
+    range: `DETALLE_PEDIDO!${colLetter}${sheetRow}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[nota]] },
+  })
+  return { sheetRow, colLetter, colIdx }
+}
+
 export async function PATCH(req, { params }) {
   try {
     const { id } = params
@@ -83,6 +103,16 @@ export async function PATCH(req, { params }) {
 
     if (body.SUBESTADO) updated.SUBESTADO = body.SUBESTADO
     if (body.NOTAS_AREA !== undefined) updated.NOTAS_AREA = body.NOTAS_AREA
+    // If only NOTAS_AREA is being updated, use direct cell write for reliability
+    if (body.NOTAS_AREA !== undefined && Object.keys(body).filter(k => !k.startsWith('_')).length === 1) {
+      try {
+        const result = await writeNotaArea(id, body.NOTAS_AREA)
+        if (body.NOTAS_AREA) await logCambio(item.PEDIDO_ID, `NOTA ${item.PRODUCTO_NOMBRE}`, '', body.NOTAS_AREA, usuarioId)
+        return Response.json({ ok: true, debug: result })
+      } catch(e) {
+        return Response.json({ error: e.message }, { status: 500 })
+      }
+    }
     if (body.PRECIO_UNIT !== undefined) {
       updated.PRECIO_UNIT = String(body.PRECIO_UNIT)
       updated.SUBTOTAL = String((parseFloat(body.PRECIO_UNIT) * parseInt(body.CANTIDAD || updated.CANTIDAD || 1)).toFixed(2))
