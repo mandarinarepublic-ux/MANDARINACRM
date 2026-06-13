@@ -1,68 +1,79 @@
 export const dynamic = 'force-dynamic'
+import { google } from 'googleapis'
 
-// Catalog served directly from hardcoded Shopify MCP data
-export async function GET(req) {
-  const { searchParams } = new URL(req.url)
-  const query = searchParams.get('q')?.toLowerCase() || ''
+async function readProductosShopify(tiendaId, query = '') {
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    },
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  })
+  const sheets = google.sheets({ version: 'v4', auth })
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SHEET_ID,
+    range: 'PRODUCTOS_SHOPIFY!A:G',
+  })
 
-  let products = FALLBACK_CATALOG
-  if (query) {
-    products = products.filter(p => p.title.toLowerCase().includes(query))
+  const rows = res.data.values || []
+  if (rows.length < 2) return []
+
+  // Skip header row if present
+  let dataRows = rows
+  if (rows[0][0]?.toUpperCase() === 'TIENDA') {
+    dataRows = rows.slice(1)
   }
 
-  return Response.json({ products })
+  return dataRows
+    .filter(r => {
+      if (!r[2]) return false // no name
+      if (r[6] === 'FALSE') return false // inactive
+      if (tiendaId && r[0]?.toUpperCase() !== tiendaId.toUpperCase()) return false
+      if (query && !r[2]?.toLowerCase().includes(query.toLowerCase())) return false
+      return true
+    })
+    .map(r => ({
+      id: r[1] || r[2],
+      title: r[2],
+      price: r[3] || '35.00',
+      image: r[5] || null,
+      variants: (r[4] || '').split(',').map(t => t.trim()).filter(Boolean).map(t => ({
+        id: `${r[1]}_${t}`,
+        title: t,
+        price: r[3] || '35.00',
+      })),
+      options: [{ name: 'Talla', values: (r[4] || '').split(',').map(t => t.trim()) }],
+      tags: '',
+      tienda: r[0],
+    }))
 }
 
-// Fallback catalog from Shopify MCP - 50 productos Mandarina Republic
+export async function GET(req) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const tiendaId = searchParams.get('tienda') || 'MANDARINA'
+    const query = searchParams.get('q') || ''
+
+    const products = await readProductosShopify(tiendaId, query)
+
+    // Fallback to hardcoded if sheet is empty
+    if (products.length === 0) {
+      return Response.json({ products: FALLBACK_CATALOG.filter(p =>
+        !query || p.title.toLowerCase().includes(query.toLowerCase())
+      )})
+    }
+
+    return Response.json({ products })
+  } catch (e) {
+    console.error('Catalogo error:', e.message)
+    return Response.json({ products: FALLBACK_CATALOG })
+  }
+}
+
 const FALLBACK_CATALOG = [
   { id: "7903025463389", title: "Chaqueta Dragon Ball Z - CLASIC", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/goku-02.png?v=1746627152", price: "35.00", variants: [{title:"S",price:"35.00"},{title:"M",price:"35.00"},{title:"L",price:"35.00"},{title:"XL",price:"35.00"},{title:"2XL",price:"35.00"}] },
   { id: "7903041421405", title: "Camisetas Dragon Ball", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/mock_Mesadetrabajo1.png?v=1746648611", price: "19.99", variants: [{title:"S",price:"19.99"},{title:"M",price:"19.99"},{title:"L",price:"19.99"},{title:"XL",price:"19.99"},{title:"2XL",price:"19.99"}] },
-  { id: "7903044075613", title: "Chaquetas Power Ranger", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/REDRANGER_Mesadetrabajo1.png?v=1746649096", price: "39.99", variants: [{title:"S",price:"39.99"},{title:"M",price:"39.99"},{title:"L",price:"39.99"},{title:"XL",price:"39.99"},{title:"2XL",price:"39.99"}] },
-  { id: "7903050498141", title: "Chaqueta Padrinos Mágicos", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/COSMOWANDA_Mesadetrabajo1.png?v=1746649556", price: "35.00", variants: [{title:"XS",price:"35.00"},{title:"S",price:"35.00"},{title:"M",price:"35.00"},{title:"L",price:"35.00"},{title:"XL",price:"35.00"},{title:"2XL",price:"35.00"}] },
-  { id: "7903070847069", title: "Chaqueta Kirby", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/KIRBY_Mesadetrabajo1.png?v=1746650360", price: "35.00", variants: [{title:"XS",price:"35.00"},{title:"S",price:"35.00"},{title:"M",price:"35.00"},{title:"L",price:"35.00"},{title:"XL",price:"35.00"}] },
-  { id: "7903091163229", title: "Chaquetas Universo DC", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/NUEVOSDISENOSmichaelstarsheild_Mesadetrabajo1-copia.png?v=1746650813", price: "35.00", variants: [{title:"S",price:"35.00"},{title:"M",price:"35.00"},{title:"L",price:"35.00"},{title:"XL",price:"35.00"},{title:"2XL",price:"35.00"}] },
-  { id: "7903106957405", title: "Camiseta Spiderman - Colección", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/SPIDERMAN_Mesadetrabajo1.png?v=1746651238", price: "19.99", variants: [{title:"M",price:"19.99"},{title:"L",price:"19.99"},{title:"XL",price:"19.99"},{title:"2XL",price:"19.99"},{title:"3XL",price:"19.99"}] },
-  { id: "7903115411549", title: "Hoodie Spiderman", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/NUEVOS1_Mesadetrabajo1.png?v=1746651592", price: "30.00", variants: [{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"},{title:"2XL",price:"30.00"}] },
-  { id: "7903127666781", title: "Ugly Sweaters", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/NAVIDADPOWERRANGERS_Mesadetrabajo1.png?v=1746652150", price: "30.00", variants: [{title:"XS",price:"30.00"},{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"}] },
-  { id: "7903137300573", title: "Hoodie Mortal Kombat", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/MortalKombatRojo_Mesadetrabajo1.png?v=1746652510", price: "30.00", variants: [{title:"XS",price:"30.00"},{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"}] },
   { id: "7903144509533", title: "Chaqueta Naruto", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/NARUTOHOODIEGOLDEDITION_Mesadetrabajo1.png?v=1746652796", price: "35.00", variants: [{title:"S",price:"35.00"},{title:"M",price:"35.00"},{title:"L",price:"35.00"},{title:"XL",price:"35.00"},{title:"2XL",price:"35.00"}] },
-  { id: "7903148212317", title: "Hoodie Plaza Sesamo", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/PLAZASEAMO_Mesadetrabajo1.png?v=1746652923", price: "25.00", variants: [{title:"XS",price:"25.00"},{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"}] },
-  { id: "7903152963677", title: "Hoodie Reptar", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/RUGRATS_Mesadetrabajo1_Mesadetrabajo1.png?v=1746653121", price: "30.00", variants: [{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"},{title:"2XL",price:"30.00"}] },
-  { id: "7903159025757", title: "Hoodie Thundercats", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/THUNDECATSrojo_Mesadetrabajo1.png?v=1746653377", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7903161221213", title: "Hoodie Ranma 1/2", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/RANMA_Mesadetrabajo1.png?v=1746653494", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7903171444829", title: "Chaqueta Smallville - Clark Kent", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/SMALLVILLE_Mesadetrabajo1_Mesadetrabajo1.png?v=1746653763", price: "30.00", variants: [{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"},{title:"2XL",price:"30.00"}] },
-  { id: "7903350816861", title: "Camiseta Urban Style", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/404_Mesadetrabajo1.jpg?v=1746661667", price: "19.99", variants: [{title:"S",price:"19.99"},{title:"M",price:"19.99"},{title:"L",price:"19.99"},{title:"XL",price:"19.99"},{title:"2XL",price:"19.99"}] },
-  { id: "7903354781789", title: "Hoodie X-men", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/XMENCICLOPEPROMO-02.png?v=1746661898", price: "30.00", variants: [{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"},{title:"2XL",price:"30.00"}] },
-  { id: "7904217759837", title: "Chaqueta RED Ranger", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/REDRANGER_Mesadetrabajo1.png?v=1746649096", price: "39.99", variants: [{title:"S",price:"39.99"},{title:"M",price:"39.99"},{title:"L",price:"39.99"},{title:"XL",price:"39.99"},{title:"2XL",price:"39.99"}] },
-  { id: "7904218284125", title: "Chaqueta White Ranger", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/WhiteRANGER_Mesadetrabajo1.png?v=1746649095", price: "39.99", variants: [{title:"S",price:"39.99"},{title:"M",price:"39.99"},{title:"L",price:"39.99"},{title:"XL",price:"39.99"},{title:"2XL",price:"39.99"}] },
-  { id: "7904218447965", title: "Chaqueta Black Ranger", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/BLACK_RANGER_RANGER_Mesa_de_trabajo_1.png?v=1746712644", price: "39.99", variants: [{title:"S",price:"39.99"},{title:"M",price:"39.99"},{title:"L",price:"39.99"},{title:"XL",price:"39.99"},{title:"2XL",price:"39.99"}] },
-  { id: "7904218808413", title: "Chaqueta Pink Ranger", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/PINKRANGER_Mesadetrabajo1.png?v=1746649095", price: "39.99", variants: [{title:"S",price:"39.99"},{title:"M",price:"39.99"},{title:"L",price:"39.99"},{title:"XL",price:"39.99"},{title:"2XL",price:"39.99"}] },
-  { id: "7904251150429", title: "Hoodie X-men Ciclope", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/XMENCICLOPEPROMO-02.png?v=1746661898", price: "30.00", variants: [{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"},{title:"2XL",price:"30.00"}] },
-  { id: "7904251543645", title: "Hoodie Thundercats Red", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/THUNDECATSrojo_Mesadetrabajo1.png?v=1746653377", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7904251740253", title: "Hoodie Thundercats Black", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/LEONOHOODIE_Mesadetrabajo1.png?v=1746653377", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7904254034013", title: "Hoodie Naruto", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/HOODIENARUTO_Mesadetrabajo1.png?v=1746652796", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7904254656605", title: "Hoodie Mortal Kombat Amarillo", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/MORTALKOMBAT_Mesadetrabajo1.png?v=1746652510", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7904348340317", title: "Hoodie One Piece - Luffy", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/WhatsAppImage2025-05-07at12.14.16_1.jpg?v=1746736819", price: "30.00", variants: [{title:"XS",price:"30.00"},{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"},{title:"2XL",price:"30.00"}] },
-  { id: "7905920090205", title: "Hoodie X-men Bestia", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/BESTIA-01.png?v=1746661894", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7905920122973", title: "Hoodie X-men Magneto", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/MAGNETO-01.png?v=1746661894", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7905920188509", title: "Hoodie X-men Gambito", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/GAMBITO_PROMO-01.png?v=1746661894", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7905920319581", title: "Hoodie X-men Rouge", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/ROUGE-01.png?v=1746661894", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7905920450653", title: "Hoodie X-men Bestia Azul", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/BESTIA-01.png?v=1746661894", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7905920647261", title: "Hoodie X-men Jubilee", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/JUBILEE-01.png?v=1746661894", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7905920745565", title: "Hoodie X-men Storm", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/XMENCICLOPEPROMO-02.png?v=1746661898", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7905920942173", title: "Hoodie X-men Storm Ororo", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/STORM-01.png?v=1746661894", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
+  { id: "7904348340317", title: "Hoodie One Piece - Luffy", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/WhatsAppImage2025-05-07at12.14.16_1.jpg?v=1746736819", price: "30.00", variants: [{title:"XS",price:"30.00"},{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"}] },
   { id: "7906034286685", title: "Hoodie X-men Wolverine", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/WOLVERINE-01.png?v=1746661894", price: "19.99", variants: [{title:"S",price:"19.99"},{title:"M",price:"19.99"},{title:"L",price:"19.99"},{title:"XL",price:"19.99"},{title:"2XL",price:"19.99"}] },
-  { id: "7906035236957", title: "Camisetas Dragon Ball GOKU", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/mock_Mesadetrabajo1.png?v=1746648611", price: "19.99", variants: [{title:"S",price:"19.99"},{title:"M",price:"19.99"},{title:"L",price:"19.99"},{title:"XL",price:"19.99"},{title:"2XL",price:"19.99"}] },
-  { id: "7906035368029", title: "Camisetas Dragon Ball Vegeta", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/mock-05.png?v=1746648614", price: "20.00", variants: [{title:"S",price:"20.00"},{title:"M",price:"20.00"},{title:"L",price:"20.00"},{title:"XL",price:"20.00"},{title:"2XL",price:"20.00"}] },
-  { id: "7909163466845", title: "Chaqueta Star Wars - Ed. Especial Negra", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/star-19.png?v=1747521027", price: "35.00", variants: [{title:"S",price:"35.00"},{title:"M",price:"35.00"},{title:"L",price:"35.00"},{title:"XL",price:"35.00"},{title:"2XL",price:"35.00"}] },
-  { id: "7909164154973", title: "Chaqueta Power Rangers - Varsity", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/POWER-24.png?v=1747521325", price: "35.00", variants: [{title:"S",price:"35.00"},{title:"M",price:"35.00"},{title:"L",price:"35.00"},{title:"XL",price:"35.00"},{title:"2XL",price:"35.00"}] },
-  { id: "7909164318813", title: "Chaqueta Super Campeones - Niupi Edition", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/varios-14.png?v=1747521493", price: "35.00", variants: [{title:"XS",price:"35.00"},{title:"S",price:"35.00"},{title:"M",price:"35.00"},{title:"L",price:"35.00"},{title:"XL",price:"35.00"}] },
-  { id: "7909293490269", title: "Camiseta The Amazing Spider-Man", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/SPIDERMAN_Mesadetrabajo1.png?v=1746651238", price: "19.99", variants: [{title:"M",price:"19.99"},{title:"L",price:"19.99"},{title:"XL",price:"19.99"},{title:"2XL",price:"19.99"},{title:"3XL",price:"19.99"}] },
-  { id: "7909293555805", title: "Camiseta Spider-Man Remastered", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/SPIDERMAN-02.png?v=1746651238", price: "19.99", variants: [{title:"S",price:"19.99"},{title:"M",price:"19.99"},{title:"L",price:"19.99"},{title:"XL",price:"19.99"},{title:"2XL",price:"19.99"}] },
-  { id: "7909293654109", title: "Camiseta Spiderman Miles Morales", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/SPIDERMAN-03.png?v=1746651238", price: "15.00", variants: [{title:"S",price:"15.00"},{title:"M",price:"15.00"},{title:"L",price:"15.00"},{title:"XL",price:"15.00"},{title:"2XL",price:"18.00"}] },
-  { id: "7909293719645", title: "Camiseta Spider-Man Regreso a Casa", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/SPIDERMAN-04.png?v=1746651238", price: "19.99", variants: [{title:"M",price:"19.99"},{title:"L",price:"19.99"},{title:"XL",price:"19.99"},{title:"2XL",price:"20.00"},{title:"3XL",price:"22.00"}] },
-  { id: "7911116963933", title: "Hoodie Caballeros del Zodiaco", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/WhatsAppImage2025-05-20at15.12.44.jpg?v=1747786959", price: "25.00", variants: [{title:"S",price:"25.00"},{title:"M",price:"25.00"},{title:"L",price:"25.00"},{title:"XL",price:"25.00"},{title:"2XL",price:"25.00"}] },
-  { id: "7911424557149", title: "Hoodie 4 Fantásticos", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/4FANTASTICOS-03.png?v=1749258504", price: "30.00", variants: [{title:"XS",price:"30.00"},{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"}] },
-  { id: "7913964175453", title: "Hoodie 4 Fantásticos Ed. Especial", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/4FANTASTICOS-03.png?v=1749258504", price: "30.00", variants: [{title:"S",price:"30.00"},{title:"M",price:"30.00"},{title:"L",price:"30.00"},{title:"XL",price:"30.00"},{title:"2XL",price:"30.00"}] },
-  { id: "7913964208221", title: "Pijama 4 Fantásticos", image: "https://cdn.shopify.com/s/files/1/0689/5832/2781/files/4F-03.png?v=1748352878", price: "35.00", variants: [{title:"S",price:"35.00"},{title:"M",price:"35.00"},{title:"L",price:"35.00"},{title:"XL",price:"35.00"},{title:"2XL",price:"40.00"}] },
 ]
