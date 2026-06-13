@@ -202,6 +202,7 @@ export default function NuevoPedidoPage() {
         body: JSON.stringify({
           tiendaId: tienda,
           vendedorId: user.id,
+          vendedorNombre: user.nombre || user.id,
           vendedorCodigo: user.codigo,
           cliente: { ...cliente, cedula: String(cliente.cedula), celular: String(cliente.celular), direccion: direccionFinal },
           items,

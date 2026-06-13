@@ -340,7 +340,7 @@ function PdfContent({ pedido, items, cliente, tiendaColor }) {
                   {item.PRODUCTO_NOMBRE}<br/><span style={{ color: tiendaColor, fontSize: '9px' }}>{item.AREA}</span>
                 </td>
                 <td style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', verticalAlign: 'middle', width: '50px', height: '50px' }}>
-                  {item.FOTO_PECHO_URL
+                  {(item.FOTO_PECHO_URL && item.FOTO_PECHO_URL !== '')
                     ? <img src={item.FOTO_PECHO_URL} style={{ maxWidth: '46px', maxHeight: '46px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
                     : <span style={{ color: '#ccc', fontSize: '8px' }}>—</span>}
                 </td>

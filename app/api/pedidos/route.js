@@ -38,7 +38,7 @@ export async function POST(req) {
   try {
     const body = await req.json()
     const {
-      tiendaId, vendedorId, vendedorCodigo,
+      tiendaId, vendedorId, vendedorNombre, vendedorCodigo,
       cliente, items, pagos: pagosInput,
       emitirFactura, fechaEntregaPrometida,
       notasVendedor, direccionTexto, latitud, longitud,
@@ -74,7 +74,7 @@ export async function POST(req) {
 
     // Pedido nace directamente EN_FABRICA
     await appendRow('PEDIDOS', [
-      pedidoId, tiendaId, vendedorId, clienteId,
+      pedidoId, tiendaId, vendedorNombre || vendedorId, clienteId,
       now, now, fechaEntregaPrometida || '',
       String(diasCalculado), String(diasCalculado),
       'FALSE',
