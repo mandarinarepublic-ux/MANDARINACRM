@@ -17,8 +17,24 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
     { key: 'FOTO_MANGA_I_URL', label: 'M. Izq'  },
   ].filter(f => item[f.key])
 
-  const [fotoActiva,    setFotoActiva]    = useState(fotos[0]?.key || null)
+  const [fotoActiva,     setFotoActiva]    = useState(fotos[0]?.key || null)
   const [fotoFullscreen, setFotoFullscreen] = useState(null)
+  const [editingNota,    setEditingNota]   = useState(false)
+  const [notaText,       setNotaText]      = useState(item.NOTAS_AREA || '')
+  const [savingNota,     setSavingNota]    = useState(false)
+
+  async function saveNota() {
+    setSavingNota(true)
+    try {
+      await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ NOTAS_AREA: notaText, _usuarioId: user?.id }),
+      })
+      setEditingNota(false)
+      loadPedido()
+    } finally { setSavingNota(false) }
+  }
 
   return (
     <div className="p-4">
@@ -72,13 +88,43 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
             {item.DETALLE_PERSONALIZADO && (
               <div><span className="text-gray-500">Detalle:</span> <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
             )}
-            {item.NOTAS_AREA && (
-              <div className="pt-1 border-t border-gray-700">
-                <span className="text-blue-400">📝 Nota:</span>
-                <span className="text-blue-300 ml-1">{item.NOTAS_AREA}</span>
-              </div>
-            )}
           </div>
+
+          {/* Notas del área — editable para roles de producción */}
+          {!readOnly ? (
+            editingNota ? (
+              <div>
+                <textarea className="input resize-none text-sm mb-2 w-full" rows={2}
+                  placeholder="Nota para este producto..."
+                  value={notaText} onChange={e => setNotaText(e.target.value)} />
+                <div className="flex gap-2">
+                  <button onClick={saveNota} disabled={savingNota}
+                    className="btn-primary text-xs px-3 py-1.5">
+                    {savingNota ? '⏳' : '💾 Guardar'}
+                  </button>
+                  <button onClick={() => setEditingNota(false)} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                {item.NOTAS_AREA && (
+                  <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">
+                    📝 {item.NOTAS_AREA}
+                  </div>
+                )}
+                <button onClick={() => { setEditingNota(true); setNotaText(item.NOTAS_AREA || '') }}
+                  className="text-xs text-gray-600 hover:text-gray-400">
+                  {item.NOTAS_AREA ? '✏️ Editar nota' : '+ Agregar nota de área'}
+                </button>
+              </div>
+            )
+          ) : (
+            item.NOTAS_AREA && (
+              <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
+                📝 {item.NOTAS_AREA}
+              </div>
+            )
+          )}
 
           {/* Subestado */}
           {(readOnly || user?.rol === 'DESPACHO') ? (

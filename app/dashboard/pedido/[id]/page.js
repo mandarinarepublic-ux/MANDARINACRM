@@ -102,7 +102,10 @@ export default function PedidoDetailPage() {
   )
 
   const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
-  const readOnly = fromHistorial || user?.rol === 'VENDEDOR' || user?.rol === 'DISEÑO' || user?.rol === 'ESTAMPADO' || user?.rol === 'SUBLIMACION' || user?.rol === 'BORDADO'
+  // readOnly: can't edit pedido-level data (status, address, payments)
+  const readOnly = fromHistorial || user?.rol === 'VENDEDOR' || user?.rol === 'DISEÑO' || user?.rol === 'ESTAMPADO' || user?.rol === 'SUBLIMACION' || user?.rol === 'BORDADO' || user?.rol === 'DESPACHO'
+  // canEditItems: can change subestado and notas_area on items (production roles)
+  const canEditItems = !fromHistorial && (user?.rol === 'ADMIN' || user?.rol === 'DISEÑO' || user?.rol === 'ESTAMPADO' || user?.rol === 'SUBLIMACION' || user?.rol === 'BORDADO')
   const montoTotal = parseFloat(pedido.MONTO_TOTAL || 0)
   const montoAbonado = parseFloat(pedido.MONTO_ABONADO || 0)
   const montoPendiente = montoTotal - montoAbonado
@@ -199,7 +202,7 @@ export default function PedidoDetailPage() {
             </div>
             <div className="divide-y divide-gray-800">
               {items.map(item => (
-                <ItemDetalle key={item.ITEM_ID} item={item} readOnly={readOnly} tiendaColor={tiendaColor} user={user} loadPedido={loadPedido} />
+                <ItemDetalle key={item.ITEM_ID} item={item} readOnly={!canEditItems} tiendaColor={tiendaColor} user={user} loadPedido={loadPedido} />
               ))}
             </div>
           </div>
