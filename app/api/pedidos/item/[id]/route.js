@@ -19,7 +19,36 @@ export async function PATCH(req, { params }) {
     if (body.NOTAS_AREA !== undefined) updated.NOTAS_AREA = body.NOTAS_AREA
     if (body.PRECIO_UNIT !== undefined) {
       updated.PRECIO_UNIT = String(body.PRECIO_UNIT)
-      updated.SUBTOTAL = String((parseFloat(body.PRECIO_UNIT) * parseInt(updated.CANTIDAD || 1)).toFixed(2))
+      updated.SUBTOTAL = String((parseFloat(body.PRECIO_UNIT) * parseInt(body.CANTIDAD || updated.CANTIDAD || 1)).toFixed(2))
+    }
+    // Full item edit fields
+    if (body.PRODUCTO_NOMBRE) updated.PRODUCTO_NOMBRE = body.PRODUCTO_NOMBRE
+    if (body.COLOR !== undefined) updated.COLOR = body.COLOR
+    if (body.TALLA !== undefined) updated.TALLA = body.TALLA
+    if (body.CANTIDAD !== undefined) {
+      updated.CANTIDAD = String(body.CANTIDAD)
+      updated.SUBTOTAL = String((parseFloat(updated.PRECIO_UNIT || 0) * parseInt(body.CANTIDAD || 1)).toFixed(2))
+    }
+    if (body.AREA !== undefined) updated.AREA = body.AREA
+    if (body.DETALLE_PERSONALIZADO !== undefined) updated.DETALLE_PERSONALIZADO = body.DETALLE_PERSONALIZADO
+    if (body.SUBTOTAL !== undefined) updated.SUBTOTAL = String(body.SUBTOTAL)
+    // Photos - handle base64 or URL
+    const photoFields = ['FOTO_PECHO_URL','FOTO_ESPALDA_URL','FOTO_MANGA_D_URL','FOTO_MANGA_I_URL']
+    for (const field of photoFields) {
+      if (body[field] !== undefined) {
+        if (body[field] === '') {
+          updated[field] = ''
+        } else if (body[field].startsWith('http')) {
+          updated[field] = body[field]
+        } else if (body[field].startsWith('data:')) {
+          try {
+            const { uploadToCloudinary } = await import('@/lib/cloudinary')
+            const name = `${id}_${field.toLowerCase().replace('_url','')}.jpg`
+            const r = await uploadToCloudinary(body[field], name, `mandarina-pro/pedidos`)
+            updated[field] = r.url
+          } catch(e) { console.error('Photo upload error:', e.message) }
+        }
+      }
     }
 
     await updateRow('DETALLE_PEDIDO', idx, [

@@ -7,6 +7,146 @@ import BuscadorProductos from '@/components/pedido/BuscadorProductos'
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
 
+const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
+const AREAS = [
+  'ESTAMPADO','SUBLIMACION','BORDADO',
+  'ESTAMPADO + SUBLIMACION','ESTAMPADO + BORDADO',
+  'SUBLIMACION + BORDADO','ESTAMPADO + SUBLIMACION + BORDADO',
+  'PRODUCTO SIN DISEÑO','ENTREGA EN TIENDA',
+]
+
+function ItemEditor({ item, onSave }) {
+  const [data, setData] = useState({
+    PRODUCTO_NOMBRE: item.PRODUCTO_NOMBRE || '',
+    COLOR: item.COLOR || '',
+    TALLA: item.TALLA || '',
+    CANTIDAD: item.CANTIDAD || 1,
+    PRECIO_UNIT: item.PRECIO_UNIT || '0',
+    AREA: item.AREA || 'ESTAMPADO',
+    DETALLE_PERSONALIZADO: item.DETALLE_PERSONALIZADO || '',
+  })
+  const [fotos, setFotos] = useState({
+    FOTO_PECHO_URL: item.FOTO_PECHO_URL || '',
+    FOTO_ESPALDA_URL: item.FOTO_ESPALDA_URL || '',
+    FOTO_MANGA_D_URL: item.FOTO_MANGA_D_URL || '',
+    FOTO_MANGA_I_URL: item.FOTO_MANGA_I_URL || '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  function handleFoto(key, file) {
+    if (!file) return
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const MAX = 800
+      let w = img.width, h = img.height
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX }
+        else { w = Math.round(w * MAX / h); h = MAX }
+      }
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      setFotos(f => ({ ...f, [key]: canvas.toDataURL('image/jpeg', 0.75) }))
+    }
+    img.src = url
+  }
+
+  const subtotal = (parseFloat(data.PRECIO_UNIT || 0) * parseInt(data.CANTIDAD || 1)).toFixed(2)
+
+  return (
+    <div className="mt-3 border-t border-gray-800 pt-3 space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="col-span-2">
+          <label className="label">Nombre del producto</label>
+          <input className="input text-sm" value={data.PRODUCTO_NOMBRE}
+            onChange={e => setData(d => ({...d, PRODUCTO_NOMBRE: e.target.value}))} />
+        </div>
+        <div>
+          <label className="label">Color</label>
+          <input className="input text-sm" value={data.COLOR}
+            onChange={e => setData(d => ({...d, COLOR: e.target.value}))} />
+        </div>
+        <div>
+          <label className="label">Talla</label>
+          <select className="input text-sm" value={data.TALLA}
+            onChange={e => setData(d => ({...d, TALLA: e.target.value}))}>
+            {TALLAS.map(t => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Cantidad</label>
+          <input type="number" min="1" className="input text-sm" value={data.CANTIDAD}
+            onChange={e => setData(d => ({...d, CANTIDAD: e.target.value}))} />
+        </div>
+        <div>
+          <label className="label">Precio $</label>
+          <input type="number" min="0" step="0.5" className="input text-sm" value={data.PRECIO_UNIT}
+            onChange={e => setData(d => ({...d, PRECIO_UNIT: e.target.value}))} />
+        </div>
+        <div className="col-span-2">
+          <label className="label">Área</label>
+          <select className="input text-sm" value={data.AREA}
+            onChange={e => setData(d => ({...d, AREA: e.target.value}))}>
+            {AREAS.map(a => <option key={a}>{a}</option>)}
+          </select>
+        </div>
+        <div className="col-span-2">
+          <label className="label">Detalle / instrucciones</label>
+          <textarea className="input resize-none text-sm" rows={2} value={data.DETALLE_PERSONALIZADO}
+            onChange={e => setData(d => ({...d, DETALLE_PERSONALIZADO: e.target.value}))} />
+        </div>
+      </div>
+
+      {/* Fotos */}
+      <div>
+        <label className="label">Fotos del diseño</label>
+        <div className="grid grid-cols-2 gap-2">
+          {[['FOTO_PECHO_URL','Pecho'],['FOTO_ESPALDA_URL','Espalda'],['FOTO_MANGA_D_URL','M. Derecha'],['FOTO_MANGA_I_URL','M. Izquierda']].map(([key, label]) => (
+            <div key={key}>
+              <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all
+                ${fotos[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}`}>
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={e => handleFoto(key, e.target.files[0])} />
+                {fotos[key]
+                  ? <img src={fotos[key]} className="w-full h-full object-cover" />
+                  : <span className="text-xs text-gray-500 text-center px-1">{label}</span>}
+              </label>
+              {fotos[key] && (
+                <button onClick={() => setFotos(f => ({...f, [key]: ''}))}
+                  className="text-xs text-red-400 mt-0.5 w-full text-center">✕ quitar</button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-400">Subtotal: <span className="text-white font-bold">${subtotal}</span></span>
+        <button onClick={async () => {
+          setSaving(true)
+          await onSave({
+            PRODUCTO_NOMBRE: data.PRODUCTO_NOMBRE,
+            COLOR: data.COLOR,
+            TALLA: data.TALLA,
+            CANTIDAD: data.CANTIDAD,
+            PRECIO_UNIT: data.PRECIO_UNIT,
+            SUBTOTAL: subtotal,
+            AREA: data.AREA,
+            DETALLE_PERSONALIZADO: data.DETALLE_PERSONALIZADO,
+            ...fotos,
+          })
+          setSaving(false)
+        }} disabled={saving} className="btn-primary text-sm px-4 py-2">
+          {saving ? '⏳ Guardando...' : '💾 Guardar cambios'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
 export default function EditarPedidoPage() {
   const router = useRouter()
   const params = useParams()
@@ -25,6 +165,7 @@ export default function EditarPedidoPage() {
   const [nuevoPago, setNuevoPago] = useState({ tipo: 'EFECTIVO', monto: '', notas: '' })
   const [showNuevoProducto, setShowNuevoProducto] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [editingItem, setEditingItem] = useState(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -224,20 +365,23 @@ export default function EditarPedidoPage() {
                         className="text-gray-600 hover:text-red-400 text-sm p-1">✕</button>
                     )}
                   </div>
-                  {/* Price editor */}
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs text-gray-500">Precio:</span>
-                    <input type="number" step="0.50" min="0"
-                      className="input py-1 text-sm w-24"
-                      defaultValue={parseFloat(item.PRECIO_UNIT || 0).toFixed(2)}
-                      onBlur={e => {
-                        const newVal = parseFloat(e.target.value)
-                        if (!isNaN(newVal) && newVal !== parseFloat(item.PRECIO_UNIT)) {
-                          savePrice(item.ITEM_ID, newVal)
-                        }
-                      }} />
-                    <span className="text-xs text-gray-500">× {item.CANTIDAD} = <span className="text-white">${parseFloat(item.SUBTOTAL||0).toFixed(2)}</span></span>
-                  </div>
+                  {/* Edit item button */}
+                  <button onClick={() => setEditingItem(editingItem === item.ITEM_ID ? null : item.ITEM_ID)}
+                    className="text-xs text-mandarina-400 hover:underline mt-2 block">
+                    {editingItem === item.ITEM_ID ? '▲ Cerrar editor' : '✏️ Editar producto'}
+                  </button>
+                  {editingItem === item.ITEM_ID && (
+                    <ItemEditor item={item} onSave={async (updated) => {
+                      await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...updated, _usuarioId: user?.id }),
+                      })
+                      setEditingItem(null)
+                      setSuccess('Producto actualizado')
+                      loadPedido()
+                    }} />
+                  )}
                 </div>
               ))}
             </div>
