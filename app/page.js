@@ -59,15 +59,15 @@ export default function LoginPage() {
         <div className="card p-6">
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="label">Correo electrónico</label>
+              <label className="label">USUARIO</label>
               <input
-                type="email"
+                type="text"
                 className="input"
-                placeholder="tu@correo.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                placeholder="CHRISTIAN"
+                value={username}
+                onChange={e => setUsername(e.target.value.toUpperCase())}
                 required
-                autoComplete="email"
+                autoComplete="username"
               />
             </div>
             <div>
