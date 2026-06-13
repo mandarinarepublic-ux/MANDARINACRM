@@ -26,12 +26,16 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
   async function saveNota() {
     setSavingNota(true)
     try {
-      await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+      const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ NOTAS_AREA: notaText, _usuarioId: user?.id }),
       })
+      const data = await res.json()
+      if (!res.ok) { alert('Error al guardar nota: ' + (data.error || res.status)); return }
       setEditingNota(false)
+      // Update local state immediately so user sees it without waiting for reload
+      item.NOTAS_AREA = notaText
       loadPedido()
     } finally { setSavingNota(false) }
   }

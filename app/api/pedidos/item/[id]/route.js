@@ -43,10 +43,12 @@ async function updateItemRow(idx, updated) {
     'FOTO_MANGA_I_URL':     updated.FOTO_MANGA_I_URL || '',
     'ARCHIVO_DISEÑO_URL':   updated.ARCHIVO_DISENO_URL || updated.ARCHIVO_DISEÑO_URL || '',
     'ARCHIVO_DISENO_URL':   updated.ARCHIVO_DISENO_URL || updated.ARCHIVO_DISEÑO_URL || '',
-    'SHOPIFY_VARIANT_ID':   updated.SHOPIFY_VARIANT_ID || '',
-    'FECHA_MODIFICACION':   updated.FECHA_ITEM || fechaAhora(),
-    'FECHA_ITEM':           updated.FECHA_ITEM || fechaAhora(),
-    'NOTAS_AREA':           updated.NOTAS_AREA || '',
+    'SHOPIFY_VARIANT_ID':    updated.SHOPIFY_VARIANT_ID || '',
+    'FECHA_MODIFICACION':    updated.FECHA_ITEM || fechaAhora(),
+    'FECHA_MODIFICACI
+ON':  updated.FECHA_ITEM || fechaAhora(),
+    'FECHA_ITEM':            updated.FECHA_ITEM || fechaAhora(),
+    'NOTAS_AREA':            updated.NOTAS_AREA !== undefined ? String(updated.NOTAS_AREA) : '',
   }
 
   // Build row in exact header order
@@ -62,7 +64,7 @@ async function updateItemRow(idx, updated) {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.SHEET_ID,
-    range: `DETALLE_PEDIDO!A${sheetRow}:${colEnd}${sheetRow}`,
+    range: `DETALLE_PEDIDO!A${sheetRow}:U${sheetRow}`,
     valueInputOption: 'RAW',
     requestBody: { values: [row] },
   })
