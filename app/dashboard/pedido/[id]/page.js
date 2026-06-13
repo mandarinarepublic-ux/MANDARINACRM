@@ -24,6 +24,7 @@ export default function PedidoDetailPage() {
   const [loading, setLoading] = useState(true)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [showPdfPreview, setShowPdfPreview] = useState(false)
+  const [logs, setLogs] = useState([])
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -44,6 +45,10 @@ export default function PedidoDetailPage() {
       const cr = await fetch(`/api/clientes?id=${encodeURIComponent(p.CLIENTE_ID || '')}`)
       const cd = await cr.json()
       setCliente(cd.clientes?.[0] || null)
+      // Load logs
+      const lr = await fetch(`/api/pedidos/logs?pedidoId=${params.id}`)
+      const ld = await lr.json()
+      setLogs(ld.logs || [])
     } finally { setLoading(false) }
   }
 
@@ -236,6 +241,43 @@ export default function PedidoDetailPage() {
               ))}
             </div>
           </div>
+
+          {/* Notas del vendedor */}
+          {pedido.NOTAS_VENDEDOR && (
+            <div className="card p-4">
+              <h3 className="text-sm font-semibold text-white mb-2">📝 Notas internas</h3>
+              <div className="text-sm text-gray-300 bg-gray-800/50 rounded-xl px-4 py-3">
+                {pedido.NOTAS_VENDEDOR}
+              </div>
+            </div>
+          )}
+
+          {/* Bitácora de cambios */}
+          {logs.length > 0 && (
+            <div className="card p-4">
+              <h3 className="text-sm font-semibold text-white mb-3">📋 Bitácora del pedido</h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {logs.map((log, i) => (
+                  <div key={i} className="text-xs border-l-2 border-gray-700 pl-3 py-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-gray-500">{log.fecha}</span>
+                      <span className="text-mandarina-400 font-medium">{log.usuario}</span>
+                    </div>
+                    <div className="text-gray-300">
+                      {log.campo === 'CREACION' && '🆕 Pedido creado'}
+                      {log.campo === 'ESTADO_PEDIDO' && `📦 Estado: ${log.antes} → ${log.despues}`}
+                      {log.campo === 'DIRECCION' && `📍 Dirección actualizada`}
+                      {log.campo === 'ITEM_AGREGADO' && `➕ Producto agregado: ${log.despues}`}
+                      {log.campo === 'ITEM_ELIMINADO' && `❌ Producto eliminado: ${log.antes}`}
+                      {log.campo === 'PAGO_AGREGADO' && `💰 Pago registrado: ${log.despues}`}
+                      {log.campo.startsWith('ITEM_') && log.campo.includes('SUBESTADO') && `🔧 ${log.antes} → ${log.despues}`}
+                      {!['CREACION','ESTADO_PEDIDO','DIRECCION','ITEM_AGREGADO','ITEM_ELIMINADO','PAGO_AGREGADO'].includes(log.campo) && !log.campo.includes('SUBESTADO') && `${log.campo}: ${log.despues}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Entrega */}
           <div className="card p-4">
