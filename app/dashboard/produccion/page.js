@@ -20,6 +20,7 @@ export default function ProduccionPage() {
   const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
+  const [filtroSubestado, setFiltroSubestado] = useState('TODOS')
   const [expandedPedido, setExpandedPedido] = useState(null)
   const [editingNota, setEditingNota] = useState(null)
   const [notaText, setNotaText] = useState('')
@@ -45,10 +46,9 @@ export default function ProduccionPage() {
           ...p,
           itemsFiltrados: (p.items || []).filter(item => {
             if (item.SUBESTADO === 'ELIMINADO' || item.SUBESTADO === 'ENTREGADO_TIENDA') return false
-            if (item.SUBESTADO === 'LISTO') return false // solo pendientes
             // ADMIN ve todo, cada rol ve su área
-            if (u.rol === 'ADMIN') return true
-            return areaAplica(item.AREA, u.rol)
+            if (u.rol !== 'ADMIN' && !areaAplica(item.AREA, u.rol)) return false
+            return true
           })
         }))
         .filter(p => p.itemsFiltrados.length > 0)
@@ -76,12 +76,21 @@ export default function ProduccionPage() {
     loadItems(user)
   }
 
-  const filtered = pedidos.filter(p => {
-    if (!busqueda) return true
-    const q = busqueda.toLowerCase()
-    return p.PEDIDO_ID?.toLowerCase().includes(q) ||
-      p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))
-  })
+  const filtered = pedidos
+    .map(p => ({
+      ...p,
+      itemsFiltrados: p.itemsFiltrados.filter(item => {
+        if (filtroSubestado === 'TODOS') return item.SUBESTADO !== 'LISTO' // default: hide LISTO
+        return item.SUBESTADO === filtroSubestado
+      })
+    }))
+    .filter(p => {
+      if (p.itemsFiltrados.length === 0) return false
+      if (!busqueda) return true
+      const q = busqueda.toLowerCase()
+      return p.PEDIDO_ID?.toLowerCase().includes(q) ||
+        p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))
+    })
 
   const totalPendientes = filtered.reduce((s, p) => s + p.itemsFiltrados.length, 0)
   const urgentes = filtered.filter(p => {
@@ -106,8 +115,25 @@ export default function ProduccionPage() {
             </div>
             <Link href="/dashboard/impresion" className="btn-secondary text-xs px-3 py-2">🖨️ Imprimir</Link>
           </div>
-          <input className="input" placeholder="Buscar por pedido o producto..."
+          <input className="input mb-3" placeholder="Buscar por pedido o producto..."
             value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+          <div className="flex gap-1.5 overflow-x-auto pb-1 flex-wrap">
+            {[
+              { key: 'TODOS', label: 'Todos' },
+              { key: 'SOLICITADO', label: '⏳ Solicitado' },
+              { key: 'EN_PROCESO', label: '🔧 En proceso' },
+              { key: 'ENVIADO_APROBACION', label: '📤 Enviado aprobación' },
+              { key: 'LISTO', label: '✅ Listo' },
+            ].map(f => (
+              <button key={f.key} onClick={() => setFiltroSubestado(f.key)}
+                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0
+                  ${filtroSubestado === f.key
+                    ? 'bg-mandarina-500 border-mandarina-500 text-white'
+                    : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
