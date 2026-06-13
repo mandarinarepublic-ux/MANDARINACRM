@@ -1,25 +1,24 @@
 'use client'
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { areaAplica } from '@/lib/pedidos-client'
 
 const SUBESTADO_CONFIG = {
-  SOLICITADO:          { label: '⏳ Solicitado',           color: 'bg-yellow-500' },
-  EN_PROCESO:          { label: '🔧 En proceso',           color: 'bg-blue-500' },
-  ENVIADO_APROBACION:  { label: '📤 Enviado aprobación',   color: 'bg-purple-500' },
-  LISTO:               { label: '✅ Listo',                color: 'bg-green-500' },
-  ENTREGADO_TIENDA:    { label: '🏪 Entregado en tienda',  color: 'bg-gray-500' },
+  SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
+  EN_PROCESO:         { label: '🔧 En proceso',          color: 'bg-blue-500' },
+  ENVIADO_APROBACION: { label: '📤 Enviado aprobación',  color: 'bg-purple-500' },
+  LISTO:              { label: '✅ Listo',               color: 'bg-green-500' },
+  ENTREGADO_TIENDA:   { label: '🏪 Entregado en tienda', color: 'bg-gray-500' },
 }
-
 const SUBESTADOS_ORDEN = ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO']
 
 function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, saveNota, updateSubestado, pedidoId }) {
   const fotos = [
     { key: 'FOTO_PECHO_URL', label: 'Pecho' },
     { key: 'FOTO_ESPALDA_URL', label: 'Espalda' },
-    { key: 'FOTO_MANGA_D_URL', label: 'M. Der' },
-    { key: 'FOTO_MANGA_I_URL', label: 'M. Izq' },
+    { key: 'FOTO_MANGA_D_URL', label: 'M.Der' },
+    { key: 'FOTO_MANGA_I_URL', label: 'M.Izq' },
   ].filter(f => item[f.key])
 
   const [fotoActiva, setFotoActiva] = useState(fotos[0]?.key || null)
@@ -38,15 +37,16 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
         </span>
       </div>
 
-      {/* 2-column layout */}
+      {/* 2 columnas */}
       <div className="flex gap-4">
-        {/* LEFT: foto grande + miniaturas */}
+        {/* Izquierda: fotos */}
         <div className="w-40 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
-              <div className="w-40 h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
+              <div
+                className="w-40 h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
                 onDoubleClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
-                <img src={item[fotoActiva || fotos[0].key]} className="w-full h-full object-contain" />
+                <img src={item[fotoActiva || fotos[0].key]} className="w-full h-full object-contain" alt="foto" />
               </div>
               {fotos.length > 1 && (
                 <div className="flex gap-1 flex-wrap">
@@ -54,7 +54,7 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
                     <button key={f.key} onClick={() => setFotoActiva(f.key)}
                       className={`flex flex-col items-center gap-0.5 p-0.5 rounded-lg border transition-all
                         ${(fotoActiva || fotos[0].key) === f.key ? 'border-mandarina-500' : 'border-gray-700'}`}>
-                      <img src={item[f.key]} className="w-10 h-10 rounded object-cover" />
+                      <img src={item[f.key]} className="w-10 h-10 rounded object-cover" alt={f.label} />
                       <span className="text-xs text-gray-500">{f.label}</span>
                     </button>
                   ))}
@@ -64,17 +64,23 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
             </>
           ) : (
             <div className="w-40 h-40 rounded-xl border border-gray-800 bg-gray-800/50 flex items-center justify-center">
-              <span className="text-gray-600 text-xs">Sin fotos</span>
+              <span className="text-gray-600 text-xs text-center px-2">Sin fotos de diseño</span>
             </div>
           )}
         </div>
 
-        {/* RIGHT: detalle + nota + botones */}
+        {/* Derecha: detalle + nota + botones */}
         <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1">
-            <div className="text-xs"><span className="text-gray-500">Área:</span> <span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
+          <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5">
+            <div className="text-xs">
+              <span className="text-gray-500">Área:</span>{' '}
+              <span className="text-mandarina-400 font-medium">{item.AREA}</span>
+            </div>
             {item.DETALLE_PERSONALIZADO && (
-              <div className="text-xs"><span className="text-gray-500">Detalle:</span> <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
+              <div className="text-xs">
+                <span className="text-gray-500">Detalle:</span>{' '}
+                <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span>
+              </div>
             )}
           </div>
 
@@ -116,18 +122,16 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
         </div>
       </div>
 
-      {/* Fullscreen modal */}
       {fotoFullscreen && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
           onClick={() => setFotoFullscreen(null)}>
-          <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" />
+          <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt="fullscreen" />
           <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
         </div>
       )}
     </div>
   )
 }
-
 
 export default function ProduccionPage() {
   const router = useRouter()
@@ -153,21 +157,17 @@ export default function ProduccionPage() {
     try {
       const res = await fetch('/api/pedidos?rol=ADMIN')
       const data = await res.json()
-
-      // Group by pedido, filter items by user area
       const pedidosConItems = (data.pedidos || [])
         .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA')
         .map(p => ({
           ...p,
           itemsFiltrados: (p.items || []).filter(item => {
             if (item.SUBESTADO === 'ELIMINADO' || item.SUBESTADO === 'ENTREGADO_TIENDA') return false
-            // ADMIN ve todo, cada rol ve su área
             if (u.rol !== 'ADMIN' && !areaAplica(item.AREA, u.rol)) return false
             return true
           })
         }))
         .filter(p => p.itemsFiltrados.length > 0)
-
       setPedidos(pedidosConItems)
     } finally { setLoading(false) }
   }
@@ -195,7 +195,7 @@ export default function ProduccionPage() {
     .map(p => ({
       ...p,
       itemsFiltrados: p.itemsFiltrados.filter(item => {
-        if (filtroSubestado === 'TODOS') return item.SUBESTADO !== 'LISTO' // default: hide LISTO
+        if (filtroSubestado === 'TODOS') return item.SUBESTADO !== 'LISTO'
         return item.SUBESTADO === filtroSubestado
       })
     }))
@@ -223,8 +223,7 @@ export default function ProduccionPage() {
               <div>
                 <h1 className="text-xl font-display font-bold text-white">Producción</h1>
                 <p className="text-xs text-gray-500">
-                  {totalPendientes} ítem(s) pendientes
-                  {user?.rol !== 'ADMIN' && ` · ${user?.rol}`}
+                  {totalPendientes} ítem(s) pendientes{user?.rol !== 'ADMIN' && ` · ${user?.rol}`}
                 </p>
               </div>
             </div>
@@ -281,12 +280,11 @@ export default function ProduccionPage() {
 
                 return (
                   <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${urgente ? 'border-red-500/40' : ''}`}>
-                    {/* Pedido header */}
                     <button onClick={() => setExpandedPedido(isExpanded ? null : pedido.PEDIDO_ID)}
                       className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <Link href={`/dashboard/pedido/${pedido.PEDIDO_ID}`}
+                          <Link href={`/dashboard/pedido/${pedido.PEDIDO_ID}?from=historial`}
                             onClick={e => e.stopPropagation()}
                             className="font-mono text-sm font-medium text-mandarina-400 hover:underline">
                             {pedido.PEDIDO_ID}
@@ -295,14 +293,12 @@ export default function ProduccionPage() {
                           <span className="text-xs text-gray-600">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                         </div>
                         <div className="text-xs text-gray-500">
-                          {pedido.itemsFiltrados.length} ítem(s) pendiente(s)
-                          {diasR !== null && ` · ${diasR}d restantes`}
+                          {pedido.itemsFiltrados.length} ítem(s){diasR !== null && ` · ${diasR}d restantes`}
                         </div>
                       </div>
                       <span className="text-gray-600 text-sm">{isExpanded ? '▲' : '▼'}</span>
                     </button>
 
-                    {/* Items */}
                     {isExpanded && (
                       <div className="border-t border-gray-800 divide-y divide-gray-800">
                         {pedido.itemsFiltrados.map(item => (
@@ -312,112 +308,6 @@ export default function ProduccionPage() {
                             saveNota={saveNota} updateSubestado={updateSubestado}
                             pedidoId={pedido.PEDIDO_ID} />
                         ))}
-                            {/* Header */}
-                            <div className="flex items-center justify-between mb-4">
-                              <div>
-                                <div className="font-semibold text-white">{item.PRODUCTO_NOMBRE}</div>
-                                <div className="text-xs text-gray-500 mt-0.5">{item.COLOR} · {item.TALLA} · {item.CANTIDAD} uni</div>
-                              </div>
-                              <span className={`badge text-xs text-white ${SUBESTADO_CONFIG[item.SUBESTADO]?.color || 'bg-gray-700'}`}>
-                                {SUBESTADO_CONFIG[item.SUBESTADO]?.label || item.SUBESTADO}
-                              </span>
-                            </div>
-
-                            {/* 2-column layout */}
-                            <div className="flex gap-4">
-                              {/* LEFT: foto grande + miniaturas */}
-                              <div className="w-40 flex-shrink-0">
-                                {fotos.length > 0 ? (
-                                  <>
-                                    {/* Foto principal */}
-                                    <div className="w-40 h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
-                                      onDoubleClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
-                                      <img src={item[fotoActiva || fotos[0].key]}
-                                        className="w-full h-full object-contain" />
-                                    </div>
-                                    {/* Miniaturas */}
-                                    {fotos.length > 1 && (
-                                      <div className="flex gap-1 flex-wrap">
-                                        {fotos.map(f => (
-                                          <button key={f.key}
-                                            onClick={() => setFotoActiva(f.key)}
-                                            className={`flex flex-col items-center gap-0.5 p-0.5 rounded-lg border transition-all
-                                              ${(fotoActiva || fotos[0].key) === f.key ? 'border-mandarina-500' : 'border-gray-700'}`}>
-                                            <img src={item[f.key]} className="w-10 h-10 rounded object-cover" />
-                                            <span className="text-xs text-gray-500">{f.label}</span>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
-                                    <div className="text-xs text-gray-600 mt-1 text-center">doble clic = pantalla completa</div>
-                                  </>
-                                ) : (
-                                  <div className="w-40 h-40 rounded-xl border border-gray-800 bg-gray-800/50 flex items-center justify-center">
-                                    <span className="text-gray-600 text-xs">Sin fotos</span>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* RIGHT: detalle + nota + botones */}
-                              <div className="flex-1 min-w-0 flex flex-col gap-3">
-                                {/* Info del producto */}
-                                <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1">
-                                  <div className="text-xs"><span className="text-gray-500">Área:</span> <span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
-                                  {item.DETALLE_PERSONALIZADO && (
-                                    <div className="text-xs"><span className="text-gray-500">Detalle:</span> <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
-                                  )}
-                                </div>
-
-                                {/* Nota del área */}
-                                {editingNota === item.ITEM_ID ? (
-                                  <div>
-                                    <textarea className="input resize-none text-sm mb-2 w-full" rows={2}
-                                      placeholder="Nota para este producto..."
-                                      value={notaText} onChange={e => setNotaText(e.target.value)} />
-                                    <div className="flex gap-2">
-                                      <button onClick={() => saveNota(item.ITEM_ID)} className="btn-primary text-xs px-3 py-1.5">Guardar</button>
-                                      <button onClick={() => setEditingNota(null)} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div>
-                                    {item.NOTAS_AREA && (
-                                      <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">
-                                        📝 {item.NOTAS_AREA}
-                                      </div>
-                                    )}
-                                    <button onClick={() => { setEditingNota(item.ITEM_ID); setNotaText(item.NOTAS_AREA || '') }}
-                                      className="text-xs text-gray-600 hover:text-gray-400">
-                                      {item.NOTAS_AREA ? '✏️ Editar nota' : '+ Agregar nota'}
-                                    </button>
-                                  </div>
-                                )}
-
-                                {/* Subestado buttons */}
-                                <div className="grid grid-cols-2 gap-1.5 mt-auto">
-                                  {SUBESTADOS_ORDEN.map(s => (
-                                    <button key={s} onClick={() => updateSubestado(item.ITEM_ID, s, pedido.PEDIDO_ID)}
-                                      className={`py-2 rounded-xl text-xs font-semibold transition-all
-                                        ${item.SUBESTADO === s
-                                          ? `${SUBESTADO_CONFIG[s]?.color} text-white`
-                                          : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
-                                      {SUBESTADO_CONFIG[s]?.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Fullscreen modal */}
-                            {fotoFullscreen && (
-                              <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
-                                onClick={() => setFotoFullscreen(null)}>
-                                <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" />
-                                <button className="absolute top-4 right-4 text-white text-2xl">✕</button>
-                              </div>
-                            )}
-                          </div>
-
                       </div>
                     )}
                   </div>
