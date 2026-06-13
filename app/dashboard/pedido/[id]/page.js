@@ -192,61 +192,9 @@ export default function PedidoDetailPage() {
             </div>
             <div className="divide-y divide-gray-800">
               {items.map(item => (
-                <div key={item.ITEM_ID} className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <div className="text-sm font-medium text-white">{item.PRODUCTO_NOMBRE}</div>
-                      <div className="text-xs text-gray-500">{item.COLOR} · {item.TALLA} · <span className="text-mandarina-400">{item.AREA}</span></div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-white">{item.CANTIDAD}x ${parseFloat(item.PRECIO_UNIT||0).toFixed(2)}</div>
-                      <div className="text-xs font-medium" style={{ color: tiendaColor }}>${parseFloat(item.SUBTOTAL||0).toFixed(2)}</div>
-                    </div>
-                  </div>
-                  {item.DETALLE_PERSONALIZADO && (
-                    <div className="text-xs text-gray-400 bg-gray-800/50 rounded-lg px-3 py-2 mb-2">{item.DETALLE_PERSONALIZADO}</div>
-                  )}
-                  {item.NOTAS_AREA && (
-                    <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-2">
-                      📝 Nota fábrica: {item.NOTAS_AREA}
-                    </div>
-                  )}
-                  {(item.FOTO_PECHO_URL || item.FOTO_ESPALDA_URL || item.FOTO_MANGA_D_URL || item.FOTO_MANGA_I_URL) && (
-                    <div className="flex gap-2 mt-2 flex-wrap">
-                      {[['FOTO_PECHO_URL','Pecho'],['FOTO_ESPALDA_URL','Espalda'],['FOTO_MANGA_D_URL','Manga Der.'],['FOTO_MANGA_I_URL','Manga Izq.']].map(([key,label]) =>
-                        item[key] ? (
-                          <a key={key} href={item[key]} target="_blank" className="flex flex-col items-center gap-1">
-                            <img src={item[key]} className="w-14 h-14 rounded-lg object-cover border border-gray-700" />
-                            <span className="text-xs text-gray-500">{label}</span>
-                          </a>
-                        ) : null
-                      )}
-                    </div>
-                  )}
-                  <div className="mt-2">
-                    {readOnly ? (
-                    <span className={`badge text-xs ${
-                      item.SUBESTADO === 'LISTO' ? 'bg-green-500/20 text-green-400' :
-                      item.SUBESTADO === 'EN_PROCESO' ? 'bg-blue-500/20 text-blue-400' :
-                      item.SUBESTADO === 'ENVIADO_APROBACION' ? 'bg-purple-500/20 text-purple-400' :
-                      'bg-yellow-500/20 text-yellow-400'
-                    }`}>{item.SUBESTADO}</span>
-                  ) : (
-                    <select className="bg-gray-800 border border-gray-700 text-xs text-white rounded-lg px-2 py-1"
-                      value={item.SUBESTADO}
-                      onChange={async e => {
-                        await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ SUBESTADO: e.target.value, _usuarioId: user?.id }),
-                        })
-                        loadPedido()
-                      }}>
-                      {['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO'].map(s => <option key={s}>{s}</option>)}
+                <ItemDetalle key={item.ITEM_ID} item={item} readOnly={readOnly} tiendaColor={tiendaColor} user={user} loadPedido={loadPedido} />
                     </select>
                   )}
-                  </div>
-                </div>
               ))}
             </div>
           </div>
