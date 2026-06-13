@@ -181,7 +181,7 @@ export default function EditarPedidoPage() {
       setPedido(p)
       setItems(p.items || [])
       setPagos(p.pagos || [])
-      setDireccion(p.DIRECCION_TEXTO || '')
+      setDireccion(p.DIRECCION_TEXTO || p.DIRECCION_PEDIDO || '')
 
       const cr = await fetch(`/api/clientes?id=${encodeURIComponent(p.CLIENTE_ID || '')}`)
       const cd = await cr.json()

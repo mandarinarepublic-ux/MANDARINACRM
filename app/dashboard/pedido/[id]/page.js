@@ -164,10 +164,10 @@ export default function PedidoDetailPage() {
                 {[['Nombre', cliente.NOMBRE], ['Cédula', cliente.CEDULA], ['Celular', cliente.CELULAR], ['Email', cliente.EMAIL]].map(([k, v]) =>
                   v ? <div key={k} className="flex justify-between"><span className="text-gray-500">{k}</span><span className="text-white">{v}</span></div> : null
                 )}
-                {pedido.DIRECCION_TEXTO && (
+                {(pedido.DIRECCION_TEXTO || pedido.DIRECCION_PEDIDO) && (
                   <div className="flex justify-between gap-4">
                     <span className="text-gray-500 shrink-0">Dirección</span>
-                    <span className="text-white text-right text-xs">{pedido.DIRECCION_TEXTO}</span>
+                    <span className="text-white text-right text-xs">{(pedido.DIRECCION_TEXTO || pedido.DIRECCION_PEDIDO)}</span>
                   </div>
                 )}
                 {pedido.LATITUD && (
@@ -324,7 +324,7 @@ function PdfContent({ pedido, items, cliente, tiendaColor }) {
           </tr>
           <tr>
             <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>DIRECCIÓN ENTREGA</td>
-            <td colSpan={3} style={{ border: '1px solid #000', padding: '4px 6px' }}>{pedido?.DIRECCION_TEXTO || cliente?.DIRECCION || '-'}</td>
+            <td colSpan={3} style={{ border: '1px solid #000', padding: '4px 6px' }}>{(pedido?.DIRECCION_TEXTO || pedido?.DIRECCION_PEDIDO) || cliente?.DIRECCION || '-'}</td>
           </tr>
         </tbody>
       </table>
