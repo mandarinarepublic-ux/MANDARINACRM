@@ -102,7 +102,7 @@ export default function HistorialPage() {
           ) : (
             <div className="space-y-2">
               {filtered.map(p => (
-                <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`}
+                <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}?from=historial`}
                   className="card p-4 flex items-center gap-4 hover:border-gray-700 transition-all block">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">

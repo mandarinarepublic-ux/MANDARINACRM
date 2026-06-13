@@ -17,6 +17,7 @@ export default function PedidoDetailPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const isNew = searchParams.get('nuevo') === '1'
+  const fromHistorial = searchParams.get('from') === 'historial'
   const [user, setUser] = useState(null)
   const [pedido, setPedido] = useState(null)
   const [items, setItems] = useState([])
@@ -100,7 +101,7 @@ export default function PedidoDetailPage() {
   )
 
   const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
-  const readOnly = user?.rol === 'VENDEDOR' || user?.rol === 'DISEÑO' || user?.rol === 'ESTAMPADO' || user?.rol === 'SUBLIMACION' || user?.rol === 'BORDADO'
+  const readOnly = fromHistorial || user?.rol === 'VENDEDOR' || user?.rol === 'DISEÑO' || user?.rol === 'ESTAMPADO' || user?.rol === 'SUBLIMACION' || user?.rol === 'BORDADO'
   const montoTotal = parseFloat(pedido.MONTO_TOTAL || 0)
   const montoAbonado = parseFloat(pedido.MONTO_ABONADO || 0)
   const montoPendiente = montoTotal - montoAbonado
