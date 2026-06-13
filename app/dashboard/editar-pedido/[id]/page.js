@@ -62,12 +62,19 @@ export default function EditarPedidoPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ DIRECCION_TEXTO: direccion, _usuarioId: user?.id }),
       })
-      // Also update client
+      // Update client DIRECCION field too (raw address only)
       if (cliente) {
         await fetch(`/api/clientes/${cliente.CLIENTE_ID}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ DIRECCION: direccion }),
+          body: JSON.stringify({ 
+            NOMBRE: cliente.NOMBRE,
+            CEDULA: String(cliente.CEDULA || ''),
+            CELULAR: String(cliente.CELULAR || ''),
+            EMAIL: cliente.EMAIL || '',
+            CIUDAD: cliente.CIUDAD || '',
+            DIRECCION: direccion,
+          }),
         })
       }
       setSuccess('Dirección actualizada')

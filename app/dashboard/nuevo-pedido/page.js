@@ -180,8 +180,10 @@ export default function NuevoPedidoPage() {
 
     setLoading(true); setError('')
 
-    // Update existing client with latest data including new direccion
+    // direccionFinal = full address for the order (shown in PDF)
     const direccionFinal = usarMapa ? direccionTexto : [cliente.ciudad, cliente.direccion].filter(Boolean).join(': ')
+    // clienteDireccion = just the address line (stored in CLIENTES sheet)
+    const clienteDireccion = usarMapa ? direccionTexto : (cliente.direccion || '')
     if (clienteId) {
       await fetch(`/api/clientes/${clienteId}`, {
         method: 'PATCH',
@@ -192,7 +194,7 @@ export default function NuevoPedidoPage() {
           CELULAR: String(cliente.celular),
           EMAIL: cliente.email || '',
           CIUDAD: cliente.ciudad || '',
-          DIRECCION: direccionFinal,
+          DIRECCION: clienteDireccion,
         }),
       })
     }
