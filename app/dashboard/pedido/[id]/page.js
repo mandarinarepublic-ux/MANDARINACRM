@@ -23,6 +23,7 @@ export default function PedidoDetailPage() {
   const [cliente, setCliente] = useState(null)
   const [loading, setLoading] = useState(true)
   const [generatingPdf, setGeneratingPdf] = useState(false)
+  const [showPdfPreview, setShowPdfPreview] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -93,7 +94,7 @@ export default function PedidoDetailPage() {
   )
 
   const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
-  const readOnly = user?.rol === 'VENDEDOR'
+  const readOnly = user?.rol === 'VENDEDOR' || user?.rol === 'DISEÑO' || user?.rol === 'ESTAMPADO' || user?.rol === 'SUBLIMACION' || user?.rol === 'BORDADO'
   const montoTotal = parseFloat(pedido.MONTO_TOTAL || 0)
   const montoAbonado = parseFloat(pedido.MONTO_ABONADO || 0)
   const montoPendiente = montoTotal - montoAbonado
@@ -198,6 +199,11 @@ export default function PedidoDetailPage() {
                   {item.DETALLE_PERSONALIZADO && (
                     <div className="text-xs text-gray-400 bg-gray-800/50 rounded-lg px-3 py-2 mb-2">{item.DETALLE_PERSONALIZADO}</div>
                   )}
+                  {item.NOTAS_AREA && (
+                    <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-2">
+                      📝 Nota fábrica: {item.NOTAS_AREA}
+                    </div>
+                  )}
                   {(item.FOTO_PECHO_URL || item.FOTO_ESPALDA_URL || item.FOTO_MANGA_D_URL || item.FOTO_MANGA_I_URL) && (
                     <div className="flex gap-2 mt-2 flex-wrap">
                       {[['FOTO_PECHO_URL','Pecho'],['FOTO_ESPALDA_URL','Espalda'],['FOTO_MANGA_D_URL','Manga Der.'],['FOTO_MANGA_I_URL','Manga Izq.']].map(([key,label]) =>
@@ -254,10 +260,15 @@ export default function PedidoDetailPage() {
 
       {/* Bottom actions */}
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3 flex gap-2">
-        <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">📱 WhatsApp</button>
-        <button onClick={generatePDF} disabled={generatingPdf} className="btn-primary flex-1 text-sm" style={{ backgroundColor: tiendaColor }}>
-          {generatingPdf ? '⏳...' : '⬇️ Descargar PDF'}
-        </button>
+        {user?.rol !== 'DISEÑO' && user?.rol !== 'ESTAMPADO' && user?.rol !== 'SUBLIMACION' && user?.rol !== 'BORDADO' && (
+          <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">📱 WhatsApp</button>
+        )}
+        <button onClick={() => setShowPdfPreview(true)} className="btn-secondary flex-1 text-sm">👁️ Ver PDF</button>
+        {(user?.rol === 'ADMIN' || user?.rol === 'VENDEDOR') && (
+          <button onClick={generatePDF} disabled={generatingPdf} className="btn-primary flex-1 text-sm" style={{ backgroundColor: tiendaColor }}>
+            {generatingPdf ? '⏳...' : '⬇️ Descargar PDF'}
+          </button>
+        )}
       </div>
     </div>
   )

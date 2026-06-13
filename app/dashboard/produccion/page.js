@@ -94,16 +94,17 @@ export default function ProduccionPage() {
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-3">
-            <div>
-              <h1 className="text-xl font-display font-bold text-white">Producción</h1>
-              <p className="text-xs text-gray-500">
-                {totalPendientes} ítem(s) pendientes
-                {user?.rol !== 'ADMIN' && ` · ${user?.rol}`}
-              </p>
+            <div className="flex items-center gap-3">
+              <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-white p-1">←</button>
+              <div>
+                <h1 className="text-xl font-display font-bold text-white">Producción</h1>
+                <p className="text-xs text-gray-500">
+                  {totalPendientes} ítem(s) pendientes
+                  {user?.rol !== 'ADMIN' && ` · ${user?.rol}`}
+                </p>
+              </div>
             </div>
-            {(user?.rol === 'ADMIN' || user?.rol === 'DISEÑO') && (
-              <Link href="/dashboard/impresion" className="btn-secondary text-xs px-3 py-2">🖨️ Imprimir</Link>
-            )}
+            <Link href="/dashboard/impresion" className="btn-secondary text-xs px-3 py-2">🖨️ Imprimir</Link>
           </div>
           <input className="input" placeholder="Buscar por pedido o producto..."
             value={busqueda} onChange={e => setBusqueda(e.target.value)} />

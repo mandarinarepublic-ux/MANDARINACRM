@@ -4,13 +4,13 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 
 const NAV = [
-  { href: '/dashboard',                label: 'Dashboard',    icon: '🏠', roles: ['ADMIN','VENDEDOR','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'] },
+  { href: '/dashboard',                label: 'Dashboard',    icon: '🏠', roles: ['ADMIN','VENDEDOR','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO'] },
   { href: '/dashboard/nuevo-pedido',   label: 'Nueva Venta',  icon: '➕', roles: ['ADMIN','VENDEDOR'] },
   { href: '/dashboard/mis-pedidos',    label: 'Mis Pedidos',  icon: '📦', roles: ['ADMIN','VENDEDOR'] },
-  { href: '/dashboard/historial',      label: 'Historial',    icon: '📋', roles: ['ADMIN','VENDEDOR','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'] },
+  { href: '/dashboard/historial',      label: 'Historial',    icon: '📋', roles: ['ADMIN','VENDEDOR','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO'] },
   { href: '/dashboard/catalogo',       label: 'Catálogo',     icon: '🛍️', roles: ['ADMIN','VENDEDOR'] },
-  { href: '/dashboard/produccion',     label: 'Producción',   icon: '🏭', roles: ['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO'] },
-  { href: '/dashboard/impresion',      label: 'Imprimir',     icon: '🖨️', roles: ['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO'] },
+  { href: '/dashboard/produccion',     label: 'Producción',   icon: '🏭', roles: ['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO'] },
+  { href: '/dashboard/impresion',      label: 'Imprimir',     icon: '🖨️', roles: ['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO'] },
   { href: '/dashboard/despacho',       label: 'Despacho',     icon: '🚚', roles: ['ADMIN','DESPACHO'] },
   { href: '/dashboard/usuarios',       label: 'Usuarios',     icon: '👥', roles: ['ADMIN'] },
 ]
