@@ -164,6 +164,7 @@ export default function EditarPedidoPage() {
   const [showNuevoProducto, setShowNuevoProducto] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [editingItem, setEditingItem] = useState(null)
+  const [editingDireccion, setEditingDireccion] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -196,13 +197,15 @@ export default function EditarPedidoPage() {
   async function saveDireccion() {
     setSaving(true); setError(''); setSuccess('')
     try {
-      await fetch(`/api/pedidos/${params.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ DIRECCION_TEXTO: direccion, _usuarioId: user?.id }),
-      })
-      // Update client DIRECCION field too (raw address only)
       if (cliente) {
+        // Build full address for pedido
+        const ciudadCliente = cliente.CIUDAD || ''
+        const dirCompleta = ciudadCliente ? `${ciudadCliente}: ${direccion}` : direccion
+        await fetch(`/api/pedidos/${params.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ DIRECCION_TEXTO: dirCompleta, _usuarioId: user?.id }),
+        })
         await fetch(`/api/clientes/${cliente.CLIENTE_ID}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -211,7 +214,7 @@ export default function EditarPedidoPage() {
             CEDULA: String(cliente.CEDULA || ''),
             CELULAR: String(cliente.CELULAR || ''),
             EMAIL: cliente.EMAIL || '',
-            CIUDAD: cliente.CIUDAD || '',
+            CIUDAD: ciudadCliente,
             DIRECCION: direccion,
           }),
         })
@@ -315,15 +318,47 @@ export default function EditarPedidoPage() {
 
           {/* Dirección */}
           <div className="card p-4">
-            <h3 className="font-semibold text-white text-sm mb-3">📍 Dirección de entrega</h3>
-            {cliente && <div className="text-xs text-gray-500 mb-2">Cliente: {cliente.NOMBRE} · {cliente.CELULAR}</div>}
-            <textarea className="input resize-none mb-3" rows={2}
-              value={direccion} onChange={e => setDireccion(e.target.value)}
-              placeholder="Av. 6 de Diciembre y Mercurio. Frente al Teatro 24 Mayo" />
-            <button onClick={saveDireccion} disabled={saving}
-              className="btn-primary text-sm px-4 py-2">
-              {saving ? '⏳ Guardando...' : '💾 Guardar dirección'}
-            </button>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-white text-sm">📍 Dirección de entrega</h3>
+              <button onClick={() => setEditingDireccion(e => !e)}
+                className="text-xs text-mandarina-400 hover:underline">
+                {editingDireccion ? '✕ Cancelar' : '✏️ Editar dirección'}
+              </button>
+            </div>
+            {cliente && (
+              <div className="text-xs text-gray-500 mb-2">
+                {cliente.NOMBRE} · {cliente.CELULAR}
+                {cliente.EMAIL && ` · ${cliente.EMAIL}`}
+              </div>
+            )}
+            {editingDireccion ? (
+              <>
+                <div className="space-y-2 mb-3">
+                  <input className="input text-sm" placeholder="Ciudad (ej: Quito)"
+                    value={cliente?.CIUDAD || ''}
+                    onChange={e => setCliente(c => ({...c, CIUDAD: e.target.value}))} />
+                  <textarea className="input resize-none text-sm" rows={2}
+                    value={direccion} onChange={e => setDireccion(e.target.value)}
+                    placeholder="Av. 6 de Diciembre y Mercurio. Frente al Teatro 24 Mayo" />
+                  <input className="input text-sm" placeholder="Correo electrónico"
+                    value={cliente?.EMAIL || ''}
+                    onChange={e => setCliente(c => ({...c, EMAIL: e.target.value}))} />
+                  <input className="input text-sm" placeholder="Celular"
+                    value={cliente?.CELULAR || ''}
+                    onChange={e => setCliente(c => ({...c, CELULAR: e.target.value}))} />
+                </div>
+                <button onClick={async () => {
+                  await saveDireccion()
+                  setEditingDireccion(false)
+                }} disabled={saving} className="btn-primary text-sm px-4 py-2">
+                  {saving ? '⏳ Guardando...' : '💾 Guardar cambios'}
+                </button>
+              </>
+            ) : (
+              <div className="bg-gray-800/50 rounded-xl px-4 py-3 text-sm text-gray-300">
+                {direccion || <span className="text-gray-600 italic">Sin dirección registrada</span>}
+              </div>
+            )}
           </div>
 
           {/* Productos */}
