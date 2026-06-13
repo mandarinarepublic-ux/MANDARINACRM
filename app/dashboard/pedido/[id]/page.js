@@ -123,10 +123,16 @@ export default function PedidoDetailPage() {
 
           {/* Status row in header */}
           <div className="flex items-center gap-3">
-            <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 flex-1"
-              value={pedido.ESTADO_PEDIDO} onChange={e => updateEstado(e.target.value)}>
-              {Object.entries(ESTADO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
+            {user?.rol === 'ADMIN' && !fromHistorial ? (
+              <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 flex-1"
+                value={pedido.ESTADO_PEDIDO} onChange={e => updateEstado(e.target.value)}>
+                {Object.entries(ESTADO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            ) : (
+              <div className="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-3 py-1.5 flex-1">
+                {ESTADO_LABELS[pedido.ESTADO_PEDIDO] || pedido.ESTADO_PEDIDO}
+              </div>
+            )}
             <div className="flex gap-3 text-center">
               <div><div className="text-sm font-bold text-white">${montoTotal.toFixed(2)}</div><div className="text-xs text-gray-500">Total</div></div>
               <div><div className={`text-sm font-bold ${montoPendiente > 0 ? 'text-yellow-400' : 'text-green-400'}`}>${montoPendiente.toFixed(2)}</div><div className="text-xs text-gray-500">Pendiente</div></div>
