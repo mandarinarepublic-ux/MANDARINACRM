@@ -104,8 +104,10 @@ export default function PedidoDetailPage() {
   const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
   // readOnly: can't edit pedido-level data (status, address, payments)
   const readOnly = fromHistorial || user?.rol === 'VENDEDOR' || user?.rol === 'DISEÑO' || user?.rol === 'ESTAMPADO' || user?.rol === 'SUBLIMACION' || user?.rol === 'BORDADO' || user?.rol === 'DESPACHO'
-  // canEditItems: can change subestado and notas_area on items (production roles)
-  const canEditItems = !fromHistorial && (user?.rol === 'ADMIN' || user?.rol === 'DISEÑO' || user?.rol === 'ESTAMPADO' || user?.rol === 'SUBLIMACION' || user?.rol === 'BORDADO')
+  // canEditItems: production roles can ALWAYS edit subestado and notas — even from historial link
+  // (they navigate to pedidos through historial since they have no "mis-pedidos")
+  const isProductionRole = user?.rol === 'DISEÑO' || user?.rol === 'ESTAMPADO' || user?.rol === 'SUBLIMACION' || user?.rol === 'BORDADO'
+  const canEditItems = user?.rol === 'ADMIN' || isProductionRole
   const montoTotal = parseFloat(pedido.MONTO_TOTAL || 0)
   const montoAbonado = parseFloat(pedido.MONTO_ABONADO || 0)
   const montoPendiente = montoTotal - montoAbonado
