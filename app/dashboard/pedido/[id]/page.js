@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import ItemDetalle from '@/components/pedido/ItemDetalle'
 
 // Estado labels updated
 const ESTADO_LABELS = {
