@@ -105,9 +105,22 @@ export default function BuscadorProductos({ tienda, onAdd }) {
 function FotoUploader({ fotos, onChange }) {
   function handleFoto(key, file) {
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = e => onChange({ ...fotos, [key]: e.target.result })
-    reader.readAsDataURL(file)
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const MAX = 800
+      let w = img.width, h = img.height
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX }
+        else { w = Math.round(w * MAX / h); h = MAX }
+      }
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      onChange({ ...fotos, [key]: canvas.toDataURL('image/jpeg', 0.75) })
+    }
+    img.src = url
   }
 
   const slots = [

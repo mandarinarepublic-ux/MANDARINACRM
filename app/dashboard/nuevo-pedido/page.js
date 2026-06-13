@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import MapaPicker from '@/components/maps/MapaPicker'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
@@ -81,6 +81,7 @@ export default function NuevoPedidoPage() {
   const [fechaEntrega, setFechaEntrega] = useState(getMinFecha())
   const [diasCalculado, setDiasCalculado] = useState(4)
   const [notasVendedor, setNotasVendedor] = useState('')
+  const pagoRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [step, setStep] = useState(1)
@@ -157,7 +158,12 @@ export default function NuevoPedidoPage() {
       }
       if (step === 3) {
         const err = validateStep3()
-        if (err) { setError(err); return }
+        if (err) {
+          setError(err)
+          setTimeout(() => pagoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100)
+          setTimeout(() => pagoRef.current?.querySelector('input[type="number"]')?.focus(), 300)
+          return
+        }
       }
     }
     setError('')
@@ -397,7 +403,7 @@ export default function NuevoPedidoPage() {
                   <p className="text-yellow-400 text-xs mt-2">⚠️ Fecha por debajo del mínimo recomendado</p>
                 )}
               </div>
-              <SeccionPago pagos={pagos} onChange={setPagos} montoTotal={montoTotal} />
+              <div ref={pagoRef}><SeccionPago pagos={pagos} onChange={setPagos} montoTotal={montoTotal} /></div>
             </div>
           )}
 

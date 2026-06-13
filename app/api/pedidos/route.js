@@ -17,9 +17,15 @@ export async function GET(req) {
 
     // Vendors only see their own orders in "mis-pedidos" context
     // For historial they see all
-    if (rol === 'VENDEDOR' && vendedorId && searchParams.get('scope') === 'mios') {
-      pedidos = pedidos.filter(p => p.VENDEDOR_ID === vendedorId)
+    if (rol === 'VENDEDOR' && searchParams.get('scope') === 'mios') {
+      const vendedorNombreParam = searchParams.get('vendedor') || ''
+      const vendedorIdParam = searchParams.get('vendedorId') || vendedorId || ''
+      pedidos = pedidos.filter(p =>
+        p.VENDEDOR_ID === vendedorNombreParam ||
+        p.VENDEDOR_ID === vendedorIdParam
+      )
     }
+    // ADMIN with scope=mios sees all orders
 
     const result = pedidos.map(p => ({
       ...p,

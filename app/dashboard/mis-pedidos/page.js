@@ -32,9 +32,8 @@ export default function MisPedidosPage() {
   async function loadPedidos(u) {
     setLoading(true)
     try {
-      const res = await fetch(`/api/pedidos?vendedor=${u.id}&rol=VENDEDOR&scope=mios`)
+      const res = await fetch(`/api/pedidos?vendedor=${encodeURIComponent(u.nombre || u.id)}&vendedorId=${u.id}&rol=${u.rol}&scope=mios`)
       const data = await res.json()
-      // Only show EN_FABRICA for editing, others are read-only in historial
       setPedidos((data.pedidos || []).filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA'))
     } finally { setLoading(false) }
   }

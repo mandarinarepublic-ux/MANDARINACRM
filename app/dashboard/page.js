@@ -128,13 +128,14 @@ export default function DashboardPage() {
 
 // ─── ADMIN DASHBOARD ─────────────────────────────────────────────────────────
 function DashboardAdmin({ data, user }) {
-  const mes = new Date().toLocaleDateString('es-EC', { month: 'long', year: 'numeric' })
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
       <div className="mb-6 pt-2">
         <h1 className="text-2xl font-display font-bold text-white">Dashboard Admin</h1>
-        <p className="text-gray-500 text-sm capitalize">{mes}</p>
+        <p className="text-gray-500 text-sm capitalize">
+          {new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
       </div>
 
       {/* KPIs principales */}

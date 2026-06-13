@@ -21,9 +21,24 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
 
   function handleFoto(key, file) {
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = e => onChange({ ...item, [key]: e.target.result })
-    reader.readAsDataURL(file)
+    // Compress image before storing to avoid request size limits
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const MAX = 800 // max dimension
+      let w = img.width, h = img.height
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX }
+        else { w = Math.round(w * MAX / h); h = MAX }
+      }
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      const compressed = canvas.toDataURL('image/jpeg', 0.75)
+      URL.revokeObjectURL(url)
+      onChange({ ...item, [key]: compressed })
+    }
+    img.src = url
   }
 
   return (

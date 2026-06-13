@@ -56,7 +56,7 @@ export default function DashboardLayout({ children }) {
           {navItems.map(item => (
             <Link key={item.href} href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
-                ${pathname.startsWith(item.href)
+                ${(item.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.href))
                   ? 'bg-mandarina-500/20 text-mandarina-400'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
               <span className="text-base">{item.icon}</span>
@@ -94,7 +94,7 @@ export default function DashboardLayout({ children }) {
               <Link key={item.href} href={item.href}
                 onClick={() => setMenuOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium
-                  ${pathname.startsWith(item.href) ? 'bg-mandarina-500/20 text-mandarina-400' : 'text-gray-300'}`}>
+                  ${(item.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.href)) ? 'bg-mandarina-500/20 text-mandarina-400' : 'text-gray-300'}`}>
                 <span className="text-lg">{item.icon}</span>
                 {item.label}
               </Link>
