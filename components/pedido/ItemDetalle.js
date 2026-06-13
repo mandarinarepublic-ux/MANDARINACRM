@@ -86,18 +86,30 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
               {item.SUBESTADO}
             </span>
           ) : (
-            <select className="bg-gray-800 border border-gray-700 text-xs text-white rounded-lg px-2 py-1"
-              value={item.SUBESTADO}
-              onChange={async e => {
-                await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ SUBESTADO: e.target.value, _usuarioId: user?.id }),
-                })
-                loadPedido()
-              }}>
-              {['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO'].map(s => <option key={s}>{s}</option>)}
-            </select>
+            <div className="grid grid-cols-2 gap-1">
+              {[
+                { key: 'SOLICITADO',         label: '⏳ Solicitado',         color: 'bg-yellow-500' },
+                { key: 'EN_PROCESO',         label: '🔧 En proceso',         color: 'bg-blue-500' },
+                { key: 'ENVIADO_APROBACION', label: '📤 Enviado aprobación', color: 'bg-purple-500' },
+                { key: 'LISTO',              label: '✅ Listo',              color: 'bg-green-500' },
+              ].map(s => (
+                <button key={s.key}
+                  onClick={async () => {
+                    await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ SUBESTADO: s.key, _usuarioId: user?.id }),
+                    })
+                    loadPedido()
+                  }}
+                  className={`py-1.5 rounded-xl text-xs font-semibold transition-all
+                    ${item.SUBESTADO === s.key
+                      ? `${s.color} text-white`
+                      : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       </div>
