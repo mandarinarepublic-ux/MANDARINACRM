@@ -1,6 +1,72 @@
 export const dynamic = 'force-dynamic'
-import { readSheet, updateRow, fechaAhora } from '@/lib/sheets'
+import { readSheet, fechaAhora } from '@/lib/sheets'
 import { logCambio } from '@/lib/pedidos'
+import { uploadToCloudinary } from '@/lib/cloudinary'
+import { google } from 'googleapis'
+
+async function getSheetHeaders(sheetName) {
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    },
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  })
+  const sheets = google.sheets({ version: 'v4', auth })
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SHEET_ID,
+    range: `${sheetName}!A2:Z2`,
+  })
+  return { auth, sheets, headers: res.data.values?.[0] || [] }
+}
+
+async function updateItemRow(idx, updated) {
+  const { auth, sheets, headers } = await getSheetHeaders('DETALLE_PEDIDO')
+
+  const fieldMap = {
+    'ITEM_ID':              updated.ITEM_ID || '',
+    'PEDIDO_ID':            updated.PEDIDO_ID || '',
+    'TIENDA_ID':            updated.TIENDA_ID || '',
+    'PRODUCTO_NOMBRE':      updated.PRODUCTO_NOMBRE || '',
+    'DETALLE_PERSONALIZADO': updated.DETALLE_PERSONALIZADO || '',
+    'ES_PERSONALIZADO':     updated.ES_PERSONALIZADO || '',
+    'COLOR':                updated.COLOR || '',
+    'TALLA':                updated.TALLA || '',
+    'CANTIDAD':             String(updated.CANTIDAD || ''),
+    'PRECIO_UNIT':          String(updated.PRECIO_UNIT || ''),
+    'SUBTOTAL':             String(updated.SUBTOTAL || ''),
+    'AREA':                 updated.AREA || '',
+    'SUBESTADO':            updated.SUBESTADO || '',
+    'FOTO_PECHO_URL':       updated.FOTO_PECHO_URL || '',
+    'FOTO_ESPALDA_URL':     updated.FOTO_ESPALDA_URL || '',
+    'FOTO_MANGA_D_URL':     updated.FOTO_MANGA_D_URL || '',
+    'FOTO_MANGA_I_URL':     updated.FOTO_MANGA_I_URL || '',
+    'ARCHIVO_DISEÑO_URL':   updated.ARCHIVO_DISENO_URL || updated.ARCHIVO_DISEÑO_URL || '',
+    'ARCHIVO_DISENO_URL':   updated.ARCHIVO_DISENO_URL || updated.ARCHIVO_DISEÑO_URL || '',
+    'SHOPIFY_VARIANT_ID':   updated.SHOPIFY_VARIANT_ID || '',
+    'FECHA_MODIFICACION':   updated.FECHA_ITEM || fechaAhora(),
+    'FECHA_ITEM':           updated.FECHA_ITEM || fechaAhora(),
+    'NOTAS_AREA':           updated.NOTAS_AREA || '',
+  }
+
+  // Build row in exact header order
+  const row = headers.map(h => {
+    const val = fieldMap[h]
+    return val !== undefined ? String(val) : String(updated[h] || '')
+  })
+
+  // Row 1 = header (A2), row 2 = description (A3), data starts at A4
+  // idx is 0-based index in data array, so sheet row = idx + 4
+  const sheetRow = idx + 4
+  const colEnd = String.fromCharCode(65 + headers.length - 1)
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: process.env.SHEET_ID,
+    range: `DETALLE_PEDIDO!A${sheetRow}:${colEnd}${sheetRow}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [row] },
+  })
+}
 
 export async function PATCH(req, { params }) {
   try {
@@ -21,7 +87,6 @@ export async function PATCH(req, { params }) {
       updated.PRECIO_UNIT = String(body.PRECIO_UNIT)
       updated.SUBTOTAL = String((parseFloat(body.PRECIO_UNIT) * parseInt(body.CANTIDAD || updated.CANTIDAD || 1)).toFixed(2))
     }
-    // Full item edit fields
     if (body.PRODUCTO_NOMBRE) updated.PRODUCTO_NOMBRE = body.PRODUCTO_NOMBRE
     if (body.COLOR !== undefined) updated.COLOR = body.COLOR
     if (body.TALLA !== undefined) updated.TALLA = body.TALLA
@@ -32,62 +97,39 @@ export async function PATCH(req, { params }) {
     if (body.AREA !== undefined) updated.AREA = body.AREA
     if (body.DETALLE_PERSONALIZADO !== undefined) updated.DETALLE_PERSONALIZADO = body.DETALLE_PERSONALIZADO
     if (body.SUBTOTAL !== undefined) updated.SUBTOTAL = String(body.SUBTOTAL)
-    // Photos - handle base64 or URL
+
+    // Photos
     const photoFields = ['FOTO_PECHO_URL','FOTO_ESPALDA_URL','FOTO_MANGA_D_URL','FOTO_MANGA_I_URL']
     for (const field of photoFields) {
       if (body[field] !== undefined) {
-        if (body[field] === '') {
-          updated[field] = ''
-        } else if (body[field].startsWith('http')) {
-          updated[field] = body[field]
-        } else if (body[field].startsWith('data:')) {
+        if (body[field] === '') { updated[field] = '' }
+        else if (body[field].startsWith('http')) { updated[field] = body[field] }
+        else if (body[field].startsWith('data:')) {
           try {
-            const { uploadToCloudinary } = await import('@/lib/cloudinary')
-            const name = `${id}_${field.toLowerCase().replace('_url','')}.jpg`
-            const r = await uploadToCloudinary(body[field], name, `mandarina-pro/pedidos`)
+            const r = await uploadToCloudinary(body[field], `${id}_${field}.jpg`, 'mandarina-pro/pedidos')
             updated[field] = r.url
           } catch(e) { console.error('Photo upload error:', e.message) }
         }
       }
     }
 
-    await updateRow('DETALLE_PEDIDO', idx, [
-      updated.ITEM_ID, updated.PEDIDO_ID, updated.TIENDA_ID,
-      updated.PRODUCTO_NOMBRE, updated.DETALLE_PERSONALIZADO || '', updated.ES_PERSONALIZADO || '',
-      updated.COLOR || '', updated.TALLA || '',
-      updated.CANTIDAD, updated.PRECIO_UNIT, updated.SUBTOTAL,
-      updated.AREA, updated.SUBESTADO,
-      updated.FOTO_PECHO_URL || '', updated.FOTO_ESPALDA_URL || '',
-      updated.FOTO_MANGA_D_URL || '', updated.FOTO_MANGA_I_URL || '',
-      updated.ARCHIVO_DISENO_URL || '',
-      updated.SHOPIFY_VARIANT_ID || '',
-      updated.FECHA_ITEM || fechaAhora(),
-      updated.NOTAS_AREA || '',
-    ])
+    await updateItemRow(idx, updated)
 
-    // Log all changes
-    if (body.SUBESTADO) {
-      await logCambio(updated.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO, body.SUBESTADO, usuarioId)
-    }
-    if (body.PRODUCTO_NOMBRE && body.PRODUCTO_NOMBRE !== item.PRODUCTO_NOMBRE) {
-      await logCambio(updated.PEDIDO_ID, 'PRODUCTO_EDITADO', item.PRODUCTO_NOMBRE, body.PRODUCTO_NOMBRE, usuarioId)
-    }
-    // Log any field changes in a single entry
+    // Logs
+    if (body.SUBESTADO) await logCambio(updated.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO, body.SUBESTADO, usuarioId)
+    if (body.NOTAS_AREA !== undefined && body.NOTAS_AREA !== item.NOTAS_AREA && body.NOTAS_AREA)
+      await logCambio(updated.PEDIDO_ID, `NOTA ${updated.PRODUCTO_NOMBRE}`, '', body.NOTAS_AREA, usuarioId)
     const cambios = []
     if (body.COLOR !== undefined && body.COLOR !== item.COLOR) cambios.push(`Color: ${item.COLOR}→${body.COLOR}`)
     if (body.TALLA !== undefined && body.TALLA !== item.TALLA) cambios.push(`Talla: ${item.TALLA}→${body.TALLA}`)
     if (body.CANTIDAD !== undefined && String(body.CANTIDAD) !== String(item.CANTIDAD)) cambios.push(`Cant: ${item.CANTIDAD}→${body.CANTIDAD}`)
     if (body.PRECIO_UNIT !== undefined && String(body.PRECIO_UNIT) !== String(item.PRECIO_UNIT)) cambios.push(`Precio: $${item.PRECIO_UNIT}→$${body.PRECIO_UNIT}`)
     if (body.AREA !== undefined && body.AREA !== item.AREA) cambios.push(`Área: ${item.AREA}→${body.AREA}`)
-    if (cambios.length > 0) {
-      await logCambio(updated.PEDIDO_ID, `EDICION ${updated.PRODUCTO_NOMBRE}`, '', cambios.join(' | '), usuarioId)
-    }
-    if (body.NOTAS_AREA !== undefined && body.NOTAS_AREA !== item.NOTAS_AREA && body.NOTAS_AREA) {
-      await logCambio(updated.PEDIDO_ID, `NOTA ${updated.PRODUCTO_NOMBRE}`, '', body.NOTAS_AREA, usuarioId)
-    }
+    if (cambios.length > 0) await logCambio(updated.PEDIDO_ID, `EDICION ${updated.PRODUCTO_NOMBRE}`, '', cambios.join(' | '), usuarioId)
 
     return Response.json({ ok: true })
   } catch (e) {
+    console.error('PATCH item error:', e)
     return Response.json({ error: e.message }, { status: 500 })
   }
 }
@@ -103,21 +145,8 @@ export async function DELETE(req, { params }) {
     if (idx === -1) return Response.json({ error: 'Ítem no encontrado' }, { status: 404 })
 
     const item = detalles[idx]
-    // Mark as ELIMINADO, not hard delete
-    await updateRow('DETALLE_PEDIDO', idx, [
-      item.ITEM_ID, item.PEDIDO_ID, item.TIENDA_ID,
-      item.PRODUCTO_NOMBRE, item.DETALLE_PERSONALIZADO || '', item.ES_PERSONALIZADO || '',
-      item.COLOR || '', item.TALLA || '',
-      item.CANTIDAD, item.PRECIO_UNIT, item.SUBTOTAL,
-      item.AREA, 'ELIMINADO',
-      item.FOTO_PECHO_URL || '', item.FOTO_ESPALDA_URL || '',
-      item.FOTO_MANGA_D_URL || '', item.FOTO_MANGA_I_URL || '',
-      item.ARCHIVO_DISENO_URL || '',
-      item.SHOPIFY_VARIANT_ID || '',
-      item.FECHA_ITEM || fechaAhora(),
-      item.NOTAS_AREA || '',
-    ])
-
+    const updated = { ...item, SUBESTADO: 'ELIMINADO' }
+    await updateItemRow(idx, updated)
     await logCambio(item.PEDIDO_ID, 'ITEM_ELIMINADO', item.PRODUCTO_NOMBRE, 'ELIMINADO', usuarioId)
     return Response.json({ ok: true })
   } catch (e) {
