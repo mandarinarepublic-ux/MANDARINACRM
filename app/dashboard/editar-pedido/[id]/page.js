@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
+import ItemDetalle from '@/components/pedido/ItemDetalle'
 
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
@@ -380,13 +381,9 @@ export default function EditarPedidoPage() {
 
             <div className="divide-y divide-gray-800">
               {items.filter(i => i.SUBESTADO !== 'ELIMINADO').map(item => (
-                <div key={item.ITEM_ID} className="p-4">
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-white">{item.PRODUCTO_NOMBRE}</div>
-                      <div className="text-xs text-gray-500">{item.COLOR} · {item.TALLA} · <span className="text-mandarina-400">{item.AREA}</span></div>
-                      <div className="text-xs text-gray-600 mt-0.5">Estado: {item.SUBESTADO}</div>
-                    </div>
+                <div key={item.ITEM_ID}>
+                  {/* Delete button row */}
+                  <div className="flex justify-end px-4 pt-3">
                     {confirmDelete === item.ITEM_ID ? (
                       <div className="flex gap-1">
                         <button onClick={() => deleteItem(item.ITEM_ID)}
@@ -399,23 +396,27 @@ export default function EditarPedidoPage() {
                         className="text-gray-600 hover:text-red-400 text-sm p-1">✕</button>
                     )}
                   </div>
-                  {/* Edit item button */}
-                  <button onClick={() => setEditingItem(editingItem === item.ITEM_ID ? null : item.ITEM_ID)}
-                    className="text-xs text-mandarina-400 hover:underline mt-2 block">
-                    {editingItem === item.ITEM_ID ? '▲ Cerrar editor' : '✏️ Editar producto'}
-                  </button>
-                  {editingItem === item.ITEM_ID && (
-                    <ItemEditor item={item} onSave={async (updated) => {
-                      await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...updated, _usuarioId: user?.id }),
-                      })
-                      setEditingItem(null)
-                      setSuccess('Producto actualizado')
-                      loadPedido()
-                    }} />
-                  )}
+                  {/* 2-col view */}
+                  <ItemDetalle item={item} readOnly={false} tiendaColor="#FF6B00" user={user} loadPedido={loadPedido} />
+                  {/* Edit button */}
+                  <div className="px-4 pb-3">
+                    <button onClick={() => setEditingItem(editingItem === item.ITEM_ID ? null : item.ITEM_ID)}
+                      className="text-xs text-mandarina-400 hover:underline">
+                      {editingItem === item.ITEM_ID ? '▲ Cerrar editor' : '✏️ Editar producto'}
+                    </button>
+                    {editingItem === item.ITEM_ID && (
+                      <ItemEditor item={item} onSave={async (updated) => {
+                        await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ ...updated, _usuarioId: user?.id }),
+                        })
+                        setEditingItem(null)
+                        setSuccess('Producto actualizado')
+                        loadPedido()
+                      }} />
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

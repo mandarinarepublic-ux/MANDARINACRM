@@ -63,7 +63,7 @@ export default function LoginPage() {
               <input
                 type="text"
                 className="input"
-                placeholder="CHRISTIAN"
+                placeholder="ANDRES"
                 value={username}
                 onChange={e => setUsername(e.target.value.toUpperCase())}
                 required
