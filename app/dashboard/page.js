@@ -26,8 +26,13 @@ export default function DashboardPage() {
     } finally { setLoading(false) }
   }
 
-  function buildStats(pedidos, u) {
+  function buildStats(pedidosTodos, u) {
     const now = new Date()
+
+    // VENDEDOR solo ve sus propios pedidos en el resumen
+    const pedidos = (u.rol === 'VENDEDOR')
+      ? pedidosTodos.filter(p => p.VENDEDOR_ID === u.id || p.VENDEDOR_ID === u.nombre)
+      : pedidosTodos
     const hoy = now.toISOString().split('T')[0]
     const mesActual = now.toISOString().slice(0, 7)
 
