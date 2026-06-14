@@ -1,22 +1,12 @@
 export const dynamic = 'force-dynamic'
-import { readSheet, fechaAhora } from '@/lib/sheets'
+import { readSheet, getSheets, fechaAhora, updateCell } from '@/lib/sheets'
 import { logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
-import { google } from 'googleapis'
 
-async function getSheets() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  })
-  const sheets = google.sheets({ version: 'v4', auth })
-  return { auth, sheets }
-}
-
-async function getSheetHeaders(sheets) {
+// Columnas de DETALLE_PEDIDO (fila 2 del sheet = headers)
+// Las usamos para saber en qué letra está NOTAS_AREA
+async function getDetallePedidoHeaders() {
+  const sheets = await getSheets()
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.SHEET_ID,
     range: `DETALLE_PEDIDO!A2:Z2`,
@@ -24,42 +14,14 @@ async function getSheetHeaders(sheets) {
   return res.data.values?.[0] || []
 }
 
-// Escanea columna A desde fila 4 buscando el ITEM_ID → retorna número de fila en Sheet
-async function findItemSheetRow(itemId, sheets) {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SHEET_ID,
-    range: `DETALLE_PEDIDO!A4:A`,
-  })
-  const rows = res.data.values || []
-  for (let i = 0; i < rows.length; i++) {
-    if (rows[i][0] === itemId) return i + 4 // fila 1-based en Sheet
-  }
-  return null
-}
-
-async function writeNotaArea(itemId, nota) {
-  const { sheets } = await getSheets()
-  const headers = await getSheetHeaders(sheets)
-
-  const sheetRow = await findItemSheetRow(itemId, sheets)
-  if (!sheetRow) throw new Error(`Item ${itemId} not found in sheet`)
-
-  const colIdx = headers.findIndex(h => h === 'NOTAS_AREA')
-  if (colIdx === -1) throw new Error('NOTAS_AREA column not found. Headers: ' + headers.join(', '))
-
-  const colLetter = String.fromCharCode(65 + colIdx)
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: process.env.SHEET_ID,
-    range: `DETALLE_PEDIDO!${colLetter}${sheetRow}`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [[nota]] },
-  })
-  return { sheetRow, colLetter, colIdx }
-}
-
+// Actualiza toda la fila del ítem en el sheet
 async function updateItemRow(idx, updated) {
-  const { sheets } = await getSheets()
-  const headers = await getSheetHeaders(sheets)
+  const sheets = await getSheets()
+  const headersRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SHEET_ID,
+    range: `DETALLE_PEDIDO!A2:Z2`,
+  })
+  const headers = headersRes.data.values?.[0] || []
 
   const fieldMap = {
     'ITEM_ID':               updated.ITEM_ID || '',
@@ -92,7 +54,7 @@ async function updateItemRow(idx, updated) {
     return val !== undefined ? String(val) : String(updated[h] || '')
   })
 
-  // Datos desde fila 4 (fila1=título, fila2=headers, fila3=desc, fila4+=datos)
+  // fila 1=título, fila 2=headers, fila 3=desc, fila 4+=datos → idx es 0-based → fila = idx+4
   const sheetRow = idx + 4
   const colEnd = String.fromCharCode(65 + headers.length - 1)
 
@@ -115,31 +77,38 @@ export async function PATCH(req, { params }) {
     if (idx === -1) return Response.json({ error: 'Ítem no encontrado' }, { status: 404 })
 
     const item = detalles[idx]
-
-    // ── Solo NOTAS_AREA: escritura directa en celda ───────────────────────────
     const bodyKeys = Object.keys(body).filter(k => !k.startsWith('_'))
+
+    // ── Solo NOTAS_AREA → escribe solo esa celda con updateCell ──────────────
     if (bodyKeys.length === 1 && bodyKeys[0] === 'NOTAS_AREA') {
       try {
-        const result = await writeNotaArea(id, body.NOTAS_AREA)
+        const headers = await getDetallePedidoHeaders()
+        const colIdx = headers.findIndex(h => h === 'NOTAS_AREA')
+        if (colIdx === -1) {
+          return Response.json({ error: `NOTAS_AREA no encontrada. Headers: ${headers.join(', ')}` }, { status: 500 })
+        }
+        const colLetter = String.fromCharCode(65 + colIdx)
+        // updateCell usa idx (0-based data index) → convierte a fila sheet internamente (idx+4)
+        await updateCell('DETALLE_PEDIDO', idx, colLetter, body.NOTAS_AREA || '')
         if (body.NOTAS_AREA) {
           await logCambio(item.PEDIDO_ID, `NOTA ${item.PRODUCTO_NOMBRE}`, '', body.NOTAS_AREA, usuarioId)
         }
-        return Response.json({ ok: true, debug: result })
+        return Response.json({ ok: true })
       } catch (e) {
-        console.error('writeNotaArea error:', e.message)
+        console.error('NOTAS_AREA write error:', e.message)
         return Response.json({ error: e.message }, { status: 500 })
       }
     }
 
-    // ── Actualización general de campos ──────────────────────────────────────
+    // ── Actualización general ─────────────────────────────────────────────────
     const updated = { ...item }
 
-    if (body.SUBESTADO)                       updated.SUBESTADO = body.SUBESTADO
-    if (body.NOTAS_AREA !== undefined)        updated.NOTAS_AREA = body.NOTAS_AREA
-    if (body.PRODUCTO_NOMBRE)                 updated.PRODUCTO_NOMBRE = body.PRODUCTO_NOMBRE
-    if (body.COLOR !== undefined)             updated.COLOR = body.COLOR
-    if (body.TALLA !== undefined)             updated.TALLA = body.TALLA
-    if (body.AREA !== undefined)              updated.AREA = body.AREA
+    if (body.SUBESTADO !== undefined)             updated.SUBESTADO = body.SUBESTADO
+    if (body.NOTAS_AREA !== undefined)            updated.NOTAS_AREA = body.NOTAS_AREA
+    if (body.PRODUCTO_NOMBRE !== undefined)       updated.PRODUCTO_NOMBRE = body.PRODUCTO_NOMBRE
+    if (body.COLOR !== undefined)                 updated.COLOR = body.COLOR
+    if (body.TALLA !== undefined)                 updated.TALLA = body.TALLA
+    if (body.AREA !== undefined)                  updated.AREA = body.AREA
     if (body.DETALLE_PERSONALIZADO !== undefined) updated.DETALLE_PERSONALIZADO = body.DETALLE_PERSONALIZADO
     if (body.CANTIDAD !== undefined) {
       updated.CANTIDAD = String(body.CANTIDAD)
@@ -152,8 +121,7 @@ export async function PATCH(req, { params }) {
     if (body.SUBTOTAL !== undefined) updated.SUBTOTAL = String(body.SUBTOTAL)
 
     // Fotos
-    const photoFields = ['FOTO_PECHO_URL','FOTO_ESPALDA_URL','FOTO_MANGA_D_URL','FOTO_MANGA_I_URL']
-    for (const field of photoFields) {
+    for (const field of ['FOTO_PECHO_URL','FOTO_ESPALDA_URL','FOTO_MANGA_D_URL','FOTO_MANGA_I_URL']) {
       if (body[field] !== undefined) {
         if (body[field] === '') { updated[field] = '' }
         else if (body[field].startsWith('http')) { updated[field] = body[field] }
@@ -169,17 +137,21 @@ export async function PATCH(req, { params }) {
     await updateItemRow(idx, updated)
 
     // Logs
-    if (body.SUBESTADO) await logCambio(updated.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO, body.SUBESTADO, usuarioId)
-    if (body.NOTAS_AREA !== undefined && body.NOTAS_AREA !== item.NOTAS_AREA && body.NOTAS_AREA)
+    if (body.SUBESTADO) {
+      await logCambio(updated.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO, body.SUBESTADO, usuarioId)
+    }
+    if (body.NOTAS_AREA !== undefined && body.NOTAS_AREA !== item.NOTAS_AREA && body.NOTAS_AREA) {
       await logCambio(updated.PEDIDO_ID, `NOTA ${updated.PRODUCTO_NOMBRE}`, '', body.NOTAS_AREA, usuarioId)
-
+    }
     const cambios = []
     if (body.COLOR !== undefined && body.COLOR !== item.COLOR) cambios.push(`Color: ${item.COLOR}→${body.COLOR}`)
     if (body.TALLA !== undefined && body.TALLA !== item.TALLA) cambios.push(`Talla: ${item.TALLA}→${body.TALLA}`)
     if (body.CANTIDAD !== undefined && String(body.CANTIDAD) !== String(item.CANTIDAD)) cambios.push(`Cant: ${item.CANTIDAD}→${body.CANTIDAD}`)
     if (body.PRECIO_UNIT !== undefined && String(body.PRECIO_UNIT) !== String(item.PRECIO_UNIT)) cambios.push(`Precio: $${item.PRECIO_UNIT}→$${body.PRECIO_UNIT}`)
     if (body.AREA !== undefined && body.AREA !== item.AREA) cambios.push(`Área: ${item.AREA}→${body.AREA}`)
-    if (cambios.length > 0) await logCambio(updated.PEDIDO_ID, `EDICION ${updated.PRODUCTO_NOMBRE}`, '', cambios.join(' | '), usuarioId)
+    if (cambios.length > 0) {
+      await logCambio(updated.PEDIDO_ID, `EDICION ${updated.PRODUCTO_NOMBRE}`, '', cambios.join(' | '), usuarioId)
+    }
 
     return Response.json({ ok: true })
   } catch (e) {
