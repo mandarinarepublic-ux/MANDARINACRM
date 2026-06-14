@@ -388,14 +388,17 @@ export default function NuevoPedidoPage() {
                 </div>
                 {!usarMapa ? (
                   <div className="space-y-3">
-                    <p className="text-xs text-gray-500 mb-1">Ciudad de entrega</p>
-                    <input className="input" placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
-                    <input className="input" placeholder="Av. 6 de Diciembre y Mercurio. Frente al Teatro 24 Mayo"
-                    <p className="text-xs text-gray-500 mb-1 mt-2">Dirección completa</p>
-                    <input className="input" placeholder="Av. 6 de Diciembre y Mercurio. Frente al Teatro 24 Mayo"
-                    {buildDireccion() && (
-                      <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
-                        📋 PDF: <span className="text-white">{buildDireccion()}</span>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Ciudad de entrega</p>
+                      <input className="input" placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
+                        onChange={e => setCliente(p => ({...p, ciudad: e.target.value}))} />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Dirección completa</p>
+                      <input className="input" placeholder="Av. 6 de Diciembre y Mercurio. Frente al Teatro 24 Mayo"
+                        value={cliente.direccion}
+                        onChange={e => setCliente(p => ({...p, direccion: e.target.value}))} />
+                    </div>
                       </div>
                     )}
                   </div>
