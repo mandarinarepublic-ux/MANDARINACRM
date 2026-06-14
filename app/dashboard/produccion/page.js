@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { areaAplica } from '@/lib/pedidos-client'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -20,6 +19,29 @@ function parseFecha(str) {
   const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
   if (!m) return null
   return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
+}
+
+// ── Filtro de área ────────────────────────────────────────────────────────────
+// ADMIN → todo
+// Roles directos (ESTAMPADO / SUBLIMACION / BORDADO) → coincide con rol
+// DISEÑO / ESTAMPADO / SUBLIMACION / BORDADO con AREAS en el perfil → usa u.areas
+function itemEsDeUsuario(itemArea, u) {
+  if (!itemArea) return false
+  if (u.rol === 'ADMIN') return true
+
+  // Si el usuario tiene áreas asignadas en su perfil, usarlas
+  const areas = u.areas || []
+  if (areas.length > 0 && !(areas.length === 1 && areas[0] === 'TODAS')) {
+    return areas.some(a => itemArea.includes(a))
+  }
+
+  // Fallback: filtrar por rol directo
+  if (u.rol === 'ESTAMPADO')  return itemArea.includes('ESTAMPADO')
+  if (u.rol === 'SUBLIMACION') return itemArea.includes('SUBLIMACION')
+  if (u.rol === 'BORDADO')    return itemArea.includes('BORDADO')
+
+  // DISEÑO sin áreas definidas → ve todo de diseño
+  return true
 }
 
 function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, saveNota, updateSubestado, pedidoId }) {
@@ -44,6 +66,7 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
           {SUBESTADO_CONFIG[item.SUBESTADO]?.label || item.SUBESTADO}
         </span>
       </div>
+
       <div className="flex gap-4">
         <div className="w-40 flex-shrink-0">
           {fotos.length > 0 ? (
@@ -72,6 +95,7 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
             </div>
           )}
         </div>
+
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5">
             <div className="text-xs"><span className="text-gray-500">Área:</span>{' '}<span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
@@ -79,6 +103,7 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
               <div className="text-xs"><span className="text-gray-500">Detalle:</span>{' '}<span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
             )}
           </div>
+
           {editingNota === item.ITEM_ID ? (
             <div>
               <textarea className="input resize-none text-sm mb-2 w-full" rows={2}
@@ -100,6 +125,7 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
               </button>
             </div>
           )}
+
           <div className="grid grid-cols-2 gap-1.5 mt-auto">
             {SUBESTADOS_ORDEN.map(s => (
               <button key={s} onClick={() => updateSubestado(item.ITEM_ID, s, pedidoId)}
@@ -111,6 +137,7 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
           </div>
         </div>
       </div>
+
       {fotoFullscreen && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={() => setFotoFullscreen(null)}>
           <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt="fullscreen" />
@@ -159,7 +186,8 @@ export default function ProduccionPage() {
           ...p,
           itemsFiltrados: (p.items || []).filter(item => {
             if (item.SUBESTADO === 'ELIMINADO' || item.SUBESTADO === 'ENTREGADO_TIENDA') return false
-            if (u.rol !== 'ADMIN' && !areaAplica(item.AREA, u.rol)) return false
+            // ← usa la nueva función que respeta u.areas
+            if (u.rol !== 'ADMIN') return itemEsDeUsuario(item.AREA, u)
             return true
           })
         }))
@@ -201,7 +229,8 @@ export default function ProduccionPage() {
       if (p.itemsFiltrados.length === 0) return false
       if (busqueda) {
         const q = busqueda.toLowerCase()
-        if (!p.PEDIDO_ID?.toLowerCase().includes(q) && !p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))) return false
+        if (!p.PEDIDO_ID?.toLowerCase().includes(q) &&
+            !p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))) return false
       }
       if (fechaDesde) {
         const f = parseFecha(p.FECHA_PEDIDO)
@@ -219,6 +248,12 @@ export default function ProduccionPage() {
   const urgentes = filtered.filter(p => p.FECHA_ENTREGA_PROMETIDA &&
     Math.ceil((new Date(p.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) <= 2).length
 
+  // Label del área del usuario para mostrar en el header
+  const areaLabel = user?.rol === 'ADMIN' ? '' :
+    (user?.areas?.length > 0 && user.areas[0] !== 'TODAS')
+      ? ` · ${user.areas.join(', ')}`
+      : ` · ${user?.rol}`
+
   return (
     <div className="flex flex-col h-screen md:h-auto">
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
@@ -228,11 +263,12 @@ export default function ProduccionPage() {
               <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-white p-1">←</button>
               <div>
                 <h1 className="text-xl font-display font-bold text-white">Producción</h1>
-                <p className="text-xs text-gray-500">{totalPendientes} ítem(s) pendientes{user?.rol !== 'ADMIN' && ` · ${user?.rol}`}</p>
+                <p className="text-xs text-gray-500">{totalPendientes} ítem(s) pendientes{areaLabel}</p>
               </div>
             </div>
             <Link href="/dashboard/impresion" className="btn-secondary text-xs px-3 py-2">🖨️ Imprimir</Link>
           </div>
+
           <div className="flex gap-2 mb-3">
             <input className="input flex-1" placeholder="Buscar por pedido o producto..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
@@ -242,6 +278,7 @@ export default function ProduccionPage() {
               📅 {hayFecha ? 'Fecha ✓' : 'Fecha'}
             </button>
           </div>
+
           {mostrarFecha && (
             <div className="flex gap-2 mb-3 items-end">
               <div className="flex-1">
@@ -258,6 +295,7 @@ export default function ProduccionPage() {
               )}
             </div>
           )}
+
           <div className="flex gap-1.5 overflow-x-auto pb-1 flex-wrap">
             {[
               { key: 'TODOS', label: 'Todos' },
@@ -275,6 +313,7 @@ export default function ProduccionPage() {
           </div>
         </div>
       </div>
+
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           {urgentes > 0 && (
@@ -282,6 +321,7 @@ export default function ProduccionPage() {
               <div className="text-red-400 font-semibold text-sm">🚨 {urgentes} pedido(s) urgente(s) — entrega en ≤2 días</div>
             </div>
           )}
+
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
@@ -290,7 +330,7 @@ export default function ProduccionPage() {
             <div className="card p-8 text-center">
               <div className="text-4xl mb-3">✅</div>
               <div className="font-medium text-white">¡Todo al día!</div>
-              <div className="text-sm text-gray-500 mt-1">No hay ítems pendientes</div>
+              <div className="text-sm text-gray-500 mt-1">No hay ítems pendientes en tu área</div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -299,6 +339,7 @@ export default function ProduccionPage() {
                   ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) : null
                 const urgente = diasR !== null && diasR <= 2
                 const isExpanded = expandedPedido === pedido.PEDIDO_ID
+
                 return (
                   <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${urgente ? 'border-red-500/40' : ''}`}>
                     <button onClick={() => setExpandedPedido(isExpanded ? null : pedido.PEDIDO_ID)}
@@ -319,6 +360,7 @@ export default function ProduccionPage() {
                       </div>
                       <span className="text-gray-600 text-sm">{isExpanded ? '▲' : '▼'}</span>
                     </button>
+
                     {isExpanded && (
                       <div className="border-t border-gray-800 divide-y divide-gray-800">
                         {pedido.itemsFiltrados.map(item => (
