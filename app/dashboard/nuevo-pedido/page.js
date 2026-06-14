@@ -326,9 +326,26 @@ export default function NuevoPedidoPage() {
                 </div>
                 <div>
                   <label className="label">Cédula / RUC *</label>
-                  <input className={`input ${cedulaError ? 'border-red-500' : ''}`}
-                    placeholder="1712345678" value={cliente.cedula}
-                    onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarCedulaRUC(e.target.value) || '') }} />
+                   <input className={`input ${cedulaError ? 'border-red-500' : ''}`}
+                     placeholder="1712345678" value={cliente.cedula}
+                     onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarCedulaRUC(e.target.value) || '') }}
+                     onBlur={async e => {
+                       const ced = e.target.value.trim()
+                       if (ced.length < 10) return
+                       try {
+                         const r = await fetch(`/api/clientes?q=${encodeURIComponent(ced)}`)
+                         const d = await r.json()
+                         const found = (d.clientes||[]).find(c => String(c.CEDULA)===String(ced))
+                         if (found) {
+                           const usar = window.confirm(`⚠️ Cliente ya existe:\n\nNombre: ${found.NOMBRE}\nCelular: ${found.CELULAR}\nDirección: ${found.DIRECCION||'No registrada'}\n\n¿Autocompletar datos?`)
+                           if (usar) {
+                             setClienteId(found.CLIENTE_ID)
+                             setCliente({ nombre: found.NOMBRE||'', cedula: String(found.CEDULA||''), celular: String(found.CELULAR||''), email: found.EMAIL||'', ciudad: found.CIUDAD||'', direccion: found.DIRECCION||'' })
+                             setClienteKey(k => k+1)
+                           }
+                         }
+                       } catch(err) {}
+                     }} />
                   {cedulaError && <p className="text-red-400 text-xs mt-1">{cedulaError}</p>}
                 </div>
                 <div>
@@ -371,11 +388,11 @@ export default function NuevoPedidoPage() {
                 </div>
                 {!usarMapa ? (
                   <div className="space-y-3">
-                    <input className="input" placeholder="Ciudad (Ej: Quito)" value={cliente.ciudad}
-                      onChange={e => setCliente(p => ({...p, ciudad: e.target.value}))} />
+                    <p className="text-xs text-gray-500 mb-1">Ciudad de entrega</p>
+                    <input className="input" placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
                     <input className="input" placeholder="Av. 6 de Diciembre y Mercurio. Frente al Teatro 24 Mayo"
-                      value={cliente.direccion}
-                      onChange={e => setCliente(p => ({...p, direccion: e.target.value}))} />
+                    <p className="text-xs text-gray-500 mb-1 mt-2">Dirección completa</p>
+                    <input className="input" placeholder="Av. 6 de Diciembre y Mercurio. Frente al Teatro 24 Mayo"
                     {buildDireccion() && (
                       <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
                         📋 PDF: <span className="text-white">{buildDireccion()}</span>
