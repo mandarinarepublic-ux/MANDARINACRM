@@ -45,15 +45,19 @@ function validarCelular(v) {
   return null
 }
 
-function getMinFecha() {
+function getMinFechaConDias(dias = 3) {
   const d = new Date()
   let count = 0
-  while (count < 3) {
+  while (count < dias) {
     d.setDate(d.getDate() + 1)
     const day = d.getDay()
     if (day !== 0 && day !== 6) count++
   }
   return d.toISOString().split('T')[0]
+}
+
+function getMinFecha() {
+  return getMinFechaConDias(3)
 }
 
 function itemsValidos(items) {
@@ -101,7 +105,11 @@ export default function NuevoPedidoPage() {
       'BORDADO,ESTAMPADO': 6, 'BORDADO,SUBLIMACION': 7,
       'ESTAMPADO,SUBLIMACION': 6, 'BORDADO,ESTAMPADO,SUBLIMACION': 8,
     }
-    setDiasCalculado(combos[areas.join(',')] || 4)
+    const dias = combos[areas.join(',')] || 4
+    setDiasCalculado(dias)
+    // Auto-update fechaEntrega with business days calculation
+    const fecha = getMinFechaConDias(dias)
+    setFechaEntrega(fecha)
   }, [items])
 
   const montoTotal = items.reduce((s, i) => s + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
@@ -416,7 +424,7 @@ export default function NuevoPedidoPage() {
                 <div className="text-xs text-gray-500 mb-2">Mínimo recomendado: <span className="text-white">{diasCalculado} días hábiles</span></div>
                 <input type="date" className="input" min={getMinFecha()} value={fechaEntrega}
                   onChange={e => setFechaEntrega(e.target.value)} />
-                {fechaEntrega && new Date(fechaEntrega) < new Date(Date.now() + diasCalculado * 86400000) && (
+                {fechaEntrega && fechaEntrega < getMinFechaConDias(diasCalculado) && (
                   <p className="text-yellow-400 text-xs mt-2">⚠️ Fecha por debajo del mínimo recomendado</p>
                 )}
               </div>
