@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -21,30 +21,21 @@ function parseFecha(str) {
   return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
 }
 
-// ── Filtro de área ────────────────────────────────────────────────────────────
-// ADMIN → todo
-// Roles directos (ESTAMPADO / SUBLIMACION / BORDADO) → coincide con rol
-// DISEÑO / ESTAMPADO / SUBLIMACION / BORDADO con AREAS en el perfil → usa u.areas
 function itemEsDeUsuario(itemArea, u) {
   if (!itemArea) return false
   if (u.rol === 'ADMIN') return true
-
-  // Si el usuario tiene áreas asignadas en su perfil, usarlas
   const areas = u.areas || []
   if (areas.length > 0 && !(areas.length === 1 && areas[0] === 'TODAS')) {
     return areas.some(a => itemArea.includes(a))
   }
-
-  // Fallback: filtrar por rol directo
-  if (u.rol === 'ESTAMPADO')  return itemArea.includes('ESTAMPADO')
+  if (u.rol === 'ESTAMPADO')   return itemArea.includes('ESTAMPADO')
   if (u.rol === 'SUBLIMACION') return itemArea.includes('SUBLIMACION')
-  if (u.rol === 'BORDADO')    return itemArea.includes('BORDADO')
-
-  // DISEÑO sin áreas definidas → ve todo de diseño
+  if (u.rol === 'BORDADO')     return itemArea.includes('BORDADO')
   return true
 }
 
-function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, saveNota, updateSubestado, pedidoId }) {
+// ── ItemCard con estado de nota LOCAL ─────────────────────────────────────────
+function ItemCard({ item, userId, onSubestadoChange, onNotaSaved }) {
   const fotos = [
     { key: 'FOTO_PECHO_URL', label: 'Pecho' },
     { key: 'FOTO_ESPALDA_URL', label: 'Espalda' },
@@ -55,8 +46,38 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
   const [fotoActiva, setFotoActiva] = useState(fotos[0]?.key || null)
   const [fotoFullscreen, setFotoFullscreen] = useState(null)
 
+  // Estado de nota completamente local — no provoca re-render del padre
+  const [editingNota, setEditingNota] = useState(false)
+  const [notaText, setNotaText] = useState(item.NOTAS_AREA || '')
+  const [notaGuardada, setNotaGuardada] = useState(item.NOTAS_AREA || '')
+  const [savingNota, setSavingNota] = useState(false)
+
+  async function handleGuardarNota() {
+    setSavingNota(true)
+    try {
+      const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ NOTAS_AREA: notaText, _usuarioId: userId }),
+      })
+      if (res.ok) {
+        setNotaGuardada(notaText)
+        setEditingNota(false)
+        onNotaSaved?.()
+      }
+    } finally {
+      setSavingNota(false)
+    }
+  }
+
+  function handleCancelar() {
+    setNotaText(notaGuardada)
+    setEditingNota(false)
+  }
+
   return (
     <div className="p-4">
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="font-semibold text-white">{item.PRODUCTO_NOMBRE}</div>
@@ -67,7 +88,9 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
         </span>
       </div>
 
+      {/* 2 columnas */}
       <div className="flex gap-4">
+        {/* Fotos */}
         <div className="w-40 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
@@ -96,41 +119,68 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
           )}
         </div>
 
+        {/* Detalle + nota + subestado */}
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5">
-            <div className="text-xs"><span className="text-gray-500">Área:</span>{' '}<span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
+            <div className="text-xs">
+              <span className="text-gray-500">Área:</span>{' '}
+              <span className="text-mandarina-400 font-medium">{item.AREA}</span>
+            </div>
             {item.DETALLE_PERSONALIZADO && (
-              <div className="text-xs"><span className="text-gray-500">Detalle:</span>{' '}<span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
+              <div className="text-xs">
+                <span className="text-gray-500">Detalle:</span>{' '}
+                <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span>
+              </div>
             )}
           </div>
 
-          {editingNota === item.ITEM_ID ? (
+          {/* Nota — estado completamente local */}
+          {editingNota ? (
             <div>
-              <textarea className="input resize-none text-sm mb-2 w-full" rows={2}
+              <textarea
+                className="input resize-none text-sm mb-2 w-full"
+                rows={2}
                 placeholder="Nota para este producto..."
-                value={notaText} onChange={e => setNotaText(e.target.value)} />
+                value={notaText}
+                onChange={e => setNotaText(e.target.value)}
+                autoFocus
+              />
               <div className="flex gap-2">
-                <button onClick={() => saveNota(item.ITEM_ID)} className="btn-primary text-xs px-3 py-1.5">Guardar</button>
-                <button onClick={() => setEditingNota(null)} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
+                <button
+                  onClick={handleGuardarNota}
+                  disabled={savingNota}
+                  className="btn-primary text-xs px-3 py-1.5">
+                  {savingNota ? '⏳ Guardando...' : 'Guardar'}
+                </button>
+                <button onClick={handleCancelar} className="btn-secondary text-xs px-3 py-1.5">
+                  Cancelar
+                </button>
               </div>
             </div>
           ) : (
             <div>
-              {item.NOTAS_AREA && (
-                <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">📝 {item.NOTAS_AREA}</div>
+              {notaGuardada && (
+                <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">
+                  📝 {notaGuardada}
+                </div>
               )}
-              <button onClick={() => { setEditingNota(item.ITEM_ID); setNotaText(item.NOTAS_AREA || '') }}
-                className="text-xs text-gray-600 hover:text-gray-400">
-                {item.NOTAS_AREA ? '✏️ Editar nota' : '+ Agregar nota'}
+              <button
+                onClick={() => { setNotaText(notaGuardada); setEditingNota(true) }}
+                className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+                {notaGuardada ? '✏️ Editar nota' : '+ Agregar nota'}
               </button>
             </div>
           )}
 
+          {/* Botones subestado */}
           <div className="grid grid-cols-2 gap-1.5 mt-auto">
             {SUBESTADOS_ORDEN.map(s => (
-              <button key={s} onClick={() => updateSubestado(item.ITEM_ID, s, pedidoId)}
+              <button key={s}
+                onClick={() => onSubestadoChange(item.ITEM_ID, s)}
                 className={`py-2 rounded-xl text-xs font-semibold transition-all
-                  ${item.SUBESTADO === s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                  ${item.SUBESTADO === s
+                    ? `${SUBESTADO_CONFIG[s]?.color} text-white`
+                    : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
                 {SUBESTADO_CONFIG[s]?.label}
               </button>
             ))}
@@ -139,7 +189,8 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
       </div>
 
       {fotoFullscreen && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={() => setFotoFullscreen(null)}>
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
+          onClick={() => setFotoFullscreen(null)}>
           <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt="fullscreen" />
           <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
         </div>
@@ -148,6 +199,7 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
   )
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function ProduccionPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -156,8 +208,6 @@ export default function ProduccionPage() {
   const [busqueda, setBusqueda] = useState('')
   const [filtroSubestado, setFiltroSubestado] = useState('TODOS')
   const [expandedPedido, setExpandedPedido] = useState(null)
-  const [editingNota, setEditingNota] = useState(null)
-  const [notaText, setNotaText] = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [mostrarFecha, setMostrarFecha] = useState(false)
@@ -170,7 +220,7 @@ export default function ProduccionPage() {
     loadItems(u)
   }, [])
 
-  async function loadItems(u) {
+  const loadItems = useCallback(async (u) => {
     setLoading(true)
     try {
       const res = await fetch('/api/pedidos?rol=ADMIN')
@@ -186,7 +236,6 @@ export default function ProduccionPage() {
           ...p,
           itemsFiltrados: (p.items || []).filter(item => {
             if (item.SUBESTADO === 'ELIMINADO' || item.SUBESTADO === 'ENTREGADO_TIENDA') return false
-            // ← usa la nueva función que respeta u.areas
             if (u.rol !== 'ADMIN') return itemEsDeUsuario(item.AREA, u)
             return true
           })
@@ -194,7 +243,7 @@ export default function ProduccionPage() {
         .filter(p => p.itemsFiltrados.length > 0)
       setPedidos(pedidosConItems)
     } finally { setLoading(false) }
-  }
+  }, [])
 
   async function updateSubestado(itemId, subestado) {
     await fetch(`/api/pedidos/item/${itemId}`, {
@@ -202,16 +251,6 @@ export default function ProduccionPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ SUBESTADO: subestado, _usuarioId: user?.id }),
     })
-    loadItems(user)
-  }
-
-  async function saveNota(itemId) {
-    await fetch(`/api/pedidos/item/${itemId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ NOTAS_AREA: notaText, _usuarioId: user?.id }),
-    })
-    setEditingNota(null)
     loadItems(user)
   }
 
@@ -248,7 +287,6 @@ export default function ProduccionPage() {
   const urgentes = filtered.filter(p => p.FECHA_ENTREGA_PROMETIDA &&
     Math.ceil((new Date(p.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) <= 2).length
 
-  // Label del área del usuario para mostrar en el header
   const areaLabel = user?.rol === 'ADMIN' ? '' :
     (user?.areas?.length > 0 && user.areas[0] !== 'TODAS')
       ? ` · ${user.areas.join(', ')}`
@@ -364,11 +402,13 @@ export default function ProduccionPage() {
                     {isExpanded && (
                       <div className="border-t border-gray-800 divide-y divide-gray-800">
                         {pedido.itemsFiltrados.map(item => (
-                          <ItemCard key={item.ITEM_ID} item={item}
-                            editingNota={editingNota} notaText={notaText}
-                            setEditingNota={setEditingNota} setNotaText={setNotaText}
-                            saveNota={saveNota} updateSubestado={updateSubestado}
-                            pedidoId={pedido.PEDIDO_ID} />
+                          <ItemCard
+                            key={item.ITEM_ID}
+                            item={item}
+                            userId={user?.id}
+                            onSubestadoChange={updateSubestado}
+                            onNotaSaved={() => loadItems(user)}
+                          />
                         ))}
                       </div>
                     )}
