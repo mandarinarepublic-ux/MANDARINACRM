@@ -34,7 +34,7 @@ function itemEsDeUsuario(itemArea, u) {
   return true
 }
 
-// ── ItemCard — todo el estado de nota es LOCAL, nunca recarga la lista ────────
+// ── ItemCard — todo el estado es LOCAL, nunca se recrea desde fuera ───────────
 function ItemCard({ item, userId, onSubestadoChange }) {
   const fotos = [
     { key: 'FOTO_PECHO_URL', label: 'Pecho' },
@@ -45,11 +45,36 @@ function ItemCard({ item, userId, onSubestadoChange }) {
 
   const [fotoActiva, setFotoActiva] = useState(fotos[0]?.key || null)
   const [fotoFullscreen, setFotoFullscreen] = useState(null)
+
+  // Subestado local — se actualiza optimistically sin recargar
+  const [subestado, setSubestado] = useState(item.SUBESTADO || 'SOLICITADO')
+
+  // Nota completamente local
   const [editingNota, setEditingNota] = useState(false)
   const [notaText, setNotaText] = useState(item.NOTAS_AREA || '')
   const [notaGuardada, setNotaGuardada] = useState(item.NOTAS_AREA || '')
   const [savingNota, setSavingNota] = useState(false)
   const [notaError, setNotaError] = useState('')
+
+  async function handleSubestado(s) {
+    const anterior = subestado
+    setSubestado(s) // optimistic update inmediato
+    try {
+      const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ SUBESTADO: s, _usuarioId: userId }),
+      })
+      if (!res.ok) {
+        setSubestado(anterior) // revertir si falla
+      } else {
+        // Notificar al padre solo si el item pasa a LISTO (para sacarlo del filtro Todos)
+        onSubestadoChange?.(item.ITEM_ID, s)
+      }
+    } catch {
+      setSubestado(anterior)
+    }
+  }
 
   async function handleGuardarNota() {
     setSavingNota(true)
@@ -62,13 +87,12 @@ function ItemCard({ item, userId, onSubestadoChange }) {
       })
       const data = await res.json()
       if (res.ok && data.ok) {
-        // Actualizar estado local inmediatamente — sin recargar lista
         setNotaGuardada(notaText)
         setEditingNota(false)
       } else {
         setNotaError(data.error || 'Error al guardar')
       }
-    } catch (e) {
+    } catch {
       setNotaError('Error de conexión')
     } finally {
       setSavingNota(false)
@@ -88,8 +112,8 @@ function ItemCard({ item, userId, onSubestadoChange }) {
           <div className="font-semibold text-white">{item.PRODUCTO_NOMBRE}</div>
           <div className="text-xs text-gray-500 mt-0.5">{item.COLOR} · {item.TALLA} · {item.CANTIDAD} uni</div>
         </div>
-        <span className={`badge text-xs text-white ${SUBESTADO_CONFIG[item.SUBESTADO]?.color || 'bg-gray-700'}`}>
-          {SUBESTADO_CONFIG[item.SUBESTADO]?.label || item.SUBESTADO}
+        <span className={`badge text-xs text-white ${SUBESTADO_CONFIG[subestado]?.color || 'bg-gray-700'}`}>
+          {SUBESTADO_CONFIG[subestado]?.label || subestado}
         </span>
       </div>
 
@@ -149,9 +173,7 @@ function ItemCard({ item, userId, onSubestadoChange }) {
                 onChange={e => setNotaText(e.target.value)}
                 autoFocus
               />
-              {notaError && (
-                <div className="text-xs text-red-400 mb-2">⚠️ {notaError}</div>
-              )}
+              {notaError && <div className="text-xs text-red-400 mb-2">⚠️ {notaError}</div>}
               <div className="flex gap-2">
                 <button onClick={handleGuardarNota} disabled={savingNota}
                   className="btn-primary text-xs px-3 py-1.5">
@@ -177,12 +199,12 @@ function ItemCard({ item, userId, onSubestadoChange }) {
             </div>
           )}
 
-          {/* Subestado */}
+          {/* Botones subestado — usan estado local */}
           <div className="grid grid-cols-2 gap-1.5 mt-auto">
             {SUBESTADOS_ORDEN.map(s => (
-              <button key={s} onClick={() => onSubestadoChange(item.ITEM_ID, s)}
+              <button key={s} onClick={() => handleSubestado(s)}
                 className={`py-2 rounded-xl text-xs font-semibold transition-all
-                  ${item.SUBESTADO === s
+                  ${subestado === s
                     ? `${SUBESTADO_CONFIG[s]?.color} text-white`
                     : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
                 {SUBESTADO_CONFIG[s]?.label}
@@ -248,14 +270,15 @@ export default function ProduccionPage() {
     } finally { setLoading(false) }
   }, [])
 
-  async function updateSubestado(itemId, subestado) {
-    await fetch(`/api/pedidos/item/${itemId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ SUBESTADO: subestado, _usuarioId: user?.id }),
-    })
-    // Solo recarga al cambiar subestado (necesita reflejar cambio en lista)
-    loadItems(user)
+  // Al cambiar subestado: actualizar SOLO ese item en el estado local
+  // Si pasa a LISTO, sacarlo del filtro "Todos" sin recargar el sheet
+  function handleSubestadoChange(itemId, nuevoSubestado) {
+    setPedidos(prev => prev.map(p => ({
+      ...p,
+      itemsFiltrados: p.itemsFiltrados.map(item =>
+        item.ITEM_ID === itemId ? { ...item, SUBESTADO: nuevoSubestado } : item
+      )
+    })))
   }
 
   const hayFecha = fechaDesde || fechaHasta
@@ -407,7 +430,7 @@ export default function ProduccionPage() {
                             key={item.ITEM_ID}
                             item={item}
                             userId={user?.id}
-                            onSubestadoChange={updateSubestado}
+                            onSubestadoChange={handleSubestadoChange}
                           />
                         ))}
                       </div>
