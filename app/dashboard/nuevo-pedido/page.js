@@ -399,6 +399,9 @@ export default function NuevoPedidoPage() {
                         value={cliente.direccion}
                         onChange={e => setCliente(p => ({...p, direccion: e.target.value}))} />
                     </div>
+                    {buildDireccion() && (
+                      <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
+                        📋 PDF: <span className="text-white">{buildDireccion()}</span>
                       </div>
                     )}
                   </div>
