@@ -34,8 +34,8 @@ function itemEsDeUsuario(itemArea, u) {
   return true
 }
 
-// ── ItemCard con estado de nota LOCAL ─────────────────────────────────────────
-function ItemCard({ item, userId, onSubestadoChange, onNotaSaved }) {
+// ── ItemCard — todo el estado de nota es LOCAL, nunca recarga la lista ────────
+function ItemCard({ item, userId, onSubestadoChange }) {
   const fotos = [
     { key: 'FOTO_PECHO_URL', label: 'Pecho' },
     { key: 'FOTO_ESPALDA_URL', label: 'Espalda' },
@@ -45,26 +45,31 @@ function ItemCard({ item, userId, onSubestadoChange, onNotaSaved }) {
 
   const [fotoActiva, setFotoActiva] = useState(fotos[0]?.key || null)
   const [fotoFullscreen, setFotoFullscreen] = useState(null)
-
-  // Estado de nota completamente local — no provoca re-render del padre
   const [editingNota, setEditingNota] = useState(false)
   const [notaText, setNotaText] = useState(item.NOTAS_AREA || '')
   const [notaGuardada, setNotaGuardada] = useState(item.NOTAS_AREA || '')
   const [savingNota, setSavingNota] = useState(false)
+  const [notaError, setNotaError] = useState('')
 
   async function handleGuardarNota() {
     setSavingNota(true)
+    setNotaError('')
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ NOTAS_AREA: notaText, _usuarioId: userId }),
       })
-      if (res.ok) {
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        // Actualizar estado local inmediatamente — sin recargar lista
         setNotaGuardada(notaText)
         setEditingNota(false)
-        onNotaSaved?.()
+      } else {
+        setNotaError(data.error || 'Error al guardar')
       }
+    } catch (e) {
+      setNotaError('Error de conexión')
     } finally {
       setSavingNota(false)
     }
@@ -73,11 +78,11 @@ function ItemCard({ item, userId, onSubestadoChange, onNotaSaved }) {
   function handleCancelar() {
     setNotaText(notaGuardada)
     setEditingNota(false)
+    setNotaError('')
   }
 
   return (
     <div className="p-4">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="font-semibold text-white">{item.PRODUCTO_NOMBRE}</div>
@@ -88,7 +93,6 @@ function ItemCard({ item, userId, onSubestadoChange, onNotaSaved }) {
         </span>
       </div>
 
-      {/* 2 columnas */}
       <div className="flex gap-4">
         {/* Fotos */}
         <div className="w-40 flex-shrink-0">
@@ -134,7 +138,7 @@ function ItemCard({ item, userId, onSubestadoChange, onNotaSaved }) {
             )}
           </div>
 
-          {/* Nota — estado completamente local */}
+          {/* Nota */}
           {editingNota ? (
             <div>
               <textarea
@@ -145,10 +149,11 @@ function ItemCard({ item, userId, onSubestadoChange, onNotaSaved }) {
                 onChange={e => setNotaText(e.target.value)}
                 autoFocus
               />
+              {notaError && (
+                <div className="text-xs text-red-400 mb-2">⚠️ {notaError}</div>
+              )}
               <div className="flex gap-2">
-                <button
-                  onClick={handleGuardarNota}
-                  disabled={savingNota}
+                <button onClick={handleGuardarNota} disabled={savingNota}
                   className="btn-primary text-xs px-3 py-1.5">
                   {savingNota ? '⏳ Guardando...' : 'Guardar'}
                 </button>
@@ -172,11 +177,10 @@ function ItemCard({ item, userId, onSubestadoChange, onNotaSaved }) {
             </div>
           )}
 
-          {/* Botones subestado */}
+          {/* Subestado */}
           <div className="grid grid-cols-2 gap-1.5 mt-auto">
             {SUBESTADOS_ORDEN.map(s => (
-              <button key={s}
-                onClick={() => onSubestadoChange(item.ITEM_ID, s)}
+              <button key={s} onClick={() => onSubestadoChange(item.ITEM_ID, s)}
                 className={`py-2 rounded-xl text-xs font-semibold transition-all
                   ${item.SUBESTADO === s
                     ? `${SUBESTADO_CONFIG[s]?.color} text-white`
@@ -199,7 +203,6 @@ function ItemCard({ item, userId, onSubestadoChange, onNotaSaved }) {
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function ProduccionPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -251,6 +254,7 @@ export default function ProduccionPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ SUBESTADO: subestado, _usuarioId: user?.id }),
     })
+    // Solo recarga al cambiar subestado (necesita reflejar cambio en lista)
     loadItems(user)
   }
 
@@ -359,7 +363,6 @@ export default function ProduccionPage() {
               <div className="text-red-400 font-semibold text-sm">🚨 {urgentes} pedido(s) urgente(s) — entrega en ≤2 días</div>
             </div>
           )}
-
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
@@ -377,7 +380,6 @@ export default function ProduccionPage() {
                   ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) : null
                 const urgente = diasR !== null && diasR <= 2
                 const isExpanded = expandedPedido === pedido.PEDIDO_ID
-
                 return (
                   <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${urgente ? 'border-red-500/40' : ''}`}>
                     <button onClick={() => setExpandedPedido(isExpanded ? null : pedido.PEDIDO_ID)}
@@ -398,7 +400,6 @@ export default function ProduccionPage() {
                       </div>
                       <span className="text-gray-600 text-sm">{isExpanded ? '▲' : '▼'}</span>
                     </button>
-
                     {isExpanded && (
                       <div className="border-t border-gray-800 divide-y divide-gray-800">
                         {pedido.itemsFiltrados.map(item => (
@@ -407,7 +408,6 @@ export default function ProduccionPage() {
                             item={item}
                             userId={user?.id}
                             onSubestadoChange={updateSubestado}
-                            onNotaSaved={() => loadItems(user)}
                           />
                         ))}
                       </div>
