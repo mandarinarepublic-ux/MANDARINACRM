@@ -3,15 +3,16 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-const ESTADO_LABELS = {
-  EN_FABRICA: 'En Producción',
-  DESPACHO: 'Para despacho',
-  ENTREGADO: 'Entregado',
-}
-const ESTADO_COLORS = {
-  EN_FABRICA: 'text-blue-400 bg-blue-500/10',
-  DESPACHO: 'text-purple-400 bg-purple-500/10',
-  ENTREGADO: 'text-green-400 bg-green-500/10',
+const ESTADO_LABELS = { EN_FABRICA:'En Producción', DESPACHO:'Para despacho', ENTREGADO:'Entregado' }
+const ESTADO_COLORS = { EN_FABRICA:'text-blue-400 bg-blue-500/10', DESPACHO:'text-purple-400 bg-purple-500/10', ENTREGADO:'text-green-400 bg-green-500/10' }
+
+function parseFecha(str) {
+  if (!str) return null
+  if (str.match(/^\d{4}-/)) return new Date(str)
+  const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
+  const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
+  if (!m) return null
+  return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
 }
 
 export default function MisPedidosPage() {
@@ -20,6 +21,9 @@ export default function MisPedidosPage() {
   const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [mostrarFecha, setMostrarFecha] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -34,14 +38,31 @@ export default function MisPedidosPage() {
     try {
       const res = await fetch(`/api/pedidos?vendedor=${encodeURIComponent(u.nombre || u.id)}&vendedorId=${u.id}&rol=${u.rol}&scope=mios`)
       const data = await res.json()
-      setPedidos((data.pedidos || []).filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA'))
+      const ordenados = (data.pedidos || [])
+        .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA')
+        .sort((a, b) => {
+          const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
+          const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
+          return fb - fa
+        })
+      setPedidos(ordenados)
     } finally { setLoading(false) }
   }
 
+  const hayFecha = fechaDesde || fechaHasta
+
   const filtered = pedidos.filter(p => {
-    if (!busqueda) return true
-    const q = busqueda.toLowerCase()
-    return p.PEDIDO_ID?.toLowerCase().includes(q)
+    if (busqueda && !p.PEDIDO_ID?.toLowerCase().includes(busqueda.toLowerCase())) return false
+    if (fechaDesde) {
+      const f = parseFecha(p.FECHA_PEDIDO)
+      if (!f || f < new Date(fechaDesde)) return false
+    }
+    if (fechaHasta) {
+      const f = parseFecha(p.FECHA_PEDIDO)
+      const h = new Date(fechaHasta); h.setHours(23,59,59)
+      if (!f || f > h) return false
+    }
+    return true
   })
 
   return (
@@ -55,11 +76,33 @@ export default function MisPedidosPage() {
             </div>
             <Link href="/dashboard/nuevo-pedido" className="btn-primary text-sm px-4 py-2">+ Nueva</Link>
           </div>
-          <input className="input" placeholder="Buscar por ID..."
-            value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+          <div className="flex gap-2 mb-3">
+            <input className="input flex-1" placeholder="Buscar por ID..."
+              value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+            <button onClick={() => setMostrarFecha(v => !v)}
+              className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0
+                ${hayFecha ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
+              📅 {hayFecha ? 'Fecha ✓' : 'Fecha'}
+            </button>
+          </div>
+          {mostrarFecha && (
+            <div className="flex gap-2 mb-2 items-end">
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">Desde</label>
+                <input type="date" className="input text-sm" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">Hasta</label>
+                <input type="date" className="input text-sm" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+              </div>
+              {hayFecha && (
+                <button onClick={() => { setFechaDesde(''); setFechaHasta('') }}
+                  className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>
+              )}
+            </div>
+          )}
         </div>
       </div>
-
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           {loading ? (
@@ -71,9 +114,7 @@ export default function MisPedidosPage() {
               <div className="text-3xl mb-3">📦</div>
               <div className="font-medium text-gray-400">No tienes pedidos en producción</div>
               <div className="text-sm text-gray-600 mt-1">Los pedidos entregados o despachados están en Historial</div>
-              <Link href="/dashboard/nuevo-pedido" className="btn-primary mt-4 inline-block text-sm px-6 py-2">
-                Crear nuevo pedido
-              </Link>
+              <Link href="/dashboard/nuevo-pedido" className="btn-primary mt-4 inline-block text-sm px-6 py-2">Crear nuevo pedido</Link>
             </div>
           ) : (
             <div className="space-y-2">
@@ -85,17 +126,11 @@ export default function MisPedidosPage() {
                       <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
                       <span className="text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {p.items?.length || 0} prenda(s) · {p.FECHA_PEDIDO?.split(' ')[0] || ''}
-                    </div>
+                    <div className="text-xs text-gray-500">{p.items?.length || 0} prenda(s) · {p.FECHA_PEDIDO?.split(' ')[0] || ''}</div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
-                    <span className={`badge text-xs ${ESTADO_COLORS[p.ESTADO_PEDIDO]}`}>
-                      {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
-                    </span>
-                    <span className={`badge text-xs ${p.ESTADO_PAGO === 'PAGADO' ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>
-                      ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
-                    </span>
+                    <span className={`badge text-xs ${ESTADO_COLORS[p.ESTADO_PEDIDO]}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}</span>
+                    <span className={`badge text-xs ${p.ESTADO_PAGO === 'PAGADO' ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}</span>
                   </div>
                 </Link>
               ))}

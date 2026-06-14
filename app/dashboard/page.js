@@ -33,10 +33,10 @@ export default function DashboardPage() {
     const pedidos = (u.rol === 'VENDEDOR')
       ? pedidosTodos.filter(p => p.VENDEDOR_ID === u.id || p.VENDEDOR_ID === u.nombre)
       : pedidosTodos
+
     const hoy = now.toISOString().split('T')[0]
     const mesActual = now.toISOString().slice(0, 7)
 
-    // Parse fecha from "01Jun2026 23:59:00" or ISO
     function parseFecha(str) {
       if (!str) return null
       if (str.match(/^\d{4}-/)) return new Date(str)
@@ -50,7 +50,6 @@ export default function DashboardPage() {
       const f = parseFecha(p.FECHA_PEDIDO)
       return f && f.toISOString().split('T')[0] === hoy
     })
-
     const pedidosMes = pedidos.filter(p => {
       const f = parseFecha(p.FECHA_PEDIDO)
       return f && f.toISOString().slice(0, 7) === mesActual
@@ -61,7 +60,6 @@ export default function DashboardPage() {
     const cobradoMes = pedidosMes.reduce((s, p) => s + parseFloat(p.MONTO_ABONADO || 0), 0)
     const pendienteTotal = pedidos.reduce((s, p) => s + parseFloat(p.MONTO_PENDIENTE || 0), 0)
 
-    // Por estado
     const porEstado = {
       PENDIENTE_FABRICA: pedidos.filter(p => p.ESTADO_PEDIDO === 'PENDIENTE_FABRICA').length,
       EN_FABRICA: pedidos.filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA').length,
@@ -69,14 +67,12 @@ export default function DashboardPage() {
       ENTREGADO: pedidos.filter(p => p.ESTADO_PEDIDO === 'ENTREGADO').length,
     }
 
-    // Atrasados
     const atrasados = pedidos.filter(p => {
       if (!p.FECHA_ENTREGA_PROMETIDA) return false
       if (p.ESTADO_PEDIDO === 'ENTREGADO' || p.ESTADO_PEDIDO === 'CANCELADO') return false
       return new Date(p.FECHA_ENTREGA_PROMETIDA) < now
     })
 
-    // Por vendedor (admin)
     const porVendedor = {}
     pedidosMes.forEach(p => {
       if (!porVendedor[p.VENDEDOR_ID]) porVendedor[p.VENDEDOR_ID] = { monto: 0, count: 0 }
@@ -84,13 +80,11 @@ export default function DashboardPage() {
       porVendedor[p.VENDEDOR_ID].count++
     })
 
-    // Por tienda
     const porTienda = {
       MANDARINA: pedidosMes.filter(p => p.TIENDA_ID === 'MANDARINA').reduce((s,p) => s + parseFloat(p.MONTO_TOTAL||0), 0),
       INDSTORE: pedidosMes.filter(p => p.TIENDA_ID === 'INDSTORE').reduce((s,p) => s + parseFloat(p.MONTO_TOTAL||0), 0),
     }
 
-    // Items en fábrica por área (para diseño)
     const allItems = pedidos
       .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA' || p.ESTADO_PEDIDO === 'PENDIENTE_FABRICA')
       .flatMap(p => (p.items || []).filter(i => i.SUBESTADO !== 'LISTO'))
@@ -102,8 +96,7 @@ export default function DashboardPage() {
       porArea[area]++
     })
 
-    // Mis pedidos recientes (vendedor)
-    const misRecientes = pedidos
+    const misRecientes = [...pedidos]
       .sort((a, b) => {
         const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
         const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
@@ -133,9 +126,7 @@ export default function DashboardPage() {
   return <DashboardAdmin data={data} user={user} />
 }
 
-// ─── ADMIN DASHBOARD ─────────────────────────────────────────────────────────
 function DashboardAdmin({ data, user }) {
-
   return (
     <div className="p-4 max-w-4xl mx-auto">
       <div className="mb-6 pt-2">
@@ -144,8 +135,6 @@ function DashboardAdmin({ data, user }) {
           {new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </p>
       </div>
-
-      {/* KPIs principales */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
           { label: 'Ventas hoy', value: `$${data.ventasHoy.toFixed(0)}`, sub: `${data.pedidosHoy} pedido(s)`, color: 'text-mandarina-400' },
@@ -160,9 +149,7 @@ function DashboardAdmin({ data, user }) {
           </div>
         ))}
       </div>
-
       <div className="grid md:grid-cols-2 gap-4 mb-4">
-        {/* Estados */}
         <div className="card p-4">
           <h3 className="font-semibold text-white mb-3 text-sm">📊 Estado de pedidos</h3>
           <div className="space-y-2">
@@ -172,8 +159,7 @@ function DashboardAdmin({ data, user }) {
               { label: 'Para despacho', key: 'DESPACHO', color: 'bg-purple-500', href: '/dashboard/despacho' },
               { label: 'Entregados', key: 'ENTREGADO', color: 'bg-green-500', href: '/dashboard/historial' },
             ].map(e => (
-              <Link key={e.key} href={e.href}
-                className="flex items-center gap-3 hover:bg-gray-800/50 px-2 py-1.5 rounded-lg transition-all">
+              <Link key={e.key} href={e.href} className="flex items-center gap-3 hover:bg-gray-800/50 px-2 py-1.5 rounded-lg transition-all">
                 <div className={`w-2 h-2 rounded-full ${e.color}`} />
                 <span className="text-gray-400 text-xs flex-1">{e.label}</span>
                 <span className="text-white font-bold">{data.porEstado[e.key] || 0}</span>
@@ -186,8 +172,6 @@ function DashboardAdmin({ data, user }) {
             </div>
           )}
         </div>
-
-        {/* Por tienda */}
         <div className="card p-4">
           <h3 className="font-semibold text-white mb-3 text-sm">🏪 Ventas por tienda (mes)</h3>
           <div className="space-y-3">
@@ -196,8 +180,7 @@ function DashboardAdmin({ data, user }) {
               { tienda: 'INDSTORE', label: '🏪 Indstore', color: '#E91E8C' },
             ].map(t => {
               const monto = data.porTienda[t.tienda] || 0
-              const total = data.ventasMes || 1
-              const pct = Math.round((monto / total) * 100)
+              const pct = Math.round((monto / (data.ventasMes || 1)) * 100)
               return (
                 <div key={t.tienda}>
                   <div className="flex justify-between text-sm mb-1">
@@ -211,26 +194,18 @@ function DashboardAdmin({ data, user }) {
               )
             })}
           </div>
-
           <h3 className="font-semibold text-white mt-4 mb-3 text-sm">👥 Top vendedores (mes)</h3>
           <div className="space-y-1.5">
-            {Object.entries(data.porVendedor)
-              .sort((a, b) => b[1].monto - a[1].monto)
-              .slice(0, 5)
-              .map(([id, v]) => (
-                <div key={id} className="flex justify-between text-xs">
-                  <span className="text-gray-400 font-mono">{id}</span>
-                  <span className="text-white">${v.monto.toFixed(0)} · {v.count} pedidos</span>
-                </div>
-              ))}
-            {Object.keys(data.porVendedor).length === 0 && (
-              <div className="text-gray-600 text-xs">Sin datos este mes</div>
-            )}
+            {Object.entries(data.porVendedor).sort((a, b) => b[1].monto - a[1].monto).slice(0, 5).map(([id, v]) => (
+              <div key={id} className="flex justify-between text-xs">
+                <span className="text-gray-400 font-mono">{id}</span>
+                <span className="text-white">${v.monto.toFixed(0)} · {v.count} pedidos</span>
+              </div>
+            ))}
+            {Object.keys(data.porVendedor).length === 0 && <div className="text-gray-600 text-xs">Sin datos este mes</div>}
           </div>
         </div>
       </div>
-
-      {/* Quick actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { href: '/dashboard/nuevo-pedido', icon: '➕', label: 'Nueva Venta' },
@@ -238,8 +213,7 @@ function DashboardAdmin({ data, user }) {
           { href: '/dashboard/despacho', icon: '🚚', label: 'Despachos' },
           { href: '/dashboard/usuarios', icon: '👥', label: 'Usuarios' },
         ].map(a => (
-          <Link key={a.href} href={a.href}
-            className="card p-4 flex flex-col items-center gap-2 hover:border-gray-600 transition-all">
+          <Link key={a.href} href={a.href} className="card p-4 flex flex-col items-center gap-2 hover:border-gray-600 transition-all">
             <span className="text-2xl">{a.icon}</span>
             <span className="text-xs text-gray-400 text-center">{a.label}</span>
           </Link>
@@ -249,35 +223,16 @@ function DashboardAdmin({ data, user }) {
   )
 }
 
-// ─── VENDEDOR DASHBOARD ───────────────────────────────────────────────────────
 function DashboardVendedor({ data, user }) {
-  const ESTADO_LABELS = {
-    PENDIENTE_FABRICA: 'Pend. Fábrica',
-    EN_FABRICA: 'En Producción',
-    DESPACHO: 'Para despacho',
-    ENTREGADO: 'Entregado',
-  }
-  const ESTADO_COLORS = {
-    PENDIENTE_FABRICA: 'text-yellow-400',
-    EN_FABRICA: 'text-blue-400',
-    DESPACHO: 'text-purple-400',
-    ENTREGADO: 'text-green-400',
-  }
-
+  const ESTADO_LABELS = { PENDIENTE_FABRICA: 'Pend. Fábrica', EN_FABRICA: 'En Producción', DESPACHO: 'Para despacho', ENTREGADO: 'Entregado' }
+  const ESTADO_COLORS = { PENDIENTE_FABRICA: 'text-yellow-400', EN_FABRICA: 'text-blue-400', DESPACHO: 'text-purple-400', ENTREGADO: 'text-green-400' }
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <div className="mb-6 pt-2">
-        <h1 className="text-2xl font-display font-bold text-white">
-          Hola, {user.nombre.split(' ')[0]} 👋
-        </h1>
-        <p className="text-gray-500 text-sm">
-          {new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}
-        </p>
+        <h1 className="text-2xl font-display font-bold text-white">Hola, {user.nombre.split(' ')[0]} 👋</h1>
+        <p className="text-gray-500 text-sm">{new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
       </div>
-
-      {/* Quick action */}
-      <Link href="/dashboard/nuevo-pedido"
-        className="flex items-center gap-4 card p-5 mb-6 border-mandarina-500/30 hover:border-mandarina-500/60 transition-all group">
+      <Link href="/dashboard/nuevo-pedido" className="flex items-center gap-4 card p-5 mb-6 border-mandarina-500/30 hover:border-mandarina-500/60 transition-all group">
         <div className="w-12 h-12 bg-mandarina-500 rounded-xl flex items-center justify-center text-xl group-hover:scale-105 transition-transform">➕</div>
         <div>
           <div className="font-semibold text-white">Nueva Venta</div>
@@ -285,8 +240,6 @@ function DashboardVendedor({ data, user }) {
         </div>
         <div className="ml-auto text-gray-600 group-hover:text-mandarina-400 transition-colors text-xl">→</div>
       </Link>
-
-      {/* Mis stats */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[
           { label: 'Mis ventas hoy', value: `$${data.ventasHoy.toFixed(0)}`, sub: `${data.pedidosHoy} pedidos`, color: 'text-mandarina-400' },
@@ -301,8 +254,6 @@ function DashboardVendedor({ data, user }) {
           </div>
         ))}
       </div>
-
-      {/* Mis pedidos recientes */}
       <div className="card">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
           <h2 className="font-semibold text-white text-sm">Mis pedidos recientes</h2>
@@ -319,9 +270,7 @@ function DashboardVendedor({ data, user }) {
                   <div className="text-xs text-gray-500">{p.FECHA_PEDIDO?.split(' ')[0] || ''}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs font-medium ${ESTADO_COLORS[p.ESTADO_PEDIDO] || 'text-gray-400'}`}>
-                    {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
-                  </span>
+                  <span className={`text-xs font-medium ${ESTADO_COLORS[p.ESTADO_PEDIDO] || 'text-gray-400'}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}</span>
                   <span className="text-white text-sm font-medium">${parseFloat(p.MONTO_TOTAL||0).toFixed(0)}</span>
                 </div>
               </div>
@@ -333,119 +282,78 @@ function DashboardVendedor({ data, user }) {
   )
 }
 
-
-// ─── DESPACHO DASHBOARD ───────────────────────────────────────────────────────
 function DashboardDespacho({ data, user }) {
   const listos = (data.pedidos || []).filter(p =>
     p.ESTADO_PEDIDO === 'EN_FABRICA' &&
-    (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA').every(i => i.SUBESTADO === 'LISTO')
-    && (p.items || []).length > 0
+    (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA').every(i => i.SUBESTADO === 'LISTO') &&
+    (p.items || []).length > 0
   )
   const enDespacho = (data.pedidos || []).filter(p => p.ESTADO_PEDIDO === 'DESPACHO')
-  const hoy = new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })
-
   return (
     <div className="max-w-xl mx-auto px-4 pt-4 pb-6">
       <div className="mb-6">
         <h1 className="text-2xl font-display font-bold text-white">Hola, {user.nombre.split(' ')[0]} 👋</h1>
-        <p className="text-gray-500 text-sm capitalize">{hoy}</p>
+        <p className="text-gray-500 text-sm capitalize">{new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
       </div>
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="card p-4 text-center">
-          <div className="text-3xl font-bold text-yellow-400">{listos.length}</div>
-          <div className="text-xs text-gray-500 mt-1">Listos para despacho</div>
-        </div>
-        <div className="card p-4 text-center">
-          <div className="text-3xl font-bold text-purple-400">{enDespacho.length}</div>
-          <div className="text-xs text-gray-500 mt-1">En despacho</div>
-        </div>
+        <div className="card p-4 text-center"><div className="text-3xl font-bold text-yellow-400">{listos.length}</div><div className="text-xs text-gray-500 mt-1">Listos para despacho</div></div>
+        <div className="card p-4 text-center"><div className="text-3xl font-bold text-purple-400">{enDespacho.length}</div><div className="text-xs text-gray-500 mt-1">En despacho</div></div>
       </div>
-      <Link href="/dashboard/despacho"
-        className="card p-4 flex items-center justify-between hover:border-gray-700 transition-all block mb-3">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">🚚</span>
-          <div>
-            <div className="text-white font-semibold text-sm">Módulo de despacho</div>
-            <div className="text-xs text-gray-500">Gestionar guías y entregas</div>
-          </div>
-        </div>
+      <Link href="/dashboard/despacho" className="card p-4 flex items-center justify-between hover:border-gray-700 transition-all block mb-3">
+        <div className="flex items-center gap-3"><span className="text-2xl">🚚</span><div><div className="text-white font-semibold text-sm">Módulo de despacho</div><div className="text-xs text-gray-500">Gestionar guías y entregas</div></div></div>
         <span className="text-gray-600">→</span>
       </Link>
-      <Link href="/dashboard/historial"
-        className="card p-4 flex items-center justify-between hover:border-gray-700 transition-all block">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">📋</span>
-          <div>
-            <div className="text-white font-semibold text-sm">Historial</div>
-            <div className="text-xs text-gray-500">Ver todos los pedidos</div>
-          </div>
-        </div>
+      <Link href="/dashboard/historial" className="card p-4 flex items-center justify-between hover:border-gray-700 transition-all block">
+        <div className="flex items-center gap-3"><span className="text-2xl">📋</span><div><div className="text-white font-semibold text-sm">Historial</div><div className="text-xs text-gray-500">Ver todos los pedidos</div></div></div>
         <span className="text-gray-600">→</span>
       </Link>
     </div>
   )
 }
 
-// ─── DISEÑO/FÁBRICA DASHBOARD ─────────────────────────────────────────────────
 function DashboardDiseno({ data, user }) {
   const totalPendientes = data.allItems.length
   const urgentes = data.allItems.filter(i => {
     if (!i.fechaEntrega) return false
     return Math.ceil((new Date(i.fechaEntrega) - new Date()) / 86400000) <= 2
   }).length
-
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <div className="mb-6 pt-2">
-        <h1 className="text-2xl font-display font-bold text-white">
-          Hola, {user.nombre.split(' ')[0]} 👋
-        </h1>
-        <p className="text-gray-500 text-sm">
-          {new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}
-        </p>
+        <h1 className="text-2xl font-display font-bold text-white">Hola, {user.nombre.split(' ')[0]} 👋</h1>
+        <p className="text-gray-500 text-sm">{new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
       </div>
-
-      {/* Resumen */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="card p-5">
-          <div className={`text-4xl font-bold font-display ${totalPendientes > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
-            {totalPendientes}
-          </div>
+          <div className={`text-4xl font-bold font-display ${totalPendientes > 0 ? 'text-yellow-400' : 'text-green-400'}`}>{totalPendientes}</div>
           <div className="text-sm text-gray-400 mt-1">Prendas pendientes</div>
           <div className="text-xs text-gray-600">por producir</div>
         </div>
         <div className="card p-5">
-          <div className={`text-4xl font-bold font-display ${urgentes > 0 ? 'text-red-400' : 'text-green-400'}`}>
-            {urgentes}
-          </div>
+          <div className={`text-4xl font-bold font-display ${urgentes > 0 ? 'text-red-400' : 'text-green-400'}`}>{urgentes}</div>
           <div className="text-sm text-gray-400 mt-1">Urgentes</div>
           <div className="text-xs text-gray-600">entrega en ≤2 días</div>
         </div>
       </div>
-
-      {/* Por área */}
       {Object.keys(data.porArea).length > 0 && (
         <div className="card p-4 mb-4">
           <h3 className="font-semibold text-white mb-3 text-sm">📊 Pendientes por área</h3>
           <div className="space-y-2">
-            {Object.entries(data.porArea)
-              .sort((a, b) => b[1] - a[1])
-              .map(([area, count]) => {
-                const isMyArea = user.areas?.some(a => area.includes(a))
-                return (
-                  <div key={area} className={`flex items-center justify-between px-3 py-2 rounded-xl ${isMyArea ? 'bg-mandarina-500/10 border border-mandarina-500/30' : 'bg-gray-800/50'}`}>
-                    <div>
-                      <span className={`text-sm font-medium ${isMyArea ? 'text-mandarina-400' : 'text-gray-300'}`}>{area}</span>
-                      {isMyArea && <span className="ml-2 text-xs text-mandarina-500">← tu área</span>}
-                    </div>
-                    <span className={`text-lg font-bold ${isMyArea ? 'text-mandarina-400' : 'text-gray-400'}`}>{count}</span>
+            {Object.entries(data.porArea).sort((a, b) => b[1] - a[1]).map(([area, count]) => {
+              const isMyArea = user.areas?.some(a => area.includes(a))
+              return (
+                <div key={area} className={`flex items-center justify-between px-3 py-2 rounded-xl ${isMyArea ? 'bg-mandarina-500/10 border border-mandarina-500/30' : 'bg-gray-800/50'}`}>
+                  <div>
+                    <span className={`text-sm font-medium ${isMyArea ? 'text-mandarina-400' : 'text-gray-300'}`}>{area}</span>
+                    {isMyArea && <span className="ml-2 text-xs text-mandarina-500">← tu área</span>}
                   </div>
-                )
-              })}
+                  <span className={`text-lg font-bold ${isMyArea ? 'text-mandarina-400' : 'text-gray-400'}`}>{count}</span>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
-
       {totalPendientes === 0 && (
         <div className="card p-8 text-center">
           <div className="text-4xl mb-3">✅</div>
@@ -453,15 +361,9 @@ function DashboardDiseno({ data, user }) {
           <div className="text-gray-500 text-sm">No hay prendas pendientes de producción</div>
         </div>
       )}
-
-      {/* Quick action */}
-      <Link href="/dashboard/produccion"
-        className="flex items-center gap-4 card p-5 mt-4 hover:border-gray-600 transition-all group">
+      <Link href="/dashboard/produccion" className="flex items-center gap-4 card p-5 mt-4 hover:border-gray-600 transition-all group">
         <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-xl">🏭</div>
-        <div>
-          <div className="font-semibold text-white">Ver producción</div>
-          <div className="text-gray-500 text-sm">Gestionar prendas pendientes</div>
-        </div>
+        <div><div className="font-semibold text-white">Ver producción</div><div className="text-gray-500 text-sm">Gestionar prendas pendientes</div></div>
         <div className="ml-auto text-gray-600 group-hover:text-white text-xl">→</div>
       </Link>
     </div>

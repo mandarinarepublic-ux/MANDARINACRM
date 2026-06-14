@@ -13,6 +13,15 @@ const SUBESTADO_CONFIG = {
 }
 const SUBESTADOS_ORDEN = ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO']
 
+function parseFecha(str) {
+  if (!str) return null
+  if (str.match(/^\d{4}-/)) return new Date(str)
+  const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
+  const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
+  if (!m) return null
+  return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
+}
+
 function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, saveNota, updateSubestado, pedidoId }) {
   const fotos = [
     { key: 'FOTO_PECHO_URL', label: 'Pecho' },
@@ -26,7 +35,6 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
 
   return (
     <div className="p-4">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="font-semibold text-white">{item.PRODUCTO_NOMBRE}</div>
@@ -36,15 +44,11 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
           {SUBESTADO_CONFIG[item.SUBESTADO]?.label || item.SUBESTADO}
         </span>
       </div>
-
-      {/* 2 columnas */}
       <div className="flex gap-4">
-        {/* Izquierda: fotos */}
         <div className="w-40 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
-              <div
-                className="w-40 h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
+              <div className="w-40 h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
                 onDoubleClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
                 <img src={item[fotoActiva || fotos[0].key]} className="w-full h-full object-contain" alt="foto" />
               </div>
@@ -68,22 +72,13 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
             </div>
           )}
         </div>
-
-        {/* Derecha: detalle + nota + botones */}
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5">
-            <div className="text-xs">
-              <span className="text-gray-500">Área:</span>{' '}
-              <span className="text-mandarina-400 font-medium">{item.AREA}</span>
-            </div>
+            <div className="text-xs"><span className="text-gray-500">Área:</span>{' '}<span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
             {item.DETALLE_PERSONALIZADO && (
-              <div className="text-xs">
-                <span className="text-gray-500">Detalle:</span>{' '}
-                <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span>
-              </div>
+              <div className="text-xs"><span className="text-gray-500">Detalle:</span>{' '}<span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
             )}
           </div>
-
           {editingNota === item.ITEM_ID ? (
             <div>
               <textarea className="input resize-none text-sm mb-2 w-full" rows={2}
@@ -97,9 +92,7 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
           ) : (
             <div>
               {item.NOTAS_AREA && (
-                <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">
-                  📝 {item.NOTAS_AREA}
-                </div>
+                <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">📝 {item.NOTAS_AREA}</div>
               )}
               <button onClick={() => { setEditingNota(item.ITEM_ID); setNotaText(item.NOTAS_AREA || '') }}
                 className="text-xs text-gray-600 hover:text-gray-400">
@@ -107,24 +100,19 @@ function ItemCard({ item, editingNota, notaText, setEditingNota, setNotaText, sa
               </button>
             </div>
           )}
-
           <div className="grid grid-cols-2 gap-1.5 mt-auto">
             {SUBESTADOS_ORDEN.map(s => (
               <button key={s} onClick={() => updateSubestado(item.ITEM_ID, s, pedidoId)}
                 className={`py-2 rounded-xl text-xs font-semibold transition-all
-                  ${item.SUBESTADO === s
-                    ? `${SUBESTADO_CONFIG[s]?.color} text-white`
-                    : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                  ${item.SUBESTADO === s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
                 {SUBESTADO_CONFIG[s]?.label}
               </button>
             ))}
           </div>
         </div>
       </div>
-
       {fotoFullscreen && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
-          onClick={() => setFotoFullscreen(null)}>
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={() => setFotoFullscreen(null)}>
           <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt="fullscreen" />
           <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
         </div>
@@ -143,6 +131,9 @@ export default function ProduccionPage() {
   const [expandedPedido, setExpandedPedido] = useState(null)
   const [editingNota, setEditingNota] = useState(null)
   const [notaText, setNotaText] = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [mostrarFecha, setMostrarFecha] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -159,6 +150,11 @@ export default function ProduccionPage() {
       const data = await res.json()
       const pedidosConItems = (data.pedidos || [])
         .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA')
+        .sort((a, b) => {
+          const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
+          const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
+          return fb - fa
+        })
         .map(p => ({
           ...p,
           itemsFiltrados: (p.items || []).filter(item => {
@@ -172,7 +168,7 @@ export default function ProduccionPage() {
     } finally { setLoading(false) }
   }
 
-  async function updateSubestado(itemId, subestado, pedidoId) {
+  async function updateSubestado(itemId, subestado) {
     await fetch(`/api/pedidos/item/${itemId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -191,6 +187,8 @@ export default function ProduccionPage() {
     loadItems(user)
   }
 
+  const hayFecha = fechaDesde || fechaHasta
+
   const filtered = pedidos
     .map(p => ({
       ...p,
@@ -201,17 +199,25 @@ export default function ProduccionPage() {
     }))
     .filter(p => {
       if (p.itemsFiltrados.length === 0) return false
-      if (!busqueda) return true
-      const q = busqueda.toLowerCase()
-      return p.PEDIDO_ID?.toLowerCase().includes(q) ||
-        p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))
+      if (busqueda) {
+        const q = busqueda.toLowerCase()
+        if (!p.PEDIDO_ID?.toLowerCase().includes(q) && !p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))) return false
+      }
+      if (fechaDesde) {
+        const f = parseFecha(p.FECHA_PEDIDO)
+        if (!f || f < new Date(fechaDesde)) return false
+      }
+      if (fechaHasta) {
+        const f = parseFecha(p.FECHA_PEDIDO)
+        const h = new Date(fechaHasta); h.setHours(23,59,59)
+        if (!f || f > h) return false
+      }
+      return true
     })
 
   const totalPendientes = filtered.reduce((s, p) => s + p.itemsFiltrados.length, 0)
-  const urgentes = filtered.filter(p => {
-    if (!p.FECHA_ENTREGA_PROMETIDA) return false
-    return Math.ceil((new Date(p.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) <= 2
-  }).length
+  const urgentes = filtered.filter(p => p.FECHA_ENTREGA_PROMETIDA &&
+    Math.ceil((new Date(p.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) <= 2).length
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
@@ -222,15 +228,36 @@ export default function ProduccionPage() {
               <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-white p-1">←</button>
               <div>
                 <h1 className="text-xl font-display font-bold text-white">Producción</h1>
-                <p className="text-xs text-gray-500">
-                  {totalPendientes} ítem(s) pendientes{user?.rol !== 'ADMIN' && ` · ${user?.rol}`}
-                </p>
+                <p className="text-xs text-gray-500">{totalPendientes} ítem(s) pendientes{user?.rol !== 'ADMIN' && ` · ${user?.rol}`}</p>
               </div>
             </div>
             <Link href="/dashboard/impresion" className="btn-secondary text-xs px-3 py-2">🖨️ Imprimir</Link>
           </div>
-          <input className="input mb-3" placeholder="Buscar por pedido o producto..."
-            value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+          <div className="flex gap-2 mb-3">
+            <input className="input flex-1" placeholder="Buscar por pedido o producto..."
+              value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+            <button onClick={() => setMostrarFecha(v => !v)}
+              className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0
+                ${hayFecha ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
+              📅 {hayFecha ? 'Fecha ✓' : 'Fecha'}
+            </button>
+          </div>
+          {mostrarFecha && (
+            <div className="flex gap-2 mb-3 items-end">
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">Desde</label>
+                <input type="date" className="input text-sm" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">Hasta</label>
+                <input type="date" className="input text-sm" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+              </div>
+              {hayFecha && (
+                <button onClick={() => { setFechaDesde(''); setFechaHasta('') }}
+                  className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>
+              )}
+            </div>
+          )}
           <div className="flex gap-1.5 overflow-x-auto pb-1 flex-wrap">
             {[
               { key: 'TODOS', label: 'Todos' },
@@ -241,16 +268,13 @@ export default function ProduccionPage() {
             ].map(f => (
               <button key={f.key} onClick={() => setFiltroSubestado(f.key)}
                 className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0
-                  ${filtroSubestado === f.key
-                    ? 'bg-mandarina-500 border-mandarina-500 text-white'
-                    : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
+                  ${filtroSubestado === f.key ? 'bg-mandarina-500 border-mandarina-500 text-white' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
                 {f.label}
               </button>
             ))}
           </div>
         </div>
       </div>
-
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           {urgentes > 0 && (
@@ -258,7 +282,6 @@ export default function ProduccionPage() {
               <div className="text-red-400 font-semibold text-sm">🚨 {urgentes} pedido(s) urgente(s) — entrega en ≤2 días</div>
             </div>
           )}
-
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
@@ -273,11 +296,9 @@ export default function ProduccionPage() {
             <div className="space-y-3">
               {filtered.map(pedido => {
                 const diasR = pedido.FECHA_ENTREGA_PROMETIDA
-                  ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000)
-                  : null
+                  ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) : null
                 const urgente = diasR !== null && diasR <= 2
                 const isExpanded = expandedPedido === pedido.PEDIDO_ID
-
                 return (
                   <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${urgente ? 'border-red-500/40' : ''}`}>
                     <button onClick={() => setExpandedPedido(isExpanded ? null : pedido.PEDIDO_ID)}
@@ -293,12 +314,11 @@ export default function ProduccionPage() {
                           <span className="text-xs text-gray-600">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                         </div>
                         <div className="text-xs text-gray-500">
-                          {pedido.itemsFiltrados.length} ítem(s){diasR !== null && ` · ${diasR}d restantes`}
+                          {pedido.itemsFiltrados.length} ítem(s){diasR !== null && ` · ${diasR}d restantes`} · {pedido.FECHA_PEDIDO?.split(' ')[0] || ''}
                         </div>
                       </div>
                       <span className="text-gray-600 text-sm">{isExpanded ? '▲' : '▼'}</span>
                     </button>
-
                     {isExpanded && (
                       <div className="border-t border-gray-800 divide-y divide-gray-800">
                         {pedido.itemsFiltrados.map(item => (

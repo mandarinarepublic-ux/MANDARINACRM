@@ -4,19 +4,16 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','ENTREGADO']
-const ESTADO_LABELS = {
-  PENDIENTE_FABRICA: 'Pend. Fábrica',
-  EN_FABRICA: 'En Producción',
-  DESPACHO: 'Despacho',
-  ENTREGADO: 'Entregado',
-  CANCELADO: 'Cancelado',
-}
-const ESTADO_COLORS = {
-  PENDIENTE_FABRICA: 'status-pendiente_fabrica',
-  EN_FABRICA: 'status-en_fabrica',
-  DESPACHO: 'status-despacho',
-  ENTREGADO: 'status-entregado',
-  CANCELADO: 'status-cancelado',
+const ESTADO_LABELS = { PENDIENTE_FABRICA:'Pend. Fábrica', EN_FABRICA:'En Producción', DESPACHO:'Despacho', ENTREGADO:'Entregado', CANCELADO:'Cancelado' }
+const ESTADO_COLORS = { PENDIENTE_FABRICA:'status-pendiente_fabrica', EN_FABRICA:'status-en_fabrica', DESPACHO:'status-despacho', ENTREGADO:'status-entregado', CANCELADO:'status-cancelado' }
+
+function parseFecha(str) {
+  if (!str) return null
+  if (str.match(/^\d{4}-/)) return new Date(str)
+  const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
+  const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
+  if (!m) return null
+  return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
 }
 
 export default function HistorialPage() {
@@ -27,6 +24,9 @@ export default function HistorialPage() {
   const [filtroEstado, setFiltroEstado] = useState('TODOS')
   const [filtroTienda, setFiltroTienda] = useState('TODAS')
   const [busqueda, setBusqueda] = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [mostrarFecha, setMostrarFecha] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -41,9 +41,16 @@ export default function HistorialPage() {
     try {
       const res = await fetch(`/api/pedidos?vendedor=${u.id}&rol=${u.rol}`)
       const data = await res.json()
-      setPedidos(data.pedidos || [])
+      const ordenados = (data.pedidos || []).sort((a, b) => {
+        const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
+        const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
+        return fb - fa
+      })
+      setPedidos(ordenados)
     } finally { setLoading(false) }
   }
+
+  const hayFecha = fechaDesde || fechaHasta
 
   const filtered = pedidos.filter(p => {
     if (filtroEstado !== 'TODOS' && p.ESTADO_PEDIDO !== filtroEstado) return false
@@ -52,24 +59,55 @@ export default function HistorialPage() {
       const q = busqueda.toLowerCase()
       if (!p.PEDIDO_ID?.toLowerCase().includes(q) && !p.CLIENTE_ID?.toLowerCase().includes(q)) return false
     }
+    if (fechaDesde) {
+      const f = parseFecha(p.FECHA_PEDIDO)
+      if (!f || f < new Date(fechaDesde)) return false
+    }
+    if (fechaHasta) {
+      const f = parseFecha(p.FECHA_PEDIDO)
+      const h = new Date(fechaHasta); h.setHours(23,59,59)
+      if (!f || f > h) return false
+    }
     return true
   })
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
-      {/* Sticky header + filters */}
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-xl font-display font-bold text-white">Historial de Ventas</h1>
             <Link href="/dashboard/nuevo-pedido" className="btn-primary text-sm px-4 py-2">+ Nueva</Link>
           </div>
-          <input className="input mb-3" placeholder="Buscar por ID o cliente..."
-            value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+          <div className="flex gap-2 mb-3">
+            <input className="input flex-1" placeholder="Buscar por ID o cliente..."
+              value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+            <button onClick={() => setMostrarFecha(v => !v)}
+              className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0
+                ${hayFecha ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
+              📅 {hayFecha ? 'Fecha ✓' : 'Fecha'}
+            </button>
+          </div>
+          {mostrarFecha && (
+            <div className="flex gap-2 mb-3 items-end">
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">Desde</label>
+                <input type="date" className="input text-sm" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">Hasta</label>
+                <input type="date" className="input text-sm" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+              </div>
+              {hayFecha && (
+                <button onClick={() => { setFechaDesde(''); setFechaHasta('') }}
+                  className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>
+              )}
+            </div>
+          )}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             {ESTADOS.map(e => (
               <button key={e} onClick={() => setFiltroEstado(e)}
-                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition-all border flex-shrink-0
+                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0
                   ${filtroEstado === e ? 'bg-mandarina-500 border-mandarina-500 text-white' : 'border-gray-700 text-gray-500'}`}>
                 {e === 'TODOS' ? 'Todos' : ESTADO_LABELS[e]}
               </button>
@@ -86,8 +124,6 @@ export default function HistorialPage() {
           </div>
         </div>
       </div>
-
-      {/* Scrollable list - READ ONLY */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           <div className="text-xs text-gray-600 mb-3">{filtered.length} pedido(s)</div>
@@ -96,9 +132,7 @@ export default function HistorialPage() {
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : filtered.length === 0 ? (
-            <div className="card p-8 text-center text-gray-600">
-              <div className="text-3xl mb-3">📭</div>No hay pedidos con estos filtros
-            </div>
+            <div className="card p-8 text-center text-gray-600"><div className="text-3xl mb-3">📭</div>No hay pedidos con estos filtros</div>
           ) : (
             <div className="space-y-2">
               {filtered.map(p => (
@@ -110,17 +144,11 @@ export default function HistorialPage() {
                       <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
                       <span className="text-gray-600 text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {p.items?.length || 0} prendas · {p.FECHA_PEDIDO?.split(' ')[0] || ''}
-                    </div>
+                    <div className="text-xs text-gray-500">{p.items?.length || 0} prendas · {p.FECHA_PEDIDO?.split(' ')[0] || ''}</div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
-                    <span className={`badge ${ESTADO_COLORS[p.ESTADO_PEDIDO] || 'bg-gray-800 text-gray-400'}`}>
-                      {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
-                    </span>
-                    <span className={`badge ${p.ESTADO_PAGO === 'PAGADO' ? 'status-pagado' : p.ESTADO_PAGO === 'ABONO' ? 'status-abono' : 'status-pendiente'}`}>
-                      ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
-                    </span>
+                    <span className={`badge ${ESTADO_COLORS[p.ESTADO_PEDIDO] || 'bg-gray-800 text-gray-400'}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}</span>
+                    <span className={`badge ${p.ESTADO_PAGO === 'PAGADO' ? 'status-pagado' : p.ESTADO_PAGO === 'ABONO' ? 'status-abono' : 'status-pendiente'}`}>${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}</span>
                   </div>
                 </Link>
               ))}
