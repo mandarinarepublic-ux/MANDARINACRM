@@ -232,7 +232,8 @@ export default function EditarPedidoPage() {
                       ? <div className="flex gap-1"><button onClick={()=>deleteItem(item.ITEM_ID)} className="text-xs bg-red-500 text-white px-2 py-1 rounded-lg">Eliminar</button><button onClick={()=>setConfirmDelete(null)} className="text-xs bg-gray-700 text-white px-2 py-1 rounded-lg">No</button></div>
                       : <button onClick={()=>setConfirmDelete(item.ITEM_ID)} className="text-gray-600 hover:text-red-400 text-sm p-1">✕</button>}
                   </div>
-                  <ItemDetalle item={item} readOnly={false} tiendaColor="#FF6B00" user={user} loadPedido={loadPedido} />
+                  {/* VENDEDOR no ve subestados */}
+                  <ItemDetalle item={item} readOnly={user?.rol === 'VENDEDOR'} tiendaColor="#FF6B00" user={user} loadPedido={loadPedido} />
                   <div className="px-4 pb-3">
                     <button onClick={()=>setEditingItem(editingItem===item.ITEM_ID?null:item.ITEM_ID)} className="text-xs text-mandarina-400 hover:underline">
                       {editingItem===item.ITEM_ID?'▲ Cerrar editor':'✏️ Editar producto'}
