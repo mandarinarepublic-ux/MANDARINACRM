@@ -47,7 +47,7 @@ export default function DespachosPage() {
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [mostrarFecha, setMostrarFecha] = useState(false)
-  const [tab, setTab] = useState('PENDIENTE') // PENDIENTE | DESPACHADO
+  const [tab, setTab] = useState('PENDIENTE')
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -63,7 +63,8 @@ export default function DespachosPage() {
       const data = await res.json()
       const lista = (data.pedidos || [])
         .filter(p =>
-          p.ESTADO_PEDIDO === 'DESPACHO' ||
+          p.ESTADO_PEDIDO === 'COMPLETADO' ||
+          p.ESTADO_PEDIDO === 'DESPACHO' || // compatibilidad con pedidos anteriores
           (p.ESTADO_PEDIDO === 'EN_FABRICA' &&
            (p.items || []).length > 0 &&
            (p.items || [])
@@ -77,11 +78,12 @@ export default function DespachosPage() {
 
   const hayFecha = fechaDesde || fechaHasta
 
+  // Tab PENDIENTE = listos de fábrica sin guía todavía
+  // Tab COMPLETADO = ya tienen guía registrada (COMPLETADO o DESPACHO legacy)
   const filtered = pedidos.filter(p => {
-    // Tab
-    if (tab === 'PENDIENTE' && p.ESTADO_PEDIDO === 'DESPACHO') return false
-    if (tab === 'DESPACHADO' && p.ESTADO_PEDIDO !== 'DESPACHO') return false
-    // Búsqueda
+    const esCompletado = p.ESTADO_PEDIDO === 'COMPLETADO' || p.ESTADO_PEDIDO === 'DESPACHO'
+    if (tab === 'PENDIENTE' && esCompletado) return false
+    if (tab === 'COMPLETADO' && !esCompletado) return false
     if (busqueda) {
       const q = busqueda.toLowerCase()
       if (!p.PEDIDO_ID?.toLowerCase().includes(q) && !p.CLIENTE_ID?.toLowerCase().includes(q)) return false
@@ -91,15 +93,15 @@ export default function DespachosPage() {
     return true
   })
 
-  const pendienteCount = pedidos.filter(p => p.ESTADO_PEDIDO !== 'DESPACHO').length
-  const despachadoCount = pedidos.filter(p => p.ESTADO_PEDIDO === 'DESPACHO').length
+  const pendienteCount = pedidos.filter(p => p.ESTADO_PEDIDO !== 'COMPLETADO' && p.ESTADO_PEDIDO !== 'DESPACHO').length
+  const completadoCount = pedidos.filter(p => p.ESTADO_PEDIDO === 'COMPLETADO' || p.ESTADO_PEDIDO === 'DESPACHO').length
 
   async function handleFotoGuia(file) {
     if (!file) return
     try {
       const base64 = await resizeImageBase64(file)
       setGuia(g => ({ ...g, fotoBase64: base64, fotoPreview: base64 }))
-    } catch(e) { console.error('Error procesando foto:', e) }
+    } catch(e) { console.error('Error foto:', e) }
   }
 
   async function registrarDespacho(pedidoId) {
@@ -111,7 +113,7 @@ export default function DespachosPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ESTADO_PEDIDO:     'DESPACHO',
+          ESTADO_PEDIDO:     'COMPLETADO',   // ← estado final verde
           GUIA_NUMERO:       guia.numero.trim(),
           GUIA_TRANSPORTISTA:guia.transportista,
           GUIA_FOTO_BASE64:  guia.fotoBase64 || null,
@@ -122,35 +124,22 @@ export default function DespachosPage() {
       if (!res.ok) { alert('Error: ' + (data.error || 'No se pudo guardar')); return }
       setSelectedPedido(null)
       setGuia({ numero: '', transportista: 'SERVIENTREGA', fotoBase64: null, fotoPreview: null })
-      setTab('DESPACHADO')
+      setTab('COMPLETADO')
       loadPedidos()
     } finally { setSaving(false); setSavingMsg('') }
   }
 
-  async function marcarEntregado(pedidoId) {
-    if (!confirm('¿Confirmar que el pedido ' + pedidoId + ' fue entregado al cliente?')) return
-    setSaving(true)
-    try {
-      await fetch(`/api/pedidos/${pedidoId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ESTADO_PEDIDO: 'ENTREGADO', _usuarioId: user?.id }),
-      })
-      loadPedidos()
-    } finally { setSaving(false) }
-  }
-
   return (
     <div className="flex flex-col h-screen md:h-auto">
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-xl font-display font-bold text-white">Despachos</h1>
-            <span className="text-xs text-gray-500">{pedidos.length} pedido(s) activos</span>
+            <span className="text-xs text-gray-500">{pedidos.length} pedido(s)</span>
           </div>
 
-          {/* Tabs claros — pendiente vs despachado */}
+          {/* Tabs */}
           <div className="flex gap-2 mb-3">
             <button onClick={() => setTab('PENDIENTE')}
               className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all flex items-center justify-center gap-2
@@ -164,15 +153,15 @@ export default function DespachosPage() {
                 </span>
               )}
             </button>
-            <button onClick={() => setTab('DESPACHADO')}
+            <button onClick={() => setTab('COMPLETADO')}
               className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all flex items-center justify-center gap-2
-                ${tab === 'DESPACHADO'
-                  ? 'bg-purple-500/20 border-purple-500/50 text-purple-400'
+                ${tab === 'COMPLETADO'
+                  ? 'bg-green-500/20 border-green-500/50 text-green-400'
                   : 'border-gray-700 text-gray-500 hover:border-gray-600'}`}>
-              🚚 Despachados
-              {despachadoCount > 0 && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'DESPACHADO' ? 'bg-purple-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
-                  {despachadoCount}
+              ✅ Completados
+              {completadoCount > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'COMPLETADO' ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
+                  {completadoCount}
                 </span>
               )}
             </button>
@@ -198,7 +187,7 @@ export default function DespachosPage() {
         </div>
       </div>
 
-      {/* ── Lista ── */}
+      {/* Lista */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           {loading ? (
@@ -207,46 +196,41 @@ export default function DespachosPage() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="card p-8 text-center">
-              <div className="text-4xl mb-3">{tab === 'PENDIENTE' ? '✅' : '🚚'}</div>
+              <div className="text-4xl mb-3">{tab === 'PENDIENTE' ? '✅' : '📦'}</div>
               <div className="text-gray-400 font-medium">
-                {tab === 'PENDIENTE' ? '¡Todo despachado!' : 'No hay pedidos despachados aún'}
+                {tab === 'PENDIENTE' ? '¡Todo despachado!' : 'No hay pedidos completados aún'}
               </div>
             </div>
           ) : (
             <div className="space-y-3">
               {filtered.map(p => {
-                const esDespachado = p.ESTADO_PEDIDO === 'DESPACHO'
+                const esCompletado = p.ESTADO_PEDIDO === 'COMPLETADO' || p.ESTADO_PEDIDO === 'DESPACHO'
                 const montoTotal = parseFloat(p.MONTO_TOTAL || 0)
                 const montoPendiente = parseFloat(p.MONTO_PENDIENTE || 0)
                 const itemsActivos = (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
 
                 return (
                   <div key={p.PEDIDO_ID}
-                    className={`card overflow-hidden border-l-4 ${esDespachado ? 'border-l-purple-500' : 'border-l-yellow-500'}`}>
+                    className={`card overflow-hidden border-l-4 ${esCompletado ? 'border-l-green-500' : 'border-l-yellow-500'}`}>
 
-                    {/* ── Cabecera del pedido ── */}
                     <div className="p-4">
+                      {/* Cabecera */}
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex-1 min-w-0">
-                          {/* ID + tienda */}
                           <div className="flex items-center gap-2 mb-1">
                             <Link href={`/dashboard/pedido/${p.PEDIDO_ID}`}
                               className="font-mono font-bold text-white hover:text-mandarina-400 transition-colors">
                               {p.PEDIDO_ID}
                             </Link>
-                            <span className="text-sm">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
-                            {esDespachado
-                              ? <span className="badge bg-purple-500/20 text-purple-400 text-xs">🚚 Despachado</span>
+                            <span>{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
+                            {esCompletado
+                              ? <span className="badge bg-green-500/20 text-green-400 text-xs font-bold">✅ Completado</span>
                               : <span className="badge bg-yellow-500/20 text-yellow-400 text-xs">📦 Listo para despachar</span>}
                           </div>
-
-                          {/* Fecha y cliente */}
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 mb-1.5">
                             {p.FECHA_PEDIDO?.split(' ')[0]} · {p.CLIENTE_ID}
                           </div>
-
-                          {/* Monto */}
-                          <div className="flex items-center gap-3 mt-1.5">
+                          <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-white">${montoTotal.toFixed(2)}</span>
                             {montoPendiente > 0.01
                               ? <span className="text-xs text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full">Debe ${montoPendiente.toFixed(2)}</span>
@@ -254,65 +238,48 @@ export default function DespachosPage() {
                           </div>
                         </div>
 
-                        {/* Acciones */}
-                        <div className="flex flex-col gap-2 items-end flex-shrink-0">
-                          {esDespachado ? (
-                            <button onClick={() => marcarEntregado(p.PEDIDO_ID)} disabled={saving}
-                              className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1.5">
-                              ✅ Marcar entregado
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => setSelectedPedido(p.PEDIDO_ID === selectedPedido ? null : p.PEDIDO_ID)}
-                              className="bg-mandarina-500 hover:bg-mandarina-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
-                              {selectedPedido === p.PEDIDO_ID ? '✕ Cancelar' : '🚚 Registrar guía'}
-                            </button>
-                          )}
-                        </div>
+                        {/* Acción */}
+                        {!esCompletado && (
+                          <button
+                            onClick={() => setSelectedPedido(p.PEDIDO_ID === selectedPedido ? null : p.PEDIDO_ID)}
+                            className="bg-mandarina-500 hover:bg-mandarina-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all flex-shrink-0">
+                            {selectedPedido === p.PEDIDO_ID ? '✕ Cancelar' : '🚚 Registrar guía'}
+                          </button>
+                        )}
                       </div>
 
-                      {/* Ítems resumen */}
+                      {/* Ítems */}
                       <div className="flex flex-wrap gap-1.5 mb-3">
                         {itemsActivos.map(item => (
-                          <div key={item.ITEM_ID}
-                            className="flex items-center gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1">
-                            {item.FOTO_PECHO_URL && (
-                              <img src={item.FOTO_PECHO_URL} className="w-6 h-6 rounded object-cover" />
-                            )}
-                            <span className="text-xs text-gray-300 font-medium">{item.PRODUCTO_NOMBRE?.slice(0, 20)}</span>
-                            <span className="text-xs text-gray-500">{item.TALLA} · {item.COLOR}</span>
-                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${item.SUBESTADO === 'LISTO' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                              {item.SUBESTADO === 'LISTO' ? '✅' : '⏳'}
-                            </span>
+                          <div key={item.ITEM_ID} className="flex items-center gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1">
+                            {item.FOTO_PECHO_URL && <img src={item.FOTO_PECHO_URL} className="w-6 h-6 rounded object-cover" />}
+                            <span className="text-xs text-gray-300 font-medium">{item.PRODUCTO_NOMBRE?.slice(0, 18)}</span>
+                            <span className="text-xs text-gray-500">{item.TALLA}</span>
                           </div>
                         ))}
                       </div>
 
-                      {/* Guía registrada — bloque prominente */}
+                      {/* Guía registrada */}
                       {p.GUIA_NUMERO && (
-                        <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3 flex items-center gap-3">
-                          <div className="text-2xl">📦</div>
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 flex items-center gap-3">
+                          <div className="text-xl">📦</div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs text-purple-400 font-semibold mb-0.5">Guía de despacho</div>
+                            <div className="text-xs text-green-400 font-semibold mb-0.5">Guía de despacho</div>
                             <div className="text-white font-mono font-bold"># {p.GUIA_NUMERO}</div>
                             <div className="text-xs text-gray-400">{p.GUIA_TRANSPORTISTA}{p.GUIA_FECHA ? ` · ${p.GUIA_FECHA.split(' ')[0]}` : ''}</div>
                           </div>
                           {p.GUIA_FOTO_URL && (
-                            <img
-                              src={p.GUIA_FOTO_URL}
-                              onClick={() => window.open(p.GUIA_FOTO_URL, '_blank')}
-                              className="w-14 h-14 rounded-xl object-cover border border-purple-500/30 cursor-pointer hover:opacity-80 transition-opacity"
-                              title="Ver foto de guía"
-                            />
+                            <img src={p.GUIA_FOTO_URL} onClick={() => window.open(p.GUIA_FOTO_URL, '_blank')}
+                              className="w-14 h-14 rounded-xl object-cover border border-green-500/30 cursor-pointer hover:opacity-80 transition-opacity" />
                           )}
                         </div>
                       )}
                     </div>
 
-                    {/* ── Formulario registrar guía ── */}
+                    {/* Formulario registrar guía */}
                     {selectedPedido === p.PEDIDO_ID && (
                       <div className="border-t border-gray-800 bg-gray-900/50 p-4 space-y-3">
-                        <div className="text-sm font-semibold text-white mb-1">📝 Registrar guía de envío</div>
+                        <div className="text-sm font-semibold text-white">📝 Registrar guía de envío</div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="label">Número de guía *</label>
@@ -330,28 +297,27 @@ export default function DespachosPage() {
                           </div>
                         </div>
 
-                        {/* Foto guía */}
                         <label className={`flex items-center gap-3 border-2 border-dashed rounded-xl p-3 cursor-pointer transition-all
-                          ${guia.fotoPreview ? 'border-mandarina-500 bg-mandarina-500/5' : 'border-gray-700 hover:border-gray-500'}`}>
+                          ${guia.fotoPreview ? 'border-green-500 bg-green-500/5' : 'border-gray-700 hover:border-gray-500'}`}>
                           <input type="file" accept="image/*" className="hidden"
                             onChange={e => handleFotoGuia(e.target.files[0])} />
                           {guia.fotoPreview ? (
                             <div className="flex items-center gap-3 w-full">
-                              <img src={guia.fotoPreview} className="w-14 h-14 rounded-xl object-cover border border-gray-700" />
+                              <img src={guia.fotoPreview} className="w-14 h-14 rounded-xl object-cover" />
                               <div className="flex-1">
-                                <div className="text-mandarina-400 text-sm font-medium">✓ Foto cargada</div>
-                                <div className="text-gray-500 text-xs">Toca para cambiarla</div>
+                                <div className="text-green-400 text-sm font-medium">✓ Foto cargada</div>
+                                <div className="text-gray-500 text-xs">Toca para cambiar</div>
                               </div>
                               <button type="button"
                                 onClick={e => { e.preventDefault(); setGuia(g => ({...g, fotoBase64: null, fotoPreview: null})) }}
-                                className="text-red-400 text-xs hover:text-red-300 p-1">✕</button>
+                                className="text-red-400 text-xs p-1">✕</button>
                             </div>
                           ) : (
                             <div className="flex items-center gap-3">
                               <span className="text-2xl">📷</span>
                               <div>
                                 <div className="text-gray-300 text-sm">Foto de la guía Servientrega</div>
-                                <div className="text-gray-600 text-xs">Opcional · se sube a Cloudinary</div>
+                                <div className="text-gray-600 text-xs">Opcional · sube a Cloudinary</div>
                               </div>
                             </div>
                           )}
@@ -360,10 +326,11 @@ export default function DespachosPage() {
                         <button
                           onClick={() => registrarDespacho(p.PEDIDO_ID)}
                           disabled={saving || !guia.numero.trim()}
-                          className="btn-primary w-full flex items-center justify-center gap-2 py-3">
+                          className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all
+                            bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed">
                           {saving
-                            ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{savingMsg || 'Guardando...'}</>
-                            : '🚚 Confirmar despacho'}
+                            ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{savingMsg}</>
+                            : '✅ Confirmar despacho → Completado'}
                         </button>
                       </div>
                     )}
