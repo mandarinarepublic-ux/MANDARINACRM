@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
 
-const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','ENTREGADO']
+const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
 
 function parseFecha(str) {
   if (!str) return null
@@ -38,17 +38,10 @@ export default function HistorialPage() {
   async function loadPedidos(u) {
     setLoading(true)
     try {
-      const res = await fetch(`/api/pedidos?vendedor=${u.id}&rol=${u.rol}`)
+      // Historial siempre trae TODOS los pedidos de la empresa (rol=ADMIN fuerza sin filtro)
+      const res = await fetch(`/api/pedidos?rol=ADMIN`)
       const data = await res.json()
-      let lista = data.pedidos || []
-
-      // FIX #4: VENDEDOR solo ve sus propios pedidos
-      if (u.rol === 'VENDEDOR') {
-        lista = lista.filter(p => p.VENDEDOR_ID === u.id || p.VENDEDOR_ID === u.nombre)
-      }
-
-      // Ordenar más nuevo primero
-      lista.sort((a, b) => {
+      const lista = (data.pedidos || []).sort((a, b) => {
         const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
         const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
         return fb - fa
@@ -72,6 +65,16 @@ export default function HistorialPage() {
   })
 
   const isProduccion = user && ['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO'].includes(user.rol)
+
+  // Color por estado
+  const estadoColor = {
+    PENDIENTE_FABRICA: 'text-yellow-400 bg-yellow-500/10',
+    EN_FABRICA:        'text-blue-400 bg-blue-500/10',
+    DESPACHO:          'text-purple-400 bg-purple-500/10',
+    COMPLETADO:        'text-green-400 bg-green-500/10',
+    ENTREGADO:         'text-green-400 bg-green-500/10',
+    CANCELADO:         'text-gray-400 bg-gray-800',
+  }
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
@@ -99,15 +102,17 @@ export default function HistorialPage() {
               {hayFecha && <button onClick={() => { setFechaDesde(''); setFechaHasta('') }} className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>}
             </div>
           )}
+          {/* Filtros estado */}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             {ESTADOS.map(e => (
               <button key={e} onClick={() => setFiltroEstado(e)}
                 className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0
                   ${filtroEstado === e ? 'bg-mandarina-500 border-mandarina-500 text-white' : 'border-gray-700 text-gray-500'}`}>
-                {e === 'TODOS' ? 'Todos' : ESTADO_LABELS[e]}
+                {e === 'TODOS' ? 'Todos' : ESTADO_LABELS[e] || e}
               </button>
             ))}
           </div>
+          {/* Filtros tienda */}
           <div className="flex gap-2 mt-2">
             {['TODAS','MANDARINA','INDSTORE'].map(t => (
               <button key={t} onClick={() => setFiltroTienda(t)}
@@ -119,11 +124,14 @@ export default function HistorialPage() {
           </div>
         </div>
       </div>
+
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           <div className="text-xs text-gray-600 mb-3">{filtered.length} pedido(s)</div>
           {loading ? (
-            <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" /></div>
+            <div className="flex justify-center py-12">
+              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+            </div>
           ) : filtered.length === 0 ? (
             <div className="card p-8 text-center text-gray-600"><div className="text-3xl mb-3">📭</div>No hay pedidos con estos filtros</div>
           ) : (
@@ -136,14 +144,23 @@ export default function HistorialPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
                       <span className="text-gray-600 text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
+                      {/* Mostrar vendedor para rol no-vendedor */}
+                      {user?.rol !== 'VENDEDOR' && p.VENDEDOR_ID && (
+                        <span className="text-xs text-gray-600 font-mono">{p.VENDEDOR_ID}</span>
+                      )}
                     </div>
-                    <div className="text-xs text-gray-500">{p.items?.length || 0} prendas · {p.FECHA_PEDIDO?.split(' ')[0] || ''}</div>
+                    <div className="text-xs text-gray-500">
+                      {p.items?.length || 0} prendas · {p.FECHA_PEDIDO?.split(' ')[0] || ''}
+                    </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTADO_COLORS[p.ESTADO_PEDIDO] || 'text-gray-400 bg-gray-800'}`}>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${estadoColor[p.ESTADO_PEDIDO] || 'text-gray-400 bg-gray-800'}`}>
                       {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
                     </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${p.ESTADO_PAGO==='PAGADO'?'text-green-400 bg-green-500/10':p.ESTADO_PAGO==='ABONO'?'text-yellow-400 bg-yellow-500/10':'text-red-400 bg-red-500/10'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      p.ESTADO_PAGO === 'PAGADO' ? 'text-green-400 bg-green-500/10' :
+                      p.ESTADO_PAGO === 'ABONO'  ? 'text-yellow-400 bg-yellow-500/10' :
+                                                    'text-red-400 bg-red-500/10'}`}>
                       ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
                     </span>
                   </div>

@@ -2,7 +2,9 @@
 import { useState, useEffect, useRef } from 'react'
 
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
+
 const AREAS = [
+  '',                                    // ← opción vacía = SIN SELECCIÓN
   'ESTAMPADO',
   'SUBLIMACION',
   'BORDADO',
@@ -10,6 +12,9 @@ const AREAS = [
   'ESTAMPADO + BORDADO',
   'SUBLIMACION + BORDADO',
   'ESTAMPADO + SUBLIMACION + BORDADO',
+  'PREMIUM - SIN DISEÑO',               // ← nueva área
+  'PRODUCTO SIN DISEÑO',
+  'ENTREGA EN TIENDA',
 ]
 
 export default function BuscadorProductos({ tienda, onAdd }) {
@@ -32,9 +37,7 @@ export default function BuscadorProductos({ tienda, onAdd }) {
       const res = await fetch(`/api/shopify/products?tienda=${tienda}&q=${encodeURIComponent(query)}`)
       const data = await res.json()
       setProductos(data.products || [])
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   return (
@@ -83,9 +86,8 @@ export default function BuscadorProductos({ tienda, onAdd }) {
               area, detalle,
               esPersonalizado: false,
               imagen: prod.image,
-              imagenShopify: prod.image || null, // dedicated field for Shopify CDN URL
+              imagenShopify: prod.image || null,
               ...fotos,
-              // fotoPecho: manual upload wins, else Shopify image URL
               fotoPecho: fotos.fotoPecho || prod.image || null,
             })
             setSelected(null); setQuery(''); setProductos([])
@@ -171,11 +173,14 @@ function FotoUploader({ fotos, onChange }) {
 function ProductoDetail({ producto, onAdd, onCancel }) {
   const [variant, setVariant] = useState(producto.variants[0])
   const [talla, setTalla] = useState('')
-  const [area, setArea] = useState('ESTAMPADO')
-  const [cantidad, setCantidad] = useState(1)
+  const [area, setArea] = useState('')          // ← vacío por defecto
+  const [cantidad, setCantidad] = useState(0)   // ← 0 para que el usuario ingrese
   const [color, setColor] = useState('')
   const [detalle, setDetalle] = useState('')
   const [fotos, setFotos] = useState({})
+
+  // Precio viene de la variante seleccionada
+  const precio = parseFloat(variant?.price || 0)
 
   return (
     <div className="card p-4 space-y-3 mt-2">
@@ -183,7 +188,7 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
         {producto.image && <img src={producto.image} className="w-12 h-12 rounded-xl object-cover" />}
         <div className="flex-1">
           <div className="font-medium text-white text-sm">{producto.title}</div>
-          <div className="text-xs text-gray-500">${parseFloat(variant?.price||0).toFixed(2)}</div>
+          <div className="text-xs text-gray-500">${precio.toFixed(2)}</div>
         </div>
         <button onClick={onCancel} className="text-gray-600 hover:text-white p-1">✕</button>
       </div>
@@ -205,38 +210,41 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
         <div>
           <label className="label">Talla</label>
           <select className="input" value={talla} onChange={e => setTalla(e.target.value)}>
-            <option value="">Seleccionar</option>
+            <option value="">— Seleccionar —</option>
             {TALLAS.map(t => <option key={t}>{t}</option>)}
           </select>
         </div>
         <div>
-          <label className="label">Cantidad</label>
-          <input type="number" className="input" min="1" value={cantidad}
-            onChange={e => setCantidad(parseInt(e.target.value))} />
+          <label className="label">Cantidad *</label>
+          <input type="number" className="input" min="1" placeholder="0"
+            value={cantidad || ''}
+            onChange={e => setCantidad(parseInt(e.target.value) || 0)} />
         </div>
         <div>
-          <label className="label">Área</label>
-          <select className="input" value={area} onChange={e => setArea(e.target.value)}>
-            {AREAS.map(a => <option key={a}>{a}</option>)}
+          <label className="label">Área *</label>
+          <select className={`input ${!area ? 'border-yellow-500/50 text-yellow-400' : ''}`}
+            value={area} onChange={e => setArea(e.target.value)}>
+            {AREAS.map(a => <option key={a} value={a}>{a || '— Seleccionar área —'}</option>)}
           </select>
         </div>
         <div className="col-span-2">
-          <label className="label">Detalle del diseño</label>
+          <label className="label">Detalle del diseño *</label>
           <textarea className="input resize-none" rows={2} placeholder="Descripción del diseño..."
             value={detalle} onChange={e => setDetalle(e.target.value)} />
         </div>
       </div>
       <FotoUploader fotos={fotos} onChange={setFotos} />
-      {(!color || !talla || !area || !detalle) && (
+      {(!color || !talla || !area || !detalle || cantidad < 1) && (
         <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2">
-          ⚠️ Completa: {[!color && 'Color', !talla && 'Talla', !area && 'Área', !detalle && 'Detalle'].filter(Boolean).join(', ')}
+          ⚠️ Completa: {[!color && 'Color', !talla && 'Talla', !area && 'Área', cantidad < 1 && 'Cantidad', !detalle && 'Detalle'].filter(Boolean).join(', ')}
         </div>
       )}
       <button onClick={() => {
-        if (!color) { alert('El color es obligatorio'); return }
-        if (!talla) { alert('La talla es obligatoria'); return }
-        if (!area) { alert('El área es obligatoria'); return }
-        if (!detalle) { alert('El detalle es obligatorio'); return }
+        if (!color)       { alert('El color es obligatorio'); return }
+        if (!talla)       { alert('La talla es obligatoria'); return }
+        if (!area)        { alert('Debes seleccionar un área'); return }
+        if (cantidad < 1) { alert('La cantidad debe ser al menos 1'); return }
+        if (!detalle)     { alert('El detalle es obligatorio'); return }
         onAdd(producto, variant, talla, area, detalle, cantidad, color, fotos)
       }} className="btn-primary w-full">+ Agregar al pedido</button>
     </div>
@@ -247,7 +255,8 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
   const [catalogoProductos, setCatalogoProductos] = useState([])
   const [nombre, setNombre] = useState('')
   const [nuevoNombre, setNuevoNombre] = useState('')
-  const [data, setData] = useState({ color: '', talla: 'M', cantidad: 1, precio: 15, area: 'ESTAMPADO', detalle: '' })
+  // FIX: defaults correctos — cantidad 0, precio 0, área vacía
+  const [data, setData] = useState({ color: '', talla: '', cantidad: 0, precio: 0, area: '', detalle: '' })
   const [fotos, setFotos] = useState({})
   const [addingNew, setAddingNew] = useState(false)
 
@@ -270,6 +279,8 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
     setAddingNew(false)
   }
 
+  const valido = nombre && data.color && data.talla && data.area && data.cantidad >= 1 && data.precio > 0 && data.detalle
+
   return (
     <div className="card p-4 space-y-3 mt-2">
       <div className="flex items-center justify-between">
@@ -279,16 +290,14 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="label">Nombre del producto *</label>
-          <div className="flex gap-2">
-            <select className="input flex-1" value={nombre} onChange={e => {
-              if (e.target.value === '__nuevo__') { setAddingNew(true); return }
-              setNombre(e.target.value)
-            }}>
-              <option value="">Seleccionar...</option>
-              {catalogoProductos.map(p => <option key={p.NOMBRE}>{p.NOMBRE}</option>)}
-              <option value="__nuevo__">+ Agregar nuevo...</option>
-            </select>
-          </div>
+          <select className="input flex-1 w-full" value={nombre} onChange={e => {
+            if (e.target.value === '__nuevo__') { setAddingNew(true); return }
+            setNombre(e.target.value)
+          }}>
+            <option value="">— Seleccionar —</option>
+            {catalogoProductos.map(p => <option key={p.NOMBRE}>{p.NOMBRE}</option>)}
+            <option value="__nuevo__">+ Agregar nuevo...</option>
+          </select>
           {addingNew && (
             <div className="flex gap-2 mt-2">
               <input className="input flex-1" placeholder="Nombre del nuevo producto"
@@ -299,30 +308,34 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
           )}
         </div>
         <div>
-          <label className="label">Color</label>
+          <label className="label">Color *</label>
           <input className="input" placeholder="Celeste/blanco" value={data.color}
             onChange={e => setData(p => ({...p, color: e.target.value}))} />
         </div>
         <div>
-          <label className="label">Talla</label>
+          <label className="label">Talla *</label>
           <select className="input" value={data.talla} onChange={e => setData(p => ({...p, talla: e.target.value}))}>
+            <option value="">— Seleccionar —</option>
             {TALLAS.map(t => <option key={t}>{t}</option>)}
           </select>
         </div>
         <div>
-          <label className="label">Cantidad</label>
-          <input type="number" className="input" min="1" value={data.cantidad}
-            onChange={e => setData(p => ({...p, cantidad: parseInt(e.target.value)}))} />
+          <label className="label">Cantidad *</label>
+          <input type="number" className="input" min="1" placeholder="0"
+            value={data.cantidad || ''}
+            onChange={e => setData(p => ({...p, cantidad: parseInt(e.target.value) || 0}))} />
         </div>
         <div>
-          <label className="label">Precio $</label>
-          <input type="number" className="input" step="0.50" value={data.precio}
-            onChange={e => setData(p => ({...p, precio: e.target.value}))} />
+          <label className="label">Precio $ *</label>
+          <input type="number" className="input" step="0.50" min="0" placeholder="0.00"
+            value={data.precio || ''}
+            onChange={e => setData(p => ({...p, precio: parseFloat(e.target.value) || 0}))} />
         </div>
         <div className="col-span-2">
-          <label className="label">Área</label>
-          <select className="input" value={data.area} onChange={e => setData(p => ({...p, area: e.target.value}))}>
-            {AREAS.map(a => <option key={a}>{a}</option>)}
+          <label className="label">Área *</label>
+          <select className={`input ${!data.area ? 'border-yellow-500/50' : ''}`}
+            value={data.area} onChange={e => setData(p => ({...p, area: e.target.value}))}>
+            {AREAS.map(a => <option key={a} value={a}>{a || '— Seleccionar área —'}</option>)}
           </select>
         </div>
         <div className="col-span-2">
@@ -333,13 +346,22 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
         </div>
       </div>
       <FotoUploader fotos={fotos} onChange={setFotos} />
-      {(!nombre || !data.color || !data.talla || !data.detalle) && (
+      {!valido && (
         <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2">
-          ⚠️ Obligatorio: {[!nombre && 'Nombre', !data.color && 'Color', !data.talla && 'Talla', !data.detalle && 'Detalle'].filter(Boolean).join(', ')}
+          ⚠️ Obligatorio: {[
+            !nombre && 'Nombre',
+            !data.color && 'Color',
+            !data.talla && 'Talla',
+            !data.area && 'Área',
+            data.cantidad < 1 && 'Cantidad',
+            data.precio <= 0 && 'Precio',
+            !data.detalle && 'Detalle',
+          ].filter(Boolean).join(', ')}
         </div>
       )}
-      <button onClick={() => onAdd({ productoNombre: nombre, ...data, ...fotos, esPersonalizado: true, imagen: null })}
-        disabled={!nombre || !data.color || !data.talla || !data.detalle}
+      <button
+        onClick={() => onAdd({ productoNombre: nombre, ...data, ...fotos, esPersonalizado: true, imagen: null })}
+        disabled={!valido}
         className="btn-primary w-full disabled:opacity-50">
         + Agregar al pedido
       </button>
