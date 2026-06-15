@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 const NAV_ALL = [
@@ -35,18 +35,34 @@ function getNavItems(rol) {
   return [inicio, ...prioItems, ...rest].filter(Boolean)
 }
 
-// FIX: editar-pedido resalta "Mis Pedidos" para VENDEDOR
-function isActive(itemHref, pathname, rol) {
+// Determina qué ítem del nav está activo según la ruta actual y query params
+function isActive(itemHref, pathname, searchParams, rol) {
   if (itemHref === '/dashboard') return pathname === '/dashboard'
-  // editar-pedido pertenece a mis-pedidos para el vendedor
-  if (itemHref === '/dashboard/mis-pedidos' && pathname.startsWith('/dashboard/editar-pedido')) return true
-  // pedido/[id] sin ?from=historial pertenece a mis-pedidos para el vendedor
+
+  const fromHistorial = searchParams.get('from') === 'historial'
+
+  // Detalle de pedido (/dashboard/pedido/[id]):
+  //   ?from=historial  → resalta Historial
+  //   sin param        → resalta Mis Pedidos (VENDEDOR llega desde ahí)
+  if (pathname.startsWith('/dashboard/pedido/')) {
+    if (itemHref === '/dashboard/historial') return fromHistorial
+    if (itemHref === '/dashboard/mis-pedidos') return !fromHistorial && rol === 'VENDEDOR'
+    return false
+  }
+
+  // Editar pedido → siempre pertenece a Mis Pedidos
+  if (pathname.startsWith('/dashboard/editar-pedido/')) {
+    if (itemHref === '/dashboard/mis-pedidos') return true
+    return false
+  }
+
   return pathname.startsWith(itemHref)
 }
 
 export default function DashboardLayout({ children }) {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -65,6 +81,7 @@ export default function DashboardLayout({ children }) {
   )
 
   const navItems = getNavItems(user.rol)
+  const active = (href) => isActive(href, pathname, searchParams, user.rol)
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -101,7 +118,7 @@ export default function DashboardLayout({ children }) {
               {navItems.map(item => (
                 <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}
                   className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-medium transition-all
-                    ${isActive(item.href, pathname, user.rol) ? 'bg-mandarina-500 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
+                    ${active(item.href) ? 'bg-mandarina-500 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
                   <span className="text-xl w-7 text-center">{item.icon}</span>{item.label}
                 </Link>
               ))}
@@ -119,7 +136,7 @@ export default function DashboardLayout({ children }) {
           {navItems.slice(0, 5).map(item => (
             <Link key={item.href} href={item.href}
               className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all min-w-0
-                ${isActive(item.href, pathname, user.rol) ? 'text-mandarina-400' : 'text-gray-600'}`}>
+                ${active(item.href) ? 'text-mandarina-400' : 'text-gray-600'}`}>
               <span className="text-xl">{item.icon}</span>
               <span className="text-xs truncate max-w-[52px] text-center leading-tight">{item.label}</span>
             </Link>
@@ -145,9 +162,7 @@ export default function DashboardLayout({ children }) {
           {navItems.map(item => (
             <Link key={item.href} href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
-                ${isActive(item.href, pathname, user.rol)
-                  ? 'bg-mandarina-500/20 text-mandarina-400'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
+                ${active(item.href) ? 'bg-mandarina-500/20 text-mandarina-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
               <span className="text-base">{item.icon}</span>{item.label}
             </Link>
           ))}
