@@ -1,99 +1,74 @@
 'use client'
 import { useState } from 'react'
+import { SUBESTADO_LABELS, SUBESTADO_COLORS, SUBESTADO_BG } from '@/lib/labels'
 
-const SUBESTADO_COLORS = {
-  LISTO:              'bg-green-500/20 text-green-400',
-  EN_PROCESO:         'bg-blue-500/20 text-blue-400',
-  ENVIADO_APROBACION: 'bg-purple-500/20 text-purple-400',
-  SOLICITADO:         'bg-yellow-500/20 text-yellow-400',
-  ENTREGADO_TIENDA:   'bg-gray-500/20 text-gray-400',
-}
+const SUBESTADOS_ORDEN = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO']
 
 export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPedido }) {
   const fotos = [
-    { key: 'FOTO_PECHO_URL',   label: 'Pecho'   },
-    { key: 'FOTO_ESPALDA_URL', label: 'Espalda' },
-    { key: 'FOTO_MANGA_D_URL', label: 'M. Der'  },
-    { key: 'FOTO_MANGA_I_URL', label: 'M. Izq'  },
+    { key:'FOTO_PECHO_URL',   label:'Pecho'   },
+    { key:'FOTO_ESPALDA_URL', label:'Espalda' },
+    { key:'FOTO_MANGA_D_URL', label:'M. Der'  },
+    { key:'FOTO_MANGA_I_URL', label:'M. Izq'  },
   ].filter(f => item[f.key])
 
-  const [fotoActiva,     setFotoActiva]    = useState(fotos[0]?.key || null)
-  const [fotoFullscreen, setFotoFullscreen] = useState(null)
-  const [editingNota,    setEditingNota]   = useState(false)
-  const [notaText,       setNotaText]      = useState(item.NOTAS_AREA || '')
-  const [notaGuardada,   setNotaGuardada]  = useState(item.NOTAS_AREA || '')
-  const [savingNota,     setSavingNota]    = useState(false)
-  const [notaError,      setNotaError]     = useState('')
-
-  // Subestado local para no recargar al cambiar
-  const [subestado, setSubestado] = useState(item.SUBESTADO || 'SOLICITADO')
+  const [fotoActiva,   setFotoActiva]   = useState(fotos[0]?.key || null)
+  const [fotoFullscreen,setFotoFullscreen]=useState(null)
+  const [editingNota,  setEditingNota]  = useState(false)
+  const [notaText,     setNotaText]     = useState(item.NOTAS_AREA || '')
+  const [notaGuardada, setNotaGuardada] = useState(item.NOTAS_AREA || '')
+  const [savingNota,   setSavingNota]   = useState(false)
+  const [notaError,    setNotaError]    = useState('')
+  const [subestado,    setSubestado]    = useState(item.SUBESTADO || 'SOLICITADO')
 
   async function saveNota() {
-    setSavingNota(true)
-    setNotaError('')
+    setSavingNota(true); setNotaError('')
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ NOTAS_AREA: notaText, _usuarioId: user?.id }),
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ NOTAS_AREA:notaText, _usuarioId:user?.id }),
       })
       const data = await res.json()
-      if (!res.ok || !data.ok) {
-        setNotaError(data.error || 'Error al guardar')
-        return
-      }
-      // Actualizar estado local — NO recargar el pedido
-      setNotaGuardada(notaText)
-      setEditingNota(false)
-    } finally {
-      setSavingNota(false)
-    }
+      if (!res.ok||!data.ok) { setNotaError(data.error||'Error al guardar'); return }
+      setNotaGuardada(notaText); setEditingNota(false)
+    } finally { setSavingNota(false) }
   }
 
   async function cambiarSubestado(s) {
-    const anterior = subestado
-    setSubestado(s) // optimistic
+    const anterior = subestado; setSubestado(s)
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ SUBESTADO: s, _usuarioId: user?.id }),
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ SUBESTADO:s, _usuarioId:user?.id }),
       })
-      if (!res.ok) setSubestado(anterior) // revertir si falla
-      // No recargamos — el estado local ya refleja el cambio
-    } catch {
-      setSubestado(anterior)
-    }
+      if (!res.ok) setSubestado(anterior)
+    } catch { setSubestado(anterior) }
   }
 
   return (
     <div className="p-4">
-      {/* Precio */}
       <div className="flex justify-between items-start mb-4">
         <div className="font-medium text-white text-sm">{item.PRODUCTO_NOMBRE}</div>
         <div className="text-right flex-shrink-0 ml-3">
           <div className="text-sm text-white">{item.CANTIDAD}x ${parseFloat(item.PRECIO_UNIT||0).toFixed(2)}</div>
-          <div className="text-xs font-medium" style={{ color: tiendaColor }}>${parseFloat(item.SUBTOTAL||0).toFixed(2)}</div>
+          <div className="text-xs font-medium" style={{color:tiendaColor}}>${parseFloat(item.SUBTOTAL||0).toFixed(2)}</div>
         </div>
       </div>
 
-      {/* 2 columnas */}
       <div className="flex gap-4">
-        {/* Fotos */}
         <div className="w-36 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
               <div className="w-36 h-36 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
-                onDoubleClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
-                <img src={item[fotoActiva || fotos[0].key]} className="w-full h-full object-contain" alt="foto" />
+                onDoubleClick={()=>setFotoFullscreen(item[fotoActiva||fotos[0].key])}>
+                <img src={item[fotoActiva||fotos[0].key]} className="w-full h-full object-contain" alt="foto" />
               </div>
-              {fotos.length > 1 && (
+              {fotos.length>1&&(
                 <div className="flex gap-1 flex-wrap">
-                  {fotos.map(f => (
-                    <button key={f.key} onClick={() => setFotoActiva(f.key)}
-                      className={`flex flex-col items-center p-0.5 rounded-lg border transition-all
-                        ${(fotoActiva || fotos[0].key) === f.key ? 'border-mandarina-500' : 'border-gray-700'}`}>
-                      <img src={item[f.key]} className="w-9 h-9 rounded object-cover" alt={f.label} />
+                  {fotos.map(f=>(
+                    <button key={f.key} onClick={()=>setFotoActiva(f.key)}
+                      className={`flex flex-col items-center p-0.5 rounded-lg border transition-all ${(fotoActiva||fotos[0].key)===f.key?'border-mandarina-500':'border-gray-700'}`}>
+                      <img src={item[f.key]} className="w-9 h-9 rounded object-cover" alt={f.label}/>
                       <span className="text-xs text-gray-600">{f.label}</span>
                     </button>
                   ))}
@@ -108,78 +83,51 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
           )}
         </div>
 
-        {/* Detalle */}
         <div className="flex-1 min-w-0 space-y-2">
           <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5 text-xs">
-            <div><span className="text-gray-500">Color:</span> <span className="text-gray-300">{item.COLOR || '—'}</span></div>
-            <div><span className="text-gray-500">Talla:</span> <span className="text-gray-300">{item.TALLA || '—'}</span></div>
+            <div><span className="text-gray-500">Color:</span> <span className="text-gray-300">{item.COLOR||'—'}</span></div>
+            <div><span className="text-gray-500">Talla:</span> <span className="text-gray-300">{item.TALLA||'—'}</span></div>
             <div><span className="text-gray-500">Cant.:</span> <span className="text-gray-300">{item.CANTIDAD}</span></div>
             <div><span className="text-gray-500">Área:</span> <span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
-            {item.DETALLE_PERSONALIZADO && (
-              <div><span className="text-gray-500">Detalle:</span> <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
-            )}
+            {item.DETALLE_PERSONALIZADO&&<div><span className="text-gray-500">Detalle:</span> <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>}
           </div>
 
-          {/* Nota — siempre visible si existe, editable según rol */}
+          {/* Nota — siempre visible si existe */}
           {readOnly ? (
-            // Solo lectura: mostrar nota si existe
-            notaGuardada ? (
+            notaGuardada && (
               <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
                 📝 {notaGuardada}
               </div>
-            ) : null
-          ) : (
-            // Editable: producción / admin
-            editingNota ? (
-              <div>
-                <textarea className="input resize-none text-sm mb-2 w-full" rows={2}
-                  placeholder="Nota para este producto..."
-                  value={notaText} onChange={e => setNotaText(e.target.value)}
-                  autoFocus />
-                {notaError && <div className="text-xs text-red-400 mb-2">⚠️ {notaError}</div>}
-                <div className="flex gap-2">
-                  <button onClick={saveNota} disabled={savingNota}
-                    className="btn-primary text-xs px-3 py-1.5">
-                    {savingNota ? '⏳ Guardando...' : '💾 Guardar'}
-                  </button>
-                  <button onClick={() => { setEditingNota(false); setNotaText(notaGuardada); setNotaError('') }}
-                    className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                {notaGuardada && (
-                  <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">
-                    📝 {notaGuardada}
-                  </div>
-                )}
-                <button onClick={() => { setEditingNota(true); setNotaText(notaGuardada) }}
-                  className="text-xs text-gray-600 hover:text-gray-400">
-                  {notaGuardada ? '✏️ Editar nota' : '+ Agregar nota de área'}
-                </button>
-              </div>
             )
+          ) : editingNota ? (
+            <div>
+              <textarea className="input resize-none text-sm mb-2 w-full" rows={2}
+                placeholder="Nota para este producto..."
+                value={notaText} onChange={e=>setNotaText(e.target.value)} autoFocus />
+              {notaError&&<div className="text-xs text-red-400 mb-2">⚠️ {notaError}</div>}
+              <div className="flex gap-2">
+                <button onClick={saveNota} disabled={savingNota} className="btn-primary text-xs px-3 py-1.5">{savingNota?'⏳ Guardando...':'💾 Guardar'}</button>
+                <button onClick={()=>{setEditingNota(false);setNotaText(notaGuardada);setNotaError('')}} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {notaGuardada&&<div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">📝 {notaGuardada}</div>}
+              <button onClick={()=>{setEditingNota(true);setNotaText(notaGuardada)}} className="text-xs text-gray-600 hover:text-gray-400">
+                {notaGuardada?'✏️ Editar nota':'+ Agregar nota de área'}
+              </button>
+            </div>
           )}
 
-          {/* Subestado — usa estado local */}
-          {(readOnly || user?.rol === 'DESPACHO') ? (
-            <span className={`badge text-xs ${SUBESTADO_COLORS[subestado] || 'bg-gray-500/20 text-gray-400'}`}>
-              {subestado}
-            </span>
+          {/* Subestado */}
+          {(readOnly||user?.rol==='DESPACHO') ? (
+            <span className={`badge text-xs ${SUBESTADO_COLORS[subestado]||'bg-gray-500/20 text-gray-400'}`}>{SUBESTADO_LABELS[subestado]||subestado}</span>
           ) : (
             <div className="grid grid-cols-2 gap-1">
-              {[
-                { key: 'SOLICITADO',         label: '⏳ Solicitado',         color: 'bg-yellow-500' },
-                { key: 'EN_PROCESO',         label: '🔧 En proceso',         color: 'bg-blue-500' },
-                { key: 'ENVIADO_APROBACION', label: '📤 Enviado aprobación', color: 'bg-purple-500' },
-                { key: 'LISTO',              label: '✅ Listo',              color: 'bg-green-500' },
-              ].map(s => (
-                <button key={s.key} onClick={() => cambiarSubestado(s.key)}
-                  className={`py-1.5 rounded-xl text-xs font-semibold transition-all
-                    ${subestado === s.key
-                      ? `${s.color} text-white`
-                      : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
-                  {s.label}
+              {SUBESTADOS_ORDEN.map(s=>(
+                <button key={s} onClick={()=>cambiarSubestado(s)}
+                  className={`py-1.5 rounded-xl text-xs font-semibold transition-all ${subestado===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                  {SUBESTADO_LABELS[s]}
                 </button>
               ))}
             </div>
@@ -187,10 +135,9 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
         </div>
       </div>
 
-      {fotoFullscreen && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
-          onClick={() => setFotoFullscreen(null)}>
-          <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt="fullscreen" />
+      {fotoFullscreen&&(
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={()=>setFotoFullscreen(null)}>
+          <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt="fullscreen"/>
           <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
         </div>
       )}

@@ -2,10 +2,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','ENTREGADO']
-const ESTADO_LABELS = { PENDIENTE_FABRICA:'Pend. Fábrica', EN_FABRICA:'En Producción', DESPACHO:'Despacho', ENTREGADO:'Entregado', CANCELADO:'Cancelado' }
-const ESTADO_COLORS = { PENDIENTE_FABRICA:'status-pendiente_fabrica', EN_FABRICA:'status-en_fabrica', DESPACHO:'status-despacho', ENTREGADO:'status-entregado', CANCELADO:'status-cancelado' }
 
 function parseFecha(str) {
   if (!str) return null
@@ -41,12 +40,20 @@ export default function HistorialPage() {
     try {
       const res = await fetch(`/api/pedidos?vendedor=${u.id}&rol=${u.rol}`)
       const data = await res.json()
-      const ordenados = (data.pedidos || []).sort((a, b) => {
+      let lista = data.pedidos || []
+
+      // FIX #4: VENDEDOR solo ve sus propios pedidos
+      if (u.rol === 'VENDEDOR') {
+        lista = lista.filter(p => p.VENDEDOR_ID === u.id || p.VENDEDOR_ID === u.nombre)
+      }
+
+      // Ordenar más nuevo primero
+      lista.sort((a, b) => {
         const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
         const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
         return fb - fa
       })
-      setPedidos(ordenados)
+      setPedidos(lista)
     } finally { setLoading(false) }
   }
 
@@ -59,17 +66,12 @@ export default function HistorialPage() {
       const q = busqueda.toLowerCase()
       if (!p.PEDIDO_ID?.toLowerCase().includes(q) && !p.CLIENTE_ID?.toLowerCase().includes(q)) return false
     }
-    if (fechaDesde) {
-      const f = parseFecha(p.FECHA_PEDIDO)
-      if (!f || f < new Date(fechaDesde)) return false
-    }
-    if (fechaHasta) {
-      const f = parseFecha(p.FECHA_PEDIDO)
-      const h = new Date(fechaHasta); h.setHours(23,59,59)
-      if (!f || f > h) return false
-    }
+    if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
+    if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO); const h = new Date(fechaHasta); h.setHours(23,59,59); if (!f || f > h) return false }
     return true
   })
+
+  const isProduccion = user && ['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO'].includes(user.rol)
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
@@ -77,7 +79,9 @@ export default function HistorialPage() {
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-xl font-display font-bold text-white">Historial de Ventas</h1>
-            <Link href="/dashboard/nuevo-pedido" className="btn-primary text-sm px-4 py-2">+ Nueva</Link>
+            {(user?.rol === 'ADMIN' || user?.rol === 'VENDEDOR') && (
+              <Link href="/dashboard/nuevo-pedido" className="btn-primary text-sm px-4 py-2">+ Nueva</Link>
+            )}
           </div>
           <div className="flex gap-2 mb-3">
             <input className="input flex-1" placeholder="Buscar por ID o cliente..."
@@ -90,18 +94,9 @@ export default function HistorialPage() {
           </div>
           {mostrarFecha && (
             <div className="flex gap-2 mb-3 items-end">
-              <div className="flex-1">
-                <label className="text-xs text-gray-500 mb-1 block">Desde</label>
-                <input type="date" className="input text-sm" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
-              </div>
-              <div className="flex-1">
-                <label className="text-xs text-gray-500 mb-1 block">Hasta</label>
-                <input type="date" className="input text-sm" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
-              </div>
-              {hayFecha && (
-                <button onClick={() => { setFechaDesde(''); setFechaHasta('') }}
-                  className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>
-              )}
+              <div className="flex-1"><label className="text-xs text-gray-500 mb-1 block">Desde</label><input type="date" className="input text-sm" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} /></div>
+              <div className="flex-1"><label className="text-xs text-gray-500 mb-1 block">Hasta</label><input type="date" className="input text-sm" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} /></div>
+              {hayFecha && <button onClick={() => { setFechaDesde(''); setFechaHasta('') }} className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>}
             </div>
           )}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -118,7 +113,7 @@ export default function HistorialPage() {
               <button key={t} onClick={() => setFiltroTienda(t)}
                 className={`px-3 py-1 rounded-full text-xs font-medium border transition-all flex-shrink-0
                   ${filtroTienda === t ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
-                {t === 'TODAS' ? 'Todas' : t === 'MANDARINA' ? '🍊' : '🏪'} {t}
+                {t === 'TODAS' ? 'Todas' : t === 'MANDARINA' ? '🍊 Mandarina' : 'Indstore'}
               </button>
             ))}
           </div>
@@ -128,16 +123,14 @@ export default function HistorialPage() {
         <div className="max-w-3xl mx-auto px-4 py-3">
           <div className="text-xs text-gray-600 mb-3">{filtered.length} pedido(s)</div>
           {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
-            </div>
+            <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" /></div>
           ) : filtered.length === 0 ? (
             <div className="card p-8 text-center text-gray-600"><div className="text-3xl mb-3">📭</div>No hay pedidos con estos filtros</div>
           ) : (
             <div className="space-y-2">
               {filtered.map(p => (
                 <Link key={p.PEDIDO_ID}
-                  href={`/dashboard/pedido/${p.PEDIDO_ID}${(['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO'].includes(user?.rol)) ? '' : '?from=historial'}`}
+                  href={`/dashboard/pedido/${p.PEDIDO_ID}?from=historial`}
                   className="card p-4 flex items-center gap-4 hover:border-gray-700 transition-all block">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -147,8 +140,12 @@ export default function HistorialPage() {
                     <div className="text-xs text-gray-500">{p.items?.length || 0} prendas · {p.FECHA_PEDIDO?.split(' ')[0] || ''}</div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
-                    <span className={`badge ${ESTADO_COLORS[p.ESTADO_PEDIDO] || 'bg-gray-800 text-gray-400'}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}</span>
-                    <span className={`badge ${p.ESTADO_PAGO === 'PAGADO' ? 'status-pagado' : p.ESTADO_PAGO === 'ABONO' ? 'status-abono' : 'status-pendiente'}`}>${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}</span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTADO_COLORS[p.ESTADO_PEDIDO] || 'text-gray-400 bg-gray-800'}`}>
+                      {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${p.ESTADO_PAGO==='PAGADO'?'text-green-400 bg-green-500/10':p.ESTADO_PAGO==='ABONO'?'text-yellow-400 bg-yellow-500/10':'text-red-400 bg-red-500/10'}`}>
+                      ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
+                    </span>
                   </div>
                 </Link>
               ))}
