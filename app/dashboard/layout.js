@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -35,34 +35,61 @@ function getNavItems(rol) {
   return [inicio, ...prioItems, ...rest].filter(Boolean)
 }
 
-// Determina qué ítem del nav está activo según la ruta actual y query params
-function isActive(itemHref, pathname, searchParams, rol) {
-  if (itemHref === '/dashboard') return pathname === '/dashboard'
+// Componente separado con useSearchParams — DEBE estar en <Suspense>
+function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const fromHistorial = searchParams?.get('from') === 'historial'
 
-  const fromHistorial = searchParams.get('from') === 'historial'
-
-  // Detalle de pedido (/dashboard/pedido/[id]):
-  //   ?from=historial  → resalta Historial
-  //   sin param        → resalta Mis Pedidos (VENDEDOR llega desde ahí)
-  if (pathname.startsWith('/dashboard/pedido/')) {
-    if (itemHref === '/dashboard/historial') return fromHistorial
-    if (itemHref === '/dashboard/mis-pedidos') return !fromHistorial && rol === 'VENDEDOR'
-    return false
+  function isActive(itemHref) {
+    if (itemHref === '/dashboard') return pathname === '/dashboard'
+    if (pathname.startsWith('/dashboard/pedido/')) {
+      if (itemHref === '/dashboard/historial') return fromHistorial
+      if (itemHref === '/dashboard/mis-pedidos') return !fromHistorial && rol === 'VENDEDOR'
+      return false
+    }
+    if (pathname.startsWith('/dashboard/editar-pedido/')) {
+      if (itemHref === '/dashboard/mis-pedidos') return true
+      return false
+    }
+    return pathname.startsWith(itemHref)
   }
 
-  // Editar pedido → siempre pertenece a Mis Pedidos
-  if (pathname.startsWith('/dashboard/editar-pedido/')) {
-    if (itemHref === '/dashboard/mis-pedidos') return true
-    return false
-  }
+  const active = isActive(item.href)
 
-  return pathname.startsWith(itemHref)
+  if (variant === 'sidebar') {
+    return (
+      <Link href={item.href}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
+          ${active ? 'bg-mandarina-500/20 text-mandarina-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
+        <span className="text-base">{item.icon}</span>{item.label}
+      </Link>
+    )
+  }
+  if (variant === 'bottom') {
+    return (
+      <Link href={item.href}
+        className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all min-w-0
+          ${active ? 'text-mandarina-400' : 'text-gray-600'}`}>
+        <span className="text-xl">{item.icon}</span>
+        <span className="text-xs truncate max-w-[52px] text-center leading-tight">{item.label}</span>
+      </Link>
+    )
+  }
+  if (variant === 'menu') {
+    return (
+      <Link href={item.href} onClick={() => setMenuOpen(false)}
+        className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-medium transition-all
+          ${active ? 'bg-mandarina-500 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
+        <span className="text-xl w-7 text-center">{item.icon}</span>{item.label}
+      </Link>
+    )
+  }
+  return null
 }
 
 export default function DashboardLayout({ children }) {
   const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -81,7 +108,6 @@ export default function DashboardLayout({ children }) {
   )
 
   const navItems = getNavItems(user.rol)
-  const active = (href) => isActive(href, pathname, searchParams, user.rol)
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -116,11 +142,11 @@ export default function DashboardLayout({ children }) {
             </div>
             <nav className="space-y-1">
               {navItems.map(item => (
-                <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}
-                  className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-medium transition-all
-                    ${active(item.href) ? 'bg-mandarina-500 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
-                  <span className="text-xl w-7 text-center">{item.icon}</span>{item.label}
-                </Link>
+                <Suspense key={item.href} fallback={
+                  <div className="flex items-center gap-4 px-4 py-3.5 text-gray-500 text-sm">{item.icon} {item.label}</div>
+                }>
+                  <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="menu" />
+                </Suspense>
               ))}
             </nav>
             <button onClick={logout} className="mt-4 w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all">
@@ -134,12 +160,14 @@ export default function DashboardLayout({ children }) {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-800 safe-area-pb">
         <div className="flex items-center justify-around px-2 py-1">
           {navItems.slice(0, 5).map(item => (
-            <Link key={item.href} href={item.href}
-              className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all min-w-0
-                ${active(item.href) ? 'text-mandarina-400' : 'text-gray-600'}`}>
-              <span className="text-xl">{item.icon}</span>
-              <span className="text-xs truncate max-w-[52px] text-center leading-tight">{item.label}</span>
-            </Link>
+            <Suspense key={item.href} fallback={
+              <div className="flex flex-col items-center gap-0.5 px-2 py-2 text-gray-600">
+                <span className="text-xl">{item.icon}</span>
+                <span className="text-xs">{item.label}</span>
+              </div>
+            }>
+              <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="bottom" />
+            </Suspense>
           ))}
           {navItems.length > 5 && (
             <button onClick={() => setMenuOpen(true)} className="flex flex-col items-center gap-0.5 px-2 py-2 text-gray-600">
@@ -160,11 +188,11 @@ export default function DashboardLayout({ children }) {
         </Link>
         <nav className="flex-1 space-y-1">
           {navItems.map(item => (
-            <Link key={item.href} href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
-                ${active(item.href) ? 'bg-mandarina-500/20 text-mandarina-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
-              <span className="text-base">{item.icon}</span>{item.label}
-            </Link>
+            <Suspense key={item.href} fallback={
+              <div className="flex items-center gap-3 px-3 py-2.5 text-gray-500 text-sm">{item.icon} {item.label}</div>
+            }>
+              <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="sidebar" />
+            </Suspense>
           ))}
         </nav>
         <div className="border-t border-gray-800 pt-4 mt-4">
