@@ -41,7 +41,8 @@ export default function BuscadorCliente({ onSelect }) {
     <div className="relative mb-4">
       <div className="relative">
         <input className="input pl-9" placeholder="Buscar cliente existente (nombre, cédula, celular)..."
-          value={query} onChange={handleChange} />
+          value={query} onChange={handleChange}
+          autoComplete="off" name="buscar-cliente" />
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
