@@ -76,11 +76,6 @@ export default function NuevoPedidoPage() {
   const [cliente, setCliente] = useState({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' })
   const [cedulaError, setCedulaError] = useState('')
   const [celularError, setCelularError] = useState('')
-  // refs para focus al validar
-  const refNombre  = useRef(null)
-  const refCedula  = useRef(null)
-  const refCelular = useRef(null)
-  const refCiudad  = useRef(null)
   const refDireccion = useRef(null)
   const [emitirFactura, setEmitirFactura] = useState(true)
   const [usarMapa, setUsarMapa] = useState(false)
@@ -133,30 +128,11 @@ export default function NuevoPedidoPage() {
   function validateStep1() {
     const errCedula = validarCedulaRUC(cliente.cedula)
     const errCelular = validarCelular(cliente.celular)
-    if (!cliente.nombre.trim()) {
-      setTimeout(() => refNombre.current?.focus(), 50)
-      return 'El nombre es obligatorio'
-    }
-    if (errCedula) {
-      setTimeout(() => refCedula.current?.focus(), 50)
-      return errCedula
-    }
-    if (errCelular) {
-      setTimeout(() => refCelular.current?.focus(), 50)
-      return errCelular
-    }
-    if (!cliente.ciudad.trim()) {
-      setTimeout(() => refCiudad.current?.focus(), 50)
-      return 'La ciudad de entrega es obligatoria'
-    }
-    if (!cliente.direccion.trim() && !usarMapa) {
-      setTimeout(() => refDireccion.current?.focus(), 50)
-      return 'La dirección completa es obligatoria'
-    }
-    if (!usarMapa && !buildDireccion().trim()) {
-      setTimeout(() => refCiudad.current?.focus(), 50)
-      return 'La dirección es obligatoria'
-    }
+    if (!cliente.nombre.trim()) return 'El nombre es obligatorio'
+    if (errCedula) return errCedula
+    if (errCelular) return errCelular
+    if (!cliente.ciudad.trim()) return 'La ciudad de entrega es obligatoria'
+    if (!cliente.direccion.trim() && !usarMapa) return 'La dirección completa es obligatoria'
     if (emitirFactura && !cliente.email.trim()) return '⚠️ Para emitir factura necesitas el correo del cliente'
     return null
   }
@@ -347,17 +323,15 @@ export default function NuevoPedidoPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="label">Nombre completo *</label>
-                  <input ref={refNombre} className="input" placeholder="María García" value={cliente.nombre}
-                    autoComplete="off" name="cliente-nombre" tabIndex={1}
-                    onChange={e => setCliente(p => ({...p, nombre: e.target.value}))}
-                    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }} />
+                  <input className="input" placeholder="María García" value={cliente.nombre}
+                    autoComplete="off"
+                    onChange={e => setCliente(p => ({...p, nombre: e.target.value}))} />
                 </div>
                 <div>
                   <label className="label">Cédula / RUC *</label>
-                   <input ref={refCedula} className={`input ${cedulaError ? 'border-red-500' : ''}`}
+                   <input className={`input ${cedulaError ? 'border-red-500' : ''}`}
                      placeholder="1712345678" value={cliente.cedula}
-                     autoComplete="off" name="cliente-cedula" tabIndex={2}
-                     onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                     autoComplete="off"
                      onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarCedulaRUC(e.target.value) || '') }}
                      onBlur={async e => {
                        const ced = e.target.value.trim()
@@ -380,10 +354,9 @@ export default function NuevoPedidoPage() {
                 </div>
                 <div>
                   <label className="label">Celular *</label>
-                  <input ref={refCelular} className={`input ${celularError ? 'border-red-500' : ''}`}
+                  <input className={`input ${celularError ? 'border-red-500' : ''}`}
                     placeholder="0987654321" value={cliente.celular}
-                    autoComplete="off" name="cliente-celular" tabIndex={3}
-                    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                    autoComplete="off"
                     onChange={e => { setCliente(p => ({...p, celular: e.target.value})); setCelularError(validarCelular(e.target.value) || '') }} />
                   {celularError && <p className="text-red-400 text-xs mt-1">{celularError}</p>}
                 </div>
@@ -391,7 +364,7 @@ export default function NuevoPedidoPage() {
                   <label className="label">Email {emitirFactura ? '* (requerido para factura)' : '(opcional)'}</label>
                   <input className={`input ${emitirFactura && !cliente.email ? 'border-yellow-500/50' : ''}`}
                     type="email" placeholder="cliente@gmail.com" value={cliente.email}
-                    autoComplete="off" name="cliente-email" tabIndex={4}
+                    autoComplete="off"
                     onChange={e => setCliente(p => ({...p, email: e.target.value}))} />
                   {emitirFactura && !cliente.email && (
                     <p className="text-yellow-400 text-xs mt-1">⚠️ Necesitas el correo para emitir factura</p>
@@ -423,10 +396,10 @@ export default function NuevoPedidoPage() {
                   <div className="space-y-3">
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Ciudad de entrega *</p>
-                      <input ref={refCiudad}
+                      <input
                         className={`input ${!cliente.ciudad.trim() ? 'border-yellow-500/40' : ''}`}
                         placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
-                        autoComplete="off" name="cliente-ciudad" tabIndex={5}
+                        autoComplete="off"
                         onChange={e => setCliente(p => ({...p, ciudad: e.target.value}))} />
                     </div>
                     <div>
