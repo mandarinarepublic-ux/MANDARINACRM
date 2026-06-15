@@ -11,27 +11,42 @@ export async function GET(req) {
     const vendedorId = searchParams.get('vendedor')
     const rol = searchParams.get('rol')
 
-    let pedidos = await readSheet('PEDIDOS')
+    let pedidos  = await readSheet('PEDIDOS')
     let detalles = await readSheet('DETALLE_PEDIDO')
-    let pagos = await readSheet('PAGOS')
+    let pagos    = await readSheet('PAGOS')
+    // ── Leer guías para incluirlas en el pedido ──────────────────────────────
+    let guias    = await readSheet('GUIAS_DESPACHO')
 
-    // Vendors only see their own orders in "mis-pedidos" context
-    // For historial they see all
+    // Vendedor scope=mios → solo sus pedidos
     if (rol === 'VENDEDOR' && searchParams.get('scope') === 'mios') {
       const vendedorNombreParam = searchParams.get('vendedor') || ''
-      const vendedorIdParam = searchParams.get('vendedorId') || vendedorId || ''
+      const vendedorIdParam     = searchParams.get('vendedorId') || vendedorId || ''
       pedidos = pedidos.filter(p =>
         p.VENDEDOR_ID === vendedorNombreParam ||
         p.VENDEDOR_ID === vendedorIdParam
       )
     }
-    // ADMIN with scope=mios sees all orders
 
-    const result = pedidos.map(p => ({
-      ...p,
-      items: detalles.filter(d => d.PEDIDO_ID === p.PEDIDO_ID && d.SUBESTADO !== 'ELIMINADO'),
-      pagos: pagos.filter(pg => pg.PEDIDO_ID === p.PEDIDO_ID),
-    }))
+    const result = pedidos.map(p => {
+      // Buscar la guía más reciente de este pedido
+      const guiasPedido = guias
+        .filter(g => g.PEDIDO_ID === p.PEDIDO_ID)
+        .sort((a, b) => (b.FECHA_DESPACHO || '').localeCompare(a.FECHA_DESPACHO || ''))
+
+      const guia = guiasPedido[0] || null
+
+      return {
+        ...p,
+        items: detalles.filter(d => d.PEDIDO_ID === p.PEDIDO_ID && d.SUBESTADO !== 'ELIMINADO'),
+        pagos: pagos.filter(pg => pg.PEDIDO_ID === p.PEDIDO_ID),
+        // Datos de guía disponibles directamente en el objeto pedido
+        GUIA_NUMERO:       guia?.NUMERO_GUIA       || p.GUIA_NUMERO       || '',
+        GUIA_TRANSPORTISTA:guia?.TRANSPORTISTA      || p.GUIA_TRANSPORTISTA || '',
+        GUIA_FOTO_URL:     guia?.FOTO_GUIA_URL      || '',
+        GUIA_FECHA:        guia?.FECHA_DESPACHO     || '',
+        GUIA_ID:           guia?.GUIA_ID            || '',
+      }
+    })
 
     return Response.json({ pedidos: result })
   } catch (e) {
@@ -57,6 +72,39 @@ export async function POST(req) {
     const { row: existingCliente } = await findRow('CLIENTES', 'CEDULA', String(cliente.cedula))
     if (existingCliente) {
       clienteId = existingCliente.CLIENTE_ID
+      // FIX C3: actualizar datos del cliente aunque ya exista
+      try {
+        const clientes = await readSheet('CLIENTES')
+        const cIdx = clientes.findIndex(c => c.CLIENTE_ID === clienteId)
+        if (cIdx !== -1) {
+          const cUpdated = {
+            ...clientes[cIdx],
+            NOMBRE:    cliente.nombre    || clientes[cIdx].NOMBRE,
+            CELULAR:   String(cliente.celular || clientes[cIdx].CELULAR),
+            EMAIL:     cliente.email     || clientes[cIdx].EMAIL,
+            CIUDAD:    cliente.ciudad    || clientes[cIdx].CIUDAD,
+            DIRECCION: direccionTexto    || cliente.direccion || clientes[cIdx].DIRECCION,
+          }
+          const { getSheets } = await import('@/lib/sheets')
+          const sheets = await getSheets()
+          const hRes = await sheets.spreadsheets.values.get({
+            spreadsheetId: process.env.SHEET_ID,
+            range: 'CLIENTES!A2:Z2',
+          })
+          const headers = hRes.data.values?.[0] || []
+          const row = headers.map(h => String(cUpdated[h] || ''))
+          const sheetRow = cIdx + 4
+          const lastCol = String.fromCharCode(65 + headers.length - 1)
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: process.env.SHEET_ID,
+            range: `CLIENTES!A${sheetRow}:${lastCol}${sheetRow}`,
+            valueInputOption: 'RAW',
+            requestBody: { values: [row] },
+          })
+        }
+      } catch (updateErr) {
+        console.error('Error actualizando cliente existente:', updateErr.message)
+      }
     } else {
       clienteId = uuid()
       await appendRow('CLIENTES', [
@@ -68,9 +116,9 @@ export async function POST(req) {
       ])
     }
 
-    const montoTotal = items.reduce((sum, i) => sum + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
-    const pagosArray = Array.isArray(pagosInput) ? pagosInput : []
-    const montoAbonado = pagosArray.reduce((sum, p) => sum + parseFloat(p.monto || 0), 0)
+    const montoTotal    = items.reduce((sum, i) => sum + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
+    const pagosArray    = Array.isArray(pagosInput) ? pagosInput : []
+    const montoAbonado  = pagosArray.reduce((sum, p) => sum + parseFloat(p.monto || 0), 0)
     const montoPendiente = montoTotal - montoAbonado
 
     const areas = items.map(i => i.area || '').filter(a => a !== 'ENTREGA EN TIENDA')
@@ -78,13 +126,12 @@ export async function POST(req) {
 
     const now = fechaAhora()
 
-    // Pedido nace directamente EN_FABRICA
     await appendRow('PEDIDOS', [
       pedidoId, tiendaId, vendedorNombre || vendedorId, clienteId,
       now, now, fechaEntregaPrometida || '',
       String(diasCalculado), String(diasCalculado),
       'FALSE',
-      'EN_FABRICA', // <-- directo a fábrica
+      'EN_FABRICA',
       montoAbonado >= montoTotal ? 'PAGADO' : montoAbonado > 0 ? 'ABONO' : 'PENDIENTE',
       String(montoTotal.toFixed(2)),
       String(montoAbonado.toFixed(2)),
@@ -96,10 +143,9 @@ export async function POST(req) {
       longitud ? String(longitud) : '',
     ])
 
-    // Log creation
     await logCambio(pedidoId, 'CREACION', '', 'EN_FABRICA', vendedorId)
 
-    // Save items
+    // Items
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
       const itemId = await generateItemId(pedidoId, i + 1)
@@ -109,19 +155,16 @@ export async function POST(req) {
       let fotoPecho = '', fotoEspalda = '', fotoMangaD = '', fotoMangaI = '', archivoDiseno = ''
 
       try {
-        // If photo is base64 → upload to Cloudinary
-        // If photo is already a URL (e.g. from Shopify CDN) → use directly
         async function processPhoto(data, name) {
           if (!data) return ''
-          if (data.startsWith('http')) return data // already a URL, use as-is
+          if (data.startsWith('http')) return data
           if (data.startsWith('data:')) {
             const r = await uploadToCloudinary(data, name, cloudFolder)
             return r.url
           }
           return ''
         }
-        // fotoPecho: use uploaded base64, or Shopify CDN URL directly
-        fotoPecho = await processPhoto(item.fotoPecho || item.imagenShopify || '', `${itemId}_pecho.jpg`)
+        fotoPecho   = await processPhoto(item.fotoPecho || item.imagenShopify || '', `${itemId}_pecho.jpg`)
         fotoEspalda = await processPhoto(item.fotoEspalda, `${itemId}_espalda.jpg`)
         fotoMangaD  = await processPhoto(item.fotoMangaD,  `${itemId}_manga_d.jpg`)
         fotoMangaI  = await processPhoto(item.fotoMangaI,  `${itemId}_manga_i.jpg`)
@@ -131,7 +174,6 @@ export async function POST(req) {
         }
       } catch (uploadErr) {
         console.error('Photo upload error:', uploadErr.message)
-        // If Shopify URL was passed directly, still save it
         if (item.fotoPecho?.startsWith('http')) fotoPecho = item.fotoPecho
       }
 
@@ -147,11 +189,11 @@ export async function POST(req) {
         archivoDiseno,
         item.shopifyVariantId || '',
         now,
-        '', // NOTAS_AREA
+        '',
       ])
     }
 
-    // Register payments
+    // Pagos
     for (const pago of pagosArray) {
       if (!pago || parseFloat(pago.monto || 0) <= 0) continue
       await appendRow('PAGOS', [

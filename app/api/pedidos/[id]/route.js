@@ -39,29 +39,6 @@ export async function PATCH(req, { params }) {
 
     if (body.NOTAS_VENDEDOR !== undefined) updated.NOTAS_VENDEDOR = body.NOTAS_VENDEDOR
 
-    if (body.GUIA_NUMERO) {
-      updated.GUIA_NUMERO = body.GUIA_NUMERO
-      changes.push({ campo: 'GUIA', antes: pedido.GUIA_NUMERO || '', despues: body.GUIA_NUMERO })
-    }
-    if (body.GUIA_TRANSPORTISTA) updated.GUIA_TRANSPORTISTA = body.GUIA_TRANSPORTISTA
-
-    // ── FIX C1: Subir foto de guía a Cloudinary igual que fotos de diseño ────
-    if (body.GUIA_FOTO_BASE64) {
-      try {
-        const cloudFolder = `mandarina-pro/guias/${id}`
-        const r = await uploadToCloudinary(
-          body.GUIA_FOTO_BASE64,
-          `guia_${id}_${Date.now()}.jpg`,
-          cloudFolder
-        )
-        updated.GUIA_FOTO_URL = r.url
-        changes.push({ campo: 'GUIA_FOTO', antes: '', despues: r.url })
-      } catch (uploadErr) {
-        console.error('Error subiendo foto de guía a Cloudinary:', uploadErr.message)
-        // No fallar el despacho si la foto falla — solo avisar en el log
-      }
-    }
-
     if (body.MONTO_TOTAL !== undefined) {
       updated.MONTO_TOTAL     = String(body.MONTO_TOTAL)
       updated.MONTO_ABONADO   = String(body.MONTO_ABONADO || pedido.MONTO_ABONADO)
@@ -71,7 +48,7 @@ export async function PATCH(req, { params }) {
 
     updated.FECHA_ACTUALIZACION = now
 
-    // Leer headers reales del Sheet para mapear columnas correctamente
+    // ── Leer headers reales de PEDIDOS ────────────────────────────────────────
     const { google } = await import('googleapis')
     const auth = new google.auth.GoogleAuth({
       credentials: {
@@ -88,41 +65,83 @@ export async function PATCH(req, { params }) {
     const headers = headerRes.data.values?.[0] || []
 
     const fieldMap = {
-      'PEDIDO_ID':              updated.PEDIDO_ID,
-      'TIENDA_ID':              updated.TIENDA_ID,
-      'VENDEDOR_ID':            updated.VENDEDOR_ID,
-      'CLIENTE_ID':             updated.CLIENTE_ID,
-      'FECHA_PEDIDO':           updated.FECHA_PEDIDO,
-      'FECHA_ACTUALIZACION':    updated.FECHA_ACTUALIZACION,
-      'FECHA_ENTREGA_PROMETIDA':updated.FECHA_ENTREGA_PROMETIDA || '',
-      'DIAS_CALCULADO':         updated.DIAS_CALCULADO || '',
-      'DIAS_PROMETIDO':         updated.DIAS_PROMETIDO || '',
-      'ALERTA_ENTREGA':         updated.ALERTA_ENTREGA || '',
-      'ESTADO_PEDIDO':          updated.ESTADO_PEDIDO,
-      'ESTADO_PAGO':            updated.ESTADO_PAGO,
-      'MONTO_TOTAL':            updated.MONTO_TOTAL,
-      'MONTO_ABONADO':          updated.MONTO_ABONADO,
-      'MONTO_PENDIENTE':        updated.MONTO_PENDIENTE,
-      'FACTURA_SOLICITADA':     updated.EMITIR_FACTURA || updated.FACTURA_SOLICITADA || '',
-      'FACTURA_DATIL_ID':       updated.NUMERO_FACTURA || updated.FACTURA_DATIL_ID || '',
-      'NOTAS_VENDEDOR':         updated.NOTAS_VENDEDOR || '',
-      'GUIA_NUMERO':            updated.GUIA_NUMERO || '',
-      'GUIA_TRANSPORTISTA':     updated.GUIA_TRANSPORTISTA || '',
-      'GUIA_FOTO_URL':          updated.GUIA_FOTO_URL || '',       // ← nueva columna
-      'DIRECCION_TEXTO':        updated.DIRECCION_TEXTO || updated.DIRECCION_PEDIDO || '',
-      'DIRECCION_PEDIDO':       updated.DIRECCION_TEXTO || updated.DIRECCION_PEDIDO || '',
-      'LATITUD':                updated.LATITUD || '',
-      'LONGITUD':               updated.LONGITUD || '',
+      'PEDIDO_ID':               updated.PEDIDO_ID,
+      'TIENDA_ID':               updated.TIENDA_ID,
+      'VENDEDOR_ID':             updated.VENDEDOR_ID,
+      'CLIENTE_ID':              updated.CLIENTE_ID,
+      'FECHA_PEDIDO':            updated.FECHA_PEDIDO,
+      'FECHA_ACTUALIZACION':     updated.FECHA_ACTUALIZACION,
+      'FECHA_ENTREGA_PROMETIDA': updated.FECHA_ENTREGA_PROMETIDA || '',
+      'DIAS_CALCULADO':          updated.DIAS_CALCULADO || '',
+      'DIAS_PROMETIDO':          updated.DIAS_PROMETIDO || '',
+      'ALERTA_ENTREGA':          updated.ALERTA_ENTREGA || '',
+      'ESTADO_PEDIDO':           updated.ESTADO_PEDIDO,
+      'ESTADO_PAGO':             updated.ESTADO_PAGO,
+      'MONTO_TOTAL':             updated.MONTO_TOTAL,
+      'MONTO_ABONADO':           updated.MONTO_ABONADO,
+      'MONTO_PENDIENTE':         updated.MONTO_PENDIENTE,
+      'FACTURA_SOLICITADA':      updated.EMITIR_FACTURA || updated.FACTURA_SOLICITADA || '',
+      'FACTURA_DATIL_ID':        updated.NUMERO_FACTURA || updated.FACTURA_DATIL_ID || '',
+      'NOTAS_VENDEDOR':          updated.NOTAS_VENDEDOR || '',
+      'GUIA_NUMERO':             updated.GUIA_NUMERO || '',
+      'GUIA_TRANSPORTISTA':      updated.GUIA_TRANSPORTISTA || '',
+      'DIRECCION_TEXTO':         updated.DIRECCION_TEXTO || updated.DIRECCION_PEDIDO || '',
+      'DIRECCION_PEDIDO':        updated.DIRECCION_TEXTO || updated.DIRECCION_PEDIDO || '',
+      'LATITUD':                 updated.LATITUD || '',
+      'LONGITUD':                updated.LONGITUD || '',
     }
 
-    const row = headers.map(h => fieldMap[h] !== undefined ? String(fieldMap[h]) : String(updated[h] || ''))
+    const row = headers.map(h =>
+      fieldMap[h] !== undefined ? String(fieldMap[h]) : String(updated[h] || '')
+    )
     await updateRow('PEDIDOS', idx, row)
 
     for (const c of changes) {
       await logCambio(id, c.campo, c.antes, c.despues, usuarioId)
     }
 
-    // Agregar nuevo ítem
+    // ── GUÍA DE DESPACHO → graba en hoja GUIAS_DESPACHO ─────────────────────
+    // La hoja PEDIDOS NO tiene columna de foto — el registro completo va a GUIAS_DESPACHO
+    if (body.GUIA_NUMERO) {
+      // 1. Subir foto a Cloudinary si viene base64
+      let fotoGuiaUrl = ''
+      if (body.GUIA_FOTO_BASE64) {
+        try {
+          const cloudFolder = `mandarina-pro/guias`
+          const r = await uploadToCloudinary(
+            body.GUIA_FOTO_BASE64,
+            `guia_${id}_${Date.now()}.jpg`,
+            cloudFolder
+          )
+          fotoGuiaUrl = r.url
+        } catch (uploadErr) {
+          console.error('Error subiendo foto de guía:', uploadErr.message)
+          // No bloquear el despacho si falla la foto
+        }
+      }
+
+      // 2. Guardar fila en GUIAS_DESPACHO
+      // Estructura: GUIA_ID | PEDIDO_ID | NUMERO_GUIA | TRANSPORTISTA | FOTO_GUIA_URL | FECHA_DESPACHO | REGISTRADO_POR | NOTAS
+      await appendRow('GUIAS_DESPACHO', [
+        uuid(),                          // GUIA_ID
+        id,                              // PEDIDO_ID
+        body.GUIA_NUMERO.trim(),         // NUMERO_GUIA
+        body.GUIA_TRANSPORTISTA || 'SERVIENTREGA', // TRANSPORTISTA
+        fotoGuiaUrl,                     // FOTO_GUIA_URL (URL de Cloudinary o vacío)
+        now,                             // FECHA_DESPACHO
+        usuarioId,                       // REGISTRADO_POR
+        body.GUIA_NOTAS || '',           // NOTAS
+      ])
+
+      // 3. Log en bitácora
+      await logCambio(
+        id, 'GUIA_DESPACHO', '',
+        `${body.GUIA_TRANSPORTISTA || 'SERVIENTREGA'} #${body.GUIA_NUMERO}${fotoGuiaUrl ? ' 📷' : ''}`,
+        usuarioId
+      )
+    }
+
+    // ── Nuevo ítem ────────────────────────────────────────────────────────────
     if (body.nuevoItem) {
       const detalles = await readSheet('DETALLE_PEDIDO')
       const itemsExistentes = detalles.filter(d => d.PEDIDO_ID === id).length
@@ -131,7 +150,6 @@ export async function PATCH(req, { params }) {
       const cloudFolder = `mandarina-pro/pedidos/${id}`
       const initSubestado = subestadoInicial(item.area)
 
-      // FIX I7: procesar TODAS las fotos al agregar ítem, no solo pecho
       async function processPhoto(data, name) {
         if (!data) return ''
         if (data.startsWith('http')) return data
@@ -156,7 +174,7 @@ export async function PATCH(req, { params }) {
         String(item.cantidad || 1), String(item.precioUnit || 0),
         String((parseFloat(item.precioUnit || 0) * parseInt(item.cantidad || 1)).toFixed(2)),
         item.area || '', initSubestado,
-        fotoPecho, fotoEspalda, fotoMangaD, fotoMangaI, // FIX I7: todas las fotos
+        fotoPecho, fotoEspalda, fotoMangaD, fotoMangaI,
         item.shopifyVariantId || '',
         fechaAhora(), '',
       ])
@@ -164,7 +182,7 @@ export async function PATCH(req, { params }) {
       await logCambio(id, 'ITEM_AGREGADO', '', item.productoNombre, usuarioId)
     }
 
-    // Agregar pago
+    // ── Nuevo pago ────────────────────────────────────────────────────────────
     if (body.nuevoPago) {
       const pago = body.nuevoPago
       const montoNuevo = parseFloat(pago.monto || 0)
