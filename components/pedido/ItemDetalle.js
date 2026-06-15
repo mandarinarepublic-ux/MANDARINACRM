@@ -23,9 +23,14 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
   const [notaText,       setNotaText]      = useState(item.NOTAS_AREA || '')
   const [notaGuardada,   setNotaGuardada]  = useState(item.NOTAS_AREA || '')
   const [savingNota,     setSavingNota]    = useState(false)
+  const [notaError,      setNotaError]     = useState('')
+
+  // Subestado local para no recargar al cambiar
+  const [subestado, setSubestado] = useState(item.SUBESTADO || 'SOLICITADO')
 
   async function saveNota() {
     setSavingNota(true)
+    setNotaError('')
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
         method: 'PATCH',
@@ -33,11 +38,32 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
         body: JSON.stringify({ NOTAS_AREA: notaText, _usuarioId: user?.id }),
       })
       const data = await res.json()
-      if (!res.ok) { alert('Error al guardar nota: ' + (data.error || res.status)); return }
+      if (!res.ok || !data.ok) {
+        setNotaError(data.error || 'Error al guardar')
+        return
+      }
+      // Actualizar estado local — NO recargar el pedido
       setNotaGuardada(notaText)
       setEditingNota(false)
-      loadPedido()
-    } finally { setSavingNota(false) }
+    } finally {
+      setSavingNota(false)
+    }
+  }
+
+  async function cambiarSubestado(s) {
+    const anterior = subestado
+    setSubestado(s) // optimistic
+    try {
+      const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ SUBESTADO: s, _usuarioId: user?.id }),
+      })
+      if (!res.ok) setSubestado(anterior) // revertir si falla
+      // No recargamos — el estado local ya refleja el cambio
+    } catch {
+      setSubestado(anterior)
+    }
   }
 
   return (
@@ -53,7 +79,7 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
 
       {/* 2 columnas */}
       <div className="flex gap-4">
-        {/* Izquierda: foto */}
+        {/* Fotos */}
         <div className="w-36 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
@@ -82,7 +108,7 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
           )}
         </div>
 
-        {/* Derecha: detalle */}
+        {/* Detalle */}
         <div className="flex-1 min-w-0 space-y-2">
           <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5 text-xs">
             <div><span className="text-gray-500">Color:</span> <span className="text-gray-300">{item.COLOR || '—'}</span></div>
@@ -94,19 +120,30 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
             )}
           </div>
 
-          {/* Notas del área — editable para roles de producción */}
-          {!readOnly ? (
+          {/* Nota — siempre visible si existe, editable según rol */}
+          {readOnly ? (
+            // Solo lectura: mostrar nota si existe
+            notaGuardada ? (
+              <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
+                📝 {notaGuardada}
+              </div>
+            ) : null
+          ) : (
+            // Editable: producción / admin
             editingNota ? (
               <div>
                 <textarea className="input resize-none text-sm mb-2 w-full" rows={2}
                   placeholder="Nota para este producto..."
-                  value={notaText} onChange={e => setNotaText(e.target.value)} />
+                  value={notaText} onChange={e => setNotaText(e.target.value)}
+                  autoFocus />
+                {notaError && <div className="text-xs text-red-400 mb-2">⚠️ {notaError}</div>}
                 <div className="flex gap-2">
                   <button onClick={saveNota} disabled={savingNota}
                     className="btn-primary text-xs px-3 py-1.5">
-                    {savingNota ? '⏳' : '💾 Guardar'}
+                    {savingNota ? '⏳ Guardando...' : '💾 Guardar'}
                   </button>
-                  <button onClick={() => setEditingNota(false)} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
+                  <button onClick={() => { setEditingNota(false); setNotaText(notaGuardada); setNotaError('') }}
+                    className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
                 </div>
               </div>
             ) : (
@@ -122,18 +159,12 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
                 </button>
               </div>
             )
-          ) : (
-            notaGuardada && (
-              <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
-                📝 {notaGuardada}
-              </div>
-            )
           )}
 
-          {/* Subestado */}
+          {/* Subestado — usa estado local */}
           {(readOnly || user?.rol === 'DESPACHO') ? (
-            <span className={`badge text-xs ${SUBESTADO_COLORS[item.SUBESTADO] || 'bg-gray-500/20 text-gray-400'}`}>
-              {item.SUBESTADO}
+            <span className={`badge text-xs ${SUBESTADO_COLORS[subestado] || 'bg-gray-500/20 text-gray-400'}`}>
+              {subestado}
             </span>
           ) : (
             <div className="grid grid-cols-2 gap-1">
@@ -143,17 +174,9 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
                 { key: 'ENVIADO_APROBACION', label: '📤 Enviado aprobación', color: 'bg-purple-500' },
                 { key: 'LISTO',              label: '✅ Listo',              color: 'bg-green-500' },
               ].map(s => (
-                <button key={s.key}
-                  onClick={async () => {
-                    await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ SUBESTADO: s.key, _usuarioId: user?.id }),
-                    })
-                    loadPedido()
-                  }}
+                <button key={s.key} onClick={() => cambiarSubestado(s.key)}
                   className={`py-1.5 rounded-xl text-xs font-semibold transition-all
-                    ${item.SUBESTADO === s.key
+                    ${subestado === s.key
                       ? `${s.color} text-white`
                       : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
                   {s.label}
@@ -164,7 +187,6 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
         </div>
       </div>
 
-      {/* Fullscreen */}
       {fotoFullscreen && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
           onClick={() => setFotoFullscreen(null)}>
