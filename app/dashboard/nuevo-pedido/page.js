@@ -344,16 +344,18 @@ export default function NuevoPedidoPage() {
                   </button>
                 </div>
               )}
-              <div key={clienteKey} className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="label">Nombre completo *</label>
                   <input ref={refNombre} className="input" placeholder="María García" value={cliente.nombre}
-                    onChange={e => setCliente(p => ({...p, nombre: e.target.value}))} />
+                    onChange={e => setCliente(p => ({...p, nombre: e.target.value}))}
+                    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }} />
                 </div>
                 <div>
                   <label className="label">Cédula / RUC *</label>
                    <input ref={refCedula} className={`input ${cedulaError ? 'border-red-500' : ''}`}
                      placeholder="1712345678" value={cliente.cedula}
+                     onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
                      onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarCedulaRUC(e.target.value) || '') }}
                      onBlur={async e => {
                        const ced = e.target.value.trim()
@@ -378,6 +380,7 @@ export default function NuevoPedidoPage() {
                   <label className="label">Celular *</label>
                   <input ref={refCelular} className={`input ${celularError ? 'border-red-500' : ''}`}
                     placeholder="0987654321" value={cliente.celular}
+                    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
                     onChange={e => { setCliente(p => ({...p, celular: e.target.value})); setCelularError(validarCelular(e.target.value) || '') }} />
                   {celularError && <p className="text-red-400 text-xs mt-1">{celularError}</p>}
                 </div>
