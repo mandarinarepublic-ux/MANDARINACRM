@@ -348,7 +348,7 @@ export default function NuevoPedidoPage() {
                 <div className="col-span-2">
                   <label className="label">Nombre completo *</label>
                   <input ref={refNombre} className="input" placeholder="María García" value={cliente.nombre}
-                    autoComplete="off" name="cliente-nombre"
+                    autoComplete="off" name="cliente-nombre" tabIndex={1}
                     onChange={e => setCliente(p => ({...p, nombre: e.target.value}))}
                     onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }} />
                 </div>
@@ -356,7 +356,7 @@ export default function NuevoPedidoPage() {
                   <label className="label">Cédula / RUC *</label>
                    <input ref={refCedula} className={`input ${cedulaError ? 'border-red-500' : ''}`}
                      placeholder="1712345678" value={cliente.cedula}
-                     autoComplete="off" name="cliente-cedula"
+                     autoComplete="off" name="cliente-cedula" tabIndex={2}
                      onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
                      onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarCedulaRUC(e.target.value) || '') }}
                      onBlur={async e => {
@@ -382,7 +382,7 @@ export default function NuevoPedidoPage() {
                   <label className="label">Celular *</label>
                   <input ref={refCelular} className={`input ${celularError ? 'border-red-500' : ''}`}
                     placeholder="0987654321" value={cliente.celular}
-                    autoComplete="off" name="cliente-celular"
+                    autoComplete="off" name="cliente-celular" tabIndex={3}
                     onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
                     onChange={e => { setCliente(p => ({...p, celular: e.target.value})); setCelularError(validarCelular(e.target.value) || '') }} />
                   {celularError && <p className="text-red-400 text-xs mt-1">{celularError}</p>}
@@ -391,7 +391,7 @@ export default function NuevoPedidoPage() {
                   <label className="label">Email {emitirFactura ? '* (requerido para factura)' : '(opcional)'}</label>
                   <input className={`input ${emitirFactura && !cliente.email ? 'border-yellow-500/50' : ''}`}
                     type="email" placeholder="cliente@gmail.com" value={cliente.email}
-                    autoComplete="off" name="cliente-email"
+                    autoComplete="off" name="cliente-email" tabIndex={4}
                     onChange={e => setCliente(p => ({...p, email: e.target.value}))} />
                   {emitirFactura && !cliente.email && (
                     <p className="text-yellow-400 text-xs mt-1">⚠️ Necesitas el correo para emitir factura</p>
@@ -426,7 +426,7 @@ export default function NuevoPedidoPage() {
                       <input ref={refCiudad}
                         className={`input ${!cliente.ciudad.trim() ? 'border-yellow-500/40' : ''}`}
                         placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
-                        autoComplete="off" name="cliente-ciudad"
+                        autoComplete="off" name="cliente-ciudad" tabIndex={5}
                         onChange={e => setCliente(p => ({...p, ciudad: e.target.value}))} />
                     </div>
                     <div>
