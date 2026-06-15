@@ -93,53 +93,112 @@ export default function PedidoDetailPage() {
   const montoTotal = parseFloat(pedido.MONTO_TOTAL || 0)
   const montoAbonado = parseFloat(pedido.MONTO_ABONADO || 0)
   const montoPendiente = montoTotal - montoAbonado
+  const tieneGuia = !!(pedido.GUIA_NUMERO)
+
+  // Banner de estado actual — visible y claro
+  const ESTADO_BANNERS = {
+    EN_FABRICA:  { bg: 'bg-blue-500/10 border-blue-500/30',  icon: '🏭', text: 'text-blue-400',   label: 'En Producción' },
+    DESPACHO:    { bg: 'bg-purple-500/10 border-purple-500/30', icon: '🚚', text: 'text-purple-400', label: 'En Despacho' },
+    ENTREGADO:   { bg: 'bg-green-500/10 border-green-500/30',  icon: '✅', text: 'text-green-400',  label: 'Entregado' },
+    PENDIENTE_FABRICA: { bg: 'bg-yellow-500/10 border-yellow-500/30', icon: '⏳', text: 'text-yellow-400', label: 'Pend. Fábrica' },
+    CANCELADO:   { bg: 'bg-red-500/10 border-red-500/30',     icon: '❌', text: 'text-red-400',    label: 'Cancelado' },
+  }
+  const banner = ESTADO_BANNERS[pedido.ESTADO_PEDIDO] || ESTADO_BANNERS.EN_FABRICA
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
+      {/* ── Header sticky ── */}
       <div className="sticky top-0 z-20 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center gap-3 mb-3">
-            {/* FIX #6: router.back() en lugar de hardcodear historial */}
             <button onClick={() => router.back()} className="text-gray-500 hover:text-white p-1">←</button>
             <div className="flex-1">
-              <h1 className="text-lg font-display font-bold text-white">{pedido.PEDIDO_ID}</h1>
-              <div className="text-gray-500 text-xs">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊 Mandarina Republic' : '🏪 Indstore'}</div>
-            </div>
-            {isNew && <span className="badge bg-green-500/20 text-green-400">✅ Creado</span>}
-          </div>
-          <div className="flex items-center gap-3">
-            {user?.rol === 'ADMIN' && !fromHistorial ? (
-              <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 flex-1"
-                value={pedido.ESTADO_PEDIDO} onChange={e => updateEstado(e.target.value)}>
-                {Object.entries(ESTADO_LABELS_LARGO).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            ) : (
-              <div className="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-3 py-1.5 flex-1">
-                {ESTADO_LABELS_LARGO[pedido.ESTADO_PEDIDO] || pedido.ESTADO_PEDIDO}
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-display font-bold text-white">{pedido.PEDIDO_ID}</h1>
+                <span className="text-sm">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
               </div>
-            )}
-            <div className="flex gap-3 text-center">
-              <div><div className="text-sm font-bold text-white">${montoTotal.toFixed(2)}</div><div className="text-xs text-gray-500">Total</div></div>
-              <div><div className={`text-sm font-bold ${montoPendiente>0?'text-yellow-400':'text-green-400'}`}>${montoPendiente.toFixed(2)}</div><div className="text-xs text-gray-500">Pendiente</div></div>
+              <div className="text-gray-500 text-xs">{pedido.TIENDA_ID === 'MANDARINA' ? 'Mandarina Republic' : 'Indstore'}</div>
+            </div>
+            {isNew && <span className="badge bg-green-500/20 text-green-400 text-xs">✅ Creado</span>}
+            <div className="text-right">
+              <div className="text-sm font-bold text-white">${montoTotal.toFixed(2)}</div>
+              <div className={`text-xs ${montoPendiente > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+                {montoPendiente > 0 ? `Debe $${montoPendiente.toFixed(2)}` : '✓ Pagado'}
+              </div>
             </div>
           </div>
+
+          {/* Selector de estado — solo ADMIN y no fromHistorial */}
+          {user?.rol === 'ADMIN' && !fromHistorial ? (
+            <select className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-3 py-2"
+              value={pedido.ESTADO_PEDIDO} onChange={e => updateEstado(e.target.value)}>
+              {Object.entries(ESTADO_LABELS_LARGO).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          ) : (
+            /* Banner de estado — siempre visible para todos */
+            <div className={`flex items-center gap-2 border rounded-xl px-3 py-2 ${banner.bg}`}>
+              <span className="text-lg">{banner.icon}</span>
+              <span className={`font-semibold text-sm ${banner.text}`}>{banner.label}</span>
+              {/* Si está en despacho y tiene guía, mostrarla aquí también */}
+              {tieneGuia && (
+                <span className="ml-auto text-xs text-purple-400 font-mono">
+                  #{pedido.GUIA_NUMERO}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
+      {/* ── Contenido ── */}
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+
+          {/* Banner nuevo pedido */}
           {isNew && (
             <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4">
               <div className="font-semibold text-green-400 mb-3">🎉 Pedido creado exitosamente</div>
               <div className="flex gap-2 flex-wrap">
                 <button onClick={sendWhatsApp} className="flex items-center gap-2 bg-green-500 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-600 transition-all">📱 WhatsApp al cliente</button>
-                <button onClick={generatePDF} disabled={generatingPdf} className="flex items-center gap-2 bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-gray-600 transition-all">{generatingPdf?'⏳...':'⬇️ Descargar PDF'}</button>
-                <Link href="/dashboard/nuevo-pedido" className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white transition-all">➕ Nuevo pedido</Link>
-                <Link href="/dashboard" className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white transition-all">🏠 Inicio</Link>
+                <button onClick={generatePDF} disabled={generatingPdf} className="flex items-center gap-2 bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-xl">{generatingPdf?'⏳...':'⬇️ PDF'}</button>
+                <Link href="/dashboard/nuevo-pedido" className="text-sm px-4 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white">➕ Nuevo</Link>
               </div>
             </div>
           )}
 
+          {/* ── BLOQUE GUÍA DE DESPACHO — prominente cuando existe ── */}
+          {tieneGuia && (
+            <div className="bg-purple-500/10 border border-purple-500/40 rounded-2xl p-4">
+              <div className="flex items-start gap-4">
+                <div className="text-3xl">🚚</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-purple-400 font-semibold uppercase tracking-wide mb-1">
+                    Guía de despacho registrada
+                  </div>
+                  <div className="text-white font-mono font-bold text-lg">
+                    # {pedido.GUIA_NUMERO}
+                  </div>
+                  <div className="text-sm text-gray-400 mt-0.5">
+                    {pedido.GUIA_TRANSPORTISTA}
+                    {pedido.GUIA_FECHA && <span> · {pedido.GUIA_FECHA.split(' ')[0]}</span>}
+                  </div>
+                  {pedido.ESTADO_PEDIDO === 'ENTREGADO' && (
+                    <div className="mt-2 text-green-400 text-sm font-semibold">✅ Entregado al cliente</div>
+                  )}
+                </div>
+                {pedido.GUIA_FOTO_URL && (
+                  <img
+                    src={pedido.GUIA_FOTO_URL}
+                    onClick={() => window.open(pedido.GUIA_FOTO_URL, '_blank')}
+                    className="w-20 h-20 rounded-xl object-cover border border-purple-500/40 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+                    title="Ver foto de guía"
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Cliente */}
           {cliente && (
             <div className="card p-4">
               <h3 className="text-sm font-semibold text-white mb-3">👤 Cliente</h3>
@@ -158,6 +217,7 @@ export default function PedidoDetailPage() {
             </div>
           )}
 
+          {/* Productos */}
           <div className="card">
             <div className="px-4 py-3 border-b border-gray-800">
               <h3 className="text-sm font-semibold text-white">👕 Productos ({items.length})</h3>
@@ -169,6 +229,7 @@ export default function PedidoDetailPage() {
             </div>
           </div>
 
+          {/* Notas vendedor */}
           {pedido.NOTAS_VENDEDOR && (
             <div className="card p-4">
               <h3 className="text-sm font-semibold text-white mb-2">📝 Notas internas</h3>
@@ -176,13 +237,20 @@ export default function PedidoDetailPage() {
             </div>
           )}
 
+          {/* Entrega */}
           <div className="card p-4">
             <h3 className="text-sm font-semibold text-white mb-2">📦 Entrega</h3>
-            <div className="text-sm text-gray-400">Fecha comprometida: <span className="text-white ml-2">
-              {pedido.FECHA_ENTREGA_PROMETIDA ? new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'}) : '-'}
-            </span></div>
+            <div className="text-sm text-gray-400">
+              Fecha comprometida:
+              <span className="text-white ml-2">
+                {pedido.FECHA_ENTREGA_PROMETIDA
+                  ? new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'})
+                  : '-'}
+              </span>
+            </div>
           </div>
 
+          {/* Bitácora */}
           <div className="card overflow-hidden">
             <button onClick={() => setShowBitacora(b=>!b)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-all">
               <div className="flex items-center gap-2">
@@ -194,7 +262,7 @@ export default function PedidoDetailPage() {
             {showBitacora && (
               <div className="border-t border-gray-800 px-4 py-3">
                 {logs.length === 0
-                  ? <div className="text-xs text-gray-600 text-center py-4">No hay eventos registrados aún</div>
+                  ? <div className="text-xs text-gray-600 text-center py-4">No hay eventos aún</div>
                   : <div className="space-y-3 max-h-80 overflow-y-auto">
                       {logs.map((log,i)=>(
                         <div key={i} className="flex gap-3 text-xs">
@@ -210,13 +278,14 @@ export default function PedidoDetailPage() {
                                 const c=log.campo
                                 if(c==='CREACION') return '🆕 Pedido creado → EN PRODUCCIÓN'
                                 if(c==='ESTADO_PEDIDO') return `📦 Estado: ${log.antes} → ${log.despues}`
+                                if(c==='GUIA_DESPACHO') return `🚚 Guía registrada: ${log.despues}`
                                 if(c==='DIRECCION') return `📍 Dirección: ${log.despues}`
                                 if(c==='ITEM_AGREGADO') return `➕ Agregado: ${log.despues}`
                                 if(c==='ITEM_ELIMINADO') return `❌ Eliminado: ${log.antes}`
                                 if(c==='PAGO_AGREGADO') return `💰 Pago: ${log.despues}`
                                 if(c.startsWith('SUBESTADO')) return `🔧 ${c}: ${log.antes} → ${log.despues}`
                                 if(c.startsWith('EDICION')) return `✏️ ${c.replace('EDICION ','')} — ${log.despues}`
-                                if(c.startsWith('NOTA')) return `📝 Nota ${c.replace('NOTA ','')}: ${log.despues}`
+                                if(c.startsWith('NOTA')) return `📝 Nota: ${log.despues}`
                                 return `${c}: ${log.despues}`
                               })()}
                             </div>
@@ -231,6 +300,7 @@ export default function PedidoDetailPage() {
         </div>
       </div>
 
+      {/* PDF modal */}
       {showPdfPreview && (
         <div className="fixed inset-0 bg-black/90 z-50 overflow-auto p-4" onClick={e=>e.target===e.currentTarget&&setShowPdfPreview(false)}>
           <div className="max-w-3xl mx-auto">
@@ -238,7 +308,7 @@ export default function PedidoDetailPage() {
               <h3 className="text-white font-semibold">Vista previa — {pedido.PEDIDO_ID}</h3>
               <div className="flex gap-2">
                 {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR')&&<button onClick={()=>{setShowPdfPreview(false);generatePDF()}} disabled={generatingPdf} className="btn-primary text-sm px-4 py-2">{generatingPdf?'⏳...':'⬇️ Descargar'}</button>}
-                <button onClick={()=>setShowPdfPreview(false)} className="btn-secondary text-sm px-4 py-2">✕ Cerrar</button>
+                <button onClick={()=>setShowPdfPreview(false)} className="btn-secondary text-sm px-4 py-2">✕</button>
               </div>
             </div>
             <div className="bg-white rounded-xl overflow-hidden"><PdfContent pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} /></div>
@@ -250,6 +320,7 @@ export default function PedidoDetailPage() {
         <div id="pdf-render"><PdfContent pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} /></div>
       </div>
 
+      {/* Bottom bar */}
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3 flex gap-2">
         {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
           <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">📱 WhatsApp</button>
@@ -260,7 +331,7 @@ export default function PedidoDetailPage() {
         )}
         {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR')&&(
           <button onClick={generatePDF} disabled={generatingPdf} className="btn-primary flex-1 text-sm" style={{backgroundColor:tiendaColor}}>
-            {generatingPdf?'⏳...':'⬇️ Descargar PDF'}
+            {generatingPdf?'⏳...':'⬇️ PDF'}
           </button>
         )}
       </div>
@@ -293,7 +364,9 @@ function PdfContent({ pedido, items, cliente, tiendaColor }) {
             <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0',width:'22%'}}>VENDEDOR</td>
             <td style={{border:'1px solid #000',padding:'4px 6px'}}>{pedido?.VENDEDOR_ID||'-'}</td>
           </tr>
-          <tr><td colSpan={4} style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold'}}>ESTADO PAGO: {pedido?.ESTADO_PAGO==='PAGADO'?'🟢 Pagado':pedido?.ESTADO_PAGO==='ABONO'?`🔴 Abono $${montoAbonado.toFixed(2)}, pendiente $${montoPendiente.toFixed(2)}`:`🔴 Pendiente $${montoTotal.toFixed(2)}`}</td></tr>
+          <tr><td colSpan={4} style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold'}}>
+            ESTADO PAGO: {pedido?.ESTADO_PAGO==='PAGADO'?'🟢 Pagado':pedido?.ESTADO_PAGO==='ABONO'?`🔴 Abono $${montoAbonado.toFixed(2)}, pendiente $${montoPendiente.toFixed(2)}`:`🔴 Pendiente $${montoTotal.toFixed(2)}`}
+          </td></tr>
           <tr>
             <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0'}}>NOMBRE CLIENTE</td>
             <td style={{border:'1px solid #000',padding:'4px 6px'}}>{cliente?.NOMBRE||'-'}</td>
@@ -307,9 +380,15 @@ function PdfContent({ pedido, items, cliente, tiendaColor }) {
             <td style={{border:'1px solid #000',padding:'4px 6px'}}>{cliente?.CELULAR||'-'}</td>
           </tr>
           <tr>
-            <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0'}}>DIRECCIÓN ENTREGA</td>
+            <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0'}}>DIRECCIÓN</td>
             <td colSpan={3} style={{border:'1px solid #000',padding:'4px 6px'}}>{(pedido?.DIRECCION_TEXTO||pedido?.DIRECCION_PEDIDO)||cliente?.DIRECCION||'-'}</td>
           </tr>
+          {pedido?.GUIA_NUMERO && (
+            <tr>
+              <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0'}}>GUÍA DESPACHO</td>
+              <td colSpan={3} style={{border:'1px solid #000',padding:'4px 6px'}}>{pedido.GUIA_TRANSPORTISTA} # {pedido.GUIA_NUMERO}</td>
+            </tr>
+          )}
         </tbody>
       </table>
       <h4 style={{textAlign:'center',margin:'8px 0 6px',fontSize:'11px',fontWeight:'bold'}}>Detalle de los productos solicitados</h4>
@@ -322,10 +401,10 @@ function PdfContent({ pedido, items, cliente, tiendaColor }) {
               <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center',width:'11%'}}>COLOR</th>
               <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center',width:'6%'}}>CANT.</th>
               <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center',width:'6%'}}>TALLA</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>DISEÑO PECHO</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>DISEÑO ESPALDA</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>MANGA DER.</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>MANGA IZQ.</th>
+              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>PECHO</th>
+              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>ESPALDA</th>
+              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>M. DER.</th>
+              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>M. IZQ.</th>
             </tr></thead>
             <tbody>
               <tr>
@@ -339,7 +418,7 @@ function PdfContent({ pedido, items, cliente, tiendaColor }) {
                 ))}
               </tr>
               {item.DETALLE_PERSONALIZADO&&<tr><td colSpan={9} style={{border:'1px solid #000',padding:'4px',fontSize:'9px'}}><strong>Detalles:</strong> {item.DETALLE_PERSONALIZADO}</td></tr>}
-              {item.NOTAS_AREA&&<tr><td colSpan={9} style={{border:'1px solid #000',padding:'4px',fontSize:'9px',backgroundColor:'#fff3cd'}}><strong>📝 Nota de área:</strong> {item.NOTAS_AREA}</td></tr>}
+              {item.NOTAS_AREA&&<tr><td colSpan={9} style={{border:'1px solid #000',padding:'4px',fontSize:'9px',backgroundColor:'#fff3cd'}}><strong>📝 Nota área:</strong> {item.NOTAS_AREA}</td></tr>}
             </tbody>
           </table>
         </div>
