@@ -423,9 +423,9 @@ export default function NuevoPedidoPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Dirección completa *</p>
-                      <input ref={refDireccion}
-                        className={`input ${!cliente.direccion.trim() ? 'border-yellow-500/40' : ''}`}
-                        placeholder="Av. 6 de Diciembre y Mercurio. Frente al Teatro 24 Mayo"
+                      <textarea ref={refDireccion} rows={3}
+                        className={`input resize-none ${!cliente.direccion.trim() ? 'border-yellow-500/40' : ''}`}
+                        placeholder={`Ej:\nAv. 10 de Agosto y Orellana\nEdificio Torre Norte, piso 3\nReferencia: junto a Burger King`}
                         value={cliente.direccion}
                         onChange={e => setCliente(p => ({...p, direccion: e.target.value}))} />
                     </div>
