@@ -21,16 +21,17 @@ export default function BuscadorCliente({ onSelect }) {
       const res = await fetch(`/api/clientes?q=${encodeURIComponent(q)}`)
       const data = await res.json()
       setResults(data.clientes || [])
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   function select(c) {
     onSelect({
-      nombre: c.NOMBRE, cedula: c.CEDULA,
-      celular: c.CELULAR, email: c.EMAIL || '',
-      ciudad: c.CIUDAD || 'Quito', direccion: c.DIRECCION || '',
+      nombre:    c.NOMBRE    || '',
+      cedula:    c.CEDULA    || '',
+      celular:   c.CELULAR   || '',
+      email:     c.EMAIL     || '',
+      ciudad:    c.CIUDAD    || '',   // FIX 4: sin default 'Quito'
+      direccion: c.DIRECCION || '',
     })
     setQuery('')
     setResults([])
@@ -54,7 +55,7 @@ export default function BuscadorCliente({ onSelect }) {
             <button key={c.CLIENTE_ID} onClick={() => select(c)}
               className="w-full text-left px-4 py-3 hover:bg-gray-800 transition-colors">
               <div className="text-sm text-white font-medium">{c.NOMBRE}</div>
-              <div className="text-xs text-gray-500">{c.CEDULA} · {c.CELULAR}</div>
+              <div className="text-xs text-gray-500">{c.CEDULA} · {c.CELULAR}{c.CIUDAD ? ` · ${c.CIUDAD}` : ''}</div>
             </button>
           ))}
         </div>

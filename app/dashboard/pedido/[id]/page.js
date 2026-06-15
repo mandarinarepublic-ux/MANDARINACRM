@@ -219,7 +219,7 @@ export default function PedidoDetailPage() {
             </div>
             <div className="divide-y divide-gray-800">
               {items.map(item => (
-                <ItemDetalle key={item.ITEM_ID} item={item} readOnly={!canEditItems} tiendaColor={tiendaColor} user={user} loadPedido={loadPedido} />
+                <ItemDetalle key={item.ITEM_ID} item={item} readOnly={!canEditItems} canChangeSubestado={canEditItems && !fromHistorial} tiendaColor={tiendaColor} user={user} loadPedido={loadPedido} />
               ))}
             </div>
           </div>

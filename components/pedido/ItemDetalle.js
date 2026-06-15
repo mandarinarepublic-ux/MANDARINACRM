@@ -4,7 +4,13 @@ import { SUBESTADO_LABELS, SUBESTADO_COLORS, SUBESTADO_BG } from '@/lib/labels'
 
 const SUBESTADOS_ORDEN = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO']
 
-export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPedido }) {
+export default function ItemDetalle({ item, readOnly, canChangeSubestado, tiendaColor, user, loadPedido }) {
+  // readOnly         = true → no puede editar nada (vendedor, historial)
+  // canChangeSubestado = true → puede cambiar subestados (ADMIN, produccion desde módulo producción)
+  // Si no se pasa canChangeSubestado, usar !readOnly como default
+
+  const puedeSubestado = canChangeSubestado !== undefined ? canChangeSubestado : !readOnly
+
   const fotos = [
     { key:'FOTO_PECHO_URL',   label:'Pecho'   },
     { key:'FOTO_ESPALDA_URL', label:'Espalda' },
@@ -12,14 +18,14 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
     { key:'FOTO_MANGA_I_URL', label:'M. Izq'  },
   ].filter(f => item[f.key])
 
-  const [fotoActiva,   setFotoActiva]   = useState(fotos[0]?.key || null)
-  const [fotoFullscreen,setFotoFullscreen]=useState(null)
-  const [editingNota,  setEditingNota]  = useState(false)
-  const [notaText,     setNotaText]     = useState(item.NOTAS_AREA || '')
-  const [notaGuardada, setNotaGuardada] = useState(item.NOTAS_AREA || '')
-  const [savingNota,   setSavingNota]   = useState(false)
-  const [notaError,    setNotaError]    = useState('')
-  const [subestado,    setSubestado]    = useState(item.SUBESTADO || 'SOLICITADO')
+  const [fotoActiva,    setFotoActiva]    = useState(fotos[0]?.key || null)
+  const [fotoFullscreen,setFotoFullscreen]= useState(null)
+  const [editingNota,   setEditingNota]   = useState(false)
+  const [notaText,      setNotaText]      = useState(item.NOTAS_AREA || '')
+  const [notaGuardada,  setNotaGuardada]  = useState(item.NOTAS_AREA || '')
+  const [savingNota,    setSavingNota]    = useState(false)
+  const [notaError,     setNotaError]     = useState('')
+  const [subestado,     setSubestado]     = useState(item.SUBESTADO || 'SOLICITADO')
 
   async function saveNota() {
     setSavingNota(true); setNotaError('')
@@ -29,7 +35,7 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
         body: JSON.stringify({ NOTAS_AREA:notaText, _usuarioId:user?.id }),
       })
       const data = await res.json()
-      if (!res.ok||!data.ok) { setNotaError(data.error||'Error al guardar'); return }
+      if (!res.ok || !data.ok) { setNotaError(data.error||'Error al guardar'); return }
       setNotaGuardada(notaText); setEditingNota(false)
     } finally { setSavingNota(false) }
   }
@@ -56,14 +62,15 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
       </div>
 
       <div className="flex gap-4">
+        {/* Fotos */}
         <div className="w-36 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
               <div className="w-36 h-36 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
-                onDoubleClick={()=>setFotoFullscreen(item[fotoActiva||fotos[0].key])}>
+                onDoubleClick={() => setFotoFullscreen(item[fotoActiva||fotos[0].key])}>
                 <img src={item[fotoActiva||fotos[0].key]} className="w-full h-full object-contain" alt="foto" />
               </div>
-              {fotos.length>1&&(
+              {fotos.length > 1 && (
                 <div className="flex gap-1 flex-wrap">
                   {fotos.map(f=>(
                     <button key={f.key} onClick={()=>setFotoActiva(f.key)}
@@ -83,6 +90,7 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
           )}
         </div>
 
+        {/* Info + acciones */}
         <div className="flex-1 min-w-0 space-y-2">
           <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5 text-xs">
             <div><span className="text-gray-500">Color:</span> <span className="text-gray-300">{item.COLOR||'—'}</span></div>
@@ -92,7 +100,7 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
             {item.DETALLE_PERSONALIZADO&&<div><span className="text-gray-500">Detalle:</span> <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>}
           </div>
 
-          {/* Nota — siempre visible si existe */}
+          {/* Nota */}
           {readOnly ? (
             notaGuardada && (
               <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
@@ -119,10 +127,8 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
             </div>
           )}
 
-          {/* Subestado */}
-          {(readOnly||user?.rol==='DESPACHO') ? (
-            <span className={`badge text-xs ${SUBESTADO_COLORS[subestado]||'bg-gray-500/20 text-gray-400'}`}>{SUBESTADO_LABELS[subestado]||subestado}</span>
-          ) : (
+          {/* Subestado — solo si puedeSubestado */}
+          {puedeSubestado ? (
             <div className="grid grid-cols-2 gap-1">
               {SUBESTADOS_ORDEN.map(s=>(
                 <button key={s} onClick={()=>cambiarSubestado(s)}
@@ -131,6 +137,10 @@ export default function ItemDetalle({ item, readOnly, tiendaColor, user, loadPed
                 </button>
               ))}
             </div>
+          ) : (
+            <span className={`badge text-xs ${SUBESTADO_COLORS[subestado]||'bg-gray-500/20 text-gray-400'}`}>
+              {SUBESTADO_LABELS[subestado]||subestado}
+            </span>
           )}
         </div>
       </div>

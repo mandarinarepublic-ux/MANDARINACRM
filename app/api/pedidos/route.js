@@ -1,5 +1,5 @@
 import { readSheet, appendRow, findRow, fechaAhora } from '@/lib/sheets'
-import { generatePedidoId, generateItemId, calcularDiasEntrega, subestadoInicial, logCambio } from '@/lib/pedidos'
+import { generatePedidoId, generateItemId, calcularDiasEntrega, calcularDiasEntregaDesdeSheet, subestadoInicial, logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
 import { v4 as uuid } from 'uuid'
 
@@ -122,7 +122,7 @@ export async function POST(req) {
     const montoPendiente = montoTotal - montoAbonado
 
     const areas = items.map(i => i.area || '').filter(a => a !== 'ENTREGA EN TIENDA')
-    const diasCalculado = calcularDiasEntrega(areas)
+    const diasCalculado = await calcularDiasEntregaDesdeSheet(areas)
 
     const now = fechaAhora()
 

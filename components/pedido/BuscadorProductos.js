@@ -256,7 +256,7 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
   const [nombre, setNombre] = useState('')
   const [nuevoNombre, setNuevoNombre] = useState('')
   // FIX: defaults correctos — cantidad 0, precio 0, área vacía
-  const [data, setData] = useState({ color: '', talla: '', cantidad: 0, precio: 0, area: '', detalle: '' })
+  const [data, setData] = useState({ color: '', talla: '', cantidad: '', precio: '', area: '', detalle: '' })
   const [fotos, setFotos] = useState({})
   const [addingNew, setAddingNew] = useState(false)
 
@@ -279,7 +279,7 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
     setAddingNew(false)
   }
 
-  const valido = nombre && data.color && data.talla && data.area && data.cantidad >= 1 && data.precio > 0 && data.detalle
+  const valido = nombre && data.color && data.talla && data.area && parseInt(data.cantidad||0) >= 1 && parseFloat(data.precio||0) > 0 && data.detalle
 
   return (
     <div className="card p-4 space-y-3 mt-2">
@@ -322,13 +322,13 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
         <div>
           <label className="label">Cantidad *</label>
           <input type="number" className="input" min="1" placeholder="0"
-            value={data.cantidad || ''}
+            value={data.cantidad}
             onChange={e => setData(p => ({...p, cantidad: parseInt(e.target.value) || 0}))} />
         </div>
         <div>
           <label className="label">Precio $ *</label>
           <input type="number" className="input" step="0.50" min="0" placeholder="0.00"
-            value={data.precio || ''}
+            value={data.precio}
             onChange={e => setData(p => ({...p, precio: parseFloat(e.target.value) || 0}))} />
         </div>
         <div className="col-span-2">
@@ -360,7 +360,7 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
         </div>
       )}
       <button
-        onClick={() => onAdd({ productoNombre: nombre, ...data, ...fotos, esPersonalizado: true, imagen: null })}
+        onClick={() => onAdd({ productoNombre: nombre, ...data, cantidad: parseInt(data.cantidad)||1, precioUnit: parseFloat(data.precio)||0, ...fotos, esPersonalizado: true, imagen: null })}
         disabled={!valido}
         className="btn-primary w-full disabled:opacity-50">
         + Agregar al pedido

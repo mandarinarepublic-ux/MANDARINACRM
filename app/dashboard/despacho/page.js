@@ -248,13 +248,20 @@ export default function DespachosPage() {
                         )}
                       </div>
 
-                      {/* Ítems */}
-                      <div className="flex flex-wrap gap-1.5 mb-3">
+                      {/* Ítems — foto izq + info der como en historial */}
+                      <div className="space-y-2 mb-3">
                         {itemsActivos.map(item => (
-                          <div key={item.ITEM_ID} className="flex items-center gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1">
-                            {item.FOTO_PECHO_URL && <img src={item.FOTO_PECHO_URL} className="w-6 h-6 rounded object-cover" />}
-                            <span className="text-xs text-gray-300 font-medium">{item.PRODUCTO_NOMBRE?.slice(0, 18)}</span>
-                            <span className="text-xs text-gray-500">{item.TALLA}</span>
+                          <div key={item.ITEM_ID} className="flex items-center gap-3 bg-gray-800/40 rounded-xl px-3 py-2">
+                            {item.FOTO_PECHO_URL
+                              ? <img src={item.FOTO_PECHO_URL} className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
+                              : <div className="w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0"><span className="text-gray-600 text-lg">👕</span></div>}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-white font-medium truncate">{item.PRODUCTO_NOMBRE}</div>
+                              <div className="text-xs text-gray-500">{item.TALLA} · {item.COLOR} · {item.AREA}</div>
+                            </div>
+                            <span className={"text-xs px-2 py-0.5 rounded-full flex-shrink-0 " + (item.SUBESTADO === 'LISTO' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400')}>
+                              {item.SUBESTADO === 'LISTO' ? '✅' : '⏳'}
+                            </span>
                           </div>
                         ))}
                       </div>
