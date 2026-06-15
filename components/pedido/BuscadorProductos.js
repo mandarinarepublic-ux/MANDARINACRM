@@ -76,13 +76,13 @@ export default function BuscadorProductos({ tienda, onAdd }) {
 
       {selected && (
         <ProductoDetail producto={selected}
-          onAdd={(prod, variant, talla, area, detalle, cantidad, color, fotos) => {
+          onAdd={(prod, variant, talla, area, detalle, cantidad, color, fotos, precioEdit) => {
             onAdd({
               productoNombre: prod.title,
               shopifyVariantId: variant?.id || '',
               color, talla,
               cantidad: cantidad || 1,
-              precioUnit: parseFloat(variant?.price || 0),
+              precioUnit: precioEdit ?? parseFloat(variant?.price || 0),
               area, detalle,
               esPersonalizado: false,
               imagen: prod.image,
@@ -173,14 +173,19 @@ function FotoUploader({ fotos, onChange }) {
 function ProductoDetail({ producto, onAdd, onCancel }) {
   const [variant, setVariant] = useState(producto.variants[0])
   const [talla, setTalla] = useState('')
-  const [area, setArea] = useState('')          // ← vacío por defecto
-  const [cantidad, setCantidad] = useState(0)   // ← 0 para que el usuario ingrese
+  const [area, setArea] = useState('')
+  const [cantidad, setCantidad] = useState(0)
   const [color, setColor] = useState('')
   const [detalle, setDetalle] = useState('')
   const [fotos, setFotos] = useState({})
+  const [precioEdit, setPrecioEdit] = useState(parseFloat(producto.variants[0]?.price || 0))
 
-  // Precio viene de la variante seleccionada
-  const precio = parseFloat(variant?.price || 0)
+  // Al cambiar variante, actualizar precio base (pero sin pisar si ya lo editó)
+  function handleVariantChange(variantId) {
+    const v = producto.variants.find(v => v.id == variantId)
+    setVariant(v)
+    setPrecioEdit(parseFloat(v?.price || 0))
+  }
 
   return (
     <div className="card p-4 space-y-3 mt-2">
@@ -188,7 +193,7 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
         {producto.image && <img src={producto.image} className="w-12 h-12 rounded-xl object-cover" />}
         <div className="flex-1">
           <div className="font-medium text-white text-sm">{producto.title}</div>
-          <div className="text-xs text-gray-500">${precio.toFixed(2)}</div>
+          <div className="text-xs text-gray-500">Shopify: ${parseFloat(variant?.price||0).toFixed(2)}</div>
         </div>
         <button onClick={onCancel} className="text-gray-600 hover:text-white p-1">✕</button>
       </div>
@@ -197,7 +202,7 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
           <div className="col-span-2">
             <label className="label">Variante</label>
             <select className="input" value={variant?.id}
-              onChange={e => setVariant(producto.variants.find(v => v.id == e.target.value))}>
+              onChange={e => handleVariantChange(e.target.value)}>
               {producto.variants.map(v => <option key={v.id} value={v.id}>{v.title} - ${v.price}</option>)}
             </select>
           </div>
@@ -221,31 +226,47 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
             onChange={e => setCantidad(parseInt(e.target.value) || 0)} />
         </div>
         <div>
+          <label className="label">Precio $ *</label>
+          <div className="relative">
+            <input type="number" className="input" step="0.50" min="0"
+              value={precioEdit}
+              onChange={e => setPrecioEdit(parseFloat(e.target.value) || 0)} />
+            {precioEdit !== parseFloat(variant?.price || 0) && (
+              <div className="text-xs text-yellow-400 mt-0.5">
+                Precio modificado · original: ${parseFloat(variant?.price||0).toFixed(2)}
+                <button onClick={() => setPrecioEdit(parseFloat(variant?.price||0))}
+                  className="ml-2 text-gray-500 hover:text-white underline">restablecer</button>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="col-span-2">
           <label className="label">Área *</label>
           <select className={`input ${!area ? 'border-yellow-500/50 text-yellow-400' : ''}`}
             value={area} onChange={e => setArea(e.target.value)}>
             {AREAS.map(a => <option key={a} value={a}>{a || '— Seleccionar área —'}</option>)}
           </select>
         </div>
-        <div className="col-span-2">
+        <div className="col-span-2" style={{marginTop: 0}}>
           <label className="label">Detalle del diseño *</label>
           <textarea className="input resize-none" rows={2} placeholder="Descripción del diseño..."
             value={detalle} onChange={e => setDetalle(e.target.value)} />
         </div>
       </div>
       <FotoUploader fotos={fotos} onChange={setFotos} />
-      {(!color || !talla || !area || !detalle || cantidad < 1) && (
+      {(!color || !talla || !area || !detalle || cantidad < 1 || precioEdit <= 0) && (
         <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2">
-          ⚠️ Completa: {[!color && 'Color', !talla && 'Talla', !area && 'Área', cantidad < 1 && 'Cantidad', !detalle && 'Detalle'].filter(Boolean).join(', ')}
+          ⚠️ Completa: {[!color && 'Color', !talla && 'Talla', !area && 'Área', cantidad < 1 && 'Cantidad', precioEdit <= 0 && 'Precio', !detalle && 'Detalle'].filter(Boolean).join(', ')}
         </div>
       )}
       <button onClick={() => {
-        if (!color)       { alert('El color es obligatorio'); return }
-        if (!talla)       { alert('La talla es obligatoria'); return }
-        if (!area)        { alert('Debes seleccionar un área'); return }
-        if (cantidad < 1) { alert('La cantidad debe ser al menos 1'); return }
-        if (!detalle)     { alert('El detalle es obligatorio'); return }
-        onAdd(producto, variant, talla, area, detalle, cantidad, color, fotos)
+        if (!color)          { alert('El color es obligatorio'); return }
+        if (!talla)          { alert('La talla es obligatoria'); return }
+        if (!area)           { alert('Debes seleccionar un área'); return }
+        if (cantidad < 1)    { alert('La cantidad debe ser al menos 1'); return }
+        if (precioEdit <= 0) { alert('El precio debe ser mayor a 0'); return }
+        if (!detalle)        { alert('El detalle es obligatorio'); return }
+        onAdd(producto, variant, talla, area, detalle, cantidad, color, fotos, precioEdit)
       }} className="btn-primary w-full">+ Agregar al pedido</button>
     </div>
   )
