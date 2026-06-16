@@ -81,7 +81,34 @@ export async function PATCH(req, { params }) {
       return Response.json({ ok: true, col: colLetter, row: dataIdxToSheetRow(idx) })
     }
 
-    // ── CASO 2: SUBESTADO + AREA_ROL → actualiza solo el subestado del área que guarda ──
+    // ── CASO 1b: solo SUBESTADO_CORTE → escribe directo en columna SUBESTADO_CORTE ──
+    if (bodyKeys.length === 1 && bodyKeys[0] === 'SUBESTADO_CORTE') {
+      const sheets = await getSheets()
+      const hRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: 'DETALLE_PEDIDO!A2:Z2',
+      })
+      const headers = hRes.data.values?.[0] || []
+      let colIdx = headers.indexOf('SUBESTADO_CORTE')
+
+      if (colIdx === -1) {
+        // Columna no existe aún — añadirla al final
+        colIdx = headers.length
+        const newHeader = [...headers, 'SUBESTADO_CORTE']
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: 'DETALLE_PEDIDO!A2',
+          valueInputOption: 'RAW',
+          requestBody: { values: [newHeader] },
+        })
+      }
+      const colLetter = String.fromCharCode(65 + colIdx)
+      await writeCellDetalle(idx, colLetter, body.SUBESTADO_CORTE)
+      await logCambio(item.PEDIDO_ID, `CORTE ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO_CORTE||'PENDIENTE', body.SUBESTADO_CORTE, usuarioId).catch(()=>{})
+      return Response.json({ ok: true })
+    }
+
+
     if (bodyKeys.length <= 2 && bodyKeys.includes('SUBESTADO')) {
       const areaRol = body.AREA_ROL // área específica que cambia: 'ESTAMPADO', 'BORDADO', etc.
       const nuevoEstado = body.SUBESTADO

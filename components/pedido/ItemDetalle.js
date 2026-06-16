@@ -5,6 +5,13 @@ import { SUBESTADO_LABELS, SUBESTADO_COLORS, SUBESTADO_BG } from '@/lib/labels'
 const SUBESTADOS_ORDEN = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO']
 const AREAS_BASE = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
 
+// Estados de CORTE — independiente del área, aplica a todos los ítems
+const CORTE_ESTADOS = [
+  { key: 'PENDIENTE',   label: '✂️ Pendiente',  color: 'bg-gray-600' },
+  { key: 'SOLICITADO',  label: '🛒 Solicitado', color: 'bg-yellow-500' },
+  { key: 'CORTADO',     label: '✅ Cortado',    color: 'bg-green-500' },
+]
+
 // Parsear subestado del item (puede ser simple "LISTO" o multi "ESTAMPADO:LISTO|BORDADO:EN_PROCESO")
 function parseSubestados(subestadoStr, areaStr) {
   if (!subestadoStr) return null
@@ -65,6 +72,21 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
   const subestadoActual = esMulti
     ? estadoGlobal(estadosLocales)
     : (estadosLocales._simple || 'SOLICITADO')
+
+  // Estado CORTE — independiente, siempre presente
+  const [subestadoCorte, setSubestadoCorte] = useState(item.SUBESTADO_CORTE || 'PENDIENTE')
+
+  async function cambiarCorte(nuevoEstado) {
+    const anterior = subestadoCorte
+    setSubestadoCorte(nuevoEstado)
+    try {
+      const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ SUBESTADO_CORTE: nuevoEstado, _usuarioId: user?.id }),
+      })
+      if (!res.ok) setSubestadoCorte(anterior)
+    } catch { setSubestadoCorte(anterior) }
+  }
 
   const puedeSubestado = canChangeSubestado !== undefined ? canChangeSubestado : !readOnly
 
@@ -198,7 +220,30 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
             </div>
           )}
 
-          {/* ── SUBESTADOS ── */}
+          {/* ─── PANEL CORTE — siempre primero, independiente del área ─── */}
+          {puedeSubestado ? (
+            <div className="rounded-xl border border-gray-700 p-2">
+              <div className="text-xs font-bold text-gray-400 mb-1.5">✂️ CORTE DE TELA</div>
+              <div className="flex gap-1">
+                {CORTE_ESTADOS.map(s => (
+                  <button key={s.key} onClick={() => cambiarCorte(s.key)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all
+                      ${subestadoCorte === s.key ? `${s.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : subestadoCorte !== 'PENDIENTE' && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span>✂️ Corte:</span>
+              <span className={`badge ${CORTE_ESTADOS.find(s=>s.key===subestadoCorte)?.color||'bg-gray-700'} text-white text-xs`}>
+                {CORTE_ESTADOS.find(s=>s.key===subestadoCorte)?.label||subestadoCorte}
+              </span>
+            </div>
+          )}
+
+          {/* ─── SUBESTADOS DE PRODUCCIÓN ─── */}
           {puedeSubestado ? (
             esMulti ? (
               // MULTI-ÁREA: mostrar panel por cada área

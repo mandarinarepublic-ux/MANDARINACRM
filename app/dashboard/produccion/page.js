@@ -75,6 +75,25 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
   )
   const subestadoActual = esMulti ? globalP(estadosLocales) : (estadosLocales._s||'SOLICITADO')
 
+  // CORTE — independiente, siempre primero
+  const [subestadoCorte, setSubestadoCorte] = useState(item.SUBESTADO_CORTE || 'PENDIENTE')
+  const CORTE_CONFIG = [
+    { key: 'PENDIENTE',  label: '✂️ Pendiente',  cls: 'bg-gray-600' },
+    { key: 'SOLICITADO', label: '🛒 Solicitado', cls: 'bg-yellow-500' },
+    { key: 'CORTADO',    label: '✅ Cortado',    cls: 'bg-green-500' },
+  ]
+
+  async function handleCorte(s) {
+    const prev = subestadoCorte; setSubestadoCorte(s)
+    try {
+      const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ SUBESTADO_CORTE: s, _usuarioId: userId }),
+      })
+      if (!res.ok) setSubestadoCorte(prev)
+    } catch { setSubestadoCorte(prev) }
+  }
+
   const fotos = [
     { key: 'FOTO_PECHO_URL', label: 'Pecho' },
     { key: 'FOTO_ESPALDA_URL', label: 'Espalda' },
@@ -203,7 +222,21 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
             </div>
           )}
 
-          {/* Botones subestado — multi-área o simple */}
+          {/* CORTE — siempre primero */}
+          <div className="rounded-xl border border-gray-700 p-2">
+            <div className="text-xs font-bold text-gray-400 mb-1.5">✂️ CORTE DE TELA</div>
+            <div className="flex gap-1">
+              {CORTE_CONFIG.map(s => (
+                <button key={s.key} onClick={() => handleCorte(s.key)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all
+                    ${subestadoCorte===s.key ? `${s.cls} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Botones subestado de producción — multi-área o simple */}
           {esMulti ? (
             <div className="space-y-2">
               {parsed.areas.map(area => {
