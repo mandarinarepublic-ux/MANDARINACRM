@@ -4,6 +4,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { ESTADO_LABELS, ESTADO_LABELS_LARGO } from '@/lib/labels'
+import { PdfGracias, PdfConfeccion } from '@/components/pedido/PdfPedido'
 
 export default function PedidoDetailPage() {
   const router = useRouter()

@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { PdfGracias, PdfConfeccion } from '@/components/pedido/PdfPedido'
 
 export default function ImpresionPage() {
   const router = useRouter()
@@ -87,106 +88,18 @@ export default function ImpresionPage() {
   async function printSelected() {
     if (selected.size === 0) return
     setPrinting(true)
-    const selectedPedidos = pedidos.filter(p => selected.has(p.PEDIDO_ID))
-
-    const html = selectedPedidos.map(pedido => {
-      const cliente = clientes[pedido.CLIENTE_ID] || {}
-      const items = pedido.items || []
-      const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
-      const esMandarina = pedido.TIENDA_ID === 'MANDARINA'
-      const montoTotal = parseFloat(pedido.MONTO_TOTAL || 0)
-      const montoPendiente = parseFloat(pedido.MONTO_PENDIENTE || 0)
-      const montoAbonado = parseFloat(pedido.MONTO_ABONADO || 0)
-
-      const productosHTML = items.map(item => `
-        <div style="margin-bottom:8px">
-          <table style="width:100%;border-collapse:collapse;font-size:10px">
-            <thead>
-              <tr style="background:#e8e8e8">
-                <th style="border:1px solid #000;padding:3px 4px;text-align:left;width:18%">PRODUCTO</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:50px">FOTO</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:11%">COLOR</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:6%">CANT.</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center;width:6%">TALLA</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center">DISEÑO PECHO</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center">DISEÑO ESPALDA</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center">MANGA DERECHA</th>
-                <th style="border:1px solid #000;padding:3px 4px;text-align:center">MANGA IZQUIERDA</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style="border:1px solid #000;padding:4px;vertical-align:top">${item.PRODUCTO_NOMBRE}<br><span style="color:${tiendaColor};font-size:9px">${item.AREA}</span></td>
-                <td style="border:1px solid #000;padding:2px;text-align:center;vertical-align:middle;width:50px;height:50px">
-                  ${item.FOTO_PECHO_URL?`<img src="${item.FOTO_PECHO_URL}" style="max-width:46px;max-height:46px;object-fit:contain;display:block;margin:0 auto">`:'<span style="color:#ccc;font-size:8px">—</span>'}
-                </td>
-                <td style="border:1px solid #000;padding:4px;text-align:center;vertical-align:middle">${item.COLOR||''}</td>
-                <td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;vertical-align:middle">${item.CANTIDAD}</td>
-                <td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;vertical-align:middle">${item.TALLA||''}</td>
-                ${[item.FOTO_PECHO_URL,item.FOTO_ESPALDA_URL,item.FOTO_MANGA_D_URL,item.FOTO_MANGA_I_URL].map(url =>
-                  `<td style="border:1px solid #000;padding:2px;text-align:center;width:50px;height:50px;vertical-align:middle">
-                    ${url?`<img src="${url}" style="max-width:46px;max-height:46px;object-fit:contain;display:block;margin:0 auto">`:'<span style="color:#ccc;font-size:8px">—</span>'}
-                  </td>`
-                ).join('')}
-              </tr>
-              ${item.DETALLE_PERSONALIZADO?`<tr><td colspan="9" style="border:1px solid #000;padding:4px;font-size:9px"><strong>Detalles:</strong> ${item.DETALLE_PERSONALIZADO}</td></tr>`:''}
-            </tbody>
-          </table>
-        </div>`).join('')
-
-      return `
-        <div style="page-break-after:always;font-family:Arial,sans-serif;padding:12mm;font-size:11px;color:#000;background:#fff">
-          <div style="background:${tiendaColor};height:5px;margin-bottom:10px;border-radius:3px"></div>
-          <div style="text-align:center;margin-bottom:10px">
-            <h2 style="margin:0 0 4px;font-size:15px;font-weight:bold;color:${tiendaColor}">${esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</h2>
-            ${esMandarina?`
-              <p style="margin:3px 0;font-size:12px;font-weight:bold">Hola ${cliente.NOMBRE||''}</p>
-              <p style="margin:2px 0;font-size:13px;font-weight:bold">¡Gracias por tu compra! 🎉</p>
-              <p style="margin:2px 0;font-size:10px;color:#555">Cada prenda que hacemos está pensada para gente única como tú.</p>
-              <p style="margin:2px 0;font-size:10px;color:#555">Síguenos en @mandarinarepublicec y descubre más diseños.</p>
-              <p style="margin:5px 0;font-size:11px;font-weight:bold;color:${tiendaColor}">💛 Tu confianza nos inspira 💛</p>`:''}
-          </div>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
-            <tr>
-              <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0;width:22%">NUM FACTURA</td>
-              <td style="border:1px solid #000;padding:4px 6px">${pedido.PEDIDO_ID}</td>
-              <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0;width:22%">VENDEDOR</td>
-              <td style="border:1px solid #000;padding:4px 6px">${pedido.VENDEDOR_ID||'-'}</td>
-            </tr>
-            <tr>
-              <td colspan="4" style="border:1px solid #000;padding:4px 6px;font-weight:bold">
-                ESTADO PAGO: ${pedido.ESTADO_PAGO==='PAGADO'?'🟢 Pagado':pedido.ESTADO_PAGO==='ABONO'?`🔴 Abono $${montoAbonado.toFixed(2)}, pendiente $${montoPendiente.toFixed(2)}`:`🔴 Pendiente $${montoTotal.toFixed(2)}`}
-              </td>
-            </tr>
-            <tr>
-              <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">NOMBRE CLIENTE</td>
-              <td style="border:1px solid #000;padding:4px 6px">${cliente.NOMBRE||'-'}</td>
-              <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">CANTIDAD</td>
-              <td style="border:1px solid #000;padding:4px 6px">${items.reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)}</td>
-            </tr>
-            <tr>
-              <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">CÉDULA</td>
-              <td style="border:1px solid #000;padding:4px 6px">${cliente.CEDULA||'-'}</td>
-              <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">NÚMERO CELULAR</td>
-              <td style="border:1px solid #000;padding:4px 6px">${cliente.CELULAR||'-'}</td>
-            </tr>
-            <tr>
-              <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;background:#f0f0f0">DIRECCIÓN ENTREGA</td>
-              <td colspan="3" style="border:1px solid #000;padding:4px 6px">${pedido.DIRECCION_TEXTO||cliente.DIRECCION||'-'}</td>
-            </tr>
-          </table>
-          <h4 style="text-align:center;margin:8px 0 6px;font-size:11px;font-weight:bold">Detalle de los productos solicitados</h4>
-          ${productosHTML}
-          <div style="margin-top:10px;border-top:1px solid #ddd;padding-top:6px;text-align:center;font-size:9px;color:#888">
-            Pedido: ${pedido.FECHA_PEDIDO?.split(' ')[0]||'-'} · Entrega: ${pedido.FECHA_ENTREGA_PROMETIDA?new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'}):'-'}
-          </div>
-        </div>`
-    }).join('')
-
-    const win = window.open('', '_blank')
-    win.document.write(`<!DOCTYPE html><html><head><title>Pedidos</title><style>@media print{body{margin:0}}body{margin:0;background:white}</style></head><body>${html}<script>window.onload=()=>{window.print()}<\/script></body></html>`)
-    win.document.close()
-    setPrinting(false)
+    try {
+      const html2pdf = (await import('html2pdf.js')).default
+      const element = document.getElementById('impresion-render')
+      if (!element) return
+      await html2pdf().set({
+        margin: [0,0,0,0],
+        filename: `pedidos_${new Date().toISOString().split('T')[0]}.pdf`,
+        html2canvas: { scale:2, useCORS:true, allowTaint:true, backgroundColor:'#ffffff' },
+        jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
+      }).from(element).save()
+    } catch(e) { alert('Error PDF: ' + e.message) }
+    finally { setPrinting(false) }
   }
 
   return (
@@ -294,6 +207,23 @@ export default function ImpresionPage() {
           {printing ? '⏳ Preparando...' : `🖨️ Imprimir ${selected.size > 0 ? `${selected.size} pedido(s)` : ''}`}
         </button>
         {selected.size === 0 && <p className="text-center text-gray-600 text-xs mt-2">Selecciona al menos un pedido</p>}
+      </div>
+
+      {/* PDFs ocultos renderizados con el nuevo diseño */}
+      <div style={{position:'fixed',top:'-9999px',left:'-9999px',width:'794px',backgroundColor:'white'}}>
+        <div id="impresion-render">
+          {pedidos.filter(p => selected.has(p.PEDIDO_ID)).map(pedido => {
+            const cliente = clientes[pedido.CLIENTE_ID] || {}
+            const items = pedido.items || []
+            const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
+            return (
+              <div key={pedido.PEDIDO_ID}>
+                <PdfGracias pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
+                <PdfConfeccion pedido={pedido} items={items} tiendaColor={tiendaColor} />
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
