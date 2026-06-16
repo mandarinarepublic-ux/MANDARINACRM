@@ -409,7 +409,7 @@ export default function ProduccionPage() {
                       className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <Link href={`/dashboard/pedido/${pedido.PEDIDO_ID}?from=historial`}
+                          <Link href={`/dashboard/pedido/${pedido.PEDIDO_ID}`}
                             onClick={e => e.stopPropagation()}
                             className="font-mono text-sm font-medium text-mandarina-400 hover:underline">
                             {pedido.PEDIDO_ID}
