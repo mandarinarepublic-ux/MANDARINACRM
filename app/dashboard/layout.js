@@ -9,6 +9,7 @@ const NAV_ALL = [
   { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'] },
   { href:'/dashboard/historial',    label:'Historial',    icon:'📋', roles:['ADMIN','VENDEDOR','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/catalogo',     label:'Catálogo',     icon:'🛍️', roles:['ADMIN','VENDEDOR'] },
+  { href:'/dashboard/corte',       label:'Corte',        icon:'✂️', roles:['ADMIN','CORTE'] },
   { href:'/dashboard/produccion',   label:'Producción',   icon:'🏭', roles:['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','CORTE'] },
   { href:'/dashboard/impresion',    label:'Imprimir',     icon:'🖨️', roles:['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','CORTE'] },
   { href:'/dashboard/despacho',     label:'Despacho',     icon:'🚚', roles:['ADMIN','DESPACHO'] },
@@ -21,7 +22,7 @@ const ROL_PRIORITY = {
   ESTAMPADO:   ['produccion','historial','impresion'],
   SUBLIMACION: ['produccion','historial','impresion'],
   BORDADO:     ['produccion','historial','impresion'],
-  CORTE:       ['produccion','historial'],
+  CORTE:       ['corte','historial'],
   DESPACHO:    ['despacho','historial'],
   ADMIN:       ['nuevo-pedido','historial','produccion','despacho','usuarios'],
 }
