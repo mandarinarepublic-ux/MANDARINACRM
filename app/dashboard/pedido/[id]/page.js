@@ -306,12 +306,18 @@ export default function PedidoDetailPage() {
                 <button onClick={()=>setShowPdfPreview(false)} className="btn-secondary text-sm px-4 py-2">✕</button>
               </div>
             </div>
-            <div className="bg-white rounded-xl overflow-hidden"><PdfContent pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} /></div>
+            <div className="bg-white rounded-xl overflow-hidden">
+              <PdfGracias pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
+              <PdfConfeccion pedido={pedido} items={items} tiendaColor={tiendaColor} />
+            </div>
           </div>
         </div>
       )}
       <div style={{position:'fixed',top:'-9999px',left:'-9999px',width:'794px',backgroundColor:'white'}}>
-        <div id="pdf-render"><PdfContent pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} /></div>
+        <div id="pdf-render">
+          <PdfGracias pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
+          <PdfConfeccion pedido={pedido} items={items} tiendaColor={tiendaColor} />
+        </div>
       </div>
 
       {/* Bottom bar */}
@@ -333,92 +339,304 @@ export default function PedidoDetailPage() {
   )
 }
 
-function PdfContent({ pedido, items, cliente, tiendaColor }) {
+// ─── HOJA 1: AGRADECIMIENTO AL CLIENTE ──────────────────────────────────────
+function PdfGracias({ pedido, items, cliente, tiendaColor }) {
   const esMandarina = pedido?.TIENDA_ID === 'MANDARINA'
   const montoTotal = parseFloat(pedido?.MONTO_TOTAL||0)
   const montoPendiente = parseFloat(pedido?.MONTO_PENDIENTE||0)
   const montoAbonado = parseFloat(pedido?.MONTO_ABONADO||0)
+  const pagado = pedido?.ESTADO_PAGO === 'PAGADO'
+  const nombreCorto = cliente?.NOMBRE?.split(' ')[0] || 'Cliente'
+
+  const s = (v) => ({ style: v }) // shorthand para style objects
+
   return (
-    <div style={{fontFamily:'Arial,Helvetica,sans-serif',color:'#000',backgroundColor:'#fff',padding:'12mm',width:'100%',fontSize:'11px'}}>
-      <div style={{backgroundColor:tiendaColor,height:'5px',marginBottom:'10px',borderRadius:'3px'}}/>
-      <div style={{textAlign:'center',marginBottom:'10px'}}>
-        <h2 style={{margin:'0 0 4px',fontSize:'15px',fontWeight:'bold',color:tiendaColor}}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</h2>
-        {esMandarina&&(<>
-          <p style={{margin:'3px 0',fontSize:'12px',fontWeight:'bold'}}>Hola {cliente?.NOMBRE||''}</p>
-          <p style={{margin:'2px 0',fontSize:'13px',fontWeight:'bold'}}>¡Gracias por tu compra! 🎉</p>
-          <p style={{margin:'2px 0',fontSize:'10px',color:'#555'}}>Cada prenda que hacemos está pensada para gente única como tú.</p>
-          <p style={{margin:'5px 0',fontSize:'11px',fontWeight:'bold',color:tiendaColor}}>💛 Tu confianza nos inspira 💛</p>
-        </>)}
-      </div>
-      <table style={{width:'100%',borderCollapse:'collapse',marginBottom:'8px'}}>
-        <tbody>
-          <tr>
-            <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0',width:'22%'}}>NUM FACTURA</td>
-            <td style={{border:'1px solid #000',padding:'4px 6px'}}>{pedido?.PEDIDO_ID}</td>
-            <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0',width:'22%'}}>VENDEDOR</td>
-            <td style={{border:'1px solid #000',padding:'4px 6px'}}>{pedido?.VENDEDOR_ID||'-'}</td>
-          </tr>
-          <tr><td colSpan={4} style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold'}}>
-            ESTADO PAGO: {pedido?.ESTADO_PAGO==='PAGADO'?'🟢 Pagado':pedido?.ESTADO_PAGO==='ABONO'?`🔴 Abono $${montoAbonado.toFixed(2)}, pendiente $${montoPendiente.toFixed(2)}`:`🔴 Pendiente $${montoTotal.toFixed(2)}`}
-          </td></tr>
-          <tr>
-            <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0'}}>NOMBRE CLIENTE</td>
-            <td style={{border:'1px solid #000',padding:'4px 6px'}}>{cliente?.NOMBRE||'-'}</td>
-            <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0'}}>CANTIDAD</td>
-            <td style={{border:'1px solid #000',padding:'4px 6px'}}>{(items||[]).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)}</td>
-          </tr>
-          <tr>
-            <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0'}}>CÉDULA</td>
-            <td style={{border:'1px solid #000',padding:'4px 6px'}}>{cliente?.CEDULA||'-'}</td>
-            <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0'}}>CELULAR</td>
-            <td style={{border:'1px solid #000',padding:'4px 6px'}}>{cliente?.CELULAR||'-'}</td>
-          </tr>
-          <tr>
-            <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#f0f0f0'}}>DIRECCIÓN</td>
-            <td colSpan={3} style={{border:'1px solid #000',padding:'4px 6px'}}>{(pedido?.DIRECCION_TEXTO||pedido?.DIRECCION_PEDIDO)||cliente?.DIRECCION||'-'}</td>
-          </tr>
-          {pedido?.GUIA_NUMERO&&(
-            <tr>
-              <td style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold',backgroundColor:'#d4edda'}}>GUÍA DESPACHO</td>
-              <td colSpan={3} style={{border:'1px solid #000',padding:'4px 6px',fontWeight:'bold'}}>{pedido.GUIA_TRANSPORTISTA} # {pedido.GUIA_NUMERO}</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      <h4 style={{textAlign:'center',margin:'8px 0 6px',fontSize:'11px',fontWeight:'bold'}}>Detalle de los productos solicitados</h4>
-      {(items||[]).map((item,idx)=>(
-        <div key={idx} style={{marginBottom:'8px'}}>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:'10px'}}>
-            <thead><tr style={{backgroundColor:'#e8e8e8'}}>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'left',width:'18%'}}>PRODUCTO</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center',width:'50px'}}>FOTO</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center',width:'11%'}}>COLOR</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center',width:'6%'}}>CANT.</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center',width:'6%'}}>TALLA</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>PECHO</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>ESPALDA</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>M.DER</th>
-              <th style={{border:'1px solid #000',padding:'3px 4px',textAlign:'center'}}>M.IZQ</th>
-            </tr></thead>
-            <tbody>
-              <tr>
-                <td style={{border:'1px solid #000',padding:'4px',verticalAlign:'top'}}>{item.PRODUCTO_NOMBRE}<br/><span style={{color:tiendaColor,fontSize:'9px'}}>{item.AREA}</span></td>
-                <td style={{border:'1px solid #000',padding:'2px',textAlign:'center',verticalAlign:'middle',width:'50px',height:'50px'}}>{item.FOTO_PECHO_URL?<img src={item.FOTO_PECHO_URL} style={{maxWidth:'46px',maxHeight:'46px',objectFit:'contain',display:'block',margin:'0 auto'}}/>:<span style={{color:'#ccc',fontSize:'8px'}}>—</span>}</td>
-                <td style={{border:'1px solid #000',padding:'4px',textAlign:'center',verticalAlign:'middle'}}>{item.COLOR}</td>
-                <td style={{border:'1px solid #000',padding:'4px',textAlign:'center',fontWeight:'bold',verticalAlign:'middle'}}>{item.CANTIDAD}</td>
-                <td style={{border:'1px solid #000',padding:'4px',textAlign:'center',fontWeight:'bold',verticalAlign:'middle'}}>{item.TALLA}</td>
-                {[item.FOTO_PECHO_URL,item.FOTO_ESPALDA_URL,item.FOTO_MANGA_D_URL,item.FOTO_MANGA_I_URL].map((url,i)=>(
-                  <td key={i} style={{border:'1px solid #000',padding:'2px',textAlign:'center',width:'50px',height:'50px',verticalAlign:'middle'}}>{url?<img src={url} style={{maxWidth:'46px',maxHeight:'46px',objectFit:'contain',display:'block',margin:'0 auto'}}/>:<span style={{color:'#ccc',fontSize:'8px'}}>—</span>}</td>
-                ))}
-              </tr>
-              {item.DETALLE_PERSONALIZADO&&<tr><td colSpan={9} style={{border:'1px solid #000',padding:'4px',fontSize:'9px'}}><strong>Detalles:</strong> {item.DETALLE_PERSONALIZADO}</td></tr>}
-              {item.NOTAS_AREA&&<tr><td colSpan={9} style={{border:'1px solid #000',padding:'4px',fontSize:'9px',backgroundColor:'#fff3cd'}}><strong>📝 Nota área:</strong> {item.NOTAS_AREA}</td></tr>}
-            </tbody>
-          </table>
+    <div style={{
+      fontFamily: "'Helvetica Neue', Arial, sans-serif",
+      backgroundColor: '#fff',
+      width: '794px',
+      minHeight: '1123px',
+      position: 'relative',
+      overflow: 'hidden',
+      pageBreakAfter: 'always',
+    }}>
+      {/* Barra superior de color */}
+      <div style={{ backgroundColor: tiendaColor, height: '8px', width: '100%' }} />
+
+      {/* Header */}
+      <div style={{ padding: '32px 48px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: '22px', fontWeight: '900', color: tiendaColor, letterSpacing: '-0.5px' }}>
+            {esMandarina ? 'MANDARINA REPUBLIC' : 'INDSTORE'}
+          </div>
+          <div style={{ fontSize: '11px', color: '#999', marginTop: '2px', letterSpacing: '2px', textTransform: 'uppercase' }}>
+            Ropa Personalizada · Ecuador
+          </div>
         </div>
-      ))}
-      <div style={{marginTop:'10px',borderTop:'1px solid #ddd',paddingTop:'6px',textAlign:'center',fontSize:'9px',color:'#888'}}>
-        Pedido: {pedido?.FECHA_PEDIDO?.split(' ')[0]||'-'} · Entrega: {pedido?.FECHA_ENTREGA_PROMETIDA?new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'}):'-'}
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '11px', color: '#bbb', marginBottom: '2px' }}>ORDEN DE COMPRA</div>
+          <div style={{ fontSize: '16px', fontWeight: '700', color: '#333', fontFamily: 'monospace' }}>{pedido?.PEDIDO_ID}</div>
+          <div style={{ fontSize: '10px', color: '#bbb', marginTop: '2px' }}>{pedido?.FECHA_PEDIDO?.split(' ')[0] || ''}</div>
+        </div>
+      </div>
+
+      {/* Mensaje de agradecimiento */}
+      <div style={{ padding: '28px 48px 20px', borderBottom: '1px solid #f5f5f5' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '13px', color: '#999', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Para</div>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: '#1a1a1a', lineHeight: 1.1, marginBottom: '4px' }}>
+              {cliente?.NOMBRE || '-'}
+            </div>
+            <div style={{ fontSize: '12px', color: '#888', marginTop: '6px' }}>
+              {cliente?.CEDULA && <span style={{ marginRight: '16px' }}>CI: {cliente.CEDULA}</span>}
+              {cliente?.CELULAR && <span>{cliente.CELULAR}</span>}
+            </div>
+            {(pedido?.DIRECCION_TEXTO || pedido?.DIRECCION_PEDIDO) && (
+              <div style={{ marginTop: '8px', fontSize: '11px', color: '#666', backgroundColor: '#fafafa', padding: '8px 12px', borderRadius: '6px', borderLeft: `3px solid ${tiendaColor}` }}>
+                📍 {pedido.DIRECCION_TEXTO || pedido.DIRECCION_PEDIDO}
+              </div>
+            )}
+          </div>
+          {/* Resumen financiero */}
+          <div style={{ minWidth: '180px', backgroundColor: '#fafafa', borderRadius: '12px', padding: '16px', textAlign: 'center', border: '1px solid #eee' }}>
+            <div style={{ fontSize: '10px', color: '#bbb', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Total del pedido</div>
+            <div style={{ fontSize: '28px', fontWeight: '900', color: tiendaColor, lineHeight: 1 }}>${montoTotal.toFixed(2)}</div>
+            {pagado
+              ? <div style={{ marginTop: '8px', backgroundColor: '#dcfce7', color: '#16a34a', fontSize: '10px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', display: 'inline-block' }}>✓ PAGADO</div>
+              : <div style={{ marginTop: '8px' }}>
+                  <div style={{ fontSize: '10px', color: '#888' }}>Abono: ${montoAbonado.toFixed(2)}</div>
+                  <div style={{ backgroundColor: '#fef3c7', color: '#d97706', fontSize: '10px', fontWeight: '700', padding: '3px 8px', borderRadius: '20px', display: 'inline-block', marginTop: '4px' }}>Saldo: ${montoPendiente.toFixed(2)}</div>
+                </div>
+            }
+            <div style={{ marginTop: '12px', fontSize: '10px', color: '#999', borderTop: '1px solid #eee', paddingTop: '8px' }}>
+              Entrega: {pedido?.FECHA_ENTREGA_PROMETIDA
+                ? new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC',{day:'numeric',month:'short',year:'numeric'})
+                : '-'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Productos — foto grande a la izquierda */}
+      <div style={{ padding: '20px 48px' }}>
+        <div style={{ fontSize: '11px', color: '#bbb', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '16px' }}>
+          {(items||[]).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)} prenda(s) personalizada(s)
+        </div>
+        {(items||[]).map((item, idx) => (
+          <div key={idx} style={{ display: 'flex', gap: '20px', marginBottom: '20px', padding: '16px', backgroundColor: '#fafafa', borderRadius: '12px', border: '1px solid #f0f0f0' }}>
+            {/* Foto principal grande */}
+            <div style={{ flexShrink: 0, width: '110px' }}>
+              {item.FOTO_PECHO_URL
+                ? <img src={item.FOTO_PECHO_URL} style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #eee' }} />
+                : <div style={{ width: '110px', height: '110px', backgroundColor: '#eee', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#bbb' }}>Sin foto</div>
+              }
+              {/* Fotos secundarias en fila */}
+              {[item.FOTO_ESPALDA_URL, item.FOTO_MANGA_D_URL, item.FOTO_MANGA_I_URL].filter(Boolean).length > 0 && (
+                <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                  {[item.FOTO_ESPALDA_URL, item.FOTO_MANGA_D_URL, item.FOTO_MANGA_I_URL].filter(Boolean).map((url, i) => (
+                    <img key={i} src={url} style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '5px', border: '1px solid #ddd' }} />
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Info del producto */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#1a1a1a', marginBottom: '4px' }}>{item.PRODUCTO_NOMBRE}</div>
+                <div style={{ display: 'inline-block', fontSize: '10px', fontWeight: '600', color: tiendaColor, backgroundColor: `${tiendaColor}15`, padding: '2px 8px', borderRadius: '20px', marginBottom: '10px' }}>{item.AREA}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                  {[['Color', item.COLOR], ['Talla', item.TALLA], ['Cantidad', item.CANTIDAD]].map(([k,v]) =>
+                    v ? <div key={k} style={{ fontSize: '11px' }}><span style={{ color: '#bbb' }}>{k}: </span><span style={{ color: '#333', fontWeight: '600' }}>{v}</span></div> : null
+                  )}
+                </div>
+                {item.DETALLE_PERSONALIZADO && (
+                  <div style={{ marginTop: '8px', fontSize: '10px', color: '#666', backgroundColor: '#fff', padding: '6px 10px', borderRadius: '6px', border: '1px solid #eee', fontStyle: 'italic' }}>
+                    "{item.DETALLE_PERSONALIZADO}"
+                  </div>
+                )}
+              </div>
+              <div style={{ textAlign: 'right', marginTop: '8px' }}>
+                <div style={{ fontSize: '10px', color: '#bbb' }}>{item.CANTIDAD} × ${parseFloat(item.PRECIO_UNIT||0).toFixed(2)}</div>
+                <div style={{ fontSize: '16px', fontWeight: '800', color: tiendaColor }}>${parseFloat(item.SUBTOTAL||0).toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 48px', backgroundColor: tiendaColor, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ color: 'white', fontSize: '12px', fontWeight: '700' }}>
+          ¡Gracias por confiar en nosotros, {nombreCorto}! 🧡
+        </div>
+        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '10px' }}>
+          {esMandarina ? 'mandarinaec.com' : 'indstore.ec'} · @{esMandarina ? 'mandarinaec' : 'indstore'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── HOJA 2: ORDEN DE CONFECCIÓN (sin precios) ───────────────────────────────
+function PdfConfeccion({ pedido, items, tiendaColor }) {
+  const now = new Date()
+  const entrega = pedido?.FECHA_ENTREGA_PROMETIDA ? new Date(pedido.FECHA_ENTREGA_PROMETIDA) : null
+  const diasRestantes = entrega ? Math.ceil((entrega - now) / 86400000) : null
+  const urgente = diasRestantes !== null && diasRestantes <= 2
+
+  return (
+    <div style={{
+      fontFamily: "'Helvetica Neue', Arial, sans-serif",
+      backgroundColor: '#fff',
+      width: '794px',
+      minHeight: '1123px',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Barra superior - negra para confección */}
+      <div style={{ backgroundColor: '#1a1a1a', height: '8px', width: '100%' }} />
+
+      {/* Header confección */}
+      <div style={{ padding: '24px 48px 16px', backgroundColor: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>Orden de Producción Interna</div>
+          <div style={{ fontSize: '20px', fontWeight: '900', color: '#fff', letterSpacing: '-0.5px', fontFamily: 'monospace' }}>{pedido?.PEDIDO_ID}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          {urgente && (
+            <div style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: '11px', fontWeight: '800', padding: '4px 12px', borderRadius: '20px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              🚨 URGENTE
+            </div>
+          )}
+          <div style={{ fontSize: '10px', color: '#888', marginBottom: '2px' }}>Entrega comprometida</div>
+          <div style={{ fontSize: '14px', fontWeight: '700', color: entrega && urgente ? '#ef4444' : '#fff' }}>
+            {entrega ? entrega.toLocaleDateString('es-EC', {day:'numeric', month:'long', year:'numeric'}) : '-'}
+          </div>
+          {diasRestantes !== null && (
+            <div style={{ fontSize: '10px', color: urgente ? '#ef4444' : '#888', marginTop: '2px' }}>
+              {diasRestantes > 0 ? `${diasRestantes} día(s) restante(s)` : diasRestantes === 0 ? '¡ENTREGA HOY!' : `${Math.abs(diasRestantes)} día(s) de retraso`}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Barra de área y vendedor */}
+      <div style={{ backgroundColor: '#f5f5f5', padding: '10px 48px', display: 'flex', gap: '32px', borderBottom: '1px solid #eee' }}>
+        <div><span style={{ fontSize: '10px', color: '#999' }}>VENDEDOR: </span><span style={{ fontSize: '11px', fontWeight: '700', color: '#333' }}>{pedido?.VENDEDOR_ID || '-'}</span></div>
+        <div><span style={{ fontSize: '10px', color: '#999' }}>PRENDAS: </span><span style={{ fontSize: '11px', fontWeight: '700', color: '#333' }}>{(items||[]).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)}</span></div>
+        <div><span style={{ fontSize: '10px', color: '#999' }}>FECHA PEDIDO: </span><span style={{ fontSize: '11px', fontWeight: '700', color: '#333' }}>{pedido?.FECHA_PEDIDO?.split(' ')[0] || '-'}</span></div>
+        <div><span style={{ fontSize: '10px', color: '#999' }}>ÁREAS: </span><span style={{ fontSize: '11px', fontWeight: '700', color: '#333' }}>{[...new Set((items||[]).map(i=>i.AREA).filter(Boolean))].join(', ') || '-'}</span></div>
+      </div>
+
+      {/* Ítems de producción */}
+      <div style={{ padding: '20px 48px' }}>
+        {(items||[]).map((item, idx) => {
+          const fotosDiseno = [
+            { url: item.FOTO_PECHO_URL,   label: 'PECHO'    },
+            { url: item.FOTO_ESPALDA_URL, label: 'ESPALDA'  },
+            { url: item.FOTO_MANGA_D_URL, label: 'M. DER'   },
+            { url: item.FOTO_MANGA_I_URL, label: 'M. IZQ'   },
+          ].filter(f => f.url)
+
+          return (
+            <div key={idx} style={{ marginBottom: '24px', border: '2px solid #e5e5e5', borderRadius: '12px', overflow: 'hidden' }}>
+              {/* Header del ítem */}
+              <div style={{ backgroundColor: '#1a1a1a', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ backgroundColor: tiendaColor, color: '#fff', fontSize: '11px', fontWeight: '800', padding: '2px 10px', borderRadius: '20px' }}>#{idx+1}</div>
+                  <div style={{ fontSize: '14px', fontWeight: '800', color: '#fff' }}>{item.PRODUCTO_NOMBRE}</div>
+                </div>
+                <div style={{ backgroundColor: tiendaColor, color: '#fff', fontSize: '10px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase' }}>
+                  {item.AREA}
+                </div>
+              </div>
+
+              {/* Cuerpo del ítem */}
+              <div style={{ padding: '14px 16px', display: 'flex', gap: '16px' }}>
+                {/* Datos de confección */}
+                <div style={{ flex: '0 0 200px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                    {[
+                      ['COLOR', item.COLOR || '—'],
+                      ['TALLA', item.TALLA || '—'],
+                      ['CANTIDAD', item.CANTIDAD],
+                      ['SUBESTADO', item.SUBESTADO || 'SOLICITADO'],
+                    ].map(([k,v]) => (
+                      <div key={k} style={{ backgroundColor: '#f9f9f9', borderRadius: '8px', padding: '8px 10px', border: '1px solid #eee' }}>
+                        <div style={{ fontSize: '9px', color: '#bbb', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>{k}</div>
+                        <div style={{ fontSize: k === 'CANTIDAD' ? '20px' : '12px', fontWeight: '800', color: k === 'CANTIDAD' ? tiendaColor : '#333', lineHeight: 1 }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Instrucciones / detalle */}
+                  {item.DETALLE_PERSONALIZADO && (
+                    <div style={{ backgroundColor: '#fff8e1', borderRadius: '8px', padding: '10px', border: '1px solid #ffe082' }}>
+                      <div style={{ fontSize: '9px', color: '#f59e0b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>📋 Instrucciones</div>
+                      <div style={{ fontSize: '11px', color: '#333', lineHeight: 1.4 }}>{item.DETALLE_PERSONALIZADO}</div>
+                    </div>
+                  )}
+
+                  {/* Nota de área si existe */}
+                  {item.NOTAS_AREA && (
+                    <div style={{ marginTop: '8px', backgroundColor: '#eff6ff', borderRadius: '8px', padding: '10px', border: '1px solid #bfdbfe' }}>
+                      <div style={{ fontSize: '9px', color: '#3b82f6', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>📝 Nota de área</div>
+                      <div style={{ fontSize: '11px', color: '#333', lineHeight: 1.4 }}>{item.NOTAS_AREA}</div>
+                    </div>
+                  )}
+
+                  {/* Archivo de diseño */}
+                  {item.ARCHIVO_DISENO_URL && (
+                    <div style={{ marginTop: '8px', backgroundColor: '#f0fdf4', borderRadius: '8px', padding: '8px 10px', border: '1px solid #bbf7d0' }}>
+                      <div style={{ fontSize: '9px', color: '#16a34a', fontWeight: '700', marginBottom: '2px' }}>📎 Archivo AI/PSD disponible</div>
+                      <div style={{ fontSize: '9px', color: '#888', wordBreak: 'break-all' }}>{item.ARCHIVO_DISENO_URL.split('/').pop()}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Fotos de diseño — grandes */}
+                <div style={{ flex: 1 }}>
+                  {fotosDiseno.length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(fotosDiseno.length, 2)}, 1fr)`, gap: '8px' }}>
+                      {fotosDiseno.map((f, i) => (
+                        <div key={i} style={{ textAlign: 'center' }}>
+                          <img src={f.url} style={{ width: '100%', height: fotosDiseno.length <= 2 ? '140px' : '100px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #eee', backgroundColor: '#f9f9f9' }} />
+                          <div style={{ fontSize: '9px', color: '#bbb', marginTop: '3px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{f.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ height: '120px', backgroundColor: '#f9f9f9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #ddd' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '24px', marginBottom: '4px' }}>✏️</div>
+                        <div style={{ fontSize: '10px', color: '#bbb' }}>Sin archivos de diseño</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Checkbox de control de calidad */}
+              <div style={{ backgroundColor: '#f9f9f9', padding: '8px 16px', borderTop: '1px solid #eee', display: 'flex', gap: '24px', alignItems: 'center' }}>
+                <div style={{ fontSize: '10px', color: '#999', fontWeight: '600' }}>CONTROL:</div>
+                {['Confeccionado', 'Diseño aplicado', 'Revisado', 'Listo para despacho'].map(step => (
+                  <div key={step} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <div style={{ width: '14px', height: '14px', border: '2px solid #ccc', borderRadius: '3px', flexShrink: 0 }} />
+                    <span style={{ fontSize: '9px', color: '#666' }}>{step}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Footer confección */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '12px 48px', backgroundColor: '#f5f5f5', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: '10px', color: '#999' }}>Impreso: {now.toLocaleDateString('es-EC', {day:'numeric',month:'long',year:'numeric', hour:'2-digit', minute:'2-digit'})}</div>
+        <div style={{ fontSize: '10px', color: '#999' }}>USO INTERNO — NO INCLUYE PRECIOS</div>
+        <div style={{ fontSize: '10px', color: '#999' }}>{pedido?.PEDIDO_ID}</div>
       </div>
     </div>
   )
