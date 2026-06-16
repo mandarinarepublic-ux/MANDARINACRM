@@ -185,6 +185,32 @@ export default function NuevoPedidoPage() {
     setStep(s)
   }
 
+  // Factura automática al crear — se dispara desde la API, no desde el cliente
+  // El payload incluye pedido_id para que Make pueda devolvérnoslo en el callback
+  async function dispararFactura(pedidoId, clienteData, montoTotal) {
+    const cedula = String(clienteData.cedula || '')
+    const sinImp = parseFloat((montoTotal / 1.15).toFixed(2))
+    const impuesto = parseFloat((montoTotal - sinImp).toFixed(2))
+    try {
+      await fetch('https://hook.us2.make.com/mjvj01tevojz6ayp7rrtt7wc6oa7v11n', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pedido_id:    pedidoId,
+          numero:       (clienteData.celular || '').replace(/\D/g, ''),
+          CI:           cedula,
+          tipo_id:      cedula.length === 13 ? '04' : '05',
+          cliente:      clienteData.nombre,
+          email:        clienteData.email || 'info@mandarinaec.com',
+          total:        montoTotal.toFixed(2),
+          PrecioSinImp: sinImp.toFixed(2),
+          ValorImp:     impuesto.toFixed(2),
+        }),
+      })
+    } catch(e) {
+      console.error('Error disparando factura:', e)
+    }
+  }
   async function handleSubmit() {
     const err1 = validateStep1()
     const err2 = validateStep2()
@@ -240,6 +266,10 @@ export default function NuevoPedidoPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      // Disparar factura automáticamente si el vendedor la solicitó
+      if (emitirFactura) {
+        dispararFactura(data.pedidoId, { ...cliente, cedula: String(cliente.cedula), celular: String(cliente.celular) }, montoTotal)
+      }
       router.push(`/dashboard/pedido/${data.pedidoId}?nuevo=1`)
     } catch (e) {
       setError(e.message)

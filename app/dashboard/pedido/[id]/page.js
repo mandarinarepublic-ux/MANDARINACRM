@@ -270,6 +270,29 @@ export default function PedidoDetailPage() {
             </div>
           )}
 
+          {/* Factura — si ya fue procesada por Make/Dátil */}
+          {pedido.FACTURA_PDF_URL && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 flex items-center gap-3">
+              <span className="text-2xl">🧾</span>
+              <div className="flex-1">
+                <div className="text-blue-400 font-semibold text-sm">Factura electrónica emitida</div>
+                {pedido.FACTURA_ID && <div className="text-gray-500 text-xs mt-0.5">Dátil ID: {pedido.FACTURA_ID}</div>}
+              </div>
+              <a href={pedido.FACTURA_PDF_URL} target="_blank" rel="noopener noreferrer"
+                className="btn-primary text-xs px-4 py-2" style={{backgroundColor:'#3b82f6'}}>
+                📄 Ver RIDE
+              </a>
+            </div>
+          )}
+
+          {/* Factura pendiente — si emitir_factura=TRUE pero aún no llega el callback */}
+          {pedido.EMITIR_FACTURA === 'TRUE' && !pedido.FACTURA_PDF_URL && (
+            <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-4 flex items-center gap-3">
+              <span className="text-xl">⏳</span>
+              <div className="text-gray-400 text-sm">Factura en proceso… (llega en 5–30 seg)</div>
+            </div>
+          )}
+
           {pedido.NOTAS_VENDEDOR && (
             <div className="card p-4">
               <h3 className="text-sm font-semibold text-white mb-2">📝 Notas internas</h3>
