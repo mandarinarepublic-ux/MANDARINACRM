@@ -76,13 +76,13 @@ export default function BuscadorProductos({ tienda, onAdd }) {
 
       {selected && (
         <ProductoDetail producto={selected}
-          onAdd={(prod, variant, talla, area, detalle, cantidad, color, fotos) => {
+          onAdd={(prod, variant, talla, area, detalle, cantidad, color, fotos, precioEdit) => {
             onAdd({
               productoNombre: prod.title,
               shopifyVariantId: variant?.id || '',
               color, talla,
               cantidad: cantidad || 1,
-              precioUnit: parseFloat(variant?.price || 0),
+              precioUnit: precioEdit ?? parseFloat(variant?.price || 0),
               area, detalle,
               esPersonalizado: false,
               imagen: prod.image,
@@ -99,6 +99,69 @@ export default function BuscadorProductos({ tienda, onAdd }) {
         <ProductoPersonalizado
           onAdd={data => { onAdd(data); setShowPersonalizado(false) }}
           onCancel={() => setShowPersonalizado(false)} />
+      )}
+    </div>
+  )
+}
+
+function ArchivoCloudinary({ fotos, onChange }) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleFile(file) {
+    if (!file) return
+    setUploading(true); setError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('tipo', 'diseno')
+      const res = await fetch('/api/upload', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok || !data.url) throw new Error(data.error || 'Error al subir')
+      onChange({ ...fotos, archivoDiseno: data.url })
+    } catch(e) {
+      setError(e.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div>
+      <label className={`flex items-center gap-3 border border-dashed rounded-xl p-3 cursor-pointer transition-all
+        ${fotos.archivoDiseno ? 'border-mandarina-500 bg-mandarina-500/5' : 'border-gray-700 hover:border-gray-500'}
+        ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+        <input type="file" accept=".ai,.psd,.pdf,.jpg,.png,.eps,.svg" className="hidden"
+          onChange={e => handleFile(e.target.files[0])} />
+        {uploading ? (
+          <div className="flex items-center gap-2 w-full">
+            <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            <span className="text-gray-400 text-sm">Subiendo a Cloudinary...</span>
+          </div>
+        ) : fotos.archivoDiseno ? (
+          <div className="flex items-center gap-3 w-full">
+            <span className="text-2xl">📎</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-mandarina-400 text-sm font-medium">✓ Archivo listo en Cloudinary</div>
+              <div className="text-xs text-gray-500 truncate">{fotos.archivoDiseno.split('/').pop()}</div>
+            </div>
+            <a href={fotos.archivoDiseno} target="_blank" onClick={e => e.stopPropagation()}
+              className="text-xs text-blue-400 hover:underline flex-shrink-0">Ver ↗</a>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">📎</span>
+            <div>
+              <div className="text-gray-300 text-sm">Subir archivo de diseño</div>
+              <div className="text-xs text-gray-600">AI / PSD / PDF / PNG — sube a Cloudinary al instante</div>
+            </div>
+          </div>
+        )}
+      </label>
+      {error && <div className="text-red-400 text-xs mt-1">⚠️ {error}</div>}
+      {fotos.archivoDiseno && (
+        <button type="button" onClick={() => onChange({ ...fotos, archivoDiseno: null })}
+          className="text-xs text-red-400 mt-1 hover:underline">✕ Quitar archivo</button>
       )}
     </div>
   )
@@ -153,19 +216,7 @@ function FotoUploader({ fotos, onChange }) {
           </div>
         ))}
       </div>
-      <label className="flex items-center gap-2 border border-dashed border-gray-700 rounded-xl p-3 cursor-pointer hover:border-gray-500 transition-all">
-        <input type="file" accept=".ai,.psd,.pdf,.jpg,.png" className="hidden"
-          onChange={e => {
-            const file = e.target.files[0]
-            if (!file) return
-            const reader = new FileReader()
-            reader.onload = ev => onChange({ ...fotos, archivoDiseno: ev.target.result })
-            reader.readAsDataURL(file)
-          }} />
-        <span className="text-gray-500 text-sm">
-          {fotos.archivoDiseno ? '✓ Archivo — click para cambiar' : '📎 Subir archivo AI/PSD/PDF'}
-        </span>
-      </label>
+      <ArchivoCloudinary fotos={fotos} onChange={onChange} />
     </div>
   )
 }
@@ -173,14 +224,18 @@ function FotoUploader({ fotos, onChange }) {
 function ProductoDetail({ producto, onAdd, onCancel }) {
   const [variant, setVariant] = useState(producto.variants[0])
   const [talla, setTalla] = useState('')
-  const [area, setArea] = useState('')          // ← vacío por defecto
-  const [cantidad, setCantidad] = useState(0)   // ← 0 para que el usuario ingrese
+  const [area, setArea] = useState('')
+  const [cantidad, setCantidad] = useState(0)
   const [color, setColor] = useState('')
   const [detalle, setDetalle] = useState('')
   const [fotos, setFotos] = useState({})
+  const [precioEdit, setPrecioEdit] = useState(parseFloat(producto.variants[0]?.price || 0))
 
-  // Precio viene de la variante seleccionada
-  const precio = parseFloat(variant?.price || 0)
+  function handleVariantChange(variantId) {
+    const v = producto.variants.find(v => v.id == variantId)
+    setVariant(v)
+    setPrecioEdit(parseFloat(v?.price || 0))
+  }
 
   return (
     <div className="card p-4 space-y-3 mt-2">
@@ -188,7 +243,7 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
         {producto.image && <img src={producto.image} className="w-12 h-12 rounded-xl object-cover" />}
         <div className="flex-1">
           <div className="font-medium text-white text-sm">{producto.title}</div>
-          <div className="text-xs text-gray-500">${precio.toFixed(2)}</div>
+          <div className="text-xs text-gray-500">Shopify: ${parseFloat(variant?.price||0).toFixed(2)}</div>
         </div>
         <button onClick={onCancel} className="text-gray-600 hover:text-white p-1">✕</button>
       </div>
@@ -197,7 +252,7 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
           <div className="col-span-2">
             <label className="label">Variante</label>
             <select className="input" value={variant?.id}
-              onChange={e => setVariant(producto.variants.find(v => v.id == e.target.value))}>
+              onChange={e => handleVariantChange(e.target.value)}>
               {producto.variants.map(v => <option key={v.id} value={v.id}>{v.title} - ${v.price}</option>)}
             </select>
           </div>
@@ -221,6 +276,19 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
             onChange={e => setCantidad(parseInt(e.target.value) || 0)} />
         </div>
         <div>
+          <label className="label">Precio $ *</label>
+          <input type="number" className="input" step="0.50" min="0"
+            value={precioEdit}
+            onChange={e => setPrecioEdit(parseFloat(e.target.value) || 0)} />
+          {precioEdit !== parseFloat(variant?.price || 0) && (
+            <div className="text-xs text-yellow-400 mt-0.5 flex items-center gap-2">
+              Modificado · original: ${parseFloat(variant?.price||0).toFixed(2)}
+              <button type="button" onClick={() => setPrecioEdit(parseFloat(variant?.price||0))}
+                className="text-gray-500 hover:text-white underline">restablecer</button>
+            </div>
+          )}
+        </div>
+        <div className="col-span-2">
           <label className="label">Área *</label>
           <select className={`input ${!area ? 'border-yellow-500/50 text-yellow-400' : ''}`}
             value={area} onChange={e => setArea(e.target.value)}>
@@ -234,18 +302,19 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
         </div>
       </div>
       <FotoUploader fotos={fotos} onChange={setFotos} />
-      {(!color || !talla || !area || !detalle || cantidad < 1) && (
+      {(!color || !talla || !area || !detalle || cantidad < 1 || precioEdit <= 0) && (
         <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2">
-          ⚠️ Completa: {[!color && 'Color', !talla && 'Talla', !area && 'Área', cantidad < 1 && 'Cantidad', !detalle && 'Detalle'].filter(Boolean).join(', ')}
+          ⚠️ Completa: {[!color && 'Color', !talla && 'Talla', !area && 'Área', cantidad < 1 && 'Cantidad', precioEdit <= 0 && 'Precio', !detalle && 'Detalle'].filter(Boolean).join(', ')}
         </div>
       )}
       <button onClick={() => {
-        if (!color)       { alert('El color es obligatorio'); return }
-        if (!talla)       { alert('La talla es obligatoria'); return }
-        if (!area)        { alert('Debes seleccionar un área'); return }
-        if (cantidad < 1) { alert('La cantidad debe ser al menos 1'); return }
-        if (!detalle)     { alert('El detalle es obligatorio'); return }
-        onAdd(producto, variant, talla, area, detalle, cantidad, color, fotos)
+        if (!color)          { alert('El color es obligatorio'); return }
+        if (!talla)          { alert('La talla es obligatoria'); return }
+        if (!area)           { alert('Debes seleccionar un área'); return }
+        if (cantidad < 1)    { alert('La cantidad debe ser al menos 1'); return }
+        if (precioEdit <= 0) { alert('El precio debe ser mayor a 0'); return }
+        if (!detalle)        { alert('El detalle es obligatorio'); return }
+        onAdd(producto, variant, talla, area, detalle, cantidad, color, fotos, precioEdit)
       }} className="btn-primary w-full">+ Agregar al pedido</button>
     </div>
   )
