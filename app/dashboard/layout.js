@@ -1,7 +1,9 @@
 'use client'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useNuevosPedidos } from '@/lib/useNuevosPedidos'
+import { NotifContainer, useNotifs } from '@/components/NotifToast'
 
 const NAV_ALL = [
   { href:'/dashboard',              label:'Inicio',       icon:'🏠', roles:['ADMIN','VENDEDOR','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
@@ -102,6 +104,10 @@ export default function DashboardLayout({ children }) {
   }, [])
 
   function logout() { localStorage.removeItem('mp_user'); router.push('/') }
+
+  const { notifs, addNotif, removeNotif } = useNotifs()
+  const handleNuevoPedido = useCallback((pedido) => addNotif(pedido), [addNotif])
+  useNuevosPedidos(user, handleNuevoPedido)
 
   if (!user) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -209,6 +215,9 @@ export default function DashboardLayout({ children }) {
       </aside>
 
       <main className="md:ml-56 pt-16 pb-24 md:pt-0 md:pb-0 min-h-screen">{children}</main>
+
+      {/* Notificaciones de nuevos pedidos — esquina inferior derecha */}
+      <NotifContainer notifs={notifs} onClose={removeNotif} />
     </div>
   )
 }
