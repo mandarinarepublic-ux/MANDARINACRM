@@ -89,6 +89,7 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
   }
 
   const puedeSubestado = canChangeSubestado !== undefined ? canChangeSubestado : !readOnly
+  const puedeSubestadoProduccion = puedeSubestado && user?.rol !== 'CORTE'
 
   const fotos = [
     { key:'FOTO_PECHO_URL',   label:'Pecho'   },
@@ -220,8 +221,8 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
             </div>
           )}
 
-          {/* ─── PANEL CORTE — siempre primero, independiente del área ─── */}
-          {puedeSubestado ? (
+          {/* ─── PANEL CORTE — siempre primero, editable solo CORTE y ADMIN ─── */}
+          {(puedeSubestado && (user?.rol === 'CORTE' || user?.rol === 'ADMIN')) ? (
             <div className="rounded-xl border border-gray-700 p-2">
               <div className="text-xs font-bold text-gray-400 mb-1.5">✂️ CORTE DE TELA</div>
               <div className="flex gap-1">
@@ -234,17 +235,19 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
                 ))}
               </div>
             </div>
-          ) : subestadoCorte !== 'PENDIENTE' && (
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <span>✂️ Corte:</span>
-              <span className={`badge ${CORTE_ESTADOS.find(s=>s.key===subestadoCorte)?.color||'bg-gray-700'} text-white text-xs`}>
-                {CORTE_ESTADOS.find(s=>s.key===subestadoCorte)?.label||subestadoCorte}
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl border border-gray-800 px-3 py-2">
+              <span className="text-xs text-gray-500">✂️ Corte:</span>
+              <span className={`text-xs font-bold text-white px-2 py-0.5 rounded-full ${
+                subestadoCorte==='CORTADO' ? 'bg-green-600' : subestadoCorte==='SOLICITADO' ? 'bg-yellow-600' : 'bg-gray-600'
+              }`}>
+                {CORTE_ESTADOS.find(s=>s.key===subestadoCorte)?.label || subestadoCorte}
               </span>
             </div>
           )}
 
           {/* ─── SUBESTADOS DE PRODUCCIÓN ─── */}
-          {puedeSubestado ? (
+          {puedeSubestadoProduccion ? (
             esMulti ? (
               // MULTI-ÁREA: mostrar panel por cada área
               <div className="space-y-2">

@@ -24,6 +24,7 @@ function parseFecha(str) {
 function itemEsDeUsuario(itemArea, u) {
   if (!itemArea) return false
   if (u.rol === 'ADMIN') return true
+  if (u.rol === 'CORTE') return true  // CORTE ve todos los ítems
   const areas = u.areas || []
   if (areas.length > 0 && !(areas.length === 1 && areas[0] === 'TODAS')) {
     return areas.some(a => itemArea.includes(a))
@@ -222,22 +223,33 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
             </div>
           )}
 
-          {/* CORTE — siempre primero */}
-          <div className="rounded-xl border border-gray-700 p-2">
-            <div className="text-xs font-bold text-gray-400 mb-1.5">✂️ CORTE DE TELA</div>
-            <div className="flex gap-1">
-              {CORTE_CONFIG.map(s => (
-                <button key={s.key} onClick={() => handleCorte(s.key)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all
-                    ${subestadoCorte===s.key ? `${s.cls} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
-                  {s.label}
-                </button>
-              ))}
+          {/* CORTE — siempre primero, editable solo para rol CORTE y ADMIN */}
+          {(user?.rol === 'CORTE' || user?.rol === 'ADMIN') ? (
+            <div className="rounded-xl border border-gray-700 p-2">
+              <div className="text-xs font-bold text-gray-400 mb-1.5">✂️ CORTE DE TELA</div>
+              <div className="flex gap-1">
+                {CORTE_CONFIG.map(s => (
+                  <button key={s.key} onClick={() => handleCorte(s.key)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all
+                      ${subestadoCorte===s.key ? `${s.cls} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl border border-gray-800 px-3 py-2">
+              <span className="text-xs text-gray-500">✂️ Corte:</span>
+              <span className={`text-xs font-bold text-white px-2 py-0.5 rounded-full ${
+                subestadoCorte==='CORTADO' ? 'bg-green-600' : subestadoCorte==='SOLICITADO' ? 'bg-yellow-600' : 'bg-gray-600'
+              }`}>
+                {CORTE_CONFIG.find(s=>s.key===subestadoCorte)?.label || subestadoCorte}
+              </span>
+            </div>
+          )}
 
-          {/* Botones subestado de producción — multi-área o simple */}
-          {esMulti ? (
+          {/* Botones subestado de producción — multi-área o simple, NO para CORTE */}
+          {user?.rol !== 'CORTE' && (esMulti ? (
             <div className="space-y-2">
               {parsed.areas.map(area => {
                 const estadoArea = estadosLocales[area] || 'SOLICITADO'
@@ -274,7 +286,7 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
                 </button>
               ))}
             </div>
-          )}
+          ))}
         </div>
       </div>
 
