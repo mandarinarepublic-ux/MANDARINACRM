@@ -378,62 +378,79 @@ function PdfGracias({ pedido, items, cliente, tiendaColor }) {
         <div style={{ position:'absolute', top:'-60px', right:'-60px', width:'200px', height:'200px', borderRadius:'50%', backgroundColor:'rgba(255,255,255,0.07)' }} />
         <div style={{ position:'absolute', bottom:'-40px', left:'-40px', width:'160px', height:'160px', borderRadius:'50%', backgroundColor:'rgba(255,255,255,0.07)' }} />
 
-        <div style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
-          <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '12px' }}>
-            {esMandarina ? 'MANDARINA REPUBLIC' : 'INDSTORE'}
+        <div style={{ textAlign: 'center', position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: '40px', justifyContent: 'center' }}>
+          {/* Texto de agradecimiento */}
+          <div style={{ flex: 1, maxWidth: '420px' }}>
+            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '12px' }}>
+              {esMandarina ? 'MANDARINA REPUBLIC' : 'INDSTORE'}
+            </div>
+            <div style={{ fontSize: '42px', fontWeight: '900', color: '#fff', lineHeight: 1.1, marginBottom: '16px' }}>
+              ¡Gracias,<br />{nombreCorto}!
+            </div>
+            <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, marginBottom: '20px' }}>
+              {esMandarina
+                ? 'Tu pedido fue confeccionado con mucho cariño. Esperamos que lo disfrutes tanto como nosotros disfrutamos haciéndolo.'
+                : 'Tu pedido fue preparado especialmente para ti. ¡Gracias por elegirnos!'}
+            </div>
+            {/* Regalo */}
+            <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: '12px', padding: '12px 16px', textAlign: 'left', border: '1px solid rgba(255,255,255,0.25)' }}>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', marginBottom: '4px' }}>🎁 Tenemos un regalo para ti</div>
+              <div style={{ fontSize: '13px', color: '#fff', fontWeight: '700', marginBottom: '2px' }}>10% de descuento en tu próxima compra</div>
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)' }}>Usa el cupón <strong style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '6px', letterSpacing: '1px' }}>MANDI</strong> en mandarinaec.com</div>
+            </div>
           </div>
-          <div style={{ fontSize: '42px', fontWeight: '900', color: '#fff', lineHeight: 1.1, marginBottom: '16px' }}>
-            ¡Gracias,<br />{nombreCorto}!
-          </div>
-          <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.85)', maxWidth: '400px', lineHeight: 1.6 }}>
-            {esMandarina
-              ? 'Tu pedido fue confeccionado con mucho cariño. Esperamos que lo disfrutes tanto como nosotros disfrutamos haciéndolo.'
-              : 'Tu pedido fue preparado especialmente para ti. ¡Gracias por elegirnos!'}
-          </div>
-          <div style={{ marginTop: '24px', fontSize: '12px', color: 'rgba(255,255,255,0.6)', letterSpacing: '1px' }}>
-            {esMandarina ? '🟧 mandarinaec.com' : '🛒 indstore.ec'}
+
+          {/* QR del cupón */}
+          <div style={{ flexShrink: 0, textAlign: 'center' }}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '12px', width: '130px', height: '130px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=106x106&data=${encodeURIComponent('https://www.mandarinaec.com?coupon=MANDI')}&color=1a1a1a&bgcolor=ffffff&margin=0`}
+                style={{ width: '106px', height: '106px' }}
+                alt="QR cupón MANDI"
+              />
+            </div>
+            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', marginTop: '8px' }}>Escanea para tu</div>
+            <div style={{ fontSize: '11px', color: '#fff', fontWeight: '700' }}>10% de descuento</div>
           </div>
         </div>
       </div>
 
-      {/* Línea de doblez */}
-      <div style={{ borderTop: '2px dashed #e5e5e5', margin: '0', position: 'relative' }}>
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: '-8px', backgroundColor: '#fff', padding: '0 8px', fontSize: '9px', color: '#ccc', letterSpacing: '1px' }}>DOBLAR AQUÍ</div>
-      </div>
+      {/* Línea de doblez — simple, sin texto duplicado */}
+      <div style={{ borderTop: '1.5px dashed #ccc', margin: '0' }} />
 
       {/* ═══ PANEL INFERIOR — INTERIOR DE LA CARTA ═══ */}
       <div style={{ flex: 1, padding: '28px 48px 80px' }}>
 
-        {/* INFO DE ENVÍO — destacada, clara para el motorizado */}
-        <div style={{ backgroundColor: '#1a1a1a', borderRadius: '16px', padding: '20px 24px', marginBottom: '24px' }}>
-          <div style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '12px' }}>Datos de envío</div>
-          <div style={{ fontSize: '22px', fontWeight: '900', color: '#fff', marginBottom: '12px', lineHeight: 1.1 }}>
+        {/* INFO DE ENVÍO — fondo blanco, texto negro (ahorra tinta) */}
+        <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '20px 24px', marginBottom: '24px', border: '2px solid #e5e5e5' }}>
+          <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '12px' }}>Datos de envío</div>
+          <div style={{ fontSize: '22px', fontWeight: '900', color: '#1a1a1a', marginBottom: '12px', lineHeight: 1.1 }}>
             {cliente?.NOMBRE || '-'}
           </div>
-          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '12px' }}>
             {cliente?.CELULAR && (
-              <div style={{ backgroundColor: '#2a2a2a', borderRadius: '10px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ backgroundColor: '#f5f5f5', borderRadius: '10px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #e5e5e5' }}>
                 <div style={{ fontSize: '18px' }}>📱</div>
                 <div>
-                  <div style={{ fontSize: '9px', color: '#888', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Celular</div>
-                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#fff', fontFamily: 'monospace' }}>{cliente.CELULAR}</div>
+                  <div style={{ fontSize: '9px', color: '#999', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Celular</div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#1a1a1a', fontFamily: 'monospace' }}>{cliente.CELULAR}</div>
                 </div>
               </div>
             )}
             {cliente?.CEDULA && (
-              <div style={{ backgroundColor: '#2a2a2a', borderRadius: '10px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ backgroundColor: '#f5f5f5', borderRadius: '10px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #e5e5e5' }}>
                 <div style={{ fontSize: '18px' }}>🆔</div>
                 <div>
-                  <div style={{ fontSize: '9px', color: '#888', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Cédula</div>
-                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#fff', fontFamily: 'monospace' }}>{cliente.CEDULA}</div>
+                  <div style={{ fontSize: '9px', color: '#999', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Cédula</div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#1a1a1a', fontFamily: 'monospace' }}>{cliente.CEDULA}</div>
                 </div>
               </div>
             )}
           </div>
           {(pedido?.DIRECCION_TEXTO || pedido?.DIRECCION_PEDIDO) && (
-            <div style={{ backgroundColor: tiendaColor + '20', borderRadius: '10px', padding: '12px 16px', borderLeft: `4px solid ${tiendaColor}` }}>
+            <div style={{ backgroundColor: tiendaColor + '12', borderRadius: '10px', padding: '12px 16px', borderLeft: `4px solid ${tiendaColor}` }}>
               <div style={{ fontSize: '9px', color: tiendaColor, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px', fontWeight: '700' }}>Dirección de entrega</div>
-              <div style={{ fontSize: '13px', color: '#fff', fontWeight: '600', lineHeight: 1.5 }}>
+              <div style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: '600', lineHeight: 1.5 }}>
                 {(pedido.DIRECCION_TEXTO || pedido.DIRECCION_PEDIDO).replace(/\n/g, ' · ')}
               </div>
             </div>
