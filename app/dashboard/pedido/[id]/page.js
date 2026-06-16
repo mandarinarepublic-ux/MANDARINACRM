@@ -73,6 +73,53 @@ export default function PedidoDetailPage() {
     window.open(`https://wa.me/${num}?text=${msg}`, '_blank')
   }
 
+  const [enviandoFactura, setEnviandoFactura] = useState(false)
+  const [facturaEnviada, setFacturaEnviada]   = useState(false)
+  const [facturaError,   setFacturaError]     = useState('')
+
+  async function emitirFactura() {
+    if (!cliente) return alert('No hay datos del cliente')
+    if (!cliente.EMAIL) return alert('El cliente no tiene email — necesario para la factura')
+    if (!cliente.CEDULA) return alert('El cliente no tiene cédula')
+
+    setEnviandoFactura(true); setFacturaError('')
+    try {
+      const total   = parseFloat(pedido.MONTO_TOTAL || 0)
+      const sinImp  = parseFloat((total / 1.15).toFixed(2))
+      const impuesto = parseFloat((total - sinImp).toFixed(2))
+
+      const payload = {
+        numero:      (cliente.CELULAR || '').replace(/\D/g, ''),
+        CI:          String(cliente.CEDULA),
+        tipo_id:     '05',           // persona natural sin RUC
+        cliente:     cliente.NOMBRE,
+        email:       cliente.EMAIL,
+        total:       total.toFixed(2),
+        PrecioSinImp: sinImp.toFixed(2),
+        ValorImp:    impuesto.toFixed(2),
+      }
+
+      const res = await fetch('https://hook.us2.make.com/mjvj01tevojz6ayp7rrtt7wc6oa7v11n', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) throw new Error(`Error ${res.status}`)
+      setFacturaEnviada(true)
+      // Log en bitácora
+      await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ _log: `Factura emitida a ${cliente.EMAIL} · ${total.toFixed(2)}`, _usuarioId: user?.id }),
+      }).catch(() => {})
+    } catch(e) {
+      setFacturaError(e.message || 'Error al enviar')
+    } finally {
+      setEnviandoFactura(false)
+    }
+  }
+
   async function updateEstado(nuevoEstado) {
     await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -203,6 +250,26 @@ export default function PedidoDetailPage() {
             </div>
           </div>
 
+          {/* Factura — feedback de éxito o error */}
+          {facturaEnviada && (
+            <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4 flex items-center gap-3">
+              <span className="text-2xl">🧾</span>
+              <div>
+                <div className="text-green-400 font-semibold text-sm">Factura emitida correctamente</div>
+                <div className="text-gray-500 text-xs mt-0.5">Enviada a {cliente?.EMAIL}</div>
+              </div>
+            </div>
+          )}
+          {facturaError && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <div>
+                <div className="text-red-400 font-semibold text-sm">Error al emitir factura</div>
+                <div className="text-gray-500 text-xs mt-0.5">{facturaError}</div>
+              </div>
+            </div>
+          )}
+
           {pedido.NOTAS_VENDEDOR && (
             <div className="card p-4">
               <h3 className="text-sm font-semibold text-white mb-2">📝 Notas internas</h3>
@@ -305,9 +372,23 @@ export default function PedidoDetailPage() {
           <Link href="/dashboard/despacho" className="btn-primary flex-1 text-sm flex items-center justify-center gap-1" style={{backgroundColor:'#7C3AED'}}>🚚 Ir a despacho</Link>
         )}
         {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR')&&(
-          <button onClick={generatePDF} disabled={generatingPdf} className="btn-primary flex-1 text-sm" style={{backgroundColor:tiendaColor}}>
-            {generatingPdf?'⏳...':'⬇️ PDF'}
-          </button>
+          <>
+            {pedido.EMITIR_FACTURA === 'TRUE' && !facturaEnviada && (
+              <button onClick={emitirFactura} disabled={enviandoFactura}
+                className="btn-secondary flex-1 text-sm border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10"
+                title={cliente?.EMAIL ? `Enviar factura a ${cliente.EMAIL}` : 'El cliente no tiene email'}>
+                {enviandoFactura ? '⏳...' : '🧾 Factura'}
+              </button>
+            )}
+            {facturaEnviada && (
+              <div className="flex-1 flex items-center justify-center gap-1 text-xs text-green-400 font-medium">
+                ✅ Factura enviada
+              </div>
+            )}
+            <button onClick={generatePDF} disabled={generatingPdf} className="btn-primary flex-1 text-sm" style={{backgroundColor:tiendaColor}}>
+              {generatingPdf?'⏳...':'⬇️ PDF'}
+            </button>
+          </>
         )}
       </div>
     </div>
