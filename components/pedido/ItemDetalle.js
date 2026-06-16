@@ -65,8 +65,12 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
   const miArea = areaDelRol(user, item)
 
   // Estado local: objeto {ESTAMPADO: 'LISTO', BORDADO: 'EN_PROCESO'} o string simple
+  // Si área es ENTREGA EN TIENDA → siempre LISTO
+  const esEntregaTienda2 = (item.AREA || '').toUpperCase().includes('ENTREGA EN TIENDA')
   const [estadosLocales, setEstadosLocales] = useState(
-    esMulti ? { ...parsed.estados } : { _simple: parsed?.estado || 'SOLICITADO' }
+    esEntregaTienda2
+      ? { _simple: 'LISTO' }
+      : esMulti ? { ...parsed.estados } : { _simple: parsed?.estado || 'SOLICITADO' }
   )
 
   const subestadoActual = esMulti
@@ -74,7 +78,11 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
     : (estadosLocales._simple || 'SOLICITADO')
 
   // Estado CORTE — independiente, siempre presente
-  const [subestadoCorte, setSubestadoCorte] = useState(item.SUBESTADO_CORTE || 'PENDIENTE')
+  // Si área es ENTREGA EN TIENDA → ya está cortado y listo por defecto
+  const esEntregaTienda = (item.AREA || '').toUpperCase().includes('ENTREGA EN TIENDA')
+  const [subestadoCorte, setSubestadoCorte] = useState(
+    esEntregaTienda ? 'CORTADO' : (item.SUBESTADO_CORTE || 'PENDIENTE')
+  )
 
   async function cambiarCorte(nuevoEstado) {
     const anterior = subestadoCorte
@@ -294,10 +302,13 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
               </div>
             )
           ) : (
-            // Solo lectura — mostrar badge global
-            <span className={`badge text-xs ${SUBESTADO_COLORS[subestadoActual]||'bg-gray-500/20 text-gray-400'}`}>
-              {SUBESTADO_LABELS[subestadoActual]||subestadoActual}
-            </span>
+            // Solo lectura — mostrar badge global con label
+            <div className="rounded-xl border border-gray-800 px-3 py-2 flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-medium">Estado:</span>
+              <span className={`badge text-xs ${SUBESTADO_COLORS[subestadoActual]||'bg-gray-500/20 text-gray-400'}`}>
+                {SUBESTADO_LABELS[subestadoActual]||subestadoActual}
+              </span>
+            </div>
           )}
         </div>
       </div>

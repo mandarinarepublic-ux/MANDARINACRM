@@ -162,7 +162,7 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
                       ABONO DEL {pct}% — SALDO PENDIENTE
                     </div>
                     <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '2px', fontWeight: '700' }}>
-                      Cobrar ${saldo.toFixed(2)} al momento de la entrega
+                      Cobrar ${saldo.toFixed(2)} al motorizado
                     </div>
                   </>
                 )}
