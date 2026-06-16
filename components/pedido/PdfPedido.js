@@ -1,8 +1,14 @@
 'use client'
 
-// URLs de logos — servidos desde /public/logos/ (Next.js los sirve como estáticos)
+// URLs de logos
 const LOGO_MANDARINA = '/logos/logo_mandarina.png'
 const LOGO_INDSTORE  = '/logos/logo_indstore.png'
+
+// Cupones por tienda
+const CUPON = {
+  MANDARINA: { codigo: 'MANDI',     url: 'https://www.mandarinaec.com?coupon=MANDI',     web: 'mandarinaec.com' },
+  INDSTORE:  { codigo: 'INDLOVERS', url: 'https://indlovers.com/discount/INDLOVERS',      web: 'indlovers.com' },
+}
 
 // ─── HOJA 1: AGRADECIMIENTO AL CLIENTE ───────────────────────────────────────
 export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
@@ -10,6 +16,7 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
   const pagado = pedido?.ESTADO_PAGO === 'PAGADO'
   const nombreCorto = cliente?.NOMBRE?.split(' ')[0] || 'Cliente'
   const logo = esMandarina ? LOGO_MANDARINA : LOGO_INDSTORE
+  const cupon = esMandarina ? CUPON.MANDARINA : CUPON.INDSTORE
 
   // Gradiente de fondo inspirado en el diseño de referencia
   const bgGradient = esMandarina
@@ -53,13 +60,23 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
         <div style={{ flex: 1, position: 'relative', zIndex: 2 }}>
           {/* Ícono decorativo */}
           <div style={{ fontSize: '20px', marginBottom: '8px', opacity: 0.9 }}>🧵✂️</div>
-          <div style={{ fontSize: '42px', fontWeight: '900', color: '#fff', lineHeight: 1.05, marginBottom: '12px', letterSpacing: '-1px' }}>
+          <div style={{ fontSize: '42px', fontWeight: '900', color: '#fff', lineHeight: 1.05, marginBottom: '12px', letterSpacing: '-1px',
+            textShadow: '0 2px 8px rgba(0,0,0,0.35)' }}>
             ¡Gracias,<br />{nombreCorto}!
           </div>
-          <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.88)', lineHeight: 1.7, maxWidth: '280px' }}>
-            {esMandarina
-              ? 'Tu pedido fue confeccionado con mucho cariño. Esperamos que lo disfrutes tanto como nosotros disfrutamos haciéndolo.'
-              : 'Tu pedido fue preparado especialmente para ti. ¡Gracias por elegirnos!'}
+          {/* Texto con fondo oscuro para contraste sobre naranja */}
+          <div style={{
+            backgroundColor: 'rgba(0,0,0,0.28)',
+            borderRadius: '10px',
+            padding: '10px 14px',
+            maxWidth: '280px',
+            backdropFilter: 'blur(4px)',
+          }}>
+            <div style={{ fontSize: '13px', color: '#fff', lineHeight: 1.7, fontWeight: '500' }}>
+              {esMandarina
+                ? 'Tu pedido fue confeccionado con mucho cariño. Esperamos que lo disfrutes tanto como nosotros disfrutamos haciéndolo.'
+                : 'Tu pedido fue preparado especialmente para ti. ¡Gracias por elegirnos!'}
+            </div>
           </div>
         </div>
 
@@ -81,16 +98,16 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
             <div style={{ fontSize: '11px', color: '#666', marginBottom: '6px' }}>🎁 Tenemos un regalo para ti:</div>
             <div style={{ fontSize: '14px', fontWeight: '800', color: '#1a1a1a', marginBottom: '4px', lineHeight: 1.3 }}>10% de descuento en<br />tu próxima compra</div>
             <div style={{ fontSize: '11px', color: '#666', marginBottom: '10px' }}>
-              Usa el cupón <strong style={{ color: '#1a1a1a' }}>MANDI</strong> en mandarinaec.com
+              Usa el cupón <strong style={{ color: '#1a1a1a' }}>{cupon.codigo}</strong> en {cupon.web}
             </div>
             {/* Línea punteada divisoria */}
             <div style={{ borderTop: '1.5px dashed #ddd', marginBottom: '10px' }} />
             {/* QR */}
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '6px' }}>
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent('https://www.mandarinaec.com?coupon=MANDI')}&color=1a1a1a&bgcolor=ffffff&margin=2`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(cupon.url)}&color=1a1a1a&bgcolor=ffffff&margin=2`}
                 style={{ width: '90px', height: '90px', borderRadius: '6px' }}
-                alt="QR MANDI"
+                alt={`QR ${cupon.codigo}`}
               />
             </div>
             <div style={{ fontSize: '10px', color: '#999', textAlign: 'center' }}>↗ Escanea para tu descuento</div>
