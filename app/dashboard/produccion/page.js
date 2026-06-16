@@ -34,8 +34,47 @@ function itemEsDeUsuario(itemArea, u) {
   return true
 }
 
-// ── ItemCard — todo el estado es LOCAL, nunca se recrea desde fuera ───────────
-function ItemCard({ item, userId, onSubestadoChange }) {
+// ─── Helpers multi-área ───────────────────────────────────────────────────────
+const AREAS_BASE_P = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
+const ORDEN_P = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO','ENTREGADO_TIENDA','ELIMINADO']
+
+function parseSubestadoP(str, areaStr) {
+  if (!str) return null
+  const areas = (areaStr||'').split(/\s*\+\s*|\s*,\s*/).map(a=>a.trim().toUpperCase()).filter(a=>AREAS_BASE_P.includes(a))
+  if (str.includes(':')) {
+    const r={}; str.split('|').forEach(p=>{const[a,e]=p.split(':');if(a&&e)r[a.trim()]=e.trim()})
+    return {tipo:'multi', estados:r, areas}
+  }
+  if (areas.length>1) { const r={}; areas.forEach(a=>r[a]=str); return {tipo:'multi',estados:r,areas} }
+  return {tipo:'simple', estado:str, areas}
+}
+function globalP(estados) {
+  const vals=Object.values(estados); let mi=ORDEN_P.length
+  vals.forEach(v=>{const i=ORDEN_P.indexOf(v);if(i>=0&&i<mi)mi=i})
+  return ORDEN_P[mi]||'SOLICITADO'
+}
+function areaUsuarioP(u, item) {
+  if (u?.rol==='ADMIN') return null
+  const areas=(u?.areas||[]).filter(a=>AREAS_BASE_P.includes(a))
+  if (areas.length>0&&areas[0]!=='TODAS') return areas.find(a=>(item.AREA||'').toUpperCase().includes(a))||null
+  if (u?.rol==='ESTAMPADO')   return (item.AREA||'').includes('ESTAMPADO')   ? 'ESTAMPADO'   : null
+  if (u?.rol==='SUBLIMACION') return (item.AREA||'').includes('SUBLIMACION') ? 'SUBLIMACION' : null
+  if (u?.rol==='BORDADO')     return (item.AREA||'').includes('BORDADO')     ? 'BORDADO'     : null
+  return null
+}
+const AREA_COLORS = { ESTAMPADO: 'text-orange-400', SUBLIMACION: 'text-blue-400', BORDADO: 'text-purple-400' }
+
+// ─── ItemCard ─────────────────────────────────────────────────────────────────
+function ItemCard({ item, userId, user, onSubestadoChange }) {
+  const parsed = parseSubestadoP(item.SUBESTADO, item.AREA)
+  const esMulti = parsed?.tipo === 'multi'
+  const miArea = areaUsuarioP(user, item)
+
+  const [estadosLocales, setEstadosLocales] = useState(
+    esMulti ? {...parsed.estados} : {_s: parsed?.estado||'SOLICITADO'}
+  )
+  const subestadoActual = esMulti ? globalP(estadosLocales) : (estadosLocales._s||'SOLICITADO')
+
   const fotos = [
     { key: 'FOTO_PECHO_URL', label: 'Pecho' },
     { key: 'FOTO_ESPALDA_URL', label: 'Espalda' },
@@ -45,40 +84,42 @@ function ItemCard({ item, userId, onSubestadoChange }) {
 
   const [fotoActiva, setFotoActiva] = useState(fotos[0]?.key || null)
   const [fotoFullscreen, setFotoFullscreen] = useState(null)
-
-  // Subestado local — se actualiza optimistically sin recargar
-  const [subestado, setSubestado] = useState(item.SUBESTADO || 'SOLICITADO')
-
-  // Nota completamente local
   const [editingNota, setEditingNota] = useState(false)
   const [notaText, setNotaText] = useState(item.NOTAS_AREA || '')
   const [notaGuardada, setNotaGuardada] = useState(item.NOTAS_AREA || '')
   const [savingNota, setSavingNota] = useState(false)
   const [notaError, setNotaError] = useState('')
 
-  async function handleSubestado(s) {
-    const anterior = subestado
-    setSubestado(s) // optimistic update inmediato
+  async function handleSubestado(s, areaRol) {
+    const body = { SUBESTADO: s, _usuarioId: userId }
+    if (areaRol) body.AREA_ROL = areaRol
+
+    // Optimistic update
+    if (areaRol) {
+      setEstadosLocales(prev => ({...prev, [areaRol]: s}))
+    } else {
+      setEstadosLocales({_s: s})
+    }
+
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ SUBESTADO: s, _usuarioId: userId }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
-        setSubestado(anterior) // revertir si falla
+        setEstadosLocales(esMulti ? {...parsed.estados} : {_s: parsed?.estado||'SOLICITADO'})
       } else {
-        // Notificar al padre solo si el item pasa a LISTO (para sacarlo del filtro Todos)
-        onSubestadoChange?.(item.ITEM_ID, s)
+        const nuevoGlobal = areaRol ? globalP({...estadosLocales, [areaRol]: s}) : s
+        onSubestadoChange?.(item.ITEM_ID, nuevoGlobal)
       }
     } catch {
-      setSubestado(anterior)
+      setEstadosLocales(esMulti ? {...parsed.estados} : {_s: parsed?.estado||'SOLICITADO'})
     }
   }
 
   async function handleGuardarNota() {
-    setSavingNota(true)
-    setNotaError('')
+    setSavingNota(true); setNotaError('')
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
         method: 'PATCH',
@@ -86,23 +127,10 @@ function ItemCard({ item, userId, onSubestadoChange }) {
         body: JSON.stringify({ NOTAS_AREA: notaText, _usuarioId: userId }),
       })
       const data = await res.json()
-      if (res.ok && data.ok) {
-        setNotaGuardada(notaText)
-        setEditingNota(false)
-      } else {
-        setNotaError(data.error || 'Error al guardar')
-      }
-    } catch {
-      setNotaError('Error de conexión')
-    } finally {
-      setSavingNota(false)
-    }
-  }
-
-  function handleCancelar() {
-    setNotaText(notaGuardada)
-    setEditingNota(false)
-    setNotaError('')
+      if (res.ok && data.ok) { setNotaGuardada(notaText); setEditingNota(false) }
+      else setNotaError(data.error || 'Error al guardar')
+    } catch { setNotaError('Error de conexión') }
+    finally { setSavingNota(false) }
   }
 
   return (
@@ -112,13 +140,12 @@ function ItemCard({ item, userId, onSubestadoChange }) {
           <div className="font-semibold text-white">{item.PRODUCTO_NOMBRE}</div>
           <div className="text-xs text-gray-500 mt-0.5">{item.COLOR} · {item.TALLA} · {item.CANTIDAD} uni</div>
         </div>
-        <span className={`badge text-xs text-white ${SUBESTADO_CONFIG[subestado]?.color || 'bg-gray-700'}`}>
-          {SUBESTADO_CONFIG[subestado]?.label || subestado}
+        <span className={`badge text-xs text-white ${SUBESTADO_CONFIG[subestadoActual]?.color || 'bg-gray-700'}`}>
+          {SUBESTADO_CONFIG[subestadoActual]?.label || subestadoActual}
         </span>
       </div>
 
       <div className="flex gap-4">
-        {/* Fotos */}
         <div className="w-40 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
@@ -147,76 +174,79 @@ function ItemCard({ item, userId, onSubestadoChange }) {
           )}
         </div>
 
-        {/* Detalle + nota + subestado */}
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5">
-            <div className="text-xs">
-              <span className="text-gray-500">Área:</span>{' '}
-              <span className="text-mandarina-400 font-medium">{item.AREA}</span>
-            </div>
+            <div className="text-xs"><span className="text-gray-500">Área:</span>{' '}<span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
             {item.DETALLE_PERSONALIZADO && (
-              <div className="text-xs">
-                <span className="text-gray-500">Detalle:</span>{' '}
-                <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span>
-              </div>
+              <div className="text-xs"><span className="text-gray-500">Detalle:</span>{' '}<span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
             )}
           </div>
 
-          {/* Nota */}
           {editingNota ? (
             <div>
-              <textarea
-                className="input resize-none text-sm mb-2 w-full"
-                rows={2}
-                placeholder="Nota para este producto..."
-                value={notaText}
-                onChange={e => setNotaText(e.target.value)}
-                autoFocus
-              />
+              <textarea className="input resize-none text-sm mb-2 w-full" rows={2} placeholder="Nota para este producto..."
+                value={notaText} onChange={e => setNotaText(e.target.value)} autoFocus />
               {notaError && <div className="text-xs text-red-400 mb-2">⚠️ {notaError}</div>}
               <div className="flex gap-2">
-                <button onClick={handleGuardarNota} disabled={savingNota}
-                  className="btn-primary text-xs px-3 py-1.5">
+                <button onClick={handleGuardarNota} disabled={savingNota} className="btn-primary text-xs px-3 py-1.5">
                   {savingNota ? '⏳ Guardando...' : 'Guardar'}
                 </button>
-                <button onClick={handleCancelar} className="btn-secondary text-xs px-3 py-1.5">
-                  Cancelar
-                </button>
+                <button onClick={() => {setNotaText(notaGuardada);setEditingNota(false);setNotaError('')}} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
               </div>
             </div>
           ) : (
             <div>
-              {notaGuardada && (
-                <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">
-                  📝 {notaGuardada}
-                </div>
-              )}
-              <button
-                onClick={() => { setNotaText(notaGuardada); setEditingNota(true) }}
-                className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+              {notaGuardada && <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">📝 {notaGuardada}</div>}
+              <button onClick={() => {setNotaText(notaGuardada);setEditingNota(true)}} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
                 {notaGuardada ? '✏️ Editar nota' : '+ Agregar nota'}
               </button>
             </div>
           )}
 
-          {/* Botones subestado — usan estado local */}
-          <div className="grid grid-cols-2 gap-1.5 mt-auto">
-            {SUBESTADOS_ORDEN.map(s => (
-              <button key={s} onClick={() => handleSubestado(s)}
-                className={`py-2 rounded-xl text-xs font-semibold transition-all
-                  ${subestado === s
-                    ? `${SUBESTADO_CONFIG[s]?.color} text-white`
-                    : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
-                {SUBESTADO_CONFIG[s]?.label}
-              </button>
-            ))}
-          </div>
+          {/* Botones subestado — multi-área o simple */}
+          {esMulti ? (
+            <div className="space-y-2">
+              {parsed.areas.map(area => {
+                const estadoArea = estadosLocales[area] || 'SOLICITADO'
+                const esMiArea = user?.rol === 'ADMIN' || miArea === area
+                return (
+                  <div key={area} className={`rounded-xl border p-2 ${esMiArea ? 'border-gray-700' : 'border-gray-800 opacity-50'}`}>
+                    <div className={`text-xs font-bold mb-1.5 ${AREA_COLORS[area]||'text-gray-400'}`}>{area}</div>
+                    {esMiArea ? (
+                      <div className="grid grid-cols-2 gap-1">
+                        {SUBESTADOS_ORDEN.map(s => (
+                          <button key={s} onClick={() => handleSubestado(s, area)}
+                            className={`py-1.5 rounded-lg text-xs font-semibold transition-all
+                              ${estadoArea===s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                            {SUBESTADO_CONFIG[s]?.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className={`badge text-xs text-white ${SUBESTADO_CONFIG[estadoArea]?.color||'bg-gray-700'}`}>
+                        {SUBESTADO_CONFIG[estadoArea]?.label||estadoArea}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-1.5 mt-auto">
+              {SUBESTADOS_ORDEN.map(s => (
+                <button key={s} onClick={() => handleSubestado(s, null)}
+                  className={`py-2 rounded-xl text-xs font-semibold transition-all
+                    ${subestadoActual===s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                  {SUBESTADO_CONFIG[s]?.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {fotoFullscreen && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
-          onClick={() => setFotoFullscreen(null)}>
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={() => setFotoFullscreen(null)}>
           <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt="fullscreen" />
           <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
         </div>
@@ -261,6 +291,7 @@ export default function ProduccionPage() {
           ...p,
           itemsFiltrados: (p.items || []).filter(item => {
             if (item.SUBESTADO === 'ELIMINADO' || item.SUBESTADO === 'ENTREGADO_TIENDA') return false
+            // Para multi-área: mostrar si alguna de mis áreas está en el ítem
             if (u.rol !== 'ADMIN') return itemEsDeUsuario(item.AREA, u)
             return true
           })
@@ -270,8 +301,6 @@ export default function ProduccionPage() {
     } finally { setLoading(false) }
   }, [])
 
-  // Al cambiar subestado: actualizar SOLO ese item en el estado local
-  // Si pasa a LISTO, sacarlo del filtro "Todos" sin recargar el sheet
   function handleSubestadoChange(itemId, nuevoSubestado) {
     setPedidos(prev => prev.map(p => ({
       ...p,
@@ -287,8 +316,23 @@ export default function ProduccionPage() {
     .map(p => ({
       ...p,
       itemsFiltrados: p.itemsFiltrados.filter(item => {
-        if (filtroSubestado === 'TODOS') return item.SUBESTADO !== 'LISTO'
-        return item.SUBESTADO === filtroSubestado
+        // Para multi-área: el filtro usa el estado global del ítem
+        const estadoGlobal = (() => {
+          if (!item.SUBESTADO) return 'SOLICITADO'
+          if (item.SUBESTADO.includes(':')) {
+            const estados = {}
+            item.SUBESTADO.split('|').forEach(part => {
+              const [a,e] = part.split(':'); if(a&&e) estados[a.trim()]=e.trim()
+            })
+            const vals = Object.values(estados)
+            const idx = Math.min(...vals.map(v => ORDEN_P.indexOf(v)).filter(i => i>=0))
+            return ORDEN_P[idx] || 'SOLICITADO'
+          }
+          return item.SUBESTADO
+        })()
+
+        if (filtroSubestado === 'TODOS') return estadoGlobal !== 'LISTO'
+        return estadoGlobal === filtroSubestado
       })
     }))
     .filter(p => {
@@ -298,10 +342,7 @@ export default function ProduccionPage() {
         if (!p.PEDIDO_ID?.toLowerCase().includes(q) &&
             !p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))) return false
       }
-      if (fechaDesde) {
-        const f = parseFecha(p.FECHA_PEDIDO)
-        if (!f || f < new Date(fechaDesde)) return false
-      }
+      if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
       if (fechaHasta) {
         const f = parseFecha(p.FECHA_PEDIDO)
         const h = new Date(fechaHasta); h.setHours(23,59,59)
@@ -315,9 +356,7 @@ export default function ProduccionPage() {
     Math.ceil((new Date(p.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) <= 2).length
 
   const areaLabel = user?.rol === 'ADMIN' ? '' :
-    (user?.areas?.length > 0 && user.areas[0] !== 'TODAS')
-      ? ` · ${user.areas.join(', ')}`
-      : ` · ${user?.rol}`
+    (user?.areas?.length > 0 && user.areas[0] !== 'TODAS') ? ` · ${user.areas.join(', ')}` : ` · ${user?.rol}`
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
@@ -354,10 +393,7 @@ export default function ProduccionPage() {
                 <label className="text-xs text-gray-500 mb-1 block">Hasta</label>
                 <input type="date" className="input text-sm" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
               </div>
-              {hayFecha && (
-                <button onClick={() => { setFechaDesde(''); setFechaHasta('') }}
-                  className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>
-              )}
+              {hayFecha && <button onClick={() => {setFechaDesde('');setFechaHasta('')}} className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>}
             </div>
           )}
 
@@ -430,6 +466,7 @@ export default function ProduccionPage() {
                             key={item.ITEM_ID}
                             item={item}
                             userId={user?.id}
+                            user={user}
                             onSubestadoChange={handleSubestadoChange}
                           />
                         ))}

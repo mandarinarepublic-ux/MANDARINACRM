@@ -3,11 +3,68 @@ import { useState } from 'react'
 import { SUBESTADO_LABELS, SUBESTADO_COLORS, SUBESTADO_BG } from '@/lib/labels'
 
 const SUBESTADOS_ORDEN = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO']
+const AREAS_BASE = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
+
+// Parsear subestado del item (puede ser simple "LISTO" o multi "ESTAMPADO:LISTO|BORDADO:EN_PROCESO")
+function parseSubestados(subestadoStr, areaStr) {
+  if (!subestadoStr) return null
+  const areas = (areaStr || '').split(/\s*\+\s*|\s*,\s*/).map(a => a.trim().toUpperCase()).filter(a => AREAS_BASE.includes(a))
+  if (subestadoStr.includes(':')) {
+    const result = {}
+    subestadoStr.split('|').forEach(part => {
+      const [area, estado] = part.split(':')
+      if (area && estado) result[area.trim()] = estado.trim()
+    })
+    return { tipo: 'multi', estados: result, areas }
+  }
+  if (areas.length > 1) {
+    // Pedido viejo con área combinada pero subestado simple: expandir
+    const estados = {}
+    areas.forEach(a => estados[a] = subestadoStr)
+    return { tipo: 'multi', estados, areas }
+  }
+  return { tipo: 'simple', estado: subestadoStr, areas }
+}
+
+// El más atrasado define el estado global
+const ORDEN_ESTADOS = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO','ENTREGADO_TIENDA','ELIMINADO']
+function estadoGlobal(estados) {
+  const vals = Object.values(estados)
+  let minIdx = ORDEN_ESTADOS.length
+  vals.forEach(v => { const i = ORDEN_ESTADOS.indexOf(v); if (i >= 0 && i < minIdx) minIdx = i })
+  return ORDEN_ESTADOS[minIdx] || 'SOLICITADO'
+}
+
+// Qué área puede cambiar este usuario
+function areaDelRol(user, item) {
+  if (user?.rol === 'ADMIN') return null // null = puede ver todo pero no toca áreas individuales
+  const areas = (user?.areas || []).filter(a => AREAS_BASE.includes(a))
+  if (areas.length > 0 && areas[0] !== 'TODAS') {
+    // Verificar que el ítem requiere esa área
+    const areasItem = (item.AREA || '').toUpperCase()
+    const match = areas.find(a => areasItem.includes(a))
+    return match || null
+  }
+  // Por rol
+  if (user?.rol === 'ESTAMPADO')   return item.AREA?.includes('ESTAMPADO')   ? 'ESTAMPADO'   : null
+  if (user?.rol === 'SUBLIMACION') return item.AREA?.includes('SUBLIMACION') ? 'SUBLIMACION' : null
+  if (user?.rol === 'BORDADO')     return item.AREA?.includes('BORDADO')     ? 'BORDADO'     : null
+  return null
+}
 
 export default function ItemDetalle({ item, readOnly, canChangeSubestado, tiendaColor, user, loadPedido }) {
-  // readOnly         = true → no puede editar nada (vendedor, historial)
-  // canChangeSubestado = true → puede cambiar subestados (ADMIN, produccion desde módulo producción)
-  // Si no se pasa canChangeSubestado, usar !readOnly como default
+  const parsed = parseSubestados(item.SUBESTADO, item.AREA)
+  const esMulti = parsed?.tipo === 'multi'
+  const miArea = areaDelRol(user, item)
+
+  // Estado local: objeto {ESTAMPADO: 'LISTO', BORDADO: 'EN_PROCESO'} o string simple
+  const [estadosLocales, setEstadosLocales] = useState(
+    esMulti ? { ...parsed.estados } : { _simple: parsed?.estado || 'SOLICITADO' }
+  )
+
+  const subestadoActual = esMulti
+    ? estadoGlobal(estadosLocales)
+    : (estadosLocales._simple || 'SOLICITADO')
 
   const puedeSubestado = canChangeSubestado !== undefined ? canChangeSubestado : !readOnly
 
@@ -18,14 +75,13 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
     { key:'FOTO_MANGA_I_URL', label:'M. Izq'  },
   ].filter(f => item[f.key])
 
-  const [fotoActiva,    setFotoActiva]    = useState(fotos[0]?.key || null)
-  const [fotoFullscreen,setFotoFullscreen]= useState(null)
-  const [editingNota,   setEditingNota]   = useState(false)
-  const [notaText,      setNotaText]      = useState(item.NOTAS_AREA || '')
-  const [notaGuardada,  setNotaGuardada]  = useState(item.NOTAS_AREA || '')
-  const [savingNota,    setSavingNota]    = useState(false)
-  const [notaError,     setNotaError]     = useState('')
-  const [subestado,     setSubestado]     = useState(item.SUBESTADO || 'SOLICITADO')
+  const [fotoActiva,     setFotoActiva]     = useState(fotos[0]?.key || null)
+  const [fotoFullscreen, setFotoFullscreen] = useState(null)
+  const [editingNota,    setEditingNota]    = useState(false)
+  const [notaText,       setNotaText]       = useState(item.NOTAS_AREA || '')
+  const [notaGuardada,   setNotaGuardada]   = useState(item.NOTAS_AREA || '')
+  const [savingNota,     setSavingNota]     = useState(false)
+  const [notaError,      setNotaError]      = useState('')
 
   async function saveNota() {
     setSavingNota(true); setNotaError('')
@@ -40,15 +96,30 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
     } finally { setSavingNota(false) }
   }
 
-  async function cambiarSubestado(s) {
-    const anterior = subestado; setSubestado(s)
+  // Cambiar subestado — puede ser de un área específica o global (admin)
+  async function cambiarSubestado(nuevoEstado, areaRol) {
+    const bodyPatch = { SUBESTADO: nuevoEstado, _usuarioId: user?.id }
+    if (areaRol) bodyPatch.AREA_ROL = areaRol
+
+    // Optimistic update local
+    if (areaRol) {
+      setEstadosLocales(prev => ({ ...prev, [areaRol]: nuevoEstado }))
+    } else {
+      setEstadosLocales({ _simple: nuevoEstado })
+    }
+
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ SUBESTADO:s, _usuarioId:user?.id }),
+        body: JSON.stringify(bodyPatch),
       })
-      if (!res.ok) setSubestado(anterior)
-    } catch { setSubestado(anterior) }
+      if (!res.ok) {
+        // Revertir si falla
+        setEstadosLocales(esMulti ? { ...parsed.estados } : { _simple: parsed?.estado })
+      }
+    } catch {
+      setEstadosLocales(esMulti ? { ...parsed.estados } : { _simple: parsed?.estado })
+    }
   }
 
   return (
@@ -127,19 +198,55 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
             </div>
           )}
 
-          {/* Subestado — solo si puedeSubestado */}
+          {/* ── SUBESTADOS ── */}
           {puedeSubestado ? (
-            <div className="grid grid-cols-2 gap-1">
-              {SUBESTADOS_ORDEN.map(s=>(
-                <button key={s} onClick={()=>cambiarSubestado(s)}
-                  className={`py-1.5 rounded-xl text-xs font-semibold transition-all ${subestado===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
-                  {SUBESTADO_LABELS[s]}
-                </button>
-              ))}
-            </div>
+            esMulti ? (
+              // MULTI-ÁREA: mostrar panel por cada área
+              <div className="space-y-2">
+                {parsed.areas.map(area => {
+                  const estadoArea = estadosLocales[area] || 'SOLICITADO'
+                  const esMiArea = miArea === area || user?.rol === 'ADMIN'
+                  const colorBadge = area === 'ESTAMPADO' ? 'text-orange-400' : area === 'BORDADO' ? 'text-purple-400' : 'text-blue-400'
+                  return (
+                    <div key={area} className={`rounded-xl border p-2 ${esMiArea ? 'border-gray-700' : 'border-gray-800 opacity-60'}`}>
+                      <div className={`text-xs font-bold mb-1.5 ${colorBadge}`}>{area}</div>
+                      {esMiArea ? (
+                        <div className="grid grid-cols-2 gap-1">
+                          {SUBESTADOS_ORDEN.map(s => (
+                            <button key={s} onClick={() => cambiarSubestado(s, area)}
+                              className={`py-1.5 rounded-lg text-xs font-semibold transition-all ${estadoArea===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                              {SUBESTADO_LABELS[s]}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className={`badge text-xs ${SUBESTADO_COLORS[estadoArea]||'bg-gray-500/20 text-gray-400'}`}>
+                          {SUBESTADO_LABELS[estadoArea]||estadoArea}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+                {/* Badge global */}
+                <div className="text-xs text-gray-600 text-right">
+                  Global: <span className={`font-medium ${SUBESTADO_COLORS[subestadoActual]?.replace('bg-','text-').replace('/20','') || 'text-gray-400'}`}>{SUBESTADO_LABELS[subestadoActual]||subestadoActual}</span>
+                </div>
+              </div>
+            ) : (
+              // ÁREA SIMPLE: botones normales
+              <div className="grid grid-cols-2 gap-1">
+                {SUBESTADOS_ORDEN.map(s=>(
+                  <button key={s} onClick={()=>cambiarSubestado(s, null)}
+                    className={`py-1.5 rounded-xl text-xs font-semibold transition-all ${subestadoActual===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                    {SUBESTADO_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            )
           ) : (
-            <span className={`badge text-xs ${SUBESTADO_COLORS[subestado]||'bg-gray-500/20 text-gray-400'}`}>
-              {SUBESTADO_LABELS[subestado]||subestado}
+            // Solo lectura — mostrar badge global
+            <span className={`badge text-xs ${SUBESTADO_COLORS[subestadoActual]||'bg-gray-500/20 text-gray-400'}`}>
+              {SUBESTADO_LABELS[subestadoActual]||subestadoActual}
             </span>
           )}
         </div>

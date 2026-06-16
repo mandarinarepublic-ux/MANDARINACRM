@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { readSheet, getSheets, fechaAhora } from '@/lib/sheets'
 import { logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
+import { parseSubestados, serializeSubestados, subestadoGlobal } from '@/lib/subestados'
 
 const SHEET_ID = process.env.SHEET_ID
 
@@ -80,8 +81,11 @@ export async function PATCH(req, { params }) {
       return Response.json({ ok: true, col: colLetter, row: dataIdxToSheetRow(idx) })
     }
 
-    // ── CASO 2: SUBESTADO solo → escribe directo en la columna SUBESTADO ─────
-    if (bodyKeys.length === 1 && bodyKeys[0] === 'SUBESTADO') {
+    // ── CASO 2: SUBESTADO + AREA_ROL → actualiza solo el subestado del área que guarda ──
+    if (bodyKeys.length <= 2 && bodyKeys.includes('SUBESTADO')) {
+      const areaRol = body.AREA_ROL // área específica que cambia: 'ESTAMPADO', 'BORDADO', etc.
+      const nuevoEstado = body.SUBESTADO
+
       const sheets = await getSheets()
       const hRes = await sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
@@ -91,9 +95,20 @@ export async function PATCH(req, { params }) {
       const colIdx = headers.indexOf('SUBESTADO')
       const colLetter = colIdx >= 0 ? String.fromCharCode(65 + colIdx) : 'M'
 
-      await writeCellDetalle(idx, colLetter, body.SUBESTADO)
-      await logCambio(item.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO, body.SUBESTADO, usuarioId).catch(() => {})
-      return Response.json({ ok: true })
+      let nuevoValor
+      if (areaRol) {
+        // Multi-área: actualizar solo el área del rol
+        const subestados = parseSubestados(item.SUBESTADO, item.AREA)
+        subestados[areaRol] = nuevoEstado
+        nuevoValor = serializeSubestados(subestados)
+      } else {
+        // Área simple: guardar directo
+        nuevoValor = nuevoEstado
+      }
+
+      await writeCellDetalle(idx, colLetter, nuevoValor)
+      await logCambio(item.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}${areaRol ? ` (${areaRol})` : ''}`, item.SUBESTADO, nuevoValor, usuarioId).catch(() => {})
+      return Response.json({ ok: true, subestado: nuevoValor })
     }
 
     // ── CASO 3: actualización general (editar-pedido) ─────────────────────────
