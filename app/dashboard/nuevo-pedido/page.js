@@ -118,10 +118,14 @@ export default function NuevoPedidoPage() {
 
   function buildDireccion() {
     if (usarMapa) return direccionTexto
-    const parts = []
-    if (cliente.ciudad) parts.push(cliente.ciudad)
-    if (cliente.direccion) parts.push(cliente.direccion)
-    return parts.join(': ')
+    const ciudad = (cliente.ciudad || '').trim()
+    const dir = (cliente.direccion || '').trim()
+    if (!ciudad && !dir) return ''
+    if (!ciudad) return dir
+    if (!dir) return ciudad
+    // Si la dirección ya empieza con la ciudad, no duplicar
+    if (dir.toLowerCase().startsWith(ciudad.toLowerCase())) return dir
+    return `${ciudad}: ${dir}`
   }
 
   // Step validation

@@ -138,16 +138,38 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
           </div>
         ))}
 
-        {/* Estado pago */}
-        <div style={{ marginTop: '14px', display: 'table', width: '100%', borderRadius: '10px', backgroundColor: pagado ? '#dcfce7' : '#fef3c7', border: `1px solid ${pagado ? '#86efac' : '#fde68a'}`, padding: '10px 14px' }}>
-          <div style={{ display: 'table-cell', width: '30px', verticalAlign: 'middle', fontSize: '18px' }}>{pagado ? '✅' : '💳'}</div>
-          <div style={{ display: 'table-cell', verticalAlign: 'middle' }}>
-            <div style={{ fontSize: '11px', fontWeight: '800', color: pagado ? '#15803d' : '#92400e' }}>
-              {pagado ? 'Pedido pagado — listo para entregar' : 'Pendiente de pago al recibir'}
+        {/* Estado pago con semáforo */}
+        {(() => {
+          const total = parseFloat(pedido?.MONTO_TOTAL || 0)
+          const abonado = parseFloat(pedido?.MONTO_ABONADO || 0)
+          const saldo = total - abonado
+          const pct = total > 0 ? Math.round((abonado / total) * 100) : 100
+          const isPagado = pedido?.ESTADO_PAGO === 'PAGADO' || saldo < 0.01
+          return (
+            <div style={{ marginTop: '14px', padding: '12px 16px', borderRadius: '10px',
+              backgroundColor: isPagado ? '#dcfce7' : '#fee2e2',
+              border: `2px solid ${isPagado ? '#86efac' : '#fca5a5'}`,
+              display: 'table', width: '100%', boxSizing: 'border-box' }}>
+              <div style={{ display: 'table-cell', width: '32px', verticalAlign: 'middle', fontSize: '20px' }}>
+                {isPagado ? '✅' : '🔴'}
+              </div>
+              <div style={{ display: 'table-cell', verticalAlign: 'middle' }}>
+                {isPagado ? (
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#15803d' }}>PAGO COMPLETO</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: '13px', fontWeight: '800', color: '#b91c1c' }}>
+                      ABONO DEL {pct}% — SALDO PENDIENTE
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '2px', fontWeight: '700' }}>
+                      Cobrar ${saldo.toFixed(2)} al momento de la entrega
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-            {!pagado && <div style={{ fontSize: '10px', color: '#92400e', marginTop: '1px' }}>Cobrar el saldo al momento de la entrega</div>}
-          </div>
-        </div>
+          )
+        })()}
       </div>
 
       {/* Footer */}

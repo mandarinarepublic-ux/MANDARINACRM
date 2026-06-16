@@ -288,8 +288,14 @@ function DashboardDespacho({ data, user }) {
 
 // ─── DISEÑO / FÁBRICA ─────────────────────────────────────────────────────────
 function DashboardDiseno({ data, user }) {
-  const totalPendientes = data.allItems.length
-  const urgentes = data.allItems.filter(i => i.fechaEntrega && Math.ceil((new Date(i.fechaEntrega)-new Date())/86400000)<=2).length
+  // Filtrar ítems por las áreas del usuario
+  const misItems = data.allItems.filter(i => {
+    const areas = (user.areas || [])
+    if (areas.length === 0 || (areas.length === 1 && areas[0] === 'TODAS')) return true
+    return areas.some(a => (i.AREA || '').toUpperCase().includes(a.toUpperCase()))
+  })
+  const totalPendientes = misItems.length
+  const urgentes = misItems.filter(i => i.fechaEntrega && Math.ceil((new Date(i.fechaEntrega)-new Date())/86400000)<=2).length
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <div className="mb-6 pt-2">
