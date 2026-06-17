@@ -5,6 +5,7 @@ import Link from 'next/link'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { ESTADO_LABELS, ESTADO_LABELS_LARGO } from '@/lib/labels'
 import { PdfGracias, PdfConfeccion } from '@/components/pedido/PdfPedido'
+import PdfScaler from '@/components/pedido/PdfScaler'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -370,8 +371,10 @@ export default function PedidoDetailPage() {
               </div>
             </div>
             <div className="bg-white rounded-xl overflow-hidden">
-              <PdfGracias pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
-              <PdfConfeccion pedido={pedido} items={items} tiendaColor={tiendaColor} />
+              <PdfScaler>
+                <PdfGracias pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
+                <PdfConfeccion pedido={pedido} items={items} tiendaColor={tiendaColor} />
+              </PdfScaler>
             </div>
           </div>
         </div>
