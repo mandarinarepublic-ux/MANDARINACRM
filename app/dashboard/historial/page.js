@@ -150,7 +150,7 @@ export default function HistorialPage() {
                       )}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {p.items?.length || 0} prendas · {p.FECHA_PEDIDO?.split(' ')[0] || ''}
+                      {p.items?.length || 0} prendas · {p.FECHA_PEDIDO?.replace('T',' ').substring(0,16) || ''}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">

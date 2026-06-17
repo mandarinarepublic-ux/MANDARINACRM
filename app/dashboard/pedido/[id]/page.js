@@ -187,7 +187,7 @@ export default function PedidoDetailPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-24">
+      <div className="flex-1 overflow-y-auto pb-32 md:pb-24">
         <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
 
           {isNew && (
@@ -386,32 +386,34 @@ export default function PedidoDetailPage() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3 flex gap-2">
-        {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
-          <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">📱 WhatsApp</button>
-        )}
-        <button onClick={()=>setShowPdfPreview(true)} className="btn-secondary flex-1 text-sm">👁️ Ver PDF</button>
-        {user?.rol==='DESPACHO'&&pedido?.ESTADO_PEDIDO!=='COMPLETADO'&&(
-          <Link href="/dashboard/despacho" className="btn-primary flex-1 text-sm flex items-center justify-center gap-1" style={{backgroundColor:'#7C3AED'}}>🚚 Ir a despacho</Link>
-        )}
-        {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR')&&(
-          <>
-            {pedido.EMITIR_FACTURA === 'TRUE' && !facturaEnviada && (
-              <button onClick={emitirFactura} disabled={enviandoFactura}
-                className="btn-secondary flex-1 text-sm border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10"
-                title={cliente?.EMAIL ? `Enviar factura a ${cliente.EMAIL}` : 'El cliente no tiene email'}>
-                {enviandoFactura ? '⏳...' : '🧾 Factura'}
-              </button>
-            )}
-            {facturaEnviada && (
-              <div className="flex-1 flex items-center justify-center gap-1 text-xs text-green-400 font-medium">
-                ✅ Factura enviada
-              </div>
-            )}
+      <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3">
+        {/* Fila 1: acciones principales */}
+        <div className="flex gap-2 mb-2">
+          {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
+            <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">📱 WA</button>
+          )}
+          <button onClick={()=>setShowPdfPreview(true)} className="btn-secondary flex-1 text-sm">👁️ PDF</button>
+          {user?.rol==='DESPACHO'&&pedido?.ESTADO_PEDIDO!=='COMPLETADO'&&(
+            <Link href="/dashboard/despacho" className="btn-primary flex-1 text-sm flex items-center justify-center gap-1" style={{backgroundColor:'#7C3AED'}}>🚚 Despacho</Link>
+          )}
+          {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR')&&(
             <button onClick={generatePDF} disabled={generatingPdf} className="btn-primary flex-1 text-sm" style={{backgroundColor:tiendaColor}}>
               {generatingPdf?'⏳...':'⬇️ PDF'}
             </button>
-          </>
+          )}
+        </div>
+        {/* Fila 2: factura (solo si aplica) */}
+        {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR') && pedido.EMITIR_FACTURA === 'TRUE' && (
+          <div className="flex gap-2">
+            {!facturaEnviada ? (
+              <button onClick={emitirFactura} disabled={enviandoFactura}
+                className="w-full py-2 rounded-xl text-sm font-medium border border-yellow-500/40 text-yellow-400 bg-yellow-500/10">
+                {enviandoFactura ? '⏳ Enviando factura...' : '🧾 Emitir factura'}
+              </button>
+            ) : (
+              <div className="w-full text-center text-sm text-green-400 font-medium py-2">✅ Factura emitida</div>
+            )}
+          </div>
         )}
       </div>
     </div>
