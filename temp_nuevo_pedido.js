@@ -292,6 +292,18 @@ export default function NuevoPedidoPage() {
         </div>
 
         <div className="max-w-2xl mx-auto">
+          {/* Tienda selector */}
+          <div className="flex gap-2 mb-4">
+            {TIENDAS.map(t => (
+              <button key={t} onClick={() => setTienda(t)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border
+                  ${tienda === t ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
+                style={tienda === t ? { backgroundColor: TIENDA_COLORS[t] } : {}}>
+                {t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}
+              </button>
+            ))}
+          </div>
+
           {/* Step indicator */}
           <div className="flex items-center gap-1 mb-2">
             {steps.map((s, i) => (
@@ -312,7 +324,7 @@ export default function NuevoPedidoPage() {
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto pb-28">
+      <div className="flex-1 overflow-y-auto pb-32">
         <div className="max-w-2xl mx-auto px-4 pt-4">
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4">
@@ -451,17 +463,6 @@ export default function NuevoPedidoPage() {
           {/* STEP 2 */}
           {step === 2 && (
             <div className="space-y-4">
-              {/* Selector de tienda — solo visible en step 2 */}
-              <div className="flex gap-2">
-                {TIENDAS.map(t => (
-                  <button key={t} onClick={() => setTienda(t)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border
-                      ${tienda === t ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
-                    style={tienda === t ? { backgroundColor: TIENDA_COLORS[t] } : {}}>
-                    {t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}
-                  </button>
-                ))}
-              </div>
               <BuscadorProductos tienda={tienda} onAdd={item => setItems(p => [...p, { ...item, cantidad: item.cantidad || 1, precioUnit: item.precioUnit || '' }])} />
               {items.length === 0 && (
                 <div className="card p-6 text-center text-gray-500 border-dashed">

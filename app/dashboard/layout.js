@@ -70,16 +70,6 @@ function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
       </Link>
     )
   }
-  if (variant === 'bottom') {
-    return (
-      <Link href={item.href}
-        className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all min-w-0
-          ${active ? 'text-mandarina-400' : 'text-gray-600'}`}>
-        <span className="text-xl">{item.icon}</span>
-        <span className="text-xs truncate max-w-[52px] text-center leading-tight">{item.label}</span>
-      </Link>
-    )
-  }
   if (variant === 'menu') {
     return (
       <Link href={item.href} onClick={() => setMenuOpen(false)}
@@ -135,55 +125,55 @@ export default function DashboardLayout({ children }) {
         </div>
       </header>
 
-      {/* MOBILE MENU OVERLAY */}
-      {menuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-gray-950" onClick={() => setMenuOpen(false)}>
-          <div className="pt-16 px-4 pb-8" onClick={e => e.stopPropagation()}>
-            <div className="bg-gray-800/50 rounded-2xl p-4 mb-4 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-mandarina-500 flex items-center justify-center text-white font-bold text-lg">
-                {user.nombre?.[0]?.toUpperCase() || 'U'}
-              </div>
-              <div>
-                <div className="text-white font-semibold">{user.nombre}</div>
-                <div className="text-xs text-gray-500">{user.rol}</div>
-              </div>
+      {/* MOBILE DRAWER — deslizable de izquierda a derecha */}
+      {/* Fondo oscuro semitransparente */}
+      <div
+        className={`md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300
+          ${menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setMenuOpen(false)}
+      />
+      {/* Panel lateral */}
+      <div
+        className={`md:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-gray-900 flex flex-col
+          shadow-2xl transition-transform duration-300 ease-in-out
+          ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        {/* Header del drawer */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-mandarina-500 flex items-center justify-center text-white font-bold text-base">
+              {user.nombre?.[0]?.toUpperCase() || 'U'}
             </div>
-            <nav className="space-y-1">
-              {navItems.map(item => (
-                <Suspense key={item.href} fallback={
-                  <div className="flex items-center gap-4 px-4 py-3.5 text-gray-500 text-sm">{item.icon} {item.label}</div>
-                }>
-                  <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="menu" />
-                </Suspense>
-              ))}
-            </nav>
-            <button onClick={logout} className="mt-4 w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all">
-              <span className="text-xl w-7 text-center">🚪</span>Cerrar sesión
-            </button>
+            <div>
+              <div className="text-white font-semibold text-sm leading-none">{user.nombre}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{user.rol}</div>
+            </div>
           </div>
+          <button
+            onClick={() => setMenuOpen(false)}
+            className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white rounded-lg hover:bg-gray-800 transition-all text-lg"
+          >✕</button>
         </div>
-      )}
 
-      {/* MOBILE BOTTOM NAV */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-800 safe-area-pb">
-        <div className="flex items-center justify-around px-2 py-1">
-          {navItems.slice(0, 5).map(item => (
+        {/* Nav items */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          {navItems.map(item => (
             <Suspense key={item.href} fallback={
-              <div className="flex flex-col items-center gap-0.5 px-2 py-2 text-gray-600">
-                <span className="text-xl">{item.icon}</span>
-                <span className="text-xs">{item.label}</span>
-              </div>
+              <div className="flex items-center gap-4 px-4 py-3.5 text-gray-500 text-sm">{item.icon} {item.label}</div>
             }>
-              <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="bottom" />
+              <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="menu" />
             </Suspense>
           ))}
-          {navItems.length > 5 && (
-            <button onClick={() => setMenuOpen(true)} className="flex flex-col items-center gap-0.5 px-2 py-2 text-gray-600">
-              <span className="text-xl">⋯</span><span className="text-xs">Más</span>
-            </button>
-          )}
+        </nav>
+
+        {/* Footer del drawer */}
+        <div className="border-t border-gray-800 px-3 py-4">
+          <button onClick={logout} className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all">
+            <span className="text-xl w-7 text-center">🚪</span>Cerrar sesión
+          </button>
         </div>
-      </nav>
+      </div>
+
 
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex flex-col w-56 bg-gray-900 border-r border-gray-800 p-4 fixed h-full z-30">
@@ -214,7 +204,7 @@ export default function DashboardLayout({ children }) {
         </div>
       </aside>
 
-      <main className="md:ml-56 pt-16 pb-24 md:pt-0 md:pb-0 min-h-screen">{children}</main>
+      <main className="md:ml-56 pt-16 md:pt-0 min-h-screen">{children}</main>
 
       {/* Notificaciones de nuevos pedidos — esquina inferior derecha */}
       <NotifContainer notifs={notifs} onClose={removeNotif} />
