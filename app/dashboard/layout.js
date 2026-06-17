@@ -86,6 +86,20 @@ export default function DashboardLayout({ children }) {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [letraGrande, setLetraGrande] = useState(false)
+
+  useEffect(() => {
+    const lg = localStorage.getItem('mp_letra_grande') === 'true'
+    setLetraGrande(lg)
+    document.documentElement.classList.toggle('letra-grande', lg)
+  }, [])
+
+  function toggleLetraGrande() {
+    const nuevo = !letraGrande
+    setLetraGrande(nuevo)
+    localStorage.setItem('mp_letra_grande', String(nuevo))
+    document.documentElement.classList.toggle('letra-grande', nuevo)
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -167,7 +181,20 @@ export default function DashboardLayout({ children }) {
         </nav>
 
         {/* Footer del drawer */}
-        <div className="border-t border-gray-800 px-3 py-4">
+        <div className="border-t border-gray-800 px-3 py-4 space-y-1">
+          {/* Toggle letra grande */}
+          <button
+            onClick={toggleLetraGrande}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium text-gray-300 hover:bg-gray-800 transition-all"
+          >
+            <span className="flex items-center gap-4">
+              <span className="text-xl w-7 text-center">🔡</span>
+              Letra grande
+            </span>
+            <span className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${letraGrande ? 'bg-mandarina-500' : 'bg-gray-700'}`}>
+              <span className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${letraGrande ? 'translate-x-5' : 'translate-x-0'}`} />
+            </span>
+          </button>
           <button onClick={logout} className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all">
             <span className="text-xl w-7 text-center">🚪</span>Cerrar sesión
           </button>

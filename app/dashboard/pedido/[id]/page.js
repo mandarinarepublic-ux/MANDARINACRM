@@ -159,15 +159,15 @@ export default function PedidoDetailPage() {
             <button onClick={() => router.back()} className="text-gray-500 hover:text-white p-1 text-lg">←</button>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-display font-bold text-white">{pedido.PEDIDO_ID}</h1>
+                <h1 className="text-xl font-display font-bold text-white">{pedido.PEDIDO_ID}</h1>
                 <span>{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
               </div>
-              <div className="text-gray-500 text-xs">{pedido.TIENDA_ID === 'MANDARINA' ? 'Mandarina Republic' : 'Indstore'}</div>
+              <div className="text-gray-500 text-sm">{pedido.TIENDA_ID === 'MANDARINA' ? 'Mandarina Republic' : 'Indstore'}</div>
             </div>
             {isNew && <span className="badge bg-green-500/20 text-green-400 text-xs">✅ Creado</span>}
             <div className="text-right flex-shrink-0">
-              <div className="text-sm font-bold text-white">${montoTotal.toFixed(2)}</div>
-              <div className={`text-xs font-medium ${montoPendiente > 0.01 ? 'text-yellow-400' : 'text-green-400'}`}>
+              <div className="text-base font-bold text-white">${montoTotal.toFixed(2)}</div>
+              <div className={`text-sm font-medium ${montoPendiente > 0.01 ? 'text-yellow-400' : 'text-green-400'}`}>
                 {montoPendiente > 0.01 ? `Debe $${montoPendiente.toFixed(2)}` : '✓ Pagado'}
               </div>
             </div>
@@ -193,11 +193,9 @@ export default function PedidoDetailPage() {
           {isNew && (
             <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4">
               <div className="font-semibold text-green-400 mb-3">🎉 Pedido creado exitosamente</div>
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={sendWhatsApp} className="flex items-center gap-2 bg-green-500 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-600">📱 WhatsApp</button>
-                <button onClick={generatePDF} disabled={generatingPdf} className="flex items-center gap-2 bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-xl">{generatingPdf?'⏳...':'⬇️ PDF'}</button>
-                <Link href="/dashboard/nuevo-pedido" className="text-sm px-4 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white">➕ Nuevo</Link>
-              </div>
+              <Link href="/dashboard/nuevo-pedido" className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-mandarina-500 text-white font-medium hover:bg-mandarina-600 transition-all">
+                ➕ Nueva Venta
+              </Link>
             </div>
           )}
 
@@ -231,7 +229,7 @@ export default function PedidoDetailPage() {
                 {(pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO) && (
                   <div className="flex justify-between gap-4">
                     <span className="text-gray-500 shrink-0">Dirección</span>
-                    <span className="text-white text-right text-xs">{pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO}</span>
+                    <span className="text-white text-right text-sm">{pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO}</span>
                   </div>
                 )}
                 {pedido.LATITUD && <a href={`https://maps.google.com/?q=${pedido.LATITUD},${pedido.LONGITUD}`} target="_blank" className="text-mandarina-400 text-xs hover:underline">📍 Ver en Google Maps</a>}
@@ -241,7 +239,7 @@ export default function PedidoDetailPage() {
 
           <div className="card">
             <div className="px-4 py-3 border-b border-gray-800">
-              <h3 className="text-sm font-semibold text-white">👕 Productos ({items.length})</h3>
+              <h3 className="text-base font-semibold text-white">👕 Productos ({items.length})</h3>
             </div>
             <div className="divide-y divide-gray-800">
               {items.map(item => (
@@ -295,14 +293,14 @@ export default function PedidoDetailPage() {
 
           {pedido.NOTAS_VENDEDOR && (
             <div className="card p-4">
-              <h3 className="text-sm font-semibold text-white mb-2">📝 Notas internas</h3>
-              <div className="text-sm text-gray-300 bg-gray-800/50 rounded-xl px-4 py-3">{pedido.NOTAS_VENDEDOR}</div>
+              <h3 className="text-base font-semibold text-white mb-2">📝 Notas internas</h3>
+              <div className="text-base text-gray-300 bg-gray-800/50 rounded-xl px-4 py-3">{pedido.NOTAS_VENDEDOR}</div>
             </div>
           )}
 
           <div className="card p-4">
-            <h3 className="text-sm font-semibold text-white mb-2">📦 Entrega</h3>
-            <div className="text-sm text-gray-400">
+            <h3 className="text-base font-semibold text-white mb-2">📦 Entrega</h3>
+            <div className="text-base text-gray-400">
               Fecha comprometida:
               <span className="text-white ml-2">
                 {pedido.FECHA_ENTREGA_PROMETIDA
