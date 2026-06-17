@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
+import { parseFecha } from '@/lib/parseFecha'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -13,14 +14,6 @@ const SUBESTADO_CONFIG = {
 }
 const SUBESTADOS_ORDEN = ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO']
 
-function parseFecha(str) {
-  if (!str) return null
-  if (str.match(/^\d{4}-/)) return new Date(str)
-  const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
-  const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
-  if (!m) return null
-  return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
-}
 
 function itemEsDeUsuario(itemArea, u) {
   if (!itemArea) return false
@@ -331,7 +324,8 @@ export default function ProduccionPage() {
         .sort((a, b) => {
           const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
           const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
-          return fb - fa
+          if (fb - fa !== 0) return fb - fa
+          return (b.PEDIDO_ID || '').localeCompare(a.PEDIDO_ID || '')
         })
         .map(p => ({
           ...p,

@@ -3,15 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-
-function parseFecha(str) {
-  if (!str) return null
-  if (str.match(/^\d{4}-/)) return new Date(str)
-  const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
-  const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
-  if (!m) return null
-  return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
-}
+import { parseFecha } from '@/lib/parseFecha'
 
 function resizeImageBase64(file) {
   return new Promise((resolve, reject) => {
@@ -72,7 +64,11 @@ export default function DespachosPage() {
              .filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
              .every(i => i.SUBESTADO === 'LISTO'))
         )
-        .sort((a, b) => (parseFecha(b.FECHA_PEDIDO)||new Date(0)) - (parseFecha(a.FECHA_PEDIDO)||new Date(0)))
+        .sort((a, b) => {
+          const diff = (parseFecha(b.FECHA_PEDIDO)||new Date(0)) - (parseFecha(a.FECHA_PEDIDO)||new Date(0))
+          if (diff !== 0) return diff
+          return (b.PEDIDO_ID || '').localeCompare(a.PEDIDO_ID || '')
+        })
       setPedidos(lista)
     } finally { setLoading(false) }
   }

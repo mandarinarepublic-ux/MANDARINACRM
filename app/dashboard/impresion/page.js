@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { PdfGracias, PdfConfeccion } from '@/components/pedido/PdfPedido'
+import { parseFecha } from '@/lib/parseFecha'
 
 export default function ImpresionPage() {
   const router = useRouter()
@@ -52,17 +53,6 @@ export default function ImpresionPage() {
   function selectAll() {
     if (selected.size === filtered.length) setSelected(new Set())
     else setSelected(new Set(filtered.map(p => p.PEDIDO_ID)))
-  }
-
-  // Parse fecha from format "01Jun2026 23:59:00" or ISO
-  function parseFecha(str) {
-    if (!str) return null
-    if (str.includes('T') || str.match(/^\d{4}-/)) return new Date(str)
-    // Format: 01Jun2026 23:59:00
-    const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
-    const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
-    if (!m) return null
-    return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
   }
 
   const filtered = pedidos.filter(p => {

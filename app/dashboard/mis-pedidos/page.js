@@ -3,18 +3,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
+import { parseFecha } from '@/lib/parseFecha'
 
 const ESTADO_LABELS = { EN_FABRICA:'En Producción', DESPACHO:'Para despacho', ENTREGADO:'Entregado' }
 const ESTADO_COLORS = { EN_FABRICA:'text-blue-400 bg-blue-500/10', DESPACHO:'text-purple-400 bg-purple-500/10', ENTREGADO:'text-green-400 bg-green-500/10' }
 
-function parseFecha(str) {
-  if (!str) return null
-  if (str.match(/^\d{4}-/)) return new Date(str)
-  const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
-  const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
-  if (!m) return null
-  return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
-}
 
 export default function MisPedidosPage() {
   const router = useRouter()
@@ -44,7 +37,8 @@ export default function MisPedidosPage() {
         .sort((a, b) => {
           const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
           const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
-          return fb - fa
+          if (fb - fa !== 0) return fb - fa
+          return (b.PEDIDO_ID || '').localeCompare(a.PEDIDO_ID || '')
         })
       setPedidos(ordenados)
     } finally { setLoading(false) }

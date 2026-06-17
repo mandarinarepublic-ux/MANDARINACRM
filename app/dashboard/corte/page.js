@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
+import { parseFecha } from '@/lib/parseFecha'
 
 const CORTE_CONFIG = {
   PENDIENTE:   { label: '✂️ Pendiente',  color: 'bg-gray-600' },
@@ -10,15 +11,6 @@ const CORTE_CONFIG = {
   CORTADO:     { label: '✅ Cortado',    color: 'bg-green-500' },
 }
 const CORTE_ORDEN = ['PENDIENTE', 'SOLICITADO', 'CORTADO']
-
-function parseFecha(str) {
-  if (!str) return null
-  if (str.match(/^\d{4}-/)) return new Date(str)
-  const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
-  const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
-  if (!m) return null
-  return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
-}
 
 function CorteCard({ item, userId, onCorteChange }) {
   const [subestadoCorte, setSubestadoCorte] = useState(item.SUBESTADO_CORTE || 'PENDIENTE')
@@ -153,7 +145,11 @@ export default function CortePage() {
       const data = await res.json()
       const resultado = (data.pedidos || [])
         .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA')
-        .sort((a, b) => (parseFecha(a.FECHA_PEDIDO)||new Date(0)) - (parseFecha(b.FECHA_PEDIDO)||new Date(0)))
+        .sort((a, b) => {
+          const diff = (parseFecha(a.FECHA_PEDIDO)||new Date(0)) - (parseFecha(b.FECHA_PEDIDO)||new Date(0))
+          if (diff !== 0) return diff
+          return (a.PEDIDO_ID || '').localeCompare(b.PEDIDO_ID || '')
+        })
         .map(p => ({
           ...p,
           itemsFiltrados: (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
