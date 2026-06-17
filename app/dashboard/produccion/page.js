@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { coincideBusqueda } from '@/lib/buscarPedido'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -384,8 +385,9 @@ export default function ProduccionPage() {
       if (p.itemsFiltrados.length === 0) return false
       if (busqueda) {
         const q = busqueda.toLowerCase()
-        if (!p.PEDIDO_ID?.toLowerCase().includes(q) &&
-            !p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))) return false
+        const matchPedidoOCliente = coincideBusqueda(p, busqueda)
+        const matchProducto = p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))
+        if (!matchPedidoOCliente && !matchProducto) return false
       }
       if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
       if (fechaHasta) {
@@ -419,7 +421,7 @@ export default function ProduccionPage() {
           </div>
 
           <div className="flex gap-2 mb-3">
-            <input className="input flex-1" placeholder="Buscar por pedido o producto..."
+            <input className="input flex-1" placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
             <button onClick={() => setMostrarFecha(v => !v)}
               className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0

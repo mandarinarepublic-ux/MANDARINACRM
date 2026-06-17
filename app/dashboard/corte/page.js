@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { coincideBusqueda } from '@/lib/buscarPedido'
 
 const CORTE_CONFIG = {
   PENDIENTE:   { label: '✂️ Pendiente',  color: 'bg-gray-600' },
@@ -182,7 +183,7 @@ export default function CortePage() {
     itemsFiltrados: p.itemsFiltrados.filter(i => {
       const corte = i.SUBESTADO_CORTE || 'PENDIENTE'
       const matchF = filtro === 'TODOS' || corte === filtro
-      const matchB = !busqueda || p.PEDIDO_ID?.toLowerCase().includes(busqueda.toLowerCase()) ||
+      const matchB = !busqueda || coincideBusqueda(p, busqueda) ||
         i.PRODUCTO_NOMBRE?.toLowerCase().includes(busqueda.toLowerCase())
       return matchF && matchB
     })
@@ -202,7 +203,7 @@ export default function CortePage() {
             </div>
           </div>
 
-          <input className="input w-full mb-3" placeholder="Buscar por pedido o producto..."
+          <input className="input w-full mb-3" placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
             value={busqueda} onChange={e => setBusqueda(e.target.value)} />
 
           {/* Filtros con contadores grandes */}

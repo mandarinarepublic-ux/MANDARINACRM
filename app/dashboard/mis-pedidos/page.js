@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { coincideBusqueda } from '@/lib/buscarPedido'
 
 const ESTADO_LABELS = { EN_FABRICA:'En Producción', DESPACHO:'Para despacho', ENTREGADO:'Entregado' }
 const ESTADO_COLORS = { EN_FABRICA:'text-blue-400 bg-blue-500/10', DESPACHO:'text-purple-400 bg-purple-500/10', ENTREGADO:'text-green-400 bg-green-500/10' }
@@ -52,7 +53,7 @@ export default function MisPedidosPage() {
   const hayFecha = fechaDesde || fechaHasta
 
   const filtered = pedidos.filter(p => {
-    if (busqueda && !p.PEDIDO_ID?.toLowerCase().includes(busqueda.toLowerCase())) return false
+    if (busqueda && !coincideBusqueda(p, busqueda)) return false
     if (fechaDesde) {
       const f = parseFecha(p.FECHA_PEDIDO)
       if (!f || f < new Date(fechaDesde)) return false
@@ -77,7 +78,7 @@ export default function MisPedidosPage() {
             <Link href="/dashboard/nuevo-pedido" className="btn-primary text-sm px-4 py-2">+ Nueva</Link>
           </div>
           <div className="flex gap-2 mb-3">
-            <input className="input flex-1" placeholder="Buscar por ID..."
+            <input className="input flex-1" placeholder="Buscar por pedido, nombre, cédula o celular..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
             <button onClick={() => setMostrarFecha(v => !v)}
               className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0

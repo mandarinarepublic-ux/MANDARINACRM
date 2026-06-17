@@ -78,9 +78,11 @@ export default function ImpresionPage() {
       if (fp && fp > hasta) return false
     }
     if (busqueda) {
-      const q = busqueda.toLowerCase()
-      if (!p.PEDIDO_ID?.toLowerCase().includes(q) &&
-          !clientes[p.CLIENTE_ID]?.NOMBRE?.toLowerCase().includes(q)) return false
+      const q = busqueda.toLowerCase().replace(/[\s-]/g, '')
+      const c = clientes[p.CLIENTE_ID] || {}
+      const campos = [p.PEDIDO_ID, c.NOMBRE, c.CEDULA, c.CELULAR]
+      const match = campos.some(v => v && String(v).toLowerCase().replace(/[\s-]/g, '').includes(q))
+      if (!match) return false
     }
     return true
   })
@@ -115,7 +117,7 @@ export default function ImpresionPage() {
           </div>
 
           {/* Filters */}
-          <input className="input mb-2" placeholder="Buscar por ID o cliente..."
+          <input className="input mb-2" placeholder="Buscar por pedido, nombre, cédula o celular..."
             value={busqueda} onChange={e => setBusqueda(e.target.value)} />
 
           <div className="grid grid-cols-2 gap-2 mb-2">

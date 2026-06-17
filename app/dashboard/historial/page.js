@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
+import { coincideBusqueda } from '@/lib/buscarPedido'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
 
@@ -55,10 +56,7 @@ export default function HistorialPage() {
   const filtered = pedidos.filter(p => {
     if (filtroEstado !== 'TODOS' && p.ESTADO_PEDIDO !== filtroEstado) return false
     if (filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
-    if (busqueda) {
-      const q = busqueda.toLowerCase()
-      if (!p.PEDIDO_ID?.toLowerCase().includes(q) && !p.CLIENTE_ID?.toLowerCase().includes(q)) return false
-    }
+    if (busqueda && !coincideBusqueda(p, busqueda)) return false
     if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
     if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO); const h = new Date(fechaHasta); h.setHours(23,59,59); if (!f || f > h) return false }
     return true
@@ -87,7 +85,7 @@ export default function HistorialPage() {
             )}
           </div>
           <div className="flex gap-2 mb-3">
-            <input className="input flex-1" placeholder="Buscar por ID o cliente..."
+            <input className="input flex-1" placeholder="Buscar por pedido, nombre, cédula o celular..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
             <button onClick={() => setMostrarFecha(v => !v)}
               className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0

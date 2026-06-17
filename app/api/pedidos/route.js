@@ -14,6 +14,7 @@ export async function GET(req) {
     let pedidos  = await readSheet('PEDIDOS')
     let detalles = await readSheet('DETALLE_PEDIDO')
     let pagos    = await readSheet('PAGOS')
+    let clientes = await readSheet('CLIENTES')
     // ── Leer guías para incluirlas en el pedido ──────────────────────────────
     let guias    = await readSheet('GUIAS_DESPACHO')
 
@@ -35,10 +36,17 @@ export async function GET(req) {
 
       const guia = guiasPedido[0] || null
 
+      // Join con CLIENTES para habilitar búsqueda por nombre/cédula/celular
+      const clienteInfo = clientes.find(c => c.CLIENTE_ID === p.CLIENTE_ID) || null
+
       return {
         ...p,
         items: detalles.filter(d => d.PEDIDO_ID === p.PEDIDO_ID && d.SUBESTADO !== 'ELIMINADO'),
         pagos: pagos.filter(pg => pg.PEDIDO_ID === p.PEDIDO_ID),
+        // Datos del cliente disponibles directamente en el objeto pedido (para búsqueda y display)
+        CLIENTE_NOMBRE:  clienteInfo?.NOMBRE  || '',
+        CLIENTE_CEDULA:  clienteInfo?.CEDULA  || '',
+        CLIENTE_CELULAR: clienteInfo?.CELULAR || '',
         // Datos de guía disponibles directamente en el objeto pedido
         GUIA_NUMERO:       guia?.NUMERO_GUIA       || p.GUIA_NUMERO       || '',
         GUIA_TRANSPORTISTA:guia?.TRANSPORTISTA      || p.GUIA_TRANSPORTISTA || '',
