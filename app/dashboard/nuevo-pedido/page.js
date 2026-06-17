@@ -365,6 +365,7 @@ export default function NuevoPedidoPage() {
                   <label className="label">Cédula / RUC *</label>
                    <input className={`input ${cedulaError ? 'border-red-500' : ''}`}
                      placeholder="1712345678" value={cliente.cedula}
+                     autoComplete="off" inputMode="numeric" name="x-cedula"
                      autoComplete="off"
                      onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarCedulaRUC(e.target.value) || '') }}
                      onBlur={async e => {
@@ -390,6 +391,7 @@ export default function NuevoPedidoPage() {
                   <label className="label">Celular *</label>
                   <input className={`input ${celularError ? 'border-red-500' : ''}`}
                     placeholder="0987654321" value={cliente.celular}
+                    autoComplete="off" inputMode="tel" name="x-celular"
                     autoComplete="off"
                     onChange={e => { setCliente(p => ({...p, celular: e.target.value})); setCelularError(validarCelular(e.target.value) || '') }} />
                   {celularError && <p className="text-red-400 text-xs mt-1">{celularError}</p>}
@@ -397,7 +399,7 @@ export default function NuevoPedidoPage() {
                 <div className="col-span-2">
                   <label className="label">Email {emitirFactura ? '* (requerido para factura)' : '(opcional)'}</label>
                   <input className={`input ${emitirFactura && !cliente.email ? 'border-yellow-500/50' : ''}`}
-                    type="email" placeholder="cliente@gmail.com" value={cliente.email}
+                    type="email" autoComplete="off" name="x-email" placeholder="cliente@gmail.com" value={cliente.email}
                     autoComplete="off"
                     onChange={e => setCliente(p => ({...p, email: e.target.value}))} />
                   {emitirFactura && !cliente.email && (
@@ -432,13 +434,13 @@ export default function NuevoPedidoPage() {
                       <p className="text-xs text-gray-500 mb-1">Ciudad de entrega *</p>
                       <input
                         className={`input ${!cliente.ciudad.trim() ? 'border-yellow-500/40' : ''}`}
-                        placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
+                        autoComplete="off" name="x-ciudad" placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
                         autoComplete="off"
                         onChange={e => setCliente(p => ({...p, ciudad: e.target.value}))} />
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Dirección completa *</p>
-                      <textarea ref={refDireccion} rows={3}
+                      <textarea ref={refDireccion} autoComplete="off" name="x-direccion" rows={3}
                         className={`input resize-none ${!cliente.direccion.trim() ? 'border-yellow-500/40' : ''}`}
                         placeholder={`Ej:\nAv. 10 de Agosto y Orellana\nEdificio Torre Norte, piso 3\nReferencia: junto a Burger King`}
                         value={cliente.direccion}
