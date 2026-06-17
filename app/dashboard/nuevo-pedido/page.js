@@ -321,7 +321,56 @@ export default function NuevoPedidoPage() {
           {/* ── STEP 2: PRODUCTOS ── */}
           {step === 2 && (
             <div className="space-y-4">
-              <BuscadorProductos tienda={tienda} items={items} setItems={setItems} />
+              {/* Lista de ítems agregados */}
+              {items.length > 0 && (
+                <div className="space-y-2">
+                  {items.map((item, idx) => (
+                    <div key={item.ITEM_ID} className="card p-3 flex items-center gap-3">
+                      {item.FOTO_PECHO_URL
+                        ? <img src={item.FOTO_PECHO_URL} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                        : <div className="w-12 h-12 rounded-xl bg-gray-800 flex items-center justify-center text-gray-600 flex-shrink-0">👕</div>
+                      }
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-white font-medium truncate">{item.PRODUCTO_NOMBRE}</div>
+                        <div className="text-xs text-gray-500">{item.COLOR} · {item.TALLA} · x{item.CANTIDAD} · ${parseFloat(item.SUBTOTAL).toFixed(2)}</div>
+                        <div className="text-xs text-mandarina-400">{item.AREA}</div>
+                      </div>
+                      <button onClick={() => setItems(prev => prev.filter((_,i) => i !== idx))}
+                        className="text-gray-600 hover:text-red-400 p-1 text-lg flex-shrink-0">×</button>
+                    </div>
+                  ))}
+                  <div className="text-right text-sm text-white font-semibold pr-1">
+                    Total: ${items.reduce((s,i) => s + parseFloat(i.SUBTOTAL||0), 0).toFixed(2)}
+                  </div>
+                </div>
+              )}
+              <BuscadorProductos
+                tienda={tienda}
+                onAdd={item => {
+                  const precioUnit = parseFloat(item.precioUnit || item.precio || 0)
+                  const cantidad   = parseInt(item.cantidad || 1)
+                  const newItem = {
+                    ITEM_ID:              `tmp_${Date.now()}_${Math.random()}`,
+                    PRODUCTO_NOMBRE:      item.productoNombre || item.nombre || '',
+                    SHOPIFY_VARIANT_ID:   item.shopifyVariantId || '',
+                    COLOR:                item.color || '',
+                    TALLA:                item.talla || '',
+                    CANTIDAD:             cantidad,
+                    PRECIO_UNIT:          precioUnit,
+                    SUBTOTAL:             (precioUnit * cantidad).toFixed(2),
+                    AREA:                 item.area || '',
+                    DETALLE_PERSONALIZADO: item.detalle || '',
+                    DISENO:               item.diseno || '',
+                    FOTO_PECHO_URL:       item.fotoPecho || item.imagenShopify || item.imagen || '',
+                    FOTO_ESPALDA_URL:     item.fotoEspalda || '',
+                    FOTO_MANGA_D_URL:     item.fotoMangaD || '',
+                    FOTO_MANGA_I_URL:     item.fotoMangaI || '',
+                    ARCHIVO_DISENO_URL:   item.archivoDiseno || '',
+                    ES_PERSONALIZADO:     item.esPersonalizado ? 'TRUE' : 'FALSE',
+                  }
+                  setItems(prev => [...prev, newItem])
+                }}
+              />
             </div>
           )}
 
