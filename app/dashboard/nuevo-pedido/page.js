@@ -29,7 +29,7 @@ export default function NuevoPedidoPage() {
   const [direccionTexto, setDireccionTexto] = useState('')
   const [fechaEntrega, setFechaEntrega] = useState('')
 
-  const [clienteKey, setClienteKey] = useState(0)
+  const [clienteKey] = useState(0) // ya no se usa para resetear
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -245,16 +245,19 @@ export default function NuevoPedidoPage() {
               </div>
 
               <BuscadorCliente
-                key={clienteKey}
-                tienda={tienda}
                 onSelect={c => {
                   setCliente({
-                    id: c.CLIENTE_ID || '', nombre: c.NOMBRE || '',
-                    cedula: c.CEDULA || '', celular: c.CELULAR || '',
-                    email: c.EMAIL || '', ciudad: c.CIUDAD || '',
-                    direccion: c.DIRECCION || '', latitud: '', longitud: '',
+                    id:        c.CLIENTE_ID || '',
+                    nombre:    c.nombre     || '',
+                    cedula:    c.cedula     || '',
+                    celular:   c.celular    || '',
+                    email:     c.email      || '',
+                    ciudad:    c.ciudad     || '',
+                    direccion: c.direccion  || '',
+                    latitud: '', longitud: '',
                   })
-                  setCedulaError(''); setCelularError('')
+                  setCedulaError('')
+                  setCelularError('')
                 }}
               />
 
@@ -279,8 +282,15 @@ export default function NuevoPedidoPage() {
                       const d = await r.json()
                       const c = d.clientes?.[0]
                       if (c) {
-                        setCliente(p => ({...p, id: c.CLIENTE_ID||'', nombre: c.NOMBRE||p.nombre, celular: c.CELULAR||p.celular, email: c.EMAIL||p.email, ciudad: c.CIUDAD||p.ciudad, direccion: c.DIRECCION||p.direccion}))
-                        setClienteKey(k => k+1)
+                        setCliente(p => ({
+                          ...p,
+                          id:        c.CLIENTE_ID || p.id,
+                          nombre:    c.NOMBRE     || p.nombre,
+                          celular:   c.CELULAR    || p.celular,
+                          email:     c.EMAIL      || p.email,
+                          ciudad:    c.CIUDAD     || p.ciudad,
+                          direccion: c.DIRECCION  || p.direccion,
+                        }))
                       }
                     } catch {}
                   }}
