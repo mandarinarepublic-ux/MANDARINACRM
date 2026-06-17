@@ -50,3 +50,11 @@
 .status-pagado { @apply bg-green-500/20 text-green-400; }
 .status-abono { @apply bg-yellow-500/20 text-yellow-400; }
 .status-pendiente { @apply bg-red-500/20 text-red-400; }
+
+/* Safe area para Android/iOS — evita que botones queden bajo la barra del OS */
+.pb-safe {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 16px));
+}
+.mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 16px);
+}
