@@ -15,10 +15,8 @@ export async function GET(req) {
     let detalles = await readSheet('DETALLE_PEDIDO')
     let pagos    = await readSheet('PAGOS')
     let clientes = await readSheet('CLIENTES')
-    // ── Leer guías para incluirlas en el pedido ──────────────────────────────
     let guias    = await readSheet('GUIAS_DESPACHO')
 
-    // Vendedor scope=mios → solo sus pedidos
     if (rol === 'VENDEDOR' && searchParams.get('scope') === 'mios') {
       const vendedorNombreParam = searchParams.get('vendedor') || ''
       const vendedorIdParam     = searchParams.get('vendedorId') || vendedorId || ''
@@ -29,25 +27,20 @@ export async function GET(req) {
     }
 
     const result = pedidos.map(p => {
-      // Buscar la guía más reciente de este pedido
       const guiasPedido = guias
         .filter(g => g.PEDIDO_ID === p.PEDIDO_ID)
         .sort((a, b) => (b.FECHA_DESPACHO || '').localeCompare(a.FECHA_DESPACHO || ''))
 
       const guia = guiasPedido[0] || null
-
-      // Join con CLIENTES para habilitar búsqueda por nombre/cédula/celular
       const clienteInfo = clientes.find(c => c.CLIENTE_ID === p.CLIENTE_ID) || null
 
       return {
         ...p,
         items: detalles.filter(d => d.PEDIDO_ID === p.PEDIDO_ID && d.SUBESTADO !== 'ELIMINADO'),
         pagos: pagos.filter(pg => pg.PEDIDO_ID === p.PEDIDO_ID),
-        // Datos del cliente disponibles directamente en el objeto pedido (para búsqueda y display)
         CLIENTE_NOMBRE:  clienteInfo?.NOMBRE  || '',
         CLIENTE_CEDULA:  clienteInfo?.CEDULA  || '',
         CLIENTE_CELULAR: clienteInfo?.CELULAR || '',
-        // Datos de guía disponibles directamente en el objeto pedido
         GUIA_NUMERO:       guia?.NUMERO_GUIA       || p.GUIA_NUMERO       || '',
         GUIA_TRANSPORTISTA:guia?.TRANSPORTISTA      || p.GUIA_TRANSPORTISTA || '',
         GUIA_FOTO_URL:     guia?.FOTO_GUIA_URL      || '',
@@ -73,14 +66,11 @@ export async function POST(req) {
       notasVendedor, direccionTexto, latitud, longitud,
     } = body
 
-    const pedidoId = await generatePedidoId(tiendaId, vendedorCodigo)
-
     // Handle cliente
     let clienteId
     const { row: existingCliente } = await findRow('CLIENTES', 'CEDULA', String(cliente.cedula))
     if (existingCliente) {
       clienteId = existingCliente.CLIENTE_ID
-      // FIX C3: actualizar datos del cliente aunque ya exista
       try {
         const clientes = await readSheet('CLIENTES')
         const cIdx = clientes.findIndex(c => c.CLIENTE_ID === clienteId)
@@ -133,6 +123,27 @@ export async function POST(req) {
     const diasCalculado = await calcularDiasEntregaDesdeSheet(areas)
 
     const now = fechaAhora()
+
+    // ✅ FIX duplicados (race condition): generar el ID en el ÚLTIMO momento
+    // (justo antes de guardar la fila), NO al inicio. Antes se calculaba al
+    // empezar el pedido y, mientras se guardaba el cliente y se subían fotos
+    // (1-2 s), un segundo pedido leía el mismo "máximo" y obtenía el MISMO número.
+    // Además verificamos que el NÚMERO no esté usado por ningún pedido de NINGUNA
+    // tienda (MAN-AND-2432 e IND-XAV-2432 compartían el 2432).
+    let pedidoId = await generatePedidoId(tiendaId, vendedorCodigo)
+    {
+      const yaExisten = await readSheet('PEDIDOS')
+      const numerosUsados = new Set(
+        yaExisten
+          .map(p => parseInt((p.PEDIDO_ID || '').split('-').pop(), 10))
+          .filter(n => !isNaN(n))
+      )
+      const parts = pedidoId.split('-')
+      let num = parseInt(parts[parts.length - 1], 10)
+      while (numerosUsados.has(num)) num++   // sube hasta encontrar uno libre
+      parts[parts.length - 1] = String(num)
+      pedidoId = parts.join('-')
+    }
 
     await appendRow('PEDIDOS', [
       pedidoId, tiendaId, vendedorNombre || vendedorId, clienteId,
@@ -204,12 +215,29 @@ export async function POST(req) {
     // Pagos
     for (const pago of pagosArray) {
       if (!pago || parseFloat(pago.monto || 0) <= 0) continue
+
+      // ✅ FIX: subir comprobante a Cloudinary y guardar SOLO la URL (no base64).
+      let comprobanteUrl = pago.fotoComprobante || ''
+      if (comprobanteUrl.startsWith('data:')) {
+        try {
+          const r = await uploadToCloudinary(
+            comprobanteUrl,
+            `comprobante_${pedidoId}_${Date.now()}.jpg`,
+            `mandarina-pro/comprobantes`
+          )
+          comprobanteUrl = r.url
+        } catch (err) {
+          console.error('Error subiendo comprobante:', err.message)
+          comprobanteUrl = ''
+        }
+      }
+
       await appendRow('PAGOS', [
         uuid(), pedidoId, pago.tipo || 'EFECTIVO',
         String(parseFloat(pago.monto || 0).toFixed(2)),
         now,
         pago.tipo === 'LINK_PAGO' ? 'PENDIENTE' : 'PAGADO',
-        '', '', '', pago.fotoComprobante || '',
+        '', '', '', comprobanteUrl,
         vendedorId, pago.notas || '',
       ])
     }
