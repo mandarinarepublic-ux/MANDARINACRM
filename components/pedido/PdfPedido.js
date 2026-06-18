@@ -77,18 +77,25 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
 
       {/* PANEL INFERIOR — interior */}
       <div style={{ flex: 1, padding: '24px 48px 80px' }}>
-        {/* Datos de envío */}
+  {/* Datos de envío */}
         <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px 20px', marginBottom: '20px', border: '2px solid #e5e5e5' }}>
-          <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '10px' }}>Datos de envío</div>
+          <div style={{ display: 'table', width: '100%', marginBottom: '10px' }}>
+            <div style={{ display: 'table-cell', verticalAlign: 'middle', fontSize: '10px', color: '#999', textTransform: 'uppercase', letterSpacing: '2px' }}>Datos de envío</div>
+            <div style={{ display: 'table-cell', verticalAlign: 'middle', textAlign: 'right' }}>
+              <span style={{ display: 'inline-block', backgroundColor: tiendaColor, color: '#fff', fontSize: '13px', fontWeight: '800', fontFamily: 'monospace', padding: '4px 12px', borderRadius: '8px', letterSpacing: '0.5px', lineHeight: 1 }}>
+                {pedido?.PEDIDO_ID || ''}
+              </span>
+            </div>
+          </div>
           <div style={{ fontSize: '20px', fontWeight: '900', color: '#1a1a1a', marginBottom: '10px', lineHeight: 1.1 }}>{cliente?.NOMBRE || '-'}</div>
           <div style={{ display: 'table', marginBottom: '10px' }}>
             {cliente?.CELULAR && (
               <div style={{ display: 'table-cell', paddingRight: '12px' }}>
                 <div style={{ backgroundColor: '#f5f5f5', borderRadius: '10px', padding: '8px 14px', border: '1px solid #e5e5e5', display: 'table' }}>
-                  <div style={{ display: 'table-cell', verticalAlign: 'middle', paddingRight: '8px', fontSize: '16px' }}>📱</div>
+                  <div style={{ display: 'table-cell', verticalAlign: 'middle', paddingRight: '8px', fontSize: '16px', lineHeight: 1 }}>📱</div>
                   <div style={{ display: 'table-cell', verticalAlign: 'middle' }}>
-                    <div style={{ fontSize: '8px', color: '#999', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '1px' }}>Celular</div>
-                    <div style={{ fontSize: '14px', fontWeight: '800', color: '#1a1a1a', fontFamily: 'monospace' }}>{cliente.CELULAR}</div>
+                    <div style={{ fontSize: '8px', color: '#999', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px', lineHeight: 1 }}>Celular</div>
+                    <div style={{ fontSize: '14px', fontWeight: '800', color: '#1a1a1a', fontFamily: 'monospace', lineHeight: 1 }}>{cliente.CELULAR}</div>
                   </div>
                 </div>
               </div>
@@ -96,10 +103,10 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
             {cliente?.CEDULA && (
               <div style={{ display: 'table-cell' }}>
                 <div style={{ backgroundColor: '#f5f5f5', borderRadius: '10px', padding: '8px 14px', border: '1px solid #e5e5e5', display: 'table' }}>
-                  <div style={{ display: 'table-cell', verticalAlign: 'middle', paddingRight: '8px', fontSize: '16px' }}>🆔</div>
+                  <div style={{ display: 'table-cell', verticalAlign: 'middle', paddingRight: '8px', fontSize: '16px', lineHeight: 1 }}>🆔</div>
                   <div style={{ display: 'table-cell', verticalAlign: 'middle' }}>
-                    <div style={{ fontSize: '8px', color: '#999', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '1px' }}>Cédula</div>
-                    <div style={{ fontSize: '14px', fontWeight: '800', color: '#1a1a1a', fontFamily: 'monospace' }}>{cliente.CEDULA}</div>
+                    <div style={{ fontSize: '8px', color: '#999', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px', lineHeight: 1 }}>Cédula</div>
+                    <div style={{ fontSize: '14px', fontWeight: '800', color: '#1a1a1a', fontFamily: 'monospace', lineHeight: 1 }}>{cliente.CEDULA}</div>
                   </div>
                 </div>
               </div>
@@ -107,14 +114,13 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
           </div>
           {(pedido?.DIRECCION_TEXTO || pedido?.DIRECCION_PEDIDO) && (
             <div style={{ backgroundColor: tiendaColor + '10', borderRadius: '10px', padding: '10px 14px', borderLeft: `4px solid ${tiendaColor}` }}>
-              <div style={{ fontSize: '8px', color: tiendaColor, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '3px', fontWeight: '700' }}>Dirección de entrega</div>
-              <div style={{ fontSize: '12px', color: '#1a1a1a', fontWeight: '600', lineHeight: 1.5 }}>
+              <div style={{ fontSize: '8px', color: tiendaColor, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px', fontWeight: '700', lineHeight: 1 }}>Dirección de entrega</div>
+              <div style={{ fontSize: '12px', color: '#1a1a1a', fontWeight: '600', lineHeight: 1.4 }}>
                 {(pedido.DIRECCION_TEXTO || pedido.DIRECCION_PEDIDO).replace(/\n/g, ' · ')}
               </div>
             </div>
           )}
         </div>
-
         {/* Productos */}
         <div style={{ fontSize: '10px', color: '#bbb', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '10px' }}>
           Contenido · {(items||[]).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)} prenda(s)
