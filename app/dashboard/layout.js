@@ -4,6 +4,8 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useNuevosPedidos } from '@/lib/useNuevosPedidos'
 import { NotifContainer, useNotifs } from '@/components/NotifToast'
+import ConnectionBanner from '@/components/ConnectionBanner'
+import ToastHost from '@/components/ToastHost'
 
 const NAV_ALL = [
   { href:'/dashboard',              label:'Inicio',       icon:'🏠', roles:['ADMIN','VENDEDOR','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
@@ -123,6 +125,9 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-gray-950">
+      {/* Banner de conexión (offline / reconectado) — fijo arriba */}
+      <ConnectionBanner />
+
       {/* MOBILE TOP BAR */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-gray-900 border-b border-gray-800">
         <div className="flex items-center justify-between px-4 py-3">
@@ -235,6 +240,9 @@ export default function DashboardLayout({ children }) {
 
       {/* Notificaciones de nuevos pedidos — esquina inferior derecha */}
       <NotifContainer notifs={notifs} onClose={removeNotif} />
+
+      {/* Toasts de confirmación (✅ Guardado en cambios de producción) */}
+      <ToastHost />
     </div>
   )
 }

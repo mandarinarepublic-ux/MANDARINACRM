@@ -5,8 +5,11 @@ import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, formatFechaCorta } from '@/lib/parseFecha'
+import { SkeletonList } from '@/components/Skeleton'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
+const PAGE_SIZE = 30                       // cuántos pedidos se renderizan por tanda
+const LS_FILTROS = 'mp_historial_filtros'  // filtros recordados entre visitas
 
 export default function HistorialPage() {
   const router = useRouter()
@@ -16,17 +19,45 @@ export default function HistorialPage() {
   const [filtroEstado, setFiltroEstado] = useState('TODOS')
   const [filtroTienda, setFiltroTienda] = useState('TODAS')
   const [busqueda, setBusqueda] = useState('')
+  const [busquedaDebounced, setBusquedaDebounced] = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [mostrarFecha, setMostrarFecha] = useState(false)
+  const [visibles, setVisibles] = useState(PAGE_SIZE)
 
+  // ── Carga inicial + restaurar filtros guardados ──
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
     const u = JSON.parse(stored)
     setUser(u)
+    try {
+      const f = JSON.parse(localStorage.getItem(LS_FILTROS) || '{}')
+      if (f.filtroEstado) setFiltroEstado(f.filtroEstado)
+      if (f.filtroTienda) setFiltroTienda(f.filtroTienda)
+      if (f.fechaDesde)   setFechaDesde(f.fechaDesde)
+      if (f.fechaHasta)   setFechaHasta(f.fechaHasta)
+      if (f.fechaDesde || f.fechaHasta) setMostrarFecha(true)
+    } catch (_) {}
     loadPedidos(u)
   }, [])
+
+  // ── Guardar filtros cada vez que cambian (no la búsqueda de texto) ──
+  useEffect(() => {
+    if (!user) return
+    localStorage.setItem(LS_FILTROS, JSON.stringify({ filtroEstado, filtroTienda, fechaDesde, fechaHasta }))
+  }, [user, filtroEstado, filtroTienda, fechaDesde, fechaHasta])
+
+  // ── Debounce de la búsqueda (250ms) — no filtra en cada tecla ──
+  useEffect(() => {
+    const t = setTimeout(() => setBusquedaDebounced(busqueda), 250)
+    return () => clearTimeout(t)
+  }, [busqueda])
+
+  // ── Volver a la primera tanda cuando cambia cualquier filtro ──
+  useEffect(() => {
+    setVisibles(PAGE_SIZE)
+  }, [busquedaDebounced, filtroEstado, filtroTienda, fechaDesde, fechaHasta])
 
   async function loadPedidos(u) {
     setLoading(true)
@@ -49,11 +80,15 @@ export default function HistorialPage() {
   const filtered = pedidos.filter(p => {
     if (filtroEstado !== 'TODOS' && p.ESTADO_PEDIDO !== filtroEstado) return false
     if (filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
-    if (busqueda && !coincideBusqueda(p, busqueda)) return false
+    if (busquedaDebounced && !coincideBusqueda(p, busquedaDebounced)) return false
     if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
     if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO); const h = new Date(fechaHasta); h.setHours(23,59,59); if (!f || f > h) return false }
     return true
   })
+
+  // Solo renderizamos la tanda visible (paginación en cliente = listas largas no traban el celular)
+  const paginados = filtered.slice(0, visibles)
+  const hayMas = filtered.length > visibles
 
   const isProduccion = user && ['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO'].includes(user.rol)
 
@@ -118,46 +153,61 @@ export default function HistorialPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
-          <div className="text-xs text-gray-600 mb-3">{filtered.length} pedido(s)</div>
+          <div className="text-xs text-gray-600 mb-3">
+            {loading
+              ? 'Cargando…'
+              : hayMas
+                ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)`
+                : `${filtered.length} pedido(s)`}
+          </div>
           {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
-            </div>
+            <SkeletonList count={6} />
           ) : filtered.length === 0 ? (
             <div className="card p-8 text-center text-gray-600"><div className="text-3xl mb-3">📭</div>No hay pedidos con estos filtros</div>
           ) : (
-            <div className="space-y-2">
-              {filtered.map(p => (
-                <Link key={p.PEDIDO_ID}
-                  href={`/dashboard/pedido/${p.PEDIDO_ID}?from=historial`}
-                  className="card p-4 flex items-center gap-4 hover:border-gray-700 transition-all block">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
-                      <span className="text-gray-600 text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
-                      {/* Mostrar vendedor para rol no-vendedor */}
-                      {user?.rol !== 'VENDEDOR' && p.VENDEDOR_ID && (
-                        <span className="text-xs text-gray-600 font-mono">{p.VENDEDOR_ID}</span>
-                      )}
+            <>
+              <div className="space-y-2">
+                {paginados.map(p => (
+                  <Link key={p.PEDIDO_ID}
+                    href={`/dashboard/pedido/${p.PEDIDO_ID}?from=historial`}
+                    className="card p-4 flex items-center gap-4 hover:border-gray-700 transition-all block">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
+                        <span className="text-gray-600 text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
+                        {/* Mostrar vendedor para rol no-vendedor */}
+                        {user?.rol !== 'VENDEDOR' && p.VENDEDOR_ID && (
+                          <span className="text-xs text-gray-600 font-mono">{p.VENDEDOR_ID}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {p.items?.length || 0} prendas · {formatFechaCorta(p.FECHA_PEDIDO)}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {p.items?.length || 0} prendas · {formatFechaCorta(p.FECHA_PEDIDO)}
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${estadoColor[p.ESTADO_PEDIDO] || 'text-gray-400 bg-gray-800'}`}>
+                        {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        p.ESTADO_PAGO === 'PAGADO' ? 'text-green-400 bg-green-500/10' :
+                        p.ESTADO_PAGO === 'ABONO'  ? 'text-yellow-400 bg-yellow-500/10' :
+                                                      'text-red-400 bg-red-500/10'}`}>
+                        ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
+                      </span>
                     </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${estadoColor[p.ESTADO_PEDIDO] || 'text-gray-400 bg-gray-800'}`}>
-                      {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
-                    </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      p.ESTADO_PAGO === 'PAGADO' ? 'text-green-400 bg-green-500/10' :
-                      p.ESTADO_PAGO === 'ABONO'  ? 'text-yellow-400 bg-yellow-500/10' :
-                                                    'text-red-400 bg-red-500/10'}`}>
-                      ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Cargar más */}
+              {hayMas && (
+                <button
+                  onClick={() => setVisibles(v => v + PAGE_SIZE)}
+                  className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
+                  Cargar más ({filtered.length - visibles} restantes)
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
