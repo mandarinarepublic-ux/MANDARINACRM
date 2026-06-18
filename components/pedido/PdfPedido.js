@@ -156,13 +156,13 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
               backgroundColor: isPagado ? '#dcfce7' : '#fee2e2',
               border: `2px solid ${isPagado ? '#86efac' : '#fca5a5'}`,
               display: 'table', width: '100%', boxSizing: 'border-box' }}>
-              <div style={{ display: 'table-cell', width: '32px', verticalAlign: 'middle', fontSize: '20px' }}>
+       <div style={{ display: 'table-cell', width: '32px', verticalAlign: 'middle', fontSize: '20px', lineHeight: 1 }}>
                 {isPagado ? '✅' : '🔴'}
               </div>
               <div style={{ display: 'table-cell', verticalAlign: 'middle' }}>
                 {isPagado ? (
-                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#15803d' }}>PAGO COMPLETO</div>
-                ) : (
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#15803d', lineHeight: 1 }}>PAGO COMPLETO</div>
+          ) : (
                   <>
                     <div style={{ fontSize: '13px', fontWeight: '800', color: '#b91c1c' }}>
                       ABONO DEL {pct}% — SALDO PENDIENTE
