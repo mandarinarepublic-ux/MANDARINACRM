@@ -6,7 +6,7 @@ export async function POST(req) {
     const file = formData.get('file')
     const tipo = formData.get('tipo') || 'diseno'
 
-    if (!file) return Response.json({ error: 'No se recibi\u00f3 archivo' }, { status: 400 })
+    if (!file) return Response.json({ error: 'No se recibió archivo' }, { status: 400 })
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME
     const apiKey    = process.env.CLOUDINARY_API_KEY
@@ -25,7 +25,8 @@ export async function POST(req) {
     const timestamp = Math.round(Date.now() / 1000)
 
     const crypto = await import('crypto')
-    const sigString = `folder=${folder}&public_id=${publicId}&resource_type=auto&timestamp=${timestamp}${apiSecret}`
+    // ✅ FIX: NO incluir resource_type en la firma (Cloudinary lo excluye al firmar)
+    const sigString = `folder=${folder}&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`
     const signature = crypto.createHash('sha1').update(sigString).digest('hex')
 
     const form = new FormData()
@@ -35,7 +36,7 @@ export async function POST(req) {
     form.append('timestamp', String(timestamp))
     form.append('api_key', apiKey)
     form.append('signature', signature)
-    form.append('resource_type', 'auto')
+    form.append('resource_type', 'auto') // se envía, pero NO se firma
 
     const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
       method: 'POST', body: form,

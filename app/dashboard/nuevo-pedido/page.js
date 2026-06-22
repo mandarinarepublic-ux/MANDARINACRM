@@ -546,9 +546,14 @@ export default function NuevoPedidoPage() {
       {/* Fixed bottom nav */}
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-3">
         {step > 1 && <button onClick={() => goToStep(step - 1)} className="btn-secondary flex-1">← Atrás</button>}
-        {step < 4 ? (
-          <button onClick={() => goToStep(step + 1)} className="btn-primary flex-1"
-            style={{ backgroundColor: tiendaColor }}>Siguiente →</button>
+{step < 4 ? (
+          <button onClick={() => goToStep(step + 1)} disabled={!canGoToStep(step + 1)}
+            className="btn-primary flex-1"
+            style={canGoToStep(step + 1)
+              ? { backgroundColor: tiendaColor }
+              : { backgroundColor: '#374151', cursor: 'not-allowed', opacity: 0.5 }}>
+            Siguiente →
+          </button>
         ) : (
           <button onClick={handleSubmit} disabled={loading} className="btn-primary flex-1"
             style={{ backgroundColor: tiendaColor }}>
