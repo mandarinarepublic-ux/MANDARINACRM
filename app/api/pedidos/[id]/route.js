@@ -46,6 +46,19 @@ export async function PATCH(req, { params }) {
       updated.ESTADO_PAGO     = body.ESTADO_PAGO || pedido.ESTADO_PAGO
     }
 
+    // ── NUEVO: marcar pedido como impreso para producción ──────────────────
+    // Se usa desde /dashboard/impresion al terminar de generar el PDF.
+    // Permite alertar si alguien intenta reimprimir un pedido ya impreso.
+    if (body.marcarImpreso) {
+      changes.push({
+        campo: 'IMPRESION_PRODUCCION',
+        antes: pedido.FECHA_IMPRESION_PRODUCCION || '(nunca impreso)',
+        despues: now,
+      })
+      updated.FECHA_IMPRESION_PRODUCCION = now
+      updated.IMPRESO_POR = usuarioId
+    }
+
     updated.FECHA_ACTUALIZACION = now
 
     // ── Leer headers reales de PEDIDOS ────────────────────────────────────────
@@ -60,7 +73,7 @@ export async function PATCH(req, { params }) {
     const sheets = google.sheets({ version: 'v4', auth })
     const headerRes = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SHEET_ID,
-      range: 'PEDIDOS!A2:Z2',
+      range: 'PEDIDOS!A2:AZ2', // ampliado de Z a AZ — ver nota en lib/sheets.js
     })
     const headers = headerRes.data.values?.[0] || []
 
@@ -89,6 +102,9 @@ export async function PATCH(req, { params }) {
       'DIRECCION_PEDIDO':        updated.DIRECCION_TEXTO || updated.DIRECCION_PEDIDO || '',
       'LATITUD':                 updated.LATITUD || '',
       'LONGITUD':                updated.LONGITUD || '',
+      // ── NUEVO ──────────────────────────────────────────────────────────────
+      'FECHA_IMPRESION_PRODUCCION': updated.FECHA_IMPRESION_PRODUCCION || '',
+      'IMPRESO_POR':                updated.IMPRESO_POR || '',
     }
 
     const row = headers.map(h =>
