@@ -201,11 +201,12 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
       {/* HEADER */}
       <div style={{ borderBottom:`4px solid ${tiendaColor}`, padding:'10px 48px', backgroundColor:'#fafafa', overflow:'hidden', boxSizing:'border-box' }}>
         <div style={{ float:'left', overflow:'hidden' }}>
-          <img src={logo} style={{ float:'left', width:'40px', height:'40px', objectFit:'contain', marginRight:'10px', marginTop:'2px' }} alt="logo" />
-          <div style={{ overflow:'hidden' }}>
-            <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'1px' }}>Orden de Producción Interna</div>
+          <img src={logo} style={{ float:'left', width:'40px', height:'40px', objectFit:'contain', marginRight:'10px', marginTop:'4px' }} alt="logo" />
+          <div style={{ float:'left' }}>
+            <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'3px' }}>Orden de Producción Interna</div>
             <div style={{ fontSize:'22px', fontWeight:'900', color:'#1a1a1a', fontFamily:'monospace', letterSpacing:'-0.5px', lineHeight:1 }}>{pedido?.PEDIDO_ID}</div>
           </div>
+          <div style={{ clear:'both' }} />
         </div>
         <div style={{ float:'right', textAlign:'right' }}>
           {urgente && <div style={{ display:'inline-block', backgroundColor:'#ef4444', color:'#fff', fontSize:'10px', fontWeight:'800', padding:'3px 10px', borderRadius:'20px', marginBottom:'3px', textTransform:'uppercase' }}>🚨 URGENTE</div>}
