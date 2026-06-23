@@ -88,11 +88,11 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
         <div style={{ backgroundColor:'#fff', borderRadius:'14px', padding:'14px 18px', marginBottom:'14px', border:'2px solid #e5e5e5' }}>
           <div style={{ overflow:'hidden', marginBottom:'8px' }}>
             <span style={{ float:'left', fontSize:'10px', color:'#999', textTransform:'uppercase', letterSpacing:'2px', lineHeight:'24px' }}>Datos de envío</span>
-            <span style={{ float:'right', display:'inline-block', backgroundColor:tiendaColor, color:'#fff', fontSize:'14px', fontWeight:'800', fontFamily:'monospace', padding:'5px 14px', borderRadius:'8px', letterSpacing:'0.5px' }}>{pedido?.PEDIDO_ID||''}</span>
+            <span style={{ float:'right', fontSize:'16px', fontWeight:'900', fontFamily:'monospace', color:'#1a1a1a', letterSpacing:'0.5px', lineHeight:'24px' }}>{pedido?.PEDIDO_ID||''}</span>
             <div style={{ clear:'both' }} />
           </div>
-          <div style={{ fontSize:'19px', fontWeight:'900', color:'#1a1a1a', marginBottom:'8px', lineHeight:1.1 }}>{cliente?.NOMBRE||'-'}</div>
-          <div style={{ overflow:'hidden', marginBottom:'8px' }}>
+          <div style={{ fontSize:'22px', fontWeight:'900', color:'#1a1a1a', marginBottom:'10px', lineHeight:1.1, textAlign:'center' }}>{cliente?.NOMBRE||'-'}</div>
+          <div style={{ overflow:'hidden', marginBottom:'10px' }}>
             {cliente?.CELULAR && (
               <div style={{ float:'left', marginRight:'12px', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 16px 10px 12px', border:'1px solid #e5e5e5' }}>
                 <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px' }}>📱 Celular</div>
@@ -108,9 +108,9 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
             <div style={{ clear:'both' }} />
           </div>
           {(pedido?.DIRECCION_TEXTO || pedido?.DIRECCION_PEDIDO) && (
-            <div style={{ backgroundColor:tiendaColor+'10', borderRadius:'10px', padding:'9px 12px', borderLeft:`4px solid ${tiendaColor}` }}>
-              <div style={{ fontSize:'8px', color:tiendaColor, textTransform:'uppercase', letterSpacing:'1px', marginBottom:'3px', fontWeight:'700' }}>Dirección de entrega</div>
-              <div style={{ fontSize:'11px', color:'#1a1a1a', fontWeight:'600', lineHeight:1.4 }}>{(pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO).replace(/\n/g,' · ')}</div>
+            <div style={{ borderRadius:'10px', padding:'11px 14px', borderLeft:`4px solid ${tiendaColor}` }}>
+              <div style={{ fontSize:'8px', color:tiendaColor, textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px', fontWeight:'700' }}>Dirección de entrega</div>
+              <div style={{ fontSize:'13px', color:'#1a1a1a', fontWeight:'600', lineHeight:1.4 }}>{(pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO).replace(/\n/g,' · ')}</div>
             </div>
           )}
         </div>
