@@ -94,21 +94,15 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
           <div style={{ fontSize:'19px', fontWeight:'900', color:'#1a1a1a', marginBottom:'8px', lineHeight:1.1 }}>{cliente?.NOMBRE||'-'}</div>
           <div style={{ overflow:'hidden', marginBottom:'8px' }}>
             {cliente?.CELULAR && (
-              <div style={{ float:'left', marginRight:'10px', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 14px', border:'1px solid #e5e5e5', overflow:'hidden', minWidth:'160px' }}>
-                <span style={{ float:'left', fontSize:'16px', lineHeight:'26px', marginRight:'8px' }}>📱</span>
-                <div style={{ overflow:'hidden' }}>
-                  <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'2px' }}>Celular</div>
-                  <div style={{ fontSize:'14px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace', whiteSpace:'nowrap' }}>{cliente.CELULAR}</div>
-                </div>
+              <div style={{ float:'left', marginRight:'12px', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 16px 10px 12px', border:'1px solid #e5e5e5' }}>
+                <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px' }}>📱 Celular</div>
+                <div style={{ fontSize:'15px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace' }}>{cliente.CELULAR}</div>
               </div>
             )}
             {cliente?.CEDULA && (
-              <div style={{ float:'left', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 14px', border:'1px solid #e5e5e5', overflow:'hidden', minWidth:'160px' }}>
-                <span style={{ float:'left', fontSize:'16px', lineHeight:'26px', marginRight:'8px' }}>🆔</span>
-                <div style={{ overflow:'hidden' }}>
-                  <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'2px' }}>Cédula</div>
-                  <div style={{ fontSize:'14px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace', whiteSpace:'nowrap' }}>{cliente.CEDULA}</div>
-                </div>
+              <div style={{ float:'left', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 16px 10px 12px', border:'1px solid #e5e5e5' }}>
+                <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px' }}>🆔 Cédula</div>
+                <div style={{ fontSize:'15px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace' }}>{cliente.CEDULA}</div>
               </div>
             )}
             <div style={{ clear:'both' }} />
