@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha } from '@/lib/parseFecha'
+import { PdfConfeccion } from '@/components/pedido/PdfPedido'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -14,11 +15,10 @@ const SUBESTADO_CONFIG = {
 }
 const SUBESTADOS_ORDEN = ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO']
 
-
 function itemEsDeUsuario(itemArea, u) {
   if (!itemArea) return false
   if (u.rol === 'ADMIN') return true
-  if (u.rol === 'CORTE') return true  // CORTE ve todos los ítems
+  if (u.rol === 'CORTE') return true
   const areas = u.areas || []
   if (areas.length > 0 && !(areas.length === 1 && areas[0] === 'TODAS')) {
     return areas.some(a => itemArea.includes(a))
@@ -29,7 +29,6 @@ function itemEsDeUsuario(itemArea, u) {
   return true
 }
 
-// ─── Helpers multi-área ───────────────────────────────────────────────────────
 const AREAS_BASE_P = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
 const ORDEN_P = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO','ENTREGADO_TIENDA','ELIMINADO']
 
@@ -58,6 +57,7 @@ function areaUsuarioP(u, item) {
   return null
 }
 const AREA_COLORS = { ESTAMPADO: 'text-orange-400', SUBLIMACION: 'text-blue-400', BORDADO: 'text-purple-400' }
+const TIENDA_COLORS = { MANDARINA: '#FF6B00', INDSTORE: '#E91E8C', YAW: '#6C3FC5' }
 
 // ─── ItemCard ─────────────────────────────────────────────────────────────────
 function ItemCard({ item, userId, user, onSubestadoChange }) {
@@ -70,7 +70,6 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
   )
   const subestadoActual = esMulti ? globalP(estadosLocales) : (estadosLocales._s||'SOLICITADO')
 
-  // CORTE — independiente, siempre primero
   const [subestadoCorte, setSubestadoCorte] = useState(item.SUBESTADO_CORTE || 'PENDIENTE')
   const CORTE_CONFIG = [
     { key: 'PENDIENTE',  label: '✂️ Pendiente',  cls: 'bg-gray-600' },
@@ -107,18 +106,14 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
   async function handleSubestado(s, areaRol) {
     const body = { SUBESTADO: s, _usuarioId: userId }
     if (areaRol) body.AREA_ROL = areaRol
-
-    // Optimistic update
     if (areaRol) {
       setEstadosLocales(prev => ({...prev, [areaRol]: s}))
     } else {
       setEstadosLocales({_s: s})
     }
-
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
       if (!res.ok) {
@@ -136,8 +131,7 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
     setSavingNota(true); setNotaError('')
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ NOTAS_AREA: notaText, _usuarioId: userId }),
       })
       const data = await res.json()
@@ -217,7 +211,6 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
             </div>
           )}
 
-          {/* CORTE — siempre primero, editable solo para rol CORTE y ADMIN */}
           {(user?.rol === 'CORTE' || user?.rol === 'ADMIN') ? (
             <div className="rounded-xl border border-gray-700 p-2">
               <div className="text-xs font-bold text-gray-400 mb-1.5">✂️ CORTE DE TELA</div>
@@ -242,7 +235,6 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
             </div>
           )}
 
-          {/* Botones subestado de producción — multi-área o simple, NO para CORTE */}
           {user?.rol !== 'CORTE' && (esMulti ? (
             <div className="space-y-2">
               {parsed.areas.map(area => {
@@ -301,11 +293,11 @@ export default function ProduccionPage() {
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtroSubestado, setFiltroSubestado] = useState('TODOS')
-  // Multi-expand: varios pedidos pueden estar abiertos a la vez
   const [expandedPedidos, setExpandedPedidos] = useState(new Set())
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [mostrarFecha, setMostrarFecha] = useState(false)
+  const [generandoPdf, setGenerandoPdf] = useState(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -332,7 +324,6 @@ export default function ProduccionPage() {
           ...p,
           itemsFiltrados: (p.items || []).filter(item => {
             if (item.SUBESTADO === 'ELIMINADO' || item.SUBESTADO === 'ENTREGADO_TIENDA') return false
-            // Para multi-área: mostrar si alguna de mis áreas está en el ítem
             if (u.rol !== 'ADMIN') return itemEsDeUsuario(item.AREA, u)
             return true
           })
@@ -357,7 +348,6 @@ export default function ProduccionPage() {
     .map(p => ({
       ...p,
       itemsFiltrados: p.itemsFiltrados.filter(item => {
-        // Para multi-área: el filtro usa el estado global del ítem
         const estadoGlobal = (() => {
           if (!item.SUBESTADO) return 'SOLICITADO'
           if (item.SUBESTADO.includes(':')) {
@@ -371,7 +361,6 @@ export default function ProduccionPage() {
           }
           return item.SUBESTADO
         })()
-
         if (filtroSubestado === 'TODOS') return estadoGlobal !== 'LISTO'
         return estadoGlobal === filtroSubestado
       })
@@ -402,6 +391,26 @@ export default function ProduccionPage() {
 
   function expandirTodos() { setExpandedPedidos(new Set(filtered.map(p => p.PEDIDO_ID))) }
   function contraerTodos()  { setExpandedPedidos(new Set()) }
+
+  async function handleVerPdf(e, pedido) {
+    e.stopPropagation()
+    setGenerandoPdf(pedido.PEDIDO_ID)
+    try {
+      const { jsPDF } = await import('jspdf')
+      const html2canvas = (await import('html2canvas')).default
+      const el = document.getElementById(`pdf-prod-${pedido.PEDIDO_ID}`)
+      if (!el) { alert('Error: elemento PDF no encontrado'); return }
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' })
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297)
+      canvas.width = 1; canvas.height = 1
+      pdf.save(`${pedido.PEDIDO_ID}_confeccion.pdf`)
+    } catch(err) {
+      alert('Error generando PDF: ' + err.message)
+    } finally {
+      setGenerandoPdf(null)
+    }
+  }
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
@@ -495,12 +504,16 @@ export default function ProduccionPage() {
                   ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) : null
                 const urgente = diasR !== null && diasR <= 2
                 const isExpanded = expandedPedidos.has(pedido.PEDIDO_ID)
+                const generando = generandoPdf === pedido.PEDIDO_ID
+                const tiendaColor = TIENDA_COLORS[pedido.TIENDA_ID] || '#FF6B00'
+
                 return (
                   <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${urgente ? 'border-red-500/40' : ''}`}>
-                    <button onClick={() => setExpandedPedidos(prev => { const n = new Set(prev); n.has(pedido.PEDIDO_ID) ? n.delete(pedido.PEDIDO_ID) : n.add(pedido.PEDIDO_ID); return n })}
+                    <button
+                      onClick={() => setExpandedPedidos(prev => { const n = new Set(prev); n.has(pedido.PEDIDO_ID) ? n.delete(pedido.PEDIDO_ID) : n.add(pedido.PEDIDO_ID); return n })}
                       className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-0.5">
+                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <Link href={`/dashboard/pedido/${pedido.PEDIDO_ID}`}
                             onClick={e => e.stopPropagation()}
                             className="font-mono text-sm font-medium text-mandarina-400 hover:underline">
@@ -513,8 +526,25 @@ export default function ProduccionPage() {
                           {pedido.itemsFiltrados.length} ítem(s){diasR !== null && ` · ${diasR}d restantes`} · {pedido.FECHA_PEDIDO?.split(' ')[0] || ''}
                         </div>
                       </div>
-                      <span className="text-gray-600 text-sm">{isExpanded ? '▲' : '▼'}</span>
+
+                      {/* Botón PDF — no propaga el clic al expand */}
+                      <button
+                        onClick={e => handleVerPdf(e, pedido)}
+                        disabled={generando}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex-shrink-0
+                          ${generando
+                            ? 'border-gray-700 text-gray-600 cursor-not-allowed'
+                            : 'border-gray-600 text-gray-300 hover:border-white hover:text-white hover:bg-gray-800'}`}
+                        title="Descargar hoja de confección PDF">
+                        {generando
+                          ? <span className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
+                          : '📄'}
+                        <span className="hidden sm:inline">{generando ? 'PDF...' : 'PDF'}</span>
+                      </button>
+
+                      <span className="text-gray-600 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
                     </button>
+
                     {isExpanded && (
                       <div className="border-t border-gray-800 divide-y divide-gray-800">
                         {pedido.itemsFiltrados.map(item => (
@@ -534,6 +564,19 @@ export default function ProduccionPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* PDFs off-screen para captura con html2canvas — uno por pedido visible */}
+      <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '794px', backgroundColor: 'white', zIndex: -1 }}>
+        {pedidos.map(pedido => (
+          <div key={pedido.PEDIDO_ID} id={`pdf-prod-${pedido.PEDIDO_ID}`}>
+            <PdfConfeccion
+              pedido={pedido}
+              items={pedido.items || []}
+              tiendaColor={TIENDA_COLORS[pedido.TIENDA_ID] || '#FF6B00'}
+            />
+          </div>
+        ))}
       </div>
     </div>
   )
