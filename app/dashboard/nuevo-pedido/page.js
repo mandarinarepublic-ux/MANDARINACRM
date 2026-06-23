@@ -9,10 +9,21 @@ import SeccionPago from '@/components/pedido/SeccionPago'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE']
 
-// Indstore color fuxia suave
 const TIENDA_COLORS = {
   MANDARINA: '#FF6B00',
   INDSTORE: '#E91E8C',
+  YAW: '#6C3FC5',
+}
+
+// Cliente fijo para la tienda YAW (no editable por los vendedores YAW)
+const CLIENTE_YAW_ID = 'YAW1'
+const CLIENTE_YAW = {
+  nombre:   'YAW',
+  cedula:   '0101010101',
+  celular:  '010101010',
+  email:    'YAW@YAW.COM',
+  ciudad:   'CUMBAYA',
+  direccion:'TIENDA YAW- CENTRO COMERCIAL VILLA CUMBAYA',
 }
 
 function validarCedulaRUC(v) {
@@ -95,7 +106,16 @@ export default function NuevoPedidoPage() {
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
-    setUser(JSON.parse(stored))
+    const u = JSON.parse(stored)
+    setUser(u)
+    // Modo YAW: precargar cliente fijo y saltar directo a productos
+    if (u.rol === 'VENDEDOR_YAW') {
+      setTienda('YAW')
+      setClienteId(CLIENTE_YAW_ID)
+      setCliente(CLIENTE_YAW)
+      setEmitirFactura(false)
+      setStep(2)
+    }
   }, [])
 
   useEffect(() => {
@@ -108,13 +128,13 @@ export default function NuevoPedidoPage() {
     }
     const dias = combos[areas.join(',')] || 4
     setDiasCalculado(dias)
-    // Auto-update fechaEntrega with business days calculation
     const fecha = getMinFechaConDias(dias)
     setFechaEntrega(fecha)
   }, [items])
 
   const montoTotal = items.reduce((s, i) => s + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
-  const tiendaColor = TIENDA_COLORS[tienda]
+  const tiendaColor = TIENDA_COLORS[tienda] || '#6C3FC5'
+  const isYAW = user?.rol === 'VENDEDOR_YAW'
 
   function buildDireccion() {
     if (usarMapa) return direccionTexto
@@ -123,13 +143,13 @@ export default function NuevoPedidoPage() {
     if (!ciudad && !dir) return ''
     if (!ciudad) return dir
     if (!dir) return ciudad
-    // Si la dirección ya empieza con la ciudad, no duplicar
     if (dir.toLowerCase().startsWith(ciudad.toLowerCase())) return dir
     return `${ciudad}: ${dir}`
   }
 
-  // Step validation
   function validateStep1() {
+    // Para YAW el step 1 siempre es válido (cliente prellenado)
+    if (isYAW) return null
     const errCedula = validarCedulaRUC(cliente.cedula)
     const errCelular = validarCelular(cliente.celular)
     if (!cliente.nombre.trim()) return 'El nombre es obligatorio'
@@ -162,7 +182,6 @@ export default function NuevoPedidoPage() {
 
   function goToStep(s) {
     if (s > step) {
-      // Validate current step before advancing
       if (step === 1) {
         const err = validateStep1()
         if (err) { setError(err); return }
@@ -185,8 +204,6 @@ export default function NuevoPedidoPage() {
     setStep(s)
   }
 
-  // Factura automática al crear — se dispara desde la API, no desde el cliente
-  // El payload incluye pedido_id para que Make pueda devolvérnoslo en el callback
   async function dispararFactura(pedidoId, clienteData, montoTotal) {
     const cedula = String(clienteData.cedula || '')
     const sinImp = parseFloat((montoTotal / 1.15).toFixed(2))
@@ -211,21 +228,22 @@ export default function NuevoPedidoPage() {
       console.error('Error disparando factura:', e)
     }
   }
+
   async function handleSubmit() {
     const err1 = validateStep1()
     const err2 = validateStep2()
     const err3 = validateStep3()
-    if (err1) { setError(err1); setStep(1); return }
+    if (err1) { setError(err1); setStep(isYAW ? 2 : 1); return }
     if (err2) { setError(err2); setStep(2); return }
     if (err3) { setError(err3); setStep(3); return }
 
     setLoading(true); setError('')
 
-    // direccionFinal = full address for the order (shown in PDF)
     const direccionFinal = usarMapa ? direccionTexto : [cliente.ciudad, cliente.direccion].filter(Boolean).join(': ')
-    // clienteDireccion = just the address line (stored in CLIENTES sheet)
     const clienteDireccion = usarMapa ? direccionTexto : (cliente.direccion || '')
-    if (clienteId) {
+
+    // Para YAW no actualizamos el cliente (es un cliente compartido de tienda)
+    if (clienteId && !isYAW) {
       await fetch(`/api/clientes/${clienteId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -266,7 +284,6 @@ export default function NuevoPedidoPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      // Disparar factura automáticamente si el vendedor la solicitó
       if (emitirFactura) {
         dispararFactura(data.pedidoId, { ...cliente, cedula: String(cliente.cedula), celular: String(cliente.celular) }, montoTotal)
       }
@@ -284,15 +301,12 @@ export default function NuevoPedidoPage() {
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
-      {/* Fixed header */}
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3 md:static md:border-0 md:bg-transparent">
         <div className="flex items-center gap-3 mb-4 max-w-2xl mx-auto">
           <button onClick={() => router.back()} className="text-gray-500 hover:text-white p-1">←</button>
           <h1 className="text-xl font-display font-bold text-white">Nueva Venta</h1>
         </div>
-
         <div className="max-w-2xl mx-auto">
-          {/* Step indicator */}
           <div className="flex items-center gap-1 mb-2">
             {steps.map((s, i) => (
               <div key={s} className="flex items-center gap-1 flex-1">
@@ -311,7 +325,6 @@ export default function NuevoPedidoPage() {
         </div>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto pb-28">
         <div className="max-w-2xl mx-auto px-4 pt-4">
           {error && (
@@ -320,8 +333,8 @@ export default function NuevoPedidoPage() {
             </div>
           )}
 
-          {/* STEP 1 */}
-          {step === 1 && (
+          {/* STEP 1 — oculto para YAW (saltan directo al 2) */}
+          {step === 1 && !isYAW && (
             <div className="space-y-4">
               <BuscadorCliente onSelect={c => {
                 setClienteId(c.CLIENTE_ID || c.id || null)
@@ -351,28 +364,27 @@ export default function NuevoPedidoPage() {
                 </div>
                 <div>
                   <label className="label">Cédula / RUC *</label>
-                   <input className={`input ${cedulaError ? 'border-red-500' : ''}`}
-                     placeholder="1712345678" value={cliente.cedula}
-                     autoComplete="off" inputMode="numeric" name="x-cedula"
-                     autoComplete="off"
-                     onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarCedulaRUC(e.target.value) || '') }}
-                     onBlur={async e => {
-                       const ced = e.target.value.trim()
-                       if (ced.length < 10) return
-                       try {
-                         const r = await fetch(`/api/clientes?q=${encodeURIComponent(ced)}`)
-                         const d = await r.json()
-                         const found = (d.clientes||[]).find(c => String(c.CEDULA)===String(ced))
-                         if (found) {
-                           const usar = window.confirm(`⚠️ Cliente ya existe:\n\nNombre: ${found.NOMBRE}\nCelular: ${found.CELULAR}\nDirección: ${found.DIRECCION||'No registrada'}\n\n¿Autocompletar datos?`)
-                           if (usar) {
-                             setClienteId(found.CLIENTE_ID)
-                             setCliente({ nombre: found.NOMBRE||'', cedula: String(found.CEDULA||''), celular: String(found.CELULAR||''), email: found.EMAIL||'', ciudad: found.CIUDAD||'', direccion: found.DIRECCION||'' })
-                             setClienteKey(k => k+1)
-                           }
-                         }
-                       } catch(err) {}
-                     }} />
+                  <input className={`input ${cedulaError ? 'border-red-500' : ''}`}
+                    placeholder="1712345678" value={cliente.cedula}
+                    autoComplete="off" inputMode="numeric" name="x-cedula"
+                    onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarCedulaRUC(e.target.value) || '') }}
+                    onBlur={async e => {
+                      const ced = e.target.value.trim()
+                      if (ced.length < 10) return
+                      try {
+                        const r = await fetch(`/api/clientes?q=${encodeURIComponent(ced)}`)
+                        const d = await r.json()
+                        const found = (d.clientes||[]).find(c => String(c.CEDULA)===String(ced))
+                        if (found) {
+                          const usar = window.confirm(`⚠️ Cliente ya existe:\n\nNombre: ${found.NOMBRE}\nCelular: ${found.CELULAR}\nDirección: ${found.DIRECCION||'No registrada'}\n\n¿Autocompletar datos?`)
+                          if (usar) {
+                            setClienteId(found.CLIENTE_ID)
+                            setCliente({ nombre: found.NOMBRE||'', cedula: String(found.CEDULA||''), celular: String(found.CELULAR||''), email: found.EMAIL||'', ciudad: found.CIUDAD||'', direccion: found.DIRECCION||'' })
+                            setClienteKey(k => k+1)
+                          }
+                        }
+                      } catch(err) {}
+                    }} />
                   {cedulaError && <p className="text-red-400 text-xs mt-1">{cedulaError}</p>}
                 </div>
                 <div>
@@ -380,7 +392,6 @@ export default function NuevoPedidoPage() {
                   <input className={`input ${celularError ? 'border-red-500' : ''}`}
                     placeholder="0987654321" value={cliente.celular}
                     autoComplete="off" inputMode="tel" name="x-celular"
-                    autoComplete="off"
                     onChange={e => { setCliente(p => ({...p, celular: e.target.value})); setCelularError(validarCelular(e.target.value) || '') }} />
                   {celularError && <p className="text-red-400 text-xs mt-1">{celularError}</p>}
                 </div>
@@ -388,15 +399,12 @@ export default function NuevoPedidoPage() {
                   <label className="label">Email {emitirFactura ? '* (requerido para factura)' : '(opcional)'}</label>
                   <input className={`input ${emitirFactura && !cliente.email ? 'border-yellow-500/50' : ''}`}
                     type="email" autoComplete="off" name="x-email" placeholder="cliente@gmail.com" value={cliente.email}
-                    autoComplete="off"
                     onChange={e => setCliente(p => ({...p, email: e.target.value}))} />
                   {emitirFactura && !cliente.email && (
                     <p className="text-yellow-400 text-xs mt-1">⚠️ Necesitas el correo para emitir factura</p>
                   )}
                 </div>
               </div>
-
-              {/* Factura */}
               <label className="flex items-center gap-3 card p-4 cursor-pointer hover:border-gray-600 transition-all">
                 <input type="checkbox" checked={emitirFactura} onChange={e => setEmitirFactura(e.target.checked)}
                   className="w-5 h-5 accent-orange-500" />
@@ -405,8 +413,6 @@ export default function NuevoPedidoPage() {
                   <div className="text-gray-500 text-xs">Se enviará al SRI via Dátil</div>
                 </div>
               </label>
-
-              {/* Dirección */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="label mb-0">Dirección de entrega *</label>
@@ -420,10 +426,8 @@ export default function NuevoPedidoPage() {
                   <div className="space-y-3">
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Ciudad de entrega *</p>
-                      <input
-                        className={`input ${!cliente.ciudad.trim() ? 'border-yellow-500/40' : ''}`}
+                      <input className={`input ${!cliente.ciudad.trim() ? 'border-yellow-500/40' : ''}`}
                         autoComplete="off" name="x-ciudad" placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
-                        autoComplete="off"
                         onChange={e => setCliente(p => ({...p, ciudad: e.target.value}))} />
                     </div>
                     <div>
@@ -451,22 +455,39 @@ export default function NuevoPedidoPage() {
           {/* STEP 2 */}
           {step === 2 && (
             <div className="space-y-4">
-              {/* Selector de tienda — solo visible en step 2 */}
-              <div className="flex gap-2">
-                {TIENDAS.map(t => (
-                  <button key={t} onClick={() => setTienda(t)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border
-                      ${tienda === t ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
-                    style={tienda === t ? { backgroundColor: TIENDA_COLORS[t] } : {}}>
-                    {t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}
-                  </button>
-                ))}
-              </div>
-              <BuscadorProductos tienda={tienda} onAdd={item => setItems(p => [...p, { ...item, cantidad: item.cantidad || 1, precioUnit: item.precioUnit || '' }])} />
+              {/* Selector de tienda — oculto para YAW */}
+              {!isYAW && (
+                <div className="flex gap-2">
+                  {TIENDAS.map(t => (
+                    <button key={t} onClick={() => setTienda(t)}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border
+                        ${tienda === t ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
+                      style={tienda === t ? { backgroundColor: TIENDA_COLORS[t] } : {}}>
+                      {t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Banner YAW — muestra tienda y cliente fijo */}
+              {isYAW && (
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-purple-500/30 bg-purple-500/5">
+                  <span className="text-purple-400 text-lg">🛒</span>
+                  <div>
+                    <div className="text-purple-300 text-sm font-semibold">Tienda YAW</div>
+                    <div className="text-xs text-gray-500">{cliente.nombre} · {cliente.ciudad}</div>
+                  </div>
+                </div>
+              )}
+              {/* soloPersonalizado=true para YAW: no muestra búsqueda Shopify ni catálogo */}
+              <BuscadorProductos
+                tienda={tienda}
+                soloPersonalizado={isYAW}
+                onAdd={item => setItems(p => [...p, { ...item, cantidad: item.cantidad || 1, precioUnit: item.precioUnit || '' }])}
+              />
               {items.length === 0 && (
                 <div className="card p-6 text-center text-gray-500 border-dashed">
                   <div className="text-3xl mb-2">👕</div>
-                  <div className="text-sm">Busca un producto o agrega uno personalizado</div>
+                  <div className="text-sm">{isYAW ? 'Agrega un producto personalizado' : 'Busca un producto o agrega uno personalizado'}</div>
                 </div>
               )}
               {items.length > 0 && (
@@ -509,10 +530,7 @@ export default function NuevoPedidoPage() {
                 {[
                   ['Tienda', tienda],
                   ['Cliente', cliente.nombre],
-                  ['Cédula/RUC', cliente.cedula],
-                  ['Celular', cliente.celular],
-                  ['Email', cliente.email || '-'],
-                  ['Dirección', buildDireccion()],
+                  ['Dirección', buildDireccion() || cliente.direccion],
                   ['Factura', emitirFactura ? '✅ Sí' : '❌ No'],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4">
@@ -531,8 +549,6 @@ export default function NuevoPedidoPage() {
                   <span className="text-white">{new Date(fechaEntrega).toLocaleDateString('es-EC', {day:'numeric',month:'long',year:'numeric'})}</span>
                 </div>
               </div>
-
-              {/* Fix 4: Notas internas in step 4 */}
               <div>
                 <label className="label">Notas internas</label>
                 <textarea className="input resize-none" rows={3} placeholder="Instrucciones especiales para fábrica, urgencias..."
@@ -543,10 +559,12 @@ export default function NuevoPedidoPage() {
         </div>
       </div>
 
-      {/* Fixed bottom nav */}
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-3">
-        {step > 1 && <button onClick={() => goToStep(step - 1)} className="btn-secondary flex-1">← Atrás</button>}
-{step < 4 ? (
+        {/* YAW no puede volver al step 1 (cliente fijo) */}
+        {step > 1 && !(isYAW && step === 2) && (
+          <button onClick={() => goToStep(step - 1)} className="btn-secondary flex-1">← Atrás</button>
+        )}
+        {step < 4 ? (
           <button onClick={() => goToStep(step + 1)} disabled={!canGoToStep(step + 1)}
             className="btn-primary flex-1"
             style={canGoToStep(step + 1)

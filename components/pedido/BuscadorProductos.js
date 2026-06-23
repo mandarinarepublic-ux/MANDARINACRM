@@ -17,15 +17,17 @@ const AREAS = [
   'ENTREGA EN TIENDA',
 ]
 
-export default function BuscadorProductos({ tienda, onAdd }) {
+export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = false }) {
   const [query, setQuery] = useState('')
   const [productos, setProductos] = useState([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(null)
-  const [showPersonalizado, setShowPersonalizado] = useState(false)
+  const [showPersonalizado, setShowPersonalizado] = useState(soloPersonalizado)
   const debounceRef = useRef(null)
 
+  // Si soloPersonalizado, no hay nada más que hacer en este efecto
   useEffect(() => {
+    if (soloPersonalizado) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (query.length < 2) { setProductos([]); return }
     debounceRef.current = setTimeout(() => buscar(), 400)
@@ -42,20 +44,23 @@ export default function BuscadorProductos({ tienda, onAdd }) {
 
   return (
     <div>
-      <div className="flex gap-2 mb-3">
-        <div className="relative flex-1">
-          <input className="input pr-10" placeholder="Buscar producto en Shopify..."
-            value={query} onChange={e => setQuery(e.target.value)} />
-          {loading && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
+      {/* Si soloPersonalizado, ocultar búsqueda y botón de catálogo */}
+      {!soloPersonalizado && (
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <input className="input pr-10" placeholder="Buscar producto en Shopify..."
+              value={query} onChange={e => setQuery(e.target.value)} />
+            {loading && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+          <button onClick={() => setShowPersonalizado(true)} className="btn-secondary whitespace-nowrap text-sm px-3">
+            + Personalizado
+          </button>
         </div>
-        <button onClick={() => setShowPersonalizado(true)} className="btn-secondary whitespace-nowrap text-sm px-3">
-          + Personalizado
-        </button>
-      </div>
+      )}
 
       {productos.length > 0 && !selected && (
         <div className="card divide-y divide-gray-800 max-h-64 overflow-y-auto">
