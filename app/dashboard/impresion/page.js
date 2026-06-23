@@ -1,16 +1,23 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { PdfGracias, PdfConfeccion } from '@/components/pedido/PdfPedido'
+import { PdfGracias, PdfConfeccionPagina } from '@/components/pedido/PdfPedido'
 import { parseFecha } from '@/lib/parseFecha'
 
-// Máximo recomendado de pedidos por lote de impresión.
-// Antes esto evitaba que html2canvas generara un canvas gigante (y saliera en
-// blanco al superar el límite de píxeles del navegador). Ahora el render es
-// página-por-página, así que el límite ya no es una restricción técnica dura —
-// es un tope de cortesía para no congelar el navegador con loops muy largos
-// (cada página tarda ~1-2s en renderizarse).
 const MAX_LOTE_IMPRESION = 30
+const ITEMS_POR_PAGINA_CONF = 3
+
+const H2C_OPTS = {
+  scale: 2,
+  useCORS: true,
+  allowTaint: true,
+  backgroundColor: '#ffffff',
+  width: 794,
+  windowWidth: 794,
+  scrollX: 0,
+  scrollY: 0,
+  logging: false,
+}
 
 export default function ImpresionPage() {
   const router = useRouter()
@@ -51,17 +58,13 @@ export default function ImpresionPage() {
     } finally { setLoading(false) }
   }
 
-  // Recibe el pedido completo (no solo el id) para poder chequear si ya se imprimió antes
   function toggleSelect(pedido) {
     const id = pedido.PEDIDO_ID
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-        return next
-      }
+      if (next.has(id)) { next.delete(id); return next }
       if (next.size >= MAX_LOTE_IMPRESION) {
-        alert(`Máximo ${MAX_LOTE_IMPRESION} pedidos por lote de impresión.\n\nImprime este lote primero y continúa con el resto — así evitamos que el navegador se congele generando demasiadas páginas de una sola vez.`)
+        alert(`Máximo ${MAX_LOTE_IMPRESION} pedidos por lote de impresión.`)
         return prev
       }
       if (pedido.FECHA_IMPRESION_PRODUCCION) {
@@ -83,17 +86,13 @@ export default function ImpresionPage() {
     if (selected.size > 0) { setSelected(new Set()); return }
     const sinImprimir = filtered.filter(p => !p.FECHA_IMPRESION_PRODUCCION)
     let candidatos = sinImprimir
-
     if (sinImprimir.length === 0 && filtered.length > 0) {
-      const ok = window.confirm(
-        `Los ${filtered.length} pedido(s) con estos filtros YA fueron impresos antes.\n\n¿Deseas reimprimirlos todos?`
-      )
+      const ok = window.confirm(`Los ${filtered.length} pedido(s) YA fueron impresos. ¿Reimprimirlos?`)
       if (!ok) return
       candidatos = filtered
     }
-
     if (candidatos.length > MAX_LOTE_IMPRESION) {
-      alert(`Hay ${candidatos.length} pedidos disponibles. Por seguridad se seleccionan solo los primeros ${MAX_LOTE_IMPRESION} (máximo por lote). Imprime este lote y luego continúa con el resto.`)
+      alert(`Se seleccionan los primeros ${MAX_LOTE_IMPRESION} (máximo por lote).`)
     }
     setSelected(new Set(candidatos.slice(0, MAX_LOTE_IMPRESION).map(p => p.PEDIDO_ID)))
   }
@@ -114,11 +113,24 @@ export default function ImpresionPage() {
       const q = busqueda.toLowerCase().replace(/[\s-]/g, '')
       const c = clientes[p.CLIENTE_ID] || {}
       const campos = [p.PEDIDO_ID, c.NOMBRE, c.CEDULA, c.CELULAR]
-      const match = campos.some(v => v && String(v).toLowerCase().replace(/[\s-]/g, '').includes(q))
-      if (!match) return false
+      if (!campos.some(v => v && String(v).toLowerCase().replace(/[\s-]/g, '').includes(q))) return false
     }
     return true
   })
+
+  // Captura un elemento por ID y lo agrega al PDF
+  async function capturarElemento(html2canvas, pdf, elementId, esPrimera) {
+    const el = document.getElementById(elementId)
+    if (!el) return esPrimera
+    // Esperar un tick para asegurar que el elemento esté pintado
+    await new Promise(r => setTimeout(r, 50))
+    const canvas = await html2canvas(el, H2C_OPTS)
+    const imgData = canvas.toDataURL('image/jpeg', 0.92)
+    if (!esPrimera) pdf.addPage()
+    pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297)
+    canvas.width = 1; canvas.height = 1
+    return false // ya no es primera
+  }
 
   async function printSelected() {
     if (selected.size === 0) return
@@ -130,73 +142,38 @@ export default function ImpresionPage() {
 
       const ids = Array.from(selected)
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-      const totalPaginas = ids.length * 2
-      let paginaActual = 0
       let esPrimera = true
+      let paginaActual = 0
 
-      // Render PÁGINA POR PÁGINA (no todo el lote en un solo canvas gigante).
-      // Esto evita el límite de tamaño de canvas del navegador que causaba
-      // PDFs en blanco al seleccionar muchos pedidos.
+      // Calcular total de páginas para el progreso
+      const totalPaginas = ids.reduce((sum, id) => {
+        const p = pedidos.find(x => x.PEDIDO_ID === id)
+        const nItems = p?.items?.length || 0
+        const pagConf = Math.max(1, Math.ceil(nItems / ITEMS_POR_PAGINA_CONF))
+        return sum + 1 + pagConf // 1 gracias + N confeccion
+      }, 0)
+
       for (const pedidoId of ids) {
-        // Página 1: hoja de agradecimiento al cliente
+        // ── Hoja gracias (cliente) ──
         paginaActual++
-        setPrintProgress(`Generando página ${paginaActual}/${totalPaginas}...`)
-        const elGracias = document.getElementById(`pdf-page-${pedidoId}-gracias`)
-        if (elGracias) {
-          const canvas = await html2canvas(elGracias, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            width: 794,
-            windowWidth: 794,
-            scrollX: 0,
-            scrollY: 0,
-            logging: false,
-          })
-          const imgData = canvas.toDataURL('image/jpeg', 0.92)
-          if (!esPrimera) pdf.addPage()
-          pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297)
-          esPrimera = false
-          canvas.width = 1; canvas.height = 1
-        }
+        setPrintProgress(`Generando ${paginaActual}/${totalPaginas}...`)
+        esPrimera = await capturarElemento(html2canvas, pdf, `pdf-${pedidoId}-gracias`, esPrimera)
 
-        // Páginas de confección: puede haber varias sub-páginas (paginación)
-        let subIdx = 0
-        while (true) {
-          const elConf = document.getElementById(
-            subIdx === 0
-              ? `pdf-page-${pedidoId}-confeccion`
-              : `pdf-page-${pedidoId}-confeccion-${subIdx}`
-          )
-          if (!elConf) break
+        // ── Hojas confección (una por cada sub-página) ──
+        const pedido = pedidos.find(x => x.PEDIDO_ID === pedidoId)
+        const nItems = pedido?.items?.length || 0
+        const nPagConf = Math.max(1, Math.ceil(nItems / ITEMS_POR_PAGINA_CONF))
+
+        for (let pi = 0; pi < nPagConf; pi++) {
           paginaActual++
-          setPrintProgress(`Generando página ${paginaActual}/${totalPaginas}...`)
-          const canvas = await html2canvas(elConf, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            width: 794,
-            windowWidth: 794,
-            scrollX: 0,
-            scrollY: 0,
-            logging: false,
-          })
-          const imgData = canvas.toDataURL('image/jpeg', 0.92)
-          if (!esPrimera) pdf.addPage()
-          pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297)
-          esPrimera = false
-          canvas.width = 1; canvas.height = 1
-          subIdx++
+          setPrintProgress(`Generando ${paginaActual}/${totalPaginas}...`)
+          esPrimera = await capturarElemento(html2canvas, pdf, `pdf-${pedidoId}-conf-${pi}`, esPrimera)
         }
       }
 
       pdf.save(`pedidos_${new Date().toISOString().split('T')[0]}.pdf`)
 
-      // Marcar los pedidos como impresos — SECUENCIAL con delay para no saturar
-      // la Sheets API (30 PATCH simultáneos la bloqueaban y el loadPedidos()
-      // posterior devolvía vacío, dejando la pantalla en blanco).
+      // Registrar impresión secuencial
       setPrintProgress('Registrando impresión...')
       let usuario = {}
       try { usuario = JSON.parse(localStorage.getItem('mp_user') || '{}') } catch {}
@@ -210,12 +187,9 @@ export default function ImpresionPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ marcarImpreso: true, _usuarioId: usuarioId }),
         }).catch(() => {})
-        // Pequeña pausa entre llamadas para respetar la cuota de Sheets API
         if (i < ids.length - 1) await new Promise(r => setTimeout(r, 350))
       }
 
-      // Actualizar estado LOCAL en vez de recargar del servidor —
-      // evita otra llamada a Sheets justo cuando puede estar saturada.
       setPedidos(prev => prev.map(p =>
         ids.includes(p.PEDIDO_ID)
           ? { ...p, FECHA_IMPRESION_PRODUCCION: ahora, IMPRESO_POR: usuarioId }
@@ -242,7 +216,6 @@ export default function ImpresionPage() {
             <button onClick={() => router.back()} className="text-gray-500 hover:text-white text-sm">← Volver</button>
           </div>
 
-          {/* Filters */}
           <input className="input mb-2" placeholder="Buscar por pedido, nombre, cédula o celular..."
             value={busqueda} onChange={e => setBusqueda(e.target.value)} />
 
@@ -255,7 +228,7 @@ export default function ImpresionPage() {
                 <option value="INDSTORE">🏪 Indstore</option>
               </select>
             </div>
-            <div className="col-span-1">
+            <div>
               <label className="label">Desde</label>
               <input type="date" className="input py-2 text-sm" value={fechaDesde}
                 onChange={e => setFechaDesde(e.target.value)} />
@@ -345,27 +318,49 @@ export default function ImpresionPage() {
         {selected.size === 0 && <p className="text-center text-gray-600 text-xs mt-2">Selecciona al menos un pedido</p>}
       </div>
 
-      {/* PDFs ocultos renderizados con el nuevo diseño.
-          Cada hoja tiene su propio id único (pdf-page-{ID}-gracias / -confeccion)
-          para poder capturarla con html2canvas de forma INDIVIDUAL en printSelected(),
-          en vez de un solo canvas gigante con todo el lote. */}
-      <div style={{position:'fixed',top:'-9999px',left:'-9999px',width:'794px',backgroundColor:'white',fontFamily:"'Helvetica Neue', Arial, sans-serif"}}>
+      {/* Zona de render oculto — cada página tiene su propio ID atómico.
+          La paginación de confección se hace aquí con chunkArray, no dentro
+          del componente, para que cada sub-página sea un div independiente
+          que html2canvas capture por separado sin hojas en blanco. */}
+      <div style={{ position:'fixed', top:'-9999px', left:'-9999px', width:'794px', backgroundColor:'white', fontFamily:"'Helvetica Neue', Arial, sans-serif" }}>
         {pedidos.filter(p => selected.has(p.PEDIDO_ID)).map(pedido => {
           const cliente = clientes[pedido.CLIENTE_ID] || {}
           const items = pedido.items || []
           const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
+          const chunks = chunkArray(items, ITEMS_POR_PAGINA_CONF)
+          const totalPagConf = Math.max(chunks.length, 1)
+
           return (
             <div key={pedido.PEDIDO_ID}>
-              <div id={`pdf-page-${pedido.PEDIDO_ID}-gracias`} style={{width:'794px',overflow:'hidden'}}>
+              {/* Hoja gracias — 1 por pedido */}
+              <div id={`pdf-${pedido.PEDIDO_ID}-gracias`} style={{ width:'794px' }}>
                 <PdfGracias pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
               </div>
-              <div id={`pdf-page-${pedido.PEDIDO_ID}-confeccion`} style={{width:'794px',overflow:'hidden'}}>
-                <PdfConfeccion pedido={pedido} items={items} tiendaColor={tiendaColor} pedidoId={pedido.PEDIDO_ID} />
-              </div>
+
+              {/* Hojas confección — 1 div atómico por sub-página */}
+              {(chunks.length === 0 ? [[]] : chunks).map((pageItems, pIdx) => (
+                <div key={pIdx} id={`pdf-${pedido.PEDIDO_ID}-conf-${pIdx}`} style={{ width:'794px' }}>
+                  <PdfConfeccionPagina
+                    pedido={pedido}
+                    items={pageItems}
+                    tiendaColor={tiendaColor}
+                    paginaActual={pIdx + 1}
+                    totalPaginas={totalPagConf}
+                    offsetIdx={pIdx * ITEMS_POR_PAGINA_CONF}
+                    esUltimaPagina={pIdx === totalPagConf - 1}
+                  />
+                </div>
+              ))}
             </div>
           )
         })}
       </div>
     </div>
   )
+}
+
+function chunkArray(arr, size) {
+  const chunks = []
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
+  return chunks
 }
