@@ -88,26 +88,26 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
         <div style={{ backgroundColor:'#fff', borderRadius:'14px', padding:'14px 18px', marginBottom:'14px', border:'2px solid #e5e5e5' }}>
           <div style={{ overflow:'hidden', marginBottom:'8px' }}>
             <span style={{ float:'left', fontSize:'10px', color:'#999', textTransform:'uppercase', letterSpacing:'2px', lineHeight:'24px' }}>Datos de envío</span>
-            <span style={{ float:'right', display:'inline-block', backgroundColor:tiendaColor, color:'#fff', fontSize:'12px', fontWeight:'800', fontFamily:'monospace', padding:'3px 10px', borderRadius:'8px' }}>{pedido?.PEDIDO_ID||''}</span>
+            <span style={{ float:'right', display:'inline-block', backgroundColor:tiendaColor, color:'#fff', fontSize:'14px', fontWeight:'800', fontFamily:'monospace', padding:'5px 14px', borderRadius:'8px', letterSpacing:'0.5px' }}>{pedido?.PEDIDO_ID||''}</span>
             <div style={{ clear:'both' }} />
           </div>
           <div style={{ fontSize:'19px', fontWeight:'900', color:'#1a1a1a', marginBottom:'8px', lineHeight:1.1 }}>{cliente?.NOMBRE||'-'}</div>
           <div style={{ overflow:'hidden', marginBottom:'8px' }}>
             {cliente?.CELULAR && (
-              <div style={{ float:'left', marginRight:'10px', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'7px 12px', border:'1px solid #e5e5e5', overflow:'hidden' }}>
-                <span style={{ float:'left', fontSize:'15px', lineHeight:'20px', marginRight:'7px' }}>📱</span>
+              <div style={{ float:'left', marginRight:'10px', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 14px', border:'1px solid #e5e5e5', overflow:'hidden', minWidth:'160px' }}>
+                <span style={{ float:'left', fontSize:'16px', lineHeight:'26px', marginRight:'8px' }}>📱</span>
                 <div style={{ overflow:'hidden' }}>
-                  <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'1px' }}>Celular</div>
-                  <div style={{ fontSize:'13px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace' }}>{cliente.CELULAR}</div>
+                  <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'2px' }}>Celular</div>
+                  <div style={{ fontSize:'14px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace', whiteSpace:'nowrap' }}>{cliente.CELULAR}</div>
                 </div>
               </div>
             )}
             {cliente?.CEDULA && (
-              <div style={{ float:'left', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'7px 12px', border:'1px solid #e5e5e5', overflow:'hidden' }}>
-                <span style={{ float:'left', fontSize:'15px', lineHeight:'20px', marginRight:'7px' }}>🆔</span>
+              <div style={{ float:'left', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 14px', border:'1px solid #e5e5e5', overflow:'hidden', minWidth:'160px' }}>
+                <span style={{ float:'left', fontSize:'16px', lineHeight:'26px', marginRight:'8px' }}>🆔</span>
                 <div style={{ overflow:'hidden' }}>
-                  <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'1px' }}>Cédula</div>
-                  <div style={{ fontSize:'13px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace' }}>{cliente.CEDULA}</div>
+                  <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'2px' }}>Cédula</div>
+                  <div style={{ fontSize:'14px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace', whiteSpace:'nowrap' }}>{cliente.CEDULA}</div>
                 </div>
               </div>
             )}

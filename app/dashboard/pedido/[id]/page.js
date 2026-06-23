@@ -4,7 +4,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { ESTADO_LABELS, ESTADO_LABELS_LARGO } from '@/lib/labels'
-import { PdfGracias, PdfConfeccion } from '@/components/pedido/PdfPedido'
+import { PdfGracias, PdfConfeccion, PdfConfeccionPagina } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 
 export default function PedidoDetailPage() {
@@ -47,17 +47,34 @@ export default function PedidoDetailPage() {
     } finally { setLoading(false) }
   }
 
+  const ITEMS_POR_PAG = 3
+  const H2C = { scale:2, useCORS:true, allowTaint:true, backgroundColor:'#ffffff', width:794, windowWidth:794, scrollX:0, scrollY:0, logging:false }
+
   async function generatePDF() {
     setGeneratingPdf(true)
     try {
-      const html2pdf = (await import('html2pdf.js')).default
-      const element = document.getElementById('pdf-render')
-      if (!element) { alert('Error: PDF no encontrado'); return }
-      await html2pdf().set({
-        margin: [0,0,0,0], filename: `${pedido.PEDIDO_ID}.pdf`,
-        html2canvas: { scale:2, useCORS:true, allowTaint:true, backgroundColor:'#ffffff' },
-        jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
-      }).from(element).save()
+      const { jsPDF } = await import('jspdf')
+      const html2canvas = (await import('html2canvas')).default
+      const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' })
+      let primera = true
+
+      async function capturar(id) {
+        const el = document.getElementById(id)
+        if (!el) return
+        await new Promise(r => setTimeout(r, 40))
+        const canvas = await html2canvas(el, H2C)
+        const img = canvas.toDataURL('image/jpeg', 0.92)
+        if (!primera) pdf.addPage()
+        pdf.addImage(img, 'JPEG', 0, 0, 210, 297)
+        primera = false
+        canvas.width = 1; canvas.height = 1
+      }
+
+      await capturar('pdf-gracias')
+      const nPags = Math.max(1, Math.ceil((items||[]).length / ITEMS_POR_PAG))
+      for (let i = 0; i < nPags; i++) await capturar(`pdf-conf-${i}`)
+
+      pdf.save(`${pedido.PEDIDO_ID}.pdf`)
     } catch(e) { alert('Error PDF: ' + e.message) }
     finally { setGeneratingPdf(false) }
   }
@@ -380,11 +397,22 @@ export default function PedidoDetailPage() {
         </div>
       )}
 
-      <div style={{position:'fixed',top:'-9999px',left:'-9999px',width:'794px',backgroundColor:'white'}}>
-        <div id="pdf-render">
+      <div style={{position:'fixed',top:'-9999px',left:'-9999px',width:'794px',backgroundColor:'white',fontFamily:"'Helvetica Neue',Arial,sans-serif"}}>
+        <div id="pdf-gracias" style={{width:'794px'}}>
           <PdfGracias pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
-          <PdfConfeccion pedido={pedido} items={items} tiendaColor={tiendaColor} />
         </div>
+        {(() => {
+          const chunks = []
+          const it = items || []
+          for (let i = 0; i < it.length; i += ITEMS_POR_PAG) chunks.push(it.slice(i, i + ITEMS_POR_PAG))
+          if (chunks.length === 0) chunks.push([])
+          return chunks.map((pageItems, pIdx) => (
+            <div key={pIdx} id={`pdf-conf-${pIdx}`} style={{width:'794px'}}>
+              <PdfConfeccionPagina pedido={pedido} items={pageItems} tiendaColor={tiendaColor}
+                paginaActual={pIdx+1} totalPaginas={chunks.length} offsetIdx={pIdx*ITEMS_POR_PAG} />
+            </div>
+          ))
+        })()}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3">
