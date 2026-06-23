@@ -404,7 +404,8 @@ export default function ProduccionPage() {
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297)
       canvas.width = 1; canvas.height = 1
-      pdf.save(`${pedido.PEDIDO_ID}_confeccion.pdf`)
+      const url = pdf.output('bloburl')
+      window.open(url, '_blank')
     } catch(err) {
       alert('Error generando PDF: ' + err.message)
     } finally {
