@@ -21,9 +21,10 @@ const PAGE_H = 1123
 // ─── Ficha de dato ────────────────────────────────────────────────────────────
 function Ficha({ label, value, color, big }) {
   return (
-    <div style={{ backgroundColor:'#f5f5f5', borderRadius:'8px', padding:'8px 10px', border:'1px solid #ebebeb', marginBottom:'6px', boxSizing:'border-box' }}>
-      <div style={{ fontSize:'8px', color:'#bbb', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>{label}</div>
-      <div style={{ fontSize: big ? '24px' : '12px', fontWeight:'900', color: color || '#1a1a1a', lineHeight:1 }}>{value}</div>
+    <div style={{ backgroundColor:'#f5f5f5', borderRadius:'8px', padding:'8px 12px', border:'1px solid #ebebeb', marginBottom:'6px', overflow:'hidden', boxSizing:'border-box' }}>
+      <span style={{ float:'left', fontSize:'9px', color:'#999', textTransform:'uppercase', letterSpacing:'0.5px', lineHeight: big ? '28px' : '18px', marginRight:'8px', whiteSpace:'nowrap' }}>{label}</span>
+      <span style={{ float:'right', fontSize: big ? '22px' : '13px', fontWeight:'900', color: color || '#1a1a1a', lineHeight:1.2 }}>{value}</span>
+      <div style={{ clear:'both' }} />
     </div>
   )
 }
@@ -255,12 +256,12 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
             <div key={idx} style={{ marginBottom:'10px', border:'2px solid #e5e5e5', borderRadius:'12px', overflow:'hidden' }}>
 
               {/* Header ítem */}
-              <div style={{ backgroundColor:tiendaColor+'12', borderBottom:`3px solid ${tiendaColor}`, padding:'7px 14px', overflow:'hidden' }}>
+              <div style={{ borderBottom:`3px solid ${tiendaColor}`, padding:'7px 14px', overflow:'hidden', backgroundColor:'#fff' }}>
                 <span style={{ float:'left' }}>
-                  <span style={{ display:'inline-block', backgroundColor:tiendaColor, color:'#fff', fontSize:'10px', fontWeight:'900', padding:'2px 9px', borderRadius:'20px', marginRight:'9px', fontFamily:'monospace' }}>#{globalIdx+1}</span>
-                  <span style={{ fontSize:'13px', fontWeight:'800', color:'#1a1a1a' }}>{item.PRODUCTO_NOMBRE}</span>
+                  <span style={{ display:'inline-block', backgroundColor:tiendaColor, color:'#fff', fontSize:'11px', fontWeight:'900', padding:'3px 11px', borderRadius:'20px', marginRight:'10px', fontFamily:'monospace' }}>#{globalIdx+1}</span>
+                  <span style={{ fontSize:'14px', fontWeight:'800', color:'#1a1a1a' }}>{item.PRODUCTO_NOMBRE}</span>
                 </span>
-                {item.AREA && <span style={{ float:'right', display:'inline-block', backgroundColor:tiendaColor, color:'#fff', fontSize:'9px', fontWeight:'700', padding:'3px 10px', borderRadius:'20px', textTransform:'uppercase' }}>{item.AREA}</span>}
+                {item.AREA && <span style={{ float:'right', display:'inline-block', border:`2px solid ${tiendaColor}`, color:tiendaColor, fontSize:'11px', fontWeight:'800', padding:'3px 12px', borderRadius:'20px', textTransform:'uppercase', backgroundColor:'#fff' }}>{item.AREA}</span>}
                 <div style={{ clear:'both' }} />
               </div>
 
