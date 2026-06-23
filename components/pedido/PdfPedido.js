@@ -88,7 +88,7 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
         <div style={{ backgroundColor:'#fff', borderRadius:'14px', padding:'14px 18px', marginBottom:'14px', border:'2px solid #e5e5e5' }}>
           <div style={{ overflow:'hidden', marginBottom:'8px' }}>
             <span style={{ float:'left', fontSize:'10px', color:'#999', textTransform:'uppercase', letterSpacing:'2px', lineHeight:'24px' }}>Datos de envío</span>
-            <span style={{ float:'right', fontSize:'16px', fontWeight:'900', fontFamily:'monospace', color:'#1a1a1a', letterSpacing:'0.5px', lineHeight:'24px' }}>{pedido?.PEDIDO_ID||''}</span>
+            <span style={{ float:'right', fontSize:'14px', fontWeight:'900', fontFamily:'monospace', color:'#1a1a1a', letterSpacing:'0.5px', lineHeight:'24px', backgroundColor:'#f0f0f0', padding:'4px 12px', borderRadius:'8px', border:'1.5px solid #ddd' }}>{pedido?.PEDIDO_ID||''}</span>
             <div style={{ clear:'both' }} />
           </div>
           <div style={{ fontSize:'22px', fontWeight:'900', color:'#1a1a1a', marginBottom:'10px', lineHeight:1.1, textAlign:'center' }}>{cliente?.NOMBRE||'-'}</div>
