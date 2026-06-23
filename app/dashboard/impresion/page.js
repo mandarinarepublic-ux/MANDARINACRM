@@ -161,20 +161,34 @@ export default function ImpresionPage() {
 
       pdf.save(`pedidos_${new Date().toISOString().split('T')[0]}.pdf`)
 
-      // Marcar los pedidos como impresos para producción (para alertar reimpresiones futuras)
+      // Marcar los pedidos como impresos — SECUENCIAL con delay para no saturar
+      // la Sheets API (30 PATCH simultáneos la bloqueaban y el loadPedidos()
+      // posterior devolvía vacío, dejando la pantalla en blanco).
       setPrintProgress('Registrando impresión...')
       let usuario = {}
       try { usuario = JSON.parse(localStorage.getItem('mp_user') || '{}') } catch {}
-      await Promise.all(ids.map(id =>
-        fetch(`/api/pedidos/${id}`, {
+      const usuarioId = usuario.nombre || usuario.id || 'SISTEMA'
+      const ahora = new Date().toLocaleDateString('es-EC', { day:'2-digit', month:'short', year:'numeric' })
+
+      for (let i = 0; i < ids.length; i++) {
+        setPrintProgress(`Registrando ${i + 1}/${ids.length}...`)
+        await fetch(`/api/pedidos/${ids[i]}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ marcarImpreso: true, _usuarioId: usuario.nombre || usuario.id || 'SISTEMA' }),
+          body: JSON.stringify({ marcarImpreso: true, _usuarioId: usuarioId }),
         }).catch(() => {})
-      ))
+        // Pequeña pausa entre llamadas para respetar la cuota de Sheets API
+        if (i < ids.length - 1) await new Promise(r => setTimeout(r, 350))
+      }
 
+      // Actualizar estado LOCAL en vez de recargar del servidor —
+      // evita otra llamada a Sheets justo cuando puede estar saturada.
+      setPedidos(prev => prev.map(p =>
+        ids.includes(p.PEDIDO_ID)
+          ? { ...p, FECHA_IMPRESION_PRODUCCION: ahora, IMPRESO_POR: usuarioId }
+          : p
+      ))
       setSelected(new Set())
-      await loadPedidos() // refresca para que se vean los badges de "ya impreso"
     } catch(e) {
       alert('Error PDF: ' + e.message)
     } finally {
