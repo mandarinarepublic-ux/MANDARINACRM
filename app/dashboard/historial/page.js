@@ -24,13 +24,13 @@ export default function HistorialPage() {
   const [fechaHasta, setFechaHasta] = useState('')
   const [mostrarFecha, setMostrarFecha] = useState(false)
   const [visibles, setVisibles] = useState(PAGE_SIZE)
+  const [expandedPedidos, setExpandedPedidos] = useState(new Set())
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
     const u = JSON.parse(stored)
     setUser(u)
-    // YAW: no restaurar filtro de tienda guardado (siempre fijo en YAW)
     if (u.rol !== 'VENDEDOR_YAW') {
       try {
         const f = JSON.parse(localStorage.getItem(LS_FILTROS) || '{}')
@@ -54,9 +54,7 @@ export default function HistorialPage() {
     return () => clearTimeout(t)
   }, [busqueda])
 
-  useEffect(() => {
-    setVisibles(PAGE_SIZE)
-  }, [busquedaDebounced, filtroEstado, filtroTienda, fechaDesde, fechaHasta])
+  useEffect(() => { setVisibles(PAGE_SIZE) }, [busquedaDebounced, filtroEstado, filtroTienda, fechaDesde, fechaHasta])
 
   async function loadPedidos(u) {
     setLoading(true)
@@ -64,7 +62,6 @@ export default function HistorialPage() {
       const res = await fetch(`/api/pedidos?rol=ADMIN`)
       const data = await res.json()
       let lista = data.pedidos || []
-      // VENDEDOR_YAW: solo ve pedidos de tienda YAW
       if (u.rol === 'VENDEDOR_YAW') lista = lista.filter(p => p.TIENDA_ID === 'YAW')
       lista = lista.sort((a, b) => {
         const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
@@ -81,7 +78,6 @@ export default function HistorialPage() {
 
   const filtered = pedidos.filter(p => {
     if (filtroEstado !== 'TODOS' && p.ESTADO_PEDIDO !== filtroEstado) return false
-    // YAW: el filtro de tienda siempre es YAW (no hay selector)
     if (!isYAW && filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
     if (busquedaDebounced && !coincideBusqueda(p, busquedaDebounced)) return false
     if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
@@ -91,6 +87,9 @@ export default function HistorialPage() {
 
   const paginados = filtered.slice(0, visibles)
   const hayMas = filtered.length > visibles
+
+  function expandirTodos() { setExpandedPedidos(new Set(paginados.map(p => p.PEDIDO_ID))) }
+  function contraerTodos()  { setExpandedPedidos(new Set()) }
 
   const estadoColor = {
     PENDIENTE_FABRICA: 'text-yellow-400 bg-yellow-500/10',
@@ -114,7 +113,7 @@ export default function HistorialPage() {
             )}
           </div>
           <div className="flex gap-2 mb-3">
-            <input className="input flex-1" placeholder="Buscar por pedido, nombre, cédula o celular..."
+            <input className="input flex-1" placeholder="Buscar por pedido, nombre, cedula o celular..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
             <button onClick={() => setMostrarFecha(v => !v)}
               className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0
@@ -140,7 +139,6 @@ export default function HistorialPage() {
               </button>
             ))}
           </div>
-          {/* Filtro de tienda — oculto para YAW (siempre filtra solo YAW) */}
           {!isYAW && (
             <div className="flex gap-2 mt-2">
               {['TODAS','MANDARINA','INDSTORE'].map(t => (
@@ -152,6 +150,16 @@ export default function HistorialPage() {
               ))}
             </div>
           )}
+          <div className="flex gap-2 mt-2">
+            <button onClick={expandirTodos}
+              className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all flex-shrink-0">
+              ⊞ Expandir todos
+            </button>
+            <button onClick={contraerTodos}
+              className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all flex-shrink-0">
+              ⊟ Contraer todos
+            </button>
+          </div>
         </div>
       </div>
 
@@ -171,35 +179,75 @@ export default function HistorialPage() {
           ) : (
             <>
               <div className="space-y-2">
-                {paginados.map(p => (
-                  <Link key={p.PEDIDO_ID}
-                    href={`/dashboard/pedido/${p.PEDIDO_ID}?from=historial`}
-                    className="card p-4 flex items-center gap-4 hover:border-gray-700 transition-all block">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
-                        {!isYAW && <span className="text-gray-600 text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>}
-                        {user?.rol !== 'VENDEDOR' && !isYAW && p.VENDEDOR_ID && (
-                          <span className="text-xs text-gray-600 font-mono">{p.VENDEDOR_ID}</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {p.items?.length || 0} prendas · {formatFechaCorta(p.FECHA_PEDIDO)}
-                      </div>
+                {paginados.map(p => {
+                  const isExpanded = expandedPedidos.has(p.PEDIDO_ID)
+                  const itemsActivos = (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO')
+                  return (
+                    <div key={p.PEDIDO_ID} className="card overflow-hidden">
+                      {/* Fila principal — clic expande inline */}
+                      <button
+                        onClick={() => setExpandedPedidos(prev => {
+                          const n = new Set(prev)
+                          n.has(p.PEDIDO_ID) ? n.delete(p.PEDIDO_ID) : n.add(p.PEDIDO_ID)
+                          return n
+                        })}
+                        className="w-full p-4 flex items-center gap-4 text-left hover:bg-gray-800/20 transition-all">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
+                            {!isYAW && <span className="text-gray-600 text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>}
+                            {user?.rol !== 'VENDEDOR' && !isYAW && p.VENDEDOR_ID && (
+                              <span className="text-xs text-gray-600 font-mono">{p.VENDEDOR_ID}</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {itemsActivos.length} prenda(s) · {formatFechaCorta(p.FECHA_PEDIDO)}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${estadoColor[p.ESTADO_PEDIDO] || 'text-gray-400 bg-gray-800'}`}>
+                            {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            p.ESTADO_PAGO === 'PAGADO' ? 'text-green-400 bg-green-500/10' :
+                            p.ESTADO_PAGO === 'ABONO'  ? 'text-yellow-400 bg-yellow-500/10' :
+                                                          'text-red-400 bg-red-500/10'}`}>
+                            ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
+                          </span>
+                        </div>
+                        <span className="text-gray-600 text-xs flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
+                      </button>
+
+                      {/* Items expandidos inline */}
+                      {isExpanded && (
+                        <div className="border-t border-gray-800 p-3 space-y-2">
+                          <Link href={`/dashboard/pedido/${p.PEDIDO_ID}?from=historial`}
+                            className="text-xs text-mandarina-400 hover:underline block mb-2">
+                            Ver pedido completo →
+                          </Link>
+                          {itemsActivos.length === 0 ? (
+                            <div className="text-xs text-gray-600 py-2">Sin prendas registradas</div>
+                          ) : itemsActivos.map(item => (
+                            <div key={item.ITEM_ID} className="flex items-center gap-3 bg-gray-800/40 rounded-xl px-3 py-2">
+                              {item.FOTO_PECHO_URL
+                                ? <img src={item.FOTO_PECHO_URL} className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
+                                : <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0"><span className="text-gray-600 text-sm">👕</span></div>}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs text-white font-medium truncate">{item.PRODUCTO_NOMBRE}</div>
+                                <div className="text-xs text-gray-500">{item.TALLA} · {item.COLOR}</div>
+                              </div>
+                              <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                item.SUBESTADO === 'LISTO'       ? 'bg-green-500/20 text-green-400' :
+                                item.SUBESTADO === 'EN_PROCESO'  ? 'bg-blue-500/20 text-blue-400' :
+                                                                    'bg-yellow-500/20 text-yellow-400'
+                              }`}>{item.SUBESTADO || 'SOLICITADO'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${estadoColor[p.ESTADO_PEDIDO] || 'text-gray-400 bg-gray-800'}`}>
-                        {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        p.ESTADO_PAGO === 'PAGADO' ? 'text-green-400 bg-green-500/10' :
-                        p.ESTADO_PAGO === 'ABONO'  ? 'text-yellow-400 bg-yellow-500/10' :
-                                                      'text-red-400 bg-red-500/10'}`}>
-                        ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
+                  )
+                })}
               </div>
               {hayMas && (
                 <button

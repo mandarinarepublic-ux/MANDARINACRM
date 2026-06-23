@@ -301,7 +301,8 @@ export default function ProduccionPage() {
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtroSubestado, setFiltroSubestado] = useState('TODOS')
-  const [expandedPedido, setExpandedPedido] = useState(null)
+  // Multi-expand: varios pedidos pueden estar abiertos a la vez
+  const [expandedPedidos, setExpandedPedidos] = useState(new Set())
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [mostrarFecha, setMostrarFecha] = useState(false)
@@ -399,6 +400,9 @@ export default function ProduccionPage() {
   const areaLabel = user?.rol === 'ADMIN' ? '' :
     (user?.areas?.length > 0 && user.areas[0] !== 'TODAS') ? ` · ${user.areas.join(', ')}` : ` · ${user?.rol}`
 
+  function expandirTodos() { setExpandedPedidos(new Set(filtered.map(p => p.PEDIDO_ID))) }
+  function contraerTodos()  { setExpandedPedidos(new Set()) }
+
   return (
     <div className="flex flex-col h-screen md:h-auto">
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
@@ -437,6 +441,17 @@ export default function ProduccionPage() {
               {hayFecha && <button onClick={() => {setFechaDesde('');setFechaHasta('')}} className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>}
             </div>
           )}
+
+          <div className="flex gap-2 mt-2 mb-2">
+            <button onClick={expandirTodos}
+              className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all flex-shrink-0">
+              ⊞ Expandir todos
+            </button>
+            <button onClick={contraerTodos}
+              className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all flex-shrink-0">
+              ⊟ Contraer todos
+            </button>
+          </div>
 
           <div className="flex gap-1.5 overflow-x-auto pb-1 flex-wrap">
             {[
@@ -479,10 +494,10 @@ export default function ProduccionPage() {
                 const diasR = pedido.FECHA_ENTREGA_PROMETIDA
                   ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) : null
                 const urgente = diasR !== null && diasR <= 2
-                const isExpanded = expandedPedido === pedido.PEDIDO_ID
+                const isExpanded = expandedPedidos.has(pedido.PEDIDO_ID)
                 return (
                   <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${urgente ? 'border-red-500/40' : ''}`}>
-                    <button onClick={() => setExpandedPedido(isExpanded ? null : pedido.PEDIDO_ID)}
+                    <button onClick={() => setExpandedPedidos(prev => { const n = new Set(prev); n.has(pedido.PEDIDO_ID) ? n.delete(pedido.PEDIDO_ID) : n.add(pedido.PEDIDO_ID); return n })}
                       className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
