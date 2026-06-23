@@ -29,8 +29,11 @@ export default function DashboardPage() {
 
   function buildStats(pedidosTodos, u) {
     const now = new Date()
+    // VENDEDOR_YAW solo ve pedidos de tienda YAW
     const pedidos = (u.rol === 'VENDEDOR')
       ? pedidosTodos.filter(p => p.VENDEDOR_ID === u.id || p.VENDEDOR_ID === u.nombre)
+      : u.rol === 'VENDEDOR_YAW'
+      ? pedidosTodos.filter(p => p.TIENDA_ID === 'YAW')
       : pedidosTodos
 
     const hoy = now.toISOString().split('T')[0]
@@ -116,6 +119,7 @@ export default function DashboardPage() {
   if (rol === 'DISEÑO' || rol === 'ESTAMPADO' || rol === 'SUBLIMACION' || rol === 'BORDADO') return <DashboardDiseno data={data} user={user} />
   if (rol === 'DESPACHO') return <DashboardDespacho data={data} user={user} />
   if (rol === 'VENDEDOR') return <DashboardVendedor data={data} user={user} />
+  if (rol === 'VENDEDOR_YAW') return <DashboardYAW data={data} user={user} />
   return <DashboardAdmin data={data} user={user} />
 }
 
@@ -286,7 +290,80 @@ function DashboardDespacho({ data, user }) {
   )
 }
 
-// ─── DISEÑO / FÁBRICA ─────────────────────────────────────────────────────────
+// ─── YAW ─────────────────────────────────────────────────────────────────────
+function DashboardYAW({ data, user }) {
+  return (
+    <div className="p-4 max-w-2xl mx-auto">
+      <div className="mb-6 pt-2">
+        <h1 className="text-2xl font-display font-bold text-white">YAW</h1>
+        <p className="text-gray-500 text-sm capitalize">{new Date().toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
+      </div>
+      <Link href="/dashboard/nuevo-pedido" className="flex items-center gap-4 card p-5 mb-6 border-purple-500/30 hover:border-purple-500/60 transition-all group">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-xl group-hover:scale-105 transition-transform" style={{backgroundColor:'#6C3FC5'}}>➕</div>
+        <div><div className="font-semibold text-white">Nueva Venta</div><div className="text-gray-500 text-sm">Registrar un pedido nuevo</div></div>
+        <div className="ml-auto text-gray-600 group-hover:text-purple-400 text-xl">→</div>
+      </Link>
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        {[
+          {label:'Ventas hoy',    value:`${data.ventasHoy.toFixed(0)}`,       sub:`${data.pedidosHoy} pedidos`,   color:'text-purple-400'},
+          {label:'Mes actual',    value:`${data.ventasMes.toFixed(0)}`,        sub:`${data.totalPedidos} pedidos`, color:'text-white'},
+          {label:'Cobrado',       value:`${data.cobradoMes.toFixed(0)}`,       sub:'este mes',                     color:'text-green-400'},
+          {label:'Por cobrar',    value:`${data.pendienteTotal.toFixed(0)}`,   sub:'saldo pendiente',              color:data.pendienteTotal>0?'text-yellow-400':'text-green-400'},
+        ].map(k=>(
+          <div key={k.label} className="card p-4">
+            <div className={`text-xl font-bold font-display ${k.color}`}>{k.value}</div>
+            <div className="text-xs text-gray-500 mt-1">{k.label}</div>
+            <div className="text-xs text-gray-600">{k.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div className="card p-4 mb-4">
+        <h3 className="font-semibold text-white mb-3 text-sm">📊 Estado de pedidos YAW</h3>
+        <div className="space-y-2">
+          {[
+            { label:'En producción', key:'EN_FABRICA',        color:'bg-blue-500'   },
+            { label:'Para despacho', key:'DESPACHO',          color:'bg-purple-500' },
+            { label:'Entregados',    key:'ENTREGADO',         color:'bg-green-500'  },
+          ].map(e=>(
+            <div key={e.key} className="flex items-center gap-3 px-2 py-1.5 rounded-lg">
+              <div className={`w-2 h-2 rounded-full ${e.color}`} />
+              <span className="text-gray-400 text-xs flex-1">{e.label}</span>
+              <span className="text-white font-bold">{data.porEstado[e.key] || 0}</span>
+            </div>
+          ))}
+        </div>
+        {data.atrasados.length > 0 && (
+          <div className="mt-3 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
+            <div className="text-red-400 text-xs font-medium">🚨 {data.atrasados.length} pedido(s) atrasado(s)</div>
+          </div>
+        )}
+      </div>
+      <div className="card">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <h2 className="font-semibold text-white text-sm">Pedidos recientes</h2>
+          <Link href="/dashboard/historial" className="text-purple-400 text-xs hover:underline">Ver todos →</Link>
+        </div>
+        {data.misRecientes.length === 0
+          ? <div className="p-8 text-center text-gray-600 text-sm">No hay pedidos aún</div>
+          : <div className="divide-y divide-gray-800">
+              {data.misRecientes.map(p=>(
+                <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-all block">
+                  <div>
+                    <div className="font-mono text-sm text-white">{p.PEDIDO_ID}</div>
+                    <div className="text-xs text-gray-500">{p.FECHA_PEDIDO?.split(' ')[0]||''}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTADO_COLORS[p.ESTADO_PEDIDO]||'text-gray-400 bg-gray-800'}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO]||p.ESTADO_PEDIDO}</span>
+                    <span className="text-white text-sm font-medium">${parseFloat(p.MONTO_TOTAL||0).toFixed(0)}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+        }
+      </div>
+    </div>
+  )
+}
 function DashboardDiseno({ data, user }) {
   // Filtrar ítems por las áreas del usuario
   const misItems = data.allItems.filter(i => {

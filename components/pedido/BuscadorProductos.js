@@ -102,8 +102,14 @@ export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = f
 
       {showPersonalizado && (
         <ProductoPersonalizado
-          onAdd={data => { onAdd(data); setShowPersonalizado(false) }}
-          onCancel={() => setShowPersonalizado(false)} />
+          onAdd={data => {
+            onAdd(data)
+            // Si soloPersonalizado, mantener el form abierto para poder agregar más
+            if (!soloPersonalizado) setShowPersonalizado(false)
+          }}
+          onCancel={() => setShowPersonalizado(false)}
+          ocultarCancelar={soloPersonalizado}
+        />
       )}
     </div>
   )
@@ -325,7 +331,7 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
   )
 }
 
-function ProductoPersonalizado({ onAdd, onCancel }) {
+function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false }) {
   const [catalogoProductos, setCatalogoProductos] = useState([])
   const [nombre, setNombre] = useState('')
   const [nuevoNombre, setNuevoNombre] = useState('')
@@ -355,11 +361,22 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
 
   const valido = nombre && data.color && data.talla && data.area && parseInt(data.cantidad||0) >= 1 && parseFloat(data.precio||0) > 0 && data.detalle
 
+  function handleAgregar() {
+    if (!valido) return
+    onAdd({ productoNombre: nombre, ...data, cantidad: parseInt(data.cantidad)||1, precioUnit: parseFloat(data.precio)||0, ...fotos, esPersonalizado: true, imagen: null })
+    // Reset para poder agregar otro producto sin cerrar el form
+    setNombre('')
+    setData({ color: '', talla: '', cantidad: '', precio: '', area: '', detalle: '' })
+    setFotos({})
+  }
+
   return (
     <div className="card p-4 space-y-3 mt-2">
       <div className="flex items-center justify-between">
         <div className="font-medium text-white text-sm">✏️ Producto personalizado</div>
-        <button onClick={onCancel} className="text-gray-600 hover:text-white p-1">✕</button>
+        {!ocultarCancelar && (
+          <button onClick={onCancel} className="text-gray-600 hover:text-white p-1">✕</button>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
@@ -434,7 +451,7 @@ function ProductoPersonalizado({ onAdd, onCancel }) {
         </div>
       )}
       <button
-        onClick={() => onAdd({ productoNombre: nombre, ...data, cantidad: parseInt(data.cantidad)||1, precioUnit: parseFloat(data.precio)||0, ...fotos, esPersonalizado: true, imagen: null })}
+        onClick={handleAgregar}
         disabled={!valido}
         className="btn-primary w-full disabled:opacity-50">
         + Agregar al pedido
