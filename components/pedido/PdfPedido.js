@@ -229,7 +229,7 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
 // múltiples páginas limpias en lugar de aplastarse en una sola.
 const ITEMS_POR_PAGINA = 3
 
-export function PdfConfeccion({ pedido, items, tiendaColor }) {
+export function PdfConfeccion({ pedido, items, tiendaColor, pedidoId }) {
   const esMandarina = pedido?.TIENDA_ID === 'MANDARINA'
   const logo = esMandarina ? LOGO_MANDARINA : LOGO_INDSTORE
   const now = new Date()
@@ -261,15 +261,18 @@ export function PdfConfeccion({ pedido, items, tiendaColor }) {
           offsetIdx={pIdx * ITEMS_POR_PAGINA}
           totalPrendas={totalPrendas}
           areas={areas}
+          pageId={pedidoId ? (pIdx === 0 ? undefined : `pdf-page-${pedidoId}-confeccion-${pIdx}`) : undefined}
         />
       ))}
     </>
   )
 }
 
-function ConfeccionPagina({ pedido, items, tiendaColor, logo, esMandarina, entrega, diasRestantes, urgente, paginaActual, totalPaginas, esUltimaPagina, offsetIdx, totalPrendas, areas }) {
+function ConfeccionPagina({ pedido, items, tiendaColor, logo, esMandarina, entrega, diasRestantes, urgente, paginaActual, totalPaginas, esUltimaPagina, offsetIdx, totalPrendas, areas, pageId }) {
   return (
-    <div style={{
+    <div
+      id={pageId}
+      style={{
       fontFamily: "'Helvetica Neue', Arial, sans-serif",
       backgroundColor: '#fff',
       width: '794px',

@@ -138,24 +138,57 @@ export default function ImpresionPage() {
       // Esto evita el límite de tamaño de canvas del navegador que causaba
       // PDFs en blanco al seleccionar muchos pedidos.
       for (const pedidoId of ids) {
-        for (const sufijo of ['gracias', 'confeccion']) {
-          paginaActual++
-          setPrintProgress(`Generando página ${paginaActual}/${totalPaginas}...`)
-          const el = document.getElementById(`pdf-page-${pedidoId}-${sufijo}`)
-          if (!el) continue
-
-          const canvas = await html2canvas(el, {
-            scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff',
+        // Página 1: hoja de agradecimiento al cliente
+        paginaActual++
+        setPrintProgress(`Generando página ${paginaActual}/${totalPaginas}...`)
+        const elGracias = document.getElementById(`pdf-page-${pedidoId}-gracias`)
+        if (elGracias) {
+          const canvas = await html2canvas(elGracias, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            width: 794,
+            windowWidth: 794,
+            scrollX: 0,
+            scrollY: 0,
+            logging: false,
           })
           const imgData = canvas.toDataURL('image/jpeg', 0.92)
-
           if (!esPrimera) pdf.addPage()
           pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297)
           esPrimera = false
+          canvas.width = 1; canvas.height = 1
+        }
 
-          // Liberar el canvas de memoria antes de seguir con la siguiente página
-          canvas.width = 1
-          canvas.height = 1
+        // Páginas de confección: puede haber varias sub-páginas (paginación)
+        let subIdx = 0
+        while (true) {
+          const elConf = document.getElementById(
+            subIdx === 0
+              ? `pdf-page-${pedidoId}-confeccion`
+              : `pdf-page-${pedidoId}-confeccion-${subIdx}`
+          )
+          if (!elConf) break
+          paginaActual++
+          setPrintProgress(`Generando página ${paginaActual}/${totalPaginas}...`)
+          const canvas = await html2canvas(elConf, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            width: 794,
+            windowWidth: 794,
+            scrollX: 0,
+            scrollY: 0,
+            logging: false,
+          })
+          const imgData = canvas.toDataURL('image/jpeg', 0.92)
+          if (!esPrimera) pdf.addPage()
+          pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297)
+          esPrimera = false
+          canvas.width = 1; canvas.height = 1
+          subIdx++
         }
       }
 
@@ -316,18 +349,18 @@ export default function ImpresionPage() {
           Cada hoja tiene su propio id único (pdf-page-{ID}-gracias / -confeccion)
           para poder capturarla con html2canvas de forma INDIVIDUAL en printSelected(),
           en vez de un solo canvas gigante con todo el lote. */}
-      <div style={{position:'fixed',top:'-9999px',left:'-9999px',width:'794px',backgroundColor:'white'}}>
+      <div style={{position:'fixed',top:'-9999px',left:'-9999px',width:'794px',backgroundColor:'white',fontFamily:"'Helvetica Neue', Arial, sans-serif"}}>
         {pedidos.filter(p => selected.has(p.PEDIDO_ID)).map(pedido => {
           const cliente = clientes[pedido.CLIENTE_ID] || {}
           const items = pedido.items || []
           const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
           return (
             <div key={pedido.PEDIDO_ID}>
-              <div id={`pdf-page-${pedido.PEDIDO_ID}-gracias`}>
+              <div id={`pdf-page-${pedido.PEDIDO_ID}-gracias`} style={{width:'794px',overflow:'hidden'}}>
                 <PdfGracias pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
               </div>
-              <div id={`pdf-page-${pedido.PEDIDO_ID}-confeccion`}>
-                <PdfConfeccion pedido={pedido} items={items} tiendaColor={tiendaColor} />
+              <div id={`pdf-page-${pedido.PEDIDO_ID}-confeccion`} style={{width:'794px',overflow:'hidden'}}>
+                <PdfConfeccion pedido={pedido} items={items} tiendaColor={tiendaColor} pedidoId={pedido.PEDIDO_ID} />
               </div>
             </div>
           )
