@@ -14,21 +14,18 @@ function chunkArray(arr, size) {
   return chunks
 }
 
-// A4 a 96dpi: 794 x 1123 px
 const PAGE_W = 794
 const PAGE_H = 1123
 
-// ─── Ficha de dato ────────────────────────────────────────────────────────────
 function Ficha({ label, value, color, big }) {
   return (
-    <div style={{ backgroundColor:'#f5f5f5', borderRadius:'8px', padding:'8px 12px', border:'1px solid #ebebeb', marginBottom:'6px', boxSizing:'border-box' }}>
-      <div style={{ fontSize:'9px', color:'#999', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'4px' }}>{label}</div>
+    <div style={{ backgroundColor:'#f5f5f5', borderRadius:'8px', padding:'8px 12px', border:'1px solid #e0e0e0', marginBottom:'6px', boxSizing:'border-box' }}>
+      <div style={{ fontSize:'9px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'4px', fontWeight:'600' }}>{label}</div>
       <div style={{ fontSize: big ? '22px' : '13px', fontWeight:'900', color: color || '#1a1a1a', lineHeight:1.2, textAlign:'center' }}>{value}</div>
     </div>
   )
 }
 
-// ─── HOJA 1: AGRADECIMIENTO AL CLIENTE ───────────────────────────────────────
 export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
   const esMandarina = pedido?.TIENDA_ID === 'MANDARINA'
   const nombreCorto = cliente?.NOMBRE?.split(' ')[0] || 'Cliente'
@@ -42,7 +39,6 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
   return (
     <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", backgroundColor:'#fff', width:`${PAGE_W}px`, height:`${PAGE_H}px`, overflow:'hidden', position:'relative', boxSizing:'border-box' }}>
 
-      {/* PANEL SUPERIOR */}
       <div style={{ background:bgGradient, width:'100%', position:'relative', overflow:'hidden', padding:'32px 48px', boxSizing:'border-box' }}>
         <div style={{ position:'absolute', top:'-80px', right:'-80px', width:'280px', height:'280px', borderRadius:'50%', backgroundColor:'rgba(0,0,0,0.12)' }} />
         <div style={{ position:'absolute', bottom:'-60px', left:'30%', width:'200px', height:'200px', borderRadius:'50%', backgroundColor:'rgba(255,255,255,0.06)' }} />
@@ -54,19 +50,19 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
             <div style={{ backgroundColor:'#fff', borderRadius:'16px', padding:'14px 16px', position:'relative', boxShadow:'0 8px 32px rgba(0,0,0,0.25)' }}>
               <div style={{ position:'absolute', left:'-9px', top:'50%', marginTop:'-9px', width:'18px', height:'18px', borderRadius:'50%', backgroundColor:esMandarina?'#c94800':'#6a0dad' }} />
               <div style={{ position:'absolute', right:'-9px', top:'50%', marginTop:'-9px', width:'18px', height:'18px', borderRadius:'50%', backgroundColor:esMandarina?'#c94800':'#6a0dad' }} />
-              <div style={{ fontSize:'10px', color:'#666', marginBottom:'4px' }}>🎁 Tenemos un regalo para ti:</div>
+              <div style={{ fontSize:'10px', color:'#1a1a1a', marginBottom:'4px', fontWeight:'600' }}>🎁 Tenemos un regalo para ti:</div>
               <div style={{ fontSize:'12px', fontWeight:'800', color:'#1a1a1a', marginBottom:'4px', lineHeight:1.3 }}>10% de descuento en tu próxima compra</div>
-              <div style={{ fontSize:'10px', color:'#666', marginBottom:'8px' }}>Cupón <strong style={{ color:'#1a1a1a' }}>{cupon.codigo}</strong> en {cupon.web}</div>
-              <div style={{ borderTop:'1.5px dashed #ddd', marginBottom:'8px' }} />
+              <div style={{ fontSize:'10px', color:'#1a1a1a', marginBottom:'8px' }}>Cupón <strong>{cupon.codigo}</strong> en {cupon.web}</div>
+              <div style={{ borderTop:'1.5px dashed #ccc', marginBottom:'8px' }} />
               <div style={{ textAlign:'center', marginBottom:'4px' }}>
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(cupon.url)}&color=1a1a1a&bgcolor=ffffff&margin=2`}
                   style={{ width:'80px', height:'80px', borderRadius:'6px', display:'inline-block' }} alt="QR" />
               </div>
-              <div style={{ fontSize:'9px', color:'#999', textAlign:'center' }}>↗ Escanea para tu descuento</div>
+              <div style={{ fontSize:'9px', color:'#1a1a1a', textAlign:'center' }}>↗ Escanea para tu descuento</div>
             </div>
           </div>
           <div style={{ overflow:'hidden' }}>
-            <div style={{ fontSize:'12px', color:'rgba(255,255,255,0.7)', textTransform:'uppercase', letterSpacing:'3px', marginBottom:'6px' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</div>
+            <div style={{ fontSize:'12px', color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'3px', marginBottom:'6px', fontWeight:'700' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</div>
             <div style={{ fontSize:'38px', fontWeight:'900', color:'#fff', lineHeight:1.05, marginBottom:'10px', letterSpacing:'-1px', textShadow:'0 2px 8px rgba(0,0,0,0.35)' }}>
               ¡Gracias,<br />{nombreCorto}!
             </div>
@@ -82,26 +78,24 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
 
       <div style={{ borderTop:'1.5px dashed #ccc' }} />
 
-      {/* PANEL INFERIOR */}
       <div style={{ padding:'18px 48px 16px', boxSizing:'border-box' }}>
-        {/* Datos de envío */}
-        <div style={{ backgroundColor:'#fff', borderRadius:'14px', padding:'14px 18px', marginBottom:'14px', border:'2px solid #e5e5e5' }}>
+        <div style={{ backgroundColor:'#fff', borderRadius:'14px', padding:'14px 18px', marginBottom:'14px', border:'2px solid #e0e0e0' }}>
           <div style={{ overflow:'hidden', marginBottom:'8px' }}>
-            <span style={{ float:'left', fontSize:'10px', color:'#999', textTransform:'uppercase', letterSpacing:'2px', lineHeight:'24px' }}>Datos de envío</span>
-            <span style={{ float:'right', fontSize:'14px', fontWeight:'900', fontFamily:'monospace', color:'#1a1a1a', letterSpacing:'0.5px', lineHeight:'24px', backgroundColor:'#f0f0f0', padding:'4px 12px', borderRadius:'8px', border:'1.5px solid #ddd' }}>{pedido?.PEDIDO_ID||''}</span>
+            <span style={{ float:'left', fontSize:'10px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'2px', lineHeight:'24px', fontWeight:'700' }}>Datos de envío</span>
+            <span style={{ float:'right', fontSize:'14px', fontWeight:'900', fontFamily:'monospace', color:'#1a1a1a', letterSpacing:'0.5px', lineHeight:'24px', backgroundColor:'#f0f0f0', padding:'4px 12px', borderRadius:'8px', border:'1.5px solid #ccc' }}>{pedido?.PEDIDO_ID||''}</span>
             <div style={{ clear:'both' }} />
           </div>
           <div style={{ fontSize:'22px', fontWeight:'900', color:'#1a1a1a', marginBottom:'10px', lineHeight:1.1, textAlign:'center' }}>{cliente?.NOMBRE||'-'}</div>
           <div style={{ overflow:'hidden', marginBottom:'10px' }}>
             {cliente?.CELULAR && (
-              <div style={{ float:'left', marginRight:'12px', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 16px 10px 12px', border:'1px solid #e5e5e5' }}>
-                <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px' }}>📱 Celular</div>
+              <div style={{ float:'left', marginRight:'12px', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 16px 10px 12px', border:'1px solid #e0e0e0' }}>
+                <div style={{ fontSize:'8px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px', fontWeight:'700' }}>📱 Celular</div>
                 <div style={{ fontSize:'15px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace' }}>{cliente.CELULAR}</div>
               </div>
             )}
             {cliente?.CEDULA && (
-              <div style={{ float:'left', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 16px 10px 12px', border:'1px solid #e5e5e5' }}>
-                <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px' }}>🆔 Cédula</div>
+              <div style={{ float:'left', backgroundColor:'#f5f5f5', borderRadius:'10px', padding:'10px 16px 10px 12px', border:'1px solid #e0e0e0' }}>
+                <div style={{ fontSize:'8px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px', fontWeight:'700' }}>🆔 Cédula</div>
                 <div style={{ fontSize:'15px', fontWeight:'800', color:'#1a1a1a', fontFamily:'monospace' }}>{cliente.CEDULA}</div>
               </div>
             )}
@@ -115,24 +109,23 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
           )}
         </div>
 
-        <div style={{ fontSize:'10px', color:'#bbb', textTransform:'uppercase', letterSpacing:'1.5px', marginBottom:'8px' }}>Contenido · {totalPrendas} prenda(s)</div>
+        <div style={{ fontSize:'10px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'1.5px', marginBottom:'8px', fontWeight:'700' }}>Contenido · {totalPrendas} prenda(s)</div>
 
-        {/* Grid 2 columnas */}
         {chunkArray(items||[], 2).map((fila, fi) => (
           <div key={fi} style={{ overflow:'hidden', marginBottom:'8px' }}>
             {fila.map((item, ci) => (
               <div key={ci} style={{ float:'left', width:'50%', paddingRight:ci===0?'7px':'0', boxSizing:'border-box' }}>
-                <div style={{ backgroundColor:'#fafafa', borderRadius:'10px', border:'1px solid #f0f0f0', overflow:'hidden' }}>
+                <div style={{ backgroundColor:'#fafafa', borderRadius:'10px', border:'1px solid #e0e0e0', overflow:'hidden' }}>
                   <div style={{ float:'left', padding:'8px 8px 8px 10px' }}>
                     {item.FOTO_PECHO_URL
-                      ? <img src={item.FOTO_PECHO_URL} style={{ width:'78px', height:'78px', objectFit:'cover', borderRadius:'8px', border:'2px solid #e5e5e5', display:'block' }} />
+                      ? <img src={item.FOTO_PECHO_URL} style={{ width:'78px', height:'78px', objectFit:'cover', borderRadius:'8px', border:'2px solid #e0e0e0', display:'block' }} />
                       : <div style={{ width:'78px', height:'78px', backgroundColor:'#eee', borderRadius:'8px' }} />
                     }
                   </div>
                   <div style={{ overflow:'hidden', padding:'8px 10px 8px 0' }}>
                     <div style={{ fontSize:'10px', fontWeight:'800', color:'#1a1a1a', marginBottom:'5px', lineHeight:1.3 }}>{item.PRODUCTO_NOMBRE}</div>
-                    {item.COLOR && <div style={{ fontSize:'9px', color:'#555', marginBottom:'2px' }}>Color: <strong>{item.COLOR}</strong></div>}
-                    {item.TALLA && <div style={{ fontSize:'9px', color:'#555', marginBottom:'5px' }}>Talla: <strong>{item.TALLA}</strong></div>}
+                    {item.COLOR && <div style={{ fontSize:'9px', color:'#1a1a1a', marginBottom:'2px' }}>Color: <strong>{item.COLOR}</strong></div>}
+                    {item.TALLA && <div style={{ fontSize:'9px', color:'#1a1a1a', marginBottom:'5px' }}>Talla: <strong>{item.TALLA}</strong></div>}
                     <div style={{ backgroundColor:tiendaColor+'18', borderRadius:'6px', padding:'2px 7px', display:'inline-block' }}>
                       <span style={{ fontSize:'12px', fontWeight:'900', color:tiendaColor }}>x{item.CANTIDAD}</span>
                     </div>
@@ -145,7 +138,6 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
           </div>
         ))}
 
-        {/* Estado pago */}
         {(() => {
           const total = parseFloat(pedido?.MONTO_TOTAL||0)
           const abonado = parseFloat(pedido?.MONTO_ABONADO||0)
@@ -163,7 +155,7 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
               </div>
               {!isPagado && total > 0 && (
                 <div style={{ float:'right', textAlign:'right' }}>
-                  <div style={{ fontSize:'10px', color:'#999', marginBottom:'2px' }}>Total</div>
+                  <div style={{ fontSize:'10px', color:'#1a1a1a', marginBottom:'2px', fontWeight:'600' }}>Total</div>
                   <div style={{ fontSize:'15px', fontWeight:'900', color:'#1a1a1a' }}>${total.toFixed(2)}</div>
                 </div>
               )}
@@ -173,10 +165,9 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
         })()}
       </div>
 
-      {/* Footer — pegado al fondo con position absolute dentro del contenedor de alto fijo */}
-      <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'9px 48px', backgroundColor:'#f9f9f9', borderTop:'1px solid #eee', overflow:'hidden', boxSizing:'border-box' }}>
-        <span style={{ float:'left', fontSize:'9px', color:'#bbb' }}>{pedido?.PEDIDO_ID}</span>
-        <span style={{ float:'right', fontSize:'9px', color:'#bbb' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</span>
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'9px 48px', backgroundColor:'#f5f5f5', borderTop:'1px solid #e0e0e0', overflow:'hidden', boxSizing:'border-box' }}>
+        <span style={{ float:'left', fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>{pedido?.PEDIDO_ID}</span>
+        <span style={{ float:'right', fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</span>
         <div style={{ clear:'both' }} />
       </div>
 
@@ -184,7 +175,6 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
   )
 }
 
-// ─── HOJA 2: PÁGINA DE CONFECCIÓN ────────────────────────────────────────────
 export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, totalPaginas, offsetIdx }) {
   const esMandarina = pedido?.TIENDA_ID === 'MANDARINA'
   const logo = esMandarina ? LOGO_MANDARINA : LOGO_INDSTORE
@@ -198,12 +188,11 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
   return (
     <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", backgroundColor:'#fff', width:`${PAGE_W}px`, height:`${PAGE_H}px`, overflow:'hidden', position:'relative', boxSizing:'border-box' }}>
 
-      {/* HEADER */}
       <div style={{ borderBottom:`4px solid ${tiendaColor}`, padding:'10px 48px', backgroundColor:'#fafafa', overflow:'hidden', boxSizing:'border-box' }}>
         <div style={{ float:'left', overflow:'hidden' }}>
           <img src={logo} style={{ float:'left', width:'40px', height:'40px', objectFit:'contain', marginRight:'10px', marginTop:'4px' }} alt="logo" />
           <div style={{ float:'left' }}>
-            <div style={{ fontSize:'8px', color:'#999', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'3px' }}>Orden de Producción Interna</div>
+            <div style={{ fontSize:'8px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'3px', fontWeight:'700' }}>Orden de Producción Interna</div>
             <div style={{ fontSize:'22px', fontWeight:'900', color:'#1a1a1a', fontFamily:'monospace', letterSpacing:'-0.5px', lineHeight:1 }}>{pedido?.PEDIDO_ID}</div>
           </div>
           <div style={{ clear:'both' }} />
@@ -211,12 +200,12 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
         <div style={{ float:'right', textAlign:'right' }}>
           {urgente && <div style={{ display:'inline-block', backgroundColor:'#ef4444', color:'#fff', fontSize:'10px', fontWeight:'800', padding:'3px 10px', borderRadius:'20px', marginBottom:'3px', textTransform:'uppercase' }}>🚨 URGENTE</div>}
           {totalPaginas > 1 && <div style={{ display:'inline-block', backgroundColor:tiendaColor+'15', border:`1px solid ${tiendaColor}40`, borderRadius:'8px', padding:'3px 12px', marginBottom:'3px', marginLeft:'6px' }}><span style={{ fontSize:'10px', fontWeight:'800', color:tiendaColor }}>Pág. {paginaActual}/{totalPaginas}</span></div>}
-          <div style={{ fontSize:'9px', color:'#999', marginBottom:'1px', clear:'both' }}>Entrega comprometida</div>
+          <div style={{ fontSize:'9px', color:'#1a1a1a', marginBottom:'1px', clear:'both', fontWeight:'600' }}>Entrega comprometida</div>
           <div style={{ fontSize:'13px', fontWeight:'700', color:urgente?'#ef4444':'#1a1a1a' }}>
             {entrega ? entrega.toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'}) : '—'}
           </div>
           {diasRestantes !== null && (
-            <div style={{ fontSize:'9px', color:urgente?'#ef4444':'#999', marginTop:'1px' }}>
+            <div style={{ fontSize:'9px', color:urgente?'#ef4444':'#1a1a1a', marginTop:'1px', fontWeight:'600' }}>
               {diasRestantes > 0 ? `${diasRestantes} día(s) restante(s)` : diasRestantes === 0 ? '¡ENTREGA HOY!' : `${Math.abs(diasRestantes)} día(s) de retraso`}
             </div>
           )}
@@ -224,19 +213,17 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
         <div style={{ clear:'both' }} />
       </div>
 
-      {/* BARRA INFO */}
       {paginaActual === 1 && (
-        <div style={{ backgroundColor:'#f0f0f0', padding:'5px 48px', borderBottom:'1px solid #e0e0e0', boxSizing:'border-box' }}>
+        <div style={{ backgroundColor:'#f0f0f0', padding:'5px 48px', borderBottom:'1px solid #d0d0d0', boxSizing:'border-box' }}>
           {[['VENDEDOR', pedido?.VENDEDOR_ID||'—'], ['PRENDAS', totalPrendas], ['ÁREAS', areas]].map(([k,v]) => (
             <span key={k} style={{ display:'inline-block', marginRight:'24px' }}>
-              <span style={{ fontSize:'9px', color:'#999' }}>{k}: </span>
-              <span style={{ fontSize:'10px', fontWeight:'700', color:'#1a1a1a' }}>{v}</span>
+              <span style={{ fontSize:'9px', color:'#1a1a1a', fontWeight:'700' }}>{k}: </span>
+              <span style={{ fontSize:'10px', fontWeight:'900', color:'#1a1a1a' }}>{v}</span>
             </span>
           ))}
         </div>
       )}
 
-      {/* ÍTEMS */}
       <div style={{ padding:'10px 48px 50px', boxSizing:'border-box', overflow:'hidden' }}>
         {(items||[]).map((item, idx) => {
           const globalIdx = offsetIdx + idx
@@ -252,9 +239,8 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
           const fotoRows = fotos.length <= 2 ? [fotos] : fotos.length === 3 ? [fotos.slice(0,2), fotos.slice(2)] : [fotos.slice(0,2), fotos.slice(2,4)]
 
           return (
-            <div key={idx} style={{ marginBottom:'10px', border:'2px solid #e5e5e5', borderRadius:'12px', overflow:'hidden' }}>
+            <div key={idx} style={{ marginBottom:'10px', border:'2px solid #e0e0e0', borderRadius:'12px', overflow:'hidden' }}>
 
-              {/* Header ítem */}
               <div style={{ borderBottom:`3px solid ${tiendaColor}`, padding:'7px 14px', overflow:'hidden', backgroundColor:'#fff' }}>
                 <span style={{ float:'left' }}>
                   <span style={{ display:'inline-block', backgroundColor:tiendaColor, color:'#fff', fontSize:'11px', fontWeight:'900', padding:'3px 11px', borderRadius:'20px', marginRight:'10px', fontFamily:'monospace' }}>#{globalIdx+1}</span>
@@ -264,10 +250,7 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                 <div style={{ clear:'both' }} />
               </div>
 
-              {/* Cuerpo */}
               <div style={{ padding:'10px 14px', overflow:'hidden', boxSizing:'border-box' }}>
-
-                {/* FOTOS */}
                 <div style={{ float:'left', marginRight:'14px' }}>
                   {fotos.length > 0 ? (
                     <div>
@@ -276,7 +259,7 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                           {row.map((f, fi) => (
                             <div key={fi} style={{ float:'left', textAlign:'center', marginRight:fi < row.length-1 ? '5px' : '0' }}>
                               <img src={f.url} style={{ width:`${fotoSizePx}px`, height:`${fotoSizePx}px`, objectFit:'cover', borderRadius:'8px', border:'2px solid #ddd', backgroundColor:'#f5f5f5', display:'block' }} />
-                              <div style={{ fontSize:'8px', color:'#999', marginTop:'3px', textTransform:'uppercase', letterSpacing:'0.5px', fontWeight:'600' }}>{f.label}</div>
+                              <div style={{ fontSize:'8px', color:'#1a1a1a', marginTop:'3px', textTransform:'uppercase', letterSpacing:'0.5px', fontWeight:'700' }}>{f.label}</div>
                             </div>
                           ))}
                           <div style={{ clear:'both' }} />
@@ -286,14 +269,12 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                   ) : (
                     <div style={{ width:'160px', height:'160px', backgroundColor:'#f5f5f5', borderRadius:'10px', border:'2px dashed #ddd', textAlign:'center', paddingTop:'45px', boxSizing:'border-box' }}>
                       <div style={{ fontSize:'24px', marginBottom:'5px' }}>✏️</div>
-                      <div style={{ fontSize:'9px', color:'#bbb', fontWeight:'600' }}>Sin imágenes</div>
+                      <div style={{ fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>Sin imágenes</div>
                     </div>
                   )}
                 </div>
 
-                {/* DATOS */}
                 <div style={{ overflow:'hidden' }}>
-                  {/* 4 fichas en 2 columnas */}
                   <div style={{ overflow:'hidden', marginBottom:'2px' }}>
                     <div style={{ float:'left', width:'48%', paddingRight:'4px', boxSizing:'border-box' }}>
                       <Ficha label="COLOR" value={item.COLOR||'—'} />
@@ -313,20 +294,20 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
 
                   {item.DETALLE_PERSONALIZADO && (
                     <div style={{ backgroundColor:'#fff8e1', borderRadius:'7px', padding:'7px 9px', border:'1px solid #ffe082', marginBottom:'6px' }}>
-                      <div style={{ fontSize:'7px', color:'#f59e0b', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>📋 Instrucciones</div>
-                      <div style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5 }}>{item.DETALLE_PERSONALIZADO}</div>
+                      <div style={{ fontSize:'7px', color:'#b45309', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>📋 Instrucciones</div>
+                      <div style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5, fontWeight:'600' }}>{item.DETALLE_PERSONALIZADO}</div>
                     </div>
                   )}
                   {item.NOTAS_AREA && (
                     <div style={{ backgroundColor:'#eff6ff', borderRadius:'7px', padding:'7px 9px', border:'1px solid #bfdbfe', marginBottom:'6px' }}>
-                      <div style={{ fontSize:'7px', color:'#3b82f6', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>📝 Nota de área</div>
-                      <div style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5 }}>{item.NOTAS_AREA}</div>
+                      <div style={{ fontSize:'7px', color:'#1d4ed8', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>📝 Nota de área</div>
+                      <div style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5, fontWeight:'600' }}>{item.NOTAS_AREA}</div>
                     </div>
                   )}
                   {item.ARCHIVO_DISENO_URL && (
                     <div style={{ backgroundColor:'#f0fdf4', borderRadius:'7px', padding:'7px 9px', border:'1px solid #bbf7d0' }}>
-                      <div style={{ fontSize:'7px', color:'#16a34a', fontWeight:'800', marginBottom:'2px' }}>📎 Archivo AI/PSD</div>
-                      <div style={{ fontSize:'8px', color:'#555', wordBreak:'break-all', lineHeight:1.4 }}>{item.ARCHIVO_DISENO_URL.split('/').pop()}</div>
+                      <div style={{ fontSize:'7px', color:'#15803d', fontWeight:'800', marginBottom:'2px' }}>📎 Archivo AI/PSD</div>
+                      <div style={{ fontSize:'8px', color:'#1a1a1a', wordBreak:'break-all', lineHeight:1.4, fontWeight:'600' }}>{item.ARCHIVO_DISENO_URL.split('/').pop()}</div>
                     </div>
                   )}
                 </div>
@@ -334,13 +315,12 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                 <div style={{ clear:'both' }} />
               </div>
 
-              {/* Checkboxes */}
-              <div style={{ backgroundColor:'#f9f9f9', padding:'6px 14px', borderTop:'1px solid #eee', overflow:'hidden' }}>
-                <span style={{ float:'left', fontSize:'7px', color:'#999', fontWeight:'700', textTransform:'uppercase', lineHeight:'16px', marginRight:'12px' }}>Control</span>
+              <div style={{ backgroundColor:'#f5f5f5', padding:'6px 14px', borderTop:'1px solid #e0e0e0', overflow:'hidden' }}>
+                <span style={{ float:'left', fontSize:'7px', color:'#1a1a1a', fontWeight:'800', textTransform:'uppercase', lineHeight:'16px', marginRight:'12px' }}>Control</span>
                 {['Confeccionado','Diseño aplicado','Revisado','Listo para despacho'].map(step => (
                   <span key={step} style={{ float:'left', marginRight:'14px', overflow:'hidden' }}>
-                    <span style={{ float:'left', width:'13px', height:'13px', border:'2px solid #ccc', borderRadius:'3px', marginRight:'4px', marginTop:'1px', display:'block', boxSizing:'border-box' }} />
-                    <span style={{ float:'left', fontSize:'8px', color:'#555', lineHeight:'15px' }}>{step}</span>
+                    <span style={{ float:'left', width:'13px', height:'13px', border:'2px solid #aaa', borderRadius:'3px', marginRight:'4px', marginTop:'1px', display:'block', boxSizing:'border-box' }} />
+                    <span style={{ float:'left', fontSize:'8px', color:'#1a1a1a', lineHeight:'15px', fontWeight:'600' }}>{step}</span>
                   </span>
                 ))}
                 <div style={{ clear:'both' }} />
@@ -351,14 +331,13 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
         })}
       </div>
 
-      {/* FOOTER — absolute al fondo del contenedor de alto fijo */}
-      <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'8px 48px', backgroundColor:'#f5f5f5', borderTop:'2px solid #e5e5e5', overflow:'hidden', boxSizing:'border-box' }}>
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'8px 48px', backgroundColor:'#f5f5f5', borderTop:'2px solid #e0e0e0', overflow:'hidden', boxSizing:'border-box' }}>
         <div style={{ float:'left', overflow:'hidden' }}>
-          <img src={logo} style={{ float:'left', width:'18px', height:'18px', objectFit:'contain', opacity:0.45, marginRight:'7px', marginTop:'2px' }} alt="logo" />
-          <span style={{ float:'left', fontSize:'8px', color:'#aaa', lineHeight:'22px' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</span>
+          <img src={logo} style={{ float:'left', width:'18px', height:'18px', objectFit:'contain', opacity:0.6, marginRight:'7px', marginTop:'2px' }} alt="logo" />
+          <span style={{ float:'left', fontSize:'8px', color:'#1a1a1a', lineHeight:'22px', fontWeight:'600' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</span>
         </div>
-        <span style={{ display:'block', textAlign:'center', fontSize:'8px', color:'#bbb', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.5px', lineHeight:'22px' }}>USO INTERNO — NO INCLUYE PRECIOS</span>
-        <span style={{ float:'right', fontSize:'8px', color:'#aaa', lineHeight:'22px' }}>
+        <span style={{ display:'block', textAlign:'center', fontSize:'8px', color:'#1a1a1a', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.5px', lineHeight:'22px' }}>USO INTERNO — NO INCLUYE PRECIOS</span>
+        <span style={{ float:'right', fontSize:'8px', color:'#1a1a1a', lineHeight:'22px', fontWeight:'600' }}>
           {pedido?.PEDIDO_ID}{totalPaginas > 1 && <span style={{ marginLeft:'7px', color:tiendaColor, fontWeight:'700' }}>p.{paginaActual}/{totalPaginas}</span>}
         </span>
         <div style={{ clear:'both' }} />
@@ -368,7 +347,6 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
   )
 }
 
-// Alias para compatibilidad
 export function PdfConfeccion({ pedido, items, tiendaColor }) {
   const chunks = chunkArray(items||[], 3)
   const total = Math.max(chunks.length, 1)
