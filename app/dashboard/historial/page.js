@@ -56,11 +56,15 @@ export default function HistorialPage() {
 
   useEffect(() => { setVisibles(PAGE_SIZE) }, [busquedaDebounced, filtroEstado, filtroTienda, fechaDesde, fechaHasta])
 
-  async function loadPedidos(u) {
+  async function loadPedidos(u, intentos = 0) {
     setLoading(true)
     try {
-      const res = await fetch(`/api/pedidos?rol=ADMIN`)
+      const res = await fetch(`/api/pedidos?rol=ADMIN&_t=` + Date.now(), { cache: 'no-store' })
       const data = await res.json()
+      if (!data.pedidos?.length && intentos < 3) {
+        setTimeout(() => loadPedidos(u, intentos + 1), 1500)
+        return
+      }
       let lista = data.pedidos || []
       if (u.rol === 'VENDEDOR_YAW') lista = lista.filter(p => p.TIENDA_ID === 'YAW')
       lista = lista.sort((a, b) => {

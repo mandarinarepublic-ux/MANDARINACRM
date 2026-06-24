@@ -52,11 +52,16 @@ export default function DespachosPage() {
     loadPedidos()
   }, [])
 
-  async function loadPedidos() {
+  async function loadPedidos(intentos = 0) {
     setLoading(true)
     try {
-      const res = await fetch('/api/pedidos?rol=ADMIN')
+      const res = await fetch('/api/pedidos?rol=ADMIN&_t=' + Date.now(), { cache: 'no-store' })
       const data = await res.json()
+      // Si llega vacío y tenemos reintentos disponibles, volvemos a intentar
+      if (!data.pedidos?.length && intentos < 3) {
+        setTimeout(() => loadPedidos(intentos + 1), 1500)
+        return
+      }
       const lista = (data.pedidos || [])
         .filter(p =>
           p.ESTADO_PEDIDO === 'COMPLETADO' ||

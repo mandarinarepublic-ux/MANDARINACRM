@@ -307,11 +307,15 @@ export default function ProduccionPage() {
     loadItems(u)
   }, [])
 
-  const loadItems = useCallback(async (u) => {
+  const loadItems = useCallback(async (u, intentos = 0) => {
     setLoading(true)
     try {
-      const res = await fetch('/api/pedidos?rol=ADMIN')
+      const res = await fetch('/api/pedidos?rol=ADMIN&_t=' + Date.now(), { cache: 'no-store' })
       const data = await res.json()
+      if (!data.pedidos?.length && intentos < 3) {
+        setTimeout(() => loadItems(u, intentos + 1), 1500)
+        return
+      }
       const pedidosConItems = (data.pedidos || [])
         .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA')
         .sort((a, b) => {
