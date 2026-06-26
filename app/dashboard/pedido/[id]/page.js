@@ -22,6 +22,7 @@ export default function PedidoDetailPage() {
   const [showPdfPreview, setShowPdfPreview] = useState(false)
   const [logs, setLogs] = useState([])
   const [showBitacora, setShowBitacora] = useState(false)
+  const [fotoComprobanteAbierta, setFotoComprobanteAbierta] = useState(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -306,6 +307,51 @@ export default function PedidoDetailPage() {
             <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-4 flex items-center gap-3">
               <span className="text-xl">⏳</span>
               <div className="text-gray-400 text-sm">Factura en proceso… (llega en 5–30 seg)</div>
+            </div>
+          )}
+
+          {/* Sección de Pagos */}
+          {pedido.pagos?.length > 0 && (
+            <div className="card p-4">
+              <h3 className="text-base font-semibold text-white mb-3">💳 Pagos</h3>
+              <div className="space-y-2">
+                {pedido.pagos.map((pago, i) => {
+                  const TIPO_CONFIG = {
+                    EFECTIVO:     { icon: '💵', label: 'Efectivo',      color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20' },
+                    TRANSFERENCIA:{ icon: '🏦', label: 'Transferencia', color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
+                    LINK_PAGO:    { icon: '🔗', label: 'Link de pago',  color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
+                  }
+                  const cfg = TIPO_CONFIG[pago.TIPO_PAGO] || { icon: '💰', label: pago.TIPO_PAGO || 'Pago', color: 'text-gray-400', bg: 'bg-gray-800/50 border-gray-700' }
+                  return (
+                    <div key={i} className={`flex items-center gap-3 border rounded-xl px-3 py-2.5 ${cfg.bg}`}>
+                      <span className="text-xl flex-shrink-0">{cfg.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-sm font-semibold ${cfg.color}`}>{cfg.label}</div>
+                        {pago.FECHA_PAGO && <div className="text-xs text-gray-500">{pago.FECHA_PAGO.split(' ')[0]}</div>}
+                        {pago.NOTAS && <div className="text-xs text-gray-400 mt-0.5">{pago.NOTAS}</div>}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-white font-bold">${parseFloat(pago.MONTO||0).toFixed(2)}</div>
+                        {pago.FOTO_COMPROBANTE_URL && (
+                          <button onClick={() => setFotoComprobanteAbierta(pago.FOTO_COMPROBANTE_URL)}
+                            className="text-xs text-blue-400 hover:text-blue-300 mt-0.5 underline block">
+                            🖼️ Ver foto
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Modal foto comprobante de pago */}
+          {fotoComprobanteAbierta && (
+            <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
+              onClick={() => setFotoComprobanteAbierta(null)}>
+              <img src={fotoComprobanteAbierta} className="max-w-full max-h-full object-contain rounded-xl" alt="Comprobante" />
+              <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
             </div>
           )}
 

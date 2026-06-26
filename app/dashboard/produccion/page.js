@@ -300,6 +300,7 @@ export default function ProduccionPage() {
   const [mostrarFecha, setMostrarFecha] = useState(false)
   const [generandoPdf, setGenerandoPdf] = useState(null)
   const [pdfPreviewPedido, setPdfPreviewPedido] = useState(null)
+  const [filtroArea, setFiltroArea] = useState('TODAS')
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -354,6 +355,11 @@ export default function ProduccionPage() {
     .map(p => ({
       ...p,
       itemsFiltrados: p.itemsFiltrados.filter(item => {
+        // Filtro por área (solo visible para ADMIN)
+        if (filtroArea !== 'TODAS') {
+          const area = (item.AREA || '').toUpperCase()
+          if (!area.includes(filtroArea)) return false
+        }
         const estadoGlobal = (() => {
           if (!item.SUBESTADO) return 'SOLICITADO'
           if (item.SUBESTADO.includes(':')) {
@@ -487,6 +493,23 @@ export default function ProduccionPage() {
               </button>
             ))}
           </div>
+
+          {/* Filtro por área — solo ADMIN */}
+          {user?.rol === 'ADMIN' && (
+            <div className="flex gap-1.5 overflow-x-auto pb-1 flex-wrap mt-2">
+              {[
+                { key: 'TODAS',      label: '📌 Áreas',        color: filtroArea === 'TODAS'      ? 'bg-gray-600 border-gray-600 text-white' : 'border-gray-700 text-gray-500 hover:text-gray-300' },
+                { key: 'ESTAMPADO',  label: '🎨 Estampado',   color: filtroArea === 'ESTAMPADO'  ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-700 text-orange-400 hover:text-orange-300' },
+                { key: 'BORDADO',    label: '🧵 Bordado',     color: filtroArea === 'BORDADO'    ? 'bg-purple-500 border-purple-500 text-white' : 'border-gray-700 text-purple-400 hover:text-purple-300' },
+                { key: 'SUBLIMACION',label: '💙 Sublimación', color: filtroArea === 'SUBLIMACION'? 'bg-blue-500 border-blue-500 text-white'   : 'border-gray-700 text-blue-400 hover:text-blue-300' },
+              ].map(f => (
+                <button key={f.key} onClick={() => setFiltroArea(f.key)}
+                  className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0 ${f.color}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
