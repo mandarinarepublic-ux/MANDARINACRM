@@ -23,6 +23,13 @@ export default function PedidoDetailPage() {
   const [logs, setLogs] = useState([])
   const [showBitacora, setShowBitacora] = useState(false)
   const [fotoComprobanteAbierta, setFotoComprobanteAbierta] = useState(null)
+  const [showModalAbono, setShowModalAbono] = useState(false)
+  const [abonoTipo, setAbonoTipo] = useState('EFECTIVO')
+  const [abonoMonto, setAbonoMonto] = useState('')
+  const [abonoNotas, setAbonoNotas] = useState('')
+  const [abonoFoto, setAbonoFoto] = useState(null)
+  const [abonoFotoPreview, setAbonoFotoPreview] = useState(null)
+  const [guardandoAbono, setGuardandoAbono] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -152,6 +159,48 @@ export default function PedidoDetailPage() {
       <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
     </div>
   )
+
+  async function guardarAbono() {
+    if (!abonoMonto || parseFloat(abonoMonto) <= 0) return alert('Ingresa un monto válido')
+    if ((abonoTipo === 'TRANSFERENCIA') && !abonoFoto) return alert('Sube el comprobante de transferencia')
+    setGuardandoAbono(true)
+    try {
+      const body = {
+        pedidoId: pedido.PEDIDO_ID,
+        tipo: abonoTipo,
+        monto: abonoMonto,
+        notas: abonoNotas,
+        vendedorId: user?.id || user?.USUARIO_ID || '',
+        vendedorNombre: user?.nombre || user?.NOMBRE || user?.username || '',
+        fotoComprobante: abonoFotoPreview || '',
+      }
+      const res = await fetch('/api/pagos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al guardar')
+      setShowModalAbono(false)
+      setAbonoMonto('')
+      setAbonoNotas('')
+      setAbonoFoto(null)
+      setAbonoFotoPreview(null)
+      setAbonoTipo('EFECTIVO')
+      await loadPedido()
+    } catch (e) {
+      alert('Error: ' + e.message)
+    } finally {
+      setGuardandoAbono(false)
+    }
+  }
+
+  function handleAbonoFoto(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAbonoFoto(file)
+    const reader = new FileReader()
+    reader.onload = ev => setAbonoFotoPreview(ev.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  const canAddAbono = ['ADMIN', 'VENDEDOR', 'VENDEDOR_YAW'].includes(user?.rol)
 
   const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
   const canEditItems = user?.rol === 'ADMIN' || ['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO'].includes(user?.rol)
@@ -313,7 +362,15 @@ export default function PedidoDetailPage() {
           {/* Sección de Pagos */}
           {pedido.pagos?.length > 0 && (
             <div className="card p-4">
-              <h3 className="text-base font-semibold text-white mb-3">💳 Pagos</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-white">💳 Pagos</h3>
+                {canAddAbono && pedido.ESTADO_PEDIDO !== 'COMPLETADO' && pedido.ESTADO_PEDIDO !== 'CANCELADO' && (
+                  <button onClick={() => setShowModalAbono(true)}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-all">
+                    + Abono
+                  </button>
+                )}
+              </div>
               <div className="space-y-2">
                 {pedido.pagos.map((pago, i) => {
                   const TIPO_CONFIG = {
@@ -342,6 +399,96 @@ export default function PedidoDetailPage() {
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Botón abono cuando no hay pagos todavía */}
+          {canAddAbono && (!pedido.pagos || pedido.pagos.length === 0) && pedido.ESTADO_PEDIDO !== 'COMPLETADO' && pedido.ESTADO_PEDIDO !== 'CANCELADO' && (
+            <div className="card p-4 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-white">💳 Pagos</div>
+                <div className="text-xs text-gray-500">Sin pagos registrados</div>
+              </div>
+              <button onClick={() => setShowModalAbono(true)}
+                className="text-sm px-4 py-2 rounded-xl font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-all">
+                + Agregar pago
+              </button>
+            </div>
+          )}
+
+          {/* Modal de nuevo abono */}
+          {showModalAbono && (
+            <div className="fixed inset-0 bg-black/90 z-50 flex items-end justify-center p-4" onClick={e => e.target === e.currentTarget && setShowModalAbono(false)}>
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-white font-semibold text-base">💰 Registrar pago</h3>
+                  <button onClick={() => setShowModalAbono(false)} className="text-gray-500 hover:text-white text-lg">✕</button>
+                </div>
+
+                {/* Tipo */}
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">Tipo de pago</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[['EFECTIVO','💵','Efectivo'],['TRANSFERENCIA','🏦','Transferencia'],['LINK_PAGO','🔗','Link']].map(([val,icon,label]) => (
+                      <button key={val} onClick={() => setAbonoTipo(val)}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-medium transition-all ${
+                          abonoTipo === val ? 'border-mandarina-500 bg-mandarina-500/20 text-mandarina-400' : 'border-gray-700 bg-gray-800/50 text-gray-400'
+                        }`}>
+                        <span className="text-xl">{icon}</span>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Monto */}
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">Monto ($)</div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
+                    <input type="number" step="0.01" min="0" placeholder="0.00" value={abonoMonto} onChange={e => setAbonoMonto(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-7 pr-4 py-3 text-sm focus:border-mandarina-500 focus:outline-none" />
+                  </div>
+                  {montoPendiente > 0.01 && (
+                    <div className="text-xs text-yellow-400 mt-1">Saldo pendiente: ${montoPendiente.toFixed(2)}
+                      <button onClick={() => setAbonoMonto(montoPendiente.toFixed(2))} className="ml-2 underline">Completar</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Foto comprobante (transferencia) */}
+                {abonoTipo === 'TRANSFERENCIA' && (
+                  <div>
+                    <div className="text-xs text-gray-500 mb-2">Foto comprobante <span className="text-red-400">*</span></div>
+                    {abonoFotoPreview ? (
+                      <div className="relative">
+                        <img src={abonoFotoPreview} className="w-full h-32 object-cover rounded-xl border border-gray-700" />
+                        <button onClick={() => { setAbonoFoto(null); setAbonoFotoPreview(null) }}
+                          className="absolute top-2 right-2 bg-black/70 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm">✕</button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer hover:border-mandarina-500 transition-colors">
+                        <span className="text-2xl">📸</span>
+                        <span className="text-xs text-gray-500 mt-1">Toca para subir foto</span>
+                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAbonoFoto} />
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {/* Notas */}
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">Notas (opcional)</div>
+                  <input type="text" placeholder="Ej: Saldo pendiente, abono parcial..." value={abonoNotas} onChange={e => setAbonoNotas(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:border-mandarina-500 focus:outline-none" />
+                </div>
+
+                <button onClick={guardarAbono} disabled={guardandoAbono}
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+                  style={{ backgroundColor: '#22c55e' }}>
+                  {guardandoAbono ? '⏳ Guardando...' : '✅ Registrar pago'}
+                </button>
               </div>
             </div>
           )}
