@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha } from '@/lib/parseFecha'
 import { PdfConfeccion } from '@/components/pedido/PdfPedido'
+import PdfScaler from '@/components/pedido/PdfScaler'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -298,6 +299,7 @@ export default function ProduccionPage() {
   const [fechaHasta, setFechaHasta] = useState('')
   const [mostrarFecha, setMostrarFecha] = useState(false)
   const [generandoPdf, setGenerandoPdf] = useState(null)
+  const [pdfPreviewPedido, setPdfPreviewPedido] = useState(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -396,8 +398,12 @@ export default function ProduccionPage() {
   function expandirTodos() { setExpandedPedidos(new Set(filtered.map(p => p.PEDIDO_ID))) }
   function contraerTodos()  { setExpandedPedidos(new Set()) }
 
-  async function handleVerPdf(e, pedido) {
+  function handleVerPdf(e, pedido) {
     e.stopPropagation()
+    setPdfPreviewPedido(pedido)
+  }
+
+  async function handleDescargarPdf(pedido) {
     setGenerandoPdf(pedido.PEDIDO_ID)
     try {
       const { jsPDF } = await import('jspdf')
@@ -408,8 +414,7 @@ export default function ProduccionPage() {
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297)
       canvas.width = 1; canvas.height = 1
-      const url = pdf.output('bloburl')
-      window.open(url, '_blank')
+      pdf.save(`${pedido.PEDIDO_ID}-confeccion.pdf`)
     } catch(err) {
       alert('Error generando PDF: ' + err.message)
     } finally {
@@ -540,10 +545,10 @@ export default function ProduccionPage() {
                           ${generando
                             ? 'border-gray-700 text-gray-600 cursor-not-allowed'
                             : 'border-gray-600 text-gray-300 hover:border-white hover:text-white hover:bg-gray-800'}`}
-                        title="Descargar hoja de confección PDF">
+                        title="Ver hoja de confección PDF">
                         {generando
                           ? <span className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
-                          : '📄'}
+                          : '👁️'}
                         <span className="hidden sm:inline">{generando ? 'PDF...' : 'PDF'}</span>
                       </button>
 
@@ -570,6 +575,36 @@ export default function ProduccionPage() {
           )}
         </div>
       </div>
+
+      {/* Modal preview PDF */}
+      {pdfPreviewPedido && (
+        <div className="fixed inset-0 bg-black/90 z-50 overflow-auto p-4"
+          onClick={e => e.target === e.currentTarget && setPdfPreviewPedido(null)}>
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold">{pdfPreviewPedido.PEDIDO_ID}</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleDescargarPdf(pdfPreviewPedido)}
+                  disabled={generandoPdf === pdfPreviewPedido.PEDIDO_ID}
+                  className="btn-primary text-sm px-4 py-2">
+                  {generandoPdf === pdfPreviewPedido.PEDIDO_ID ? '⏳...' : '⬇️ Descargar'}
+                </button>
+                <button onClick={() => setPdfPreviewPedido(null)} className="btn-secondary text-sm px-4 py-2">✕</button>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl overflow-hidden">
+              <PdfScaler>
+                <PdfConfeccion
+                  pedido={pdfPreviewPedido}
+                  items={pdfPreviewPedido.items || []}
+                  tiendaColor={TIENDA_COLORS[pdfPreviewPedido.TIENDA_ID] || '#FF6B00'}
+                />
+              </PdfScaler>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PDFs off-screen para captura con html2canvas — uno por pedido visible */}
       <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '794px', backgroundColor: 'white', zIndex: -1 }}>
