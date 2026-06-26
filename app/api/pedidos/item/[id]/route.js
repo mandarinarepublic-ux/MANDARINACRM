@@ -135,6 +135,52 @@ export async function PATCH(req, { params }) {
 
       await writeCellDetalle(idx, colLetter, nuevoValor)
       await logCambio(item.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}${areaRol ? ` (${areaRol})` : ''}`, item.SUBESTADO, nuevoValor, usuarioId).catch(() => {})
+
+      // ── Auto-avance a DESPACHO si todos los ítems del pedido están en LISTO ──
+      try {
+        const todosDetalles = await readSheet('DETALLE_PEDIDO')
+        const itemsDelPedido = todosDetalles.filter(
+          d => d.PEDIDO_ID === item.PEDIDO_ID && d.SUBESTADO !== 'ELIMINADO' && d.SUBESTADO !== 'ENTREGADO_TIENDA'
+        )
+        // Actualizar el ítem actual en memoria con el valor que acabamos de guardar
+        const itemsActualizados = itemsDelPedido.map(d =>
+          d.ITEM_ID === id ? { ...d, SUBESTADO: nuevoValor } : d
+        )
+        const todosListos = itemsActualizados.every(d => {
+          const sub = d.SUBESTADO || ''
+          if (sub.includes(':')) {
+            // Multi-área: todos los valores deben ser LISTO
+            return sub.split('|').every(p => p.split(':')[1]?.trim() === 'LISTO')
+          }
+          return sub === 'LISTO'
+        })
+        if (todosListos) {
+          const pedidos = await readSheet('PEDIDOS')
+          const pedidoIdx = pedidos.findIndex(p => p.PEDIDO_ID === item.PEDIDO_ID)
+          if (pedidoIdx !== -1 && pedidos[pedidoIdx].ESTADO_PEDIDO === 'EN_FABRICA') {
+            const sheetsClient = await getSheets()
+            const hResPed = await sheetsClient.spreadsheets.values.get({
+              spreadsheetId: SHEET_ID,
+              range: 'PEDIDOS!A:AZ',
+            })
+            const pedHeaders = hResPed.data.values?.[1] || []
+            const pedActualizado = { ...pedidos[pedidoIdx], ESTADO_PEDIDO: 'DESPACHO' }
+            const pedRow = pedHeaders.map(h => String(pedActualizado[h] ?? ''))
+            const sheetRowPed = pedidoIdx + 4
+            await sheetsClient.spreadsheets.values.update({
+              spreadsheetId: SHEET_ID,
+              range: `PEDIDOS!A${sheetRowPed}`,
+              valueInputOption: 'RAW',
+              requestBody: { values: [pedRow] },
+            })
+            await logCambio(item.PEDIDO_ID, 'ESTADO_PEDIDO', 'EN_FABRICA', 'DESPACHO', 'SISTEMA').catch(() => {})
+          }
+        }
+      } catch (autoErr) {
+        console.error('Auto-avance DESPACHO error:', autoErr)
+        // No bloqueamos la respuesta si falla el auto-avance
+      }
+
       return Response.json({ ok: true, subestado: nuevoValor })
     }
 
