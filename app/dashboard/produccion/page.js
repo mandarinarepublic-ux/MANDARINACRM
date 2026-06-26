@@ -367,7 +367,7 @@ export default function ProduccionPage() {
           }
           return item.SUBESTADO
         })()
-        if (filtroSubestado === 'TODOS') return estadoGlobal !== 'LISTO'
+        if (filtroSubestado === 'TODOS') return busqueda ? true : estadoGlobal !== 'LISTO'
         return estadoGlobal === filtroSubestado
       })
     }))
