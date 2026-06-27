@@ -177,9 +177,19 @@ export default function DespachosPage() {
             </div>
             <div className="flex-1 flex flex-col gap-1">
               <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Fecha hasta</span>
-              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
-                ${fechaHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
-                value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+              <div className="flex gap-1">
+                <input type="date" className={`flex-1 min-w-0 bg-gray-800 border rounded-xl px-2 py-1.5 text-xs outline-none cursor-pointer transition-all
+                  ${fechaHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
+                  value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+                <button onClick={expandirTodos} title="Expandir todos"
+                  className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-xl px-2 py-1.5 text-gray-400 hover:text-white hover:border-gray-500 transition-all text-xs">
+                  ⊞
+                </button>
+                <button onClick={contraerTodos} title="Contraer todos"
+                  className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-xl px-2 py-1.5 text-gray-400 hover:text-white hover:border-gray-500 transition-all text-xs">
+                  ⊟
+                </button>
+              </div>
             </div>
           </div>
         </div>
