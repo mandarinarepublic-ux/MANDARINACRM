@@ -212,12 +212,17 @@ export default function HistorialPage() {
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${estadoColor[p.ESTADO_PEDIDO] || 'text-gray-400 bg-gray-800'}`}>
                             {ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}
                           </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            p.ESTADO_PAGO === 'PAGADO' ? 'text-green-400 bg-green-500/10' :
-                            p.ESTADO_PAGO === 'ABONO'  ? 'text-yellow-400 bg-yellow-500/10' :
-                                                          'text-red-400 bg-red-500/10'}`}>
-                            ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
-                          </span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              p.ESTADO_PAGO === 'PAGADO' ? 'text-green-400 bg-green-500/10' :
+                              p.ESTADO_PAGO === 'ABONO'  ? 'text-yellow-400 bg-yellow-500/10' :
+                                                            'text-red-400 bg-red-500/10'}`}>
+                              ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
+                            </span>
+                            {parseFloat(p.MONTO_PENDIENTE||0) > 0.009 && (
+                              <span className="text-xs text-red-400 font-medium">Debe ${parseFloat(p.MONTO_PENDIENTE).toFixed(2)}</span>
+                            )}
+                          </div>
                         </div>
                         <span className="text-gray-600 text-xs flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
                       </button>
