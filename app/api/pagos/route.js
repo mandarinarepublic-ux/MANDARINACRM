@@ -1,4 +1,4 @@
-import { readSheet, appendRow, updateRow, fechaAhora } from '@/lib/sheets'
+import { readSheet, appendRow, updateRow, updateCell, fechaAhora } from '@/lib/sheets'
 import { logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { v4 as uuid } from 'uuid'
@@ -63,12 +63,10 @@ export async function POST(req) {
     else if (totalAbonado > 0) estadoPago = 'ABONO'
 
     const pedidoIdx = pedidos.findIndex(p => p.PEDIDO_ID === pedidoId)
-    await updateRow('PEDIDOS', pedidoIdx, {
-      ...pedido,
-      MONTO_ABONADO: totalAbonado.toFixed(2),
-      MONTO_PENDIENTE: montoPendiente,
-      ESTADO_PAGO: estadoPago,
-    })
+    // Usar updateCell para no depender del orden de columnas del array
+    await updateCell('PEDIDOS', pedidoIdx, 'L', estadoPago)
+    await updateCell('PEDIDOS', pedidoIdx, 'N', totalAbonado.toFixed(2))
+    await updateCell('PEDIDOS', pedidoIdx, 'O', montoPendiente)
 
     // 4. Registrar en bitácora
     await logCambio(pedidoId, vendedorNombre || vendedorId || 'VENDEDOR', 'PAGO_AGREGADO', '', `${tipo} $${montoNum.toFixed(2)}${notas ? ' · ' + notas : ''}`)
