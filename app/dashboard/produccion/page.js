@@ -603,17 +603,20 @@ export default function ProduccionPage() {
         </div>
       )}
 
-      {/* PDFs off-screen para captura con html2canvas — uno por pedido visible */}
+      {/* PDF off-screen — solo el pedido activo */}
       <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '794px', backgroundColor: 'white', zIndex: -1 }}>
-        {pedidos.map(pedido => (
-          <div key={pedido.PEDIDO_ID} id={`pdf-prod-${pedido.PEDIDO_ID}`}>
-            <PdfConfeccion
-              pedido={pedido}
-              items={pedido.items || []}
-              tiendaColor={TIENDA_COLORS[pedido.TIENDA_ID] || '#FF6B00'}
-            />
-          </div>
-        ))}
+        {(pdfPreviewPedido || (generandoPdf && pedidos.find(p => p.PEDIDO_ID === generandoPdf))) && (() => {
+          const pedido = pdfPreviewPedido || pedidos.find(p => p.PEDIDO_ID === generandoPdf)
+          return pedido ? (
+            <div key={pedido.PEDIDO_ID} id={`pdf-prod-${pedido.PEDIDO_ID}`}>
+              <PdfConfeccion
+                pedido={pedido}
+                items={pedido.items || []}
+                tiendaColor={TIENDA_COLORS[pedido.TIENDA_ID] || '#FF6B00'}
+              />
+            </div>
+          ) : null
+        })()}
       </div>
     </div>
   )
