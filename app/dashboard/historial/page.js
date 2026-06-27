@@ -9,7 +9,7 @@ import { SkeletonList } from '@/components/Skeleton'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
 const PAGE_SIZE = 30
-const LS_FILTROS = 'mp_historial_filtros'
+const LS_FILTROS = 'mp_historial_filtros_v2'
 
 export default function HistorialPage() {
   const router = useRouter()
