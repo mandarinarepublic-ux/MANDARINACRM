@@ -25,7 +25,7 @@ export default function HistorialPage() {
   const [mostrarFecha, setMostrarFecha] = useState(false)
   const [visibles, setVisibles] = useState(PAGE_SIZE)
   const [expandedPedidos, setExpandedPedidos] = useState(new Set())
-  const [mostrarFiltrosExtra, setMostrarFiltrosExtra] = useState(false)
+  const [filtroPago, setFiltroPago] = useState('TODOS')
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -55,7 +55,7 @@ export default function HistorialPage() {
     return () => clearTimeout(t)
   }, [busqueda])
 
-  useEffect(() => { setVisibles(PAGE_SIZE) }, [busquedaDebounced, filtroEstado, filtroTienda, fechaDesde, fechaHasta])
+  useEffect(() => { setVisibles(PAGE_SIZE) }, [busquedaDebounced, filtroEstado, filtroTienda, filtroPago, fechaDesde, fechaHasta])
 
   async function loadPedidos(u, intentos = 0) {
     setLoading(true)
@@ -84,6 +84,7 @@ export default function HistorialPage() {
   const filtered = pedidos.filter(p => {
     if (filtroEstado !== 'TODOS' && p.ESTADO_PEDIDO !== filtroEstado) return false
     if (!isYAW && filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
+    if (filtroPago !== 'TODOS' && p.ESTADO_PAGO !== filtroPago) return false
     if (busquedaDebounced && !coincideBusqueda(p, busquedaDebounced)) return false
     if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
     if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO); const h = new Date(fechaHasta); h.setHours(23,59,59); if (!f || f > h) return false }
@@ -117,59 +118,60 @@ export default function HistorialPage() {
               <Link href="/dashboard/nuevo-pedido" className="btn-primary text-sm px-4 py-2">+ Nueva</Link>
             )}
           </div>
-          {/* Fila 1: Búsqueda + botones de acción rápida */}
-          <div className="flex gap-2 mb-2">
-            <input className="input flex-1" placeholder="Buscar por pedido, nombre, cedula o celular..."
+          {/* Fila 1: Buscador */}
+          <div className="mb-2">
+            <input className="input w-full" placeholder="Buscar por pedido, nombre, cedula o celular..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-            <button onClick={() => { setMostrarFecha(v => !v); setMostrarFiltrosExtra(v => !v) }}
-              className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0
-                ${(hayFecha || filtroTienda !== 'TODAS') ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500 hover:text-white'}`}>
-              ⚙ {(hayFecha || filtroTienda !== 'TODAS') ? 'Filtros ✓' : 'Filtros'}
-            </button>
           </div>
 
-          {/* Fila 2: Estados en scroll horizontal */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            {ESTADOS.map(e => (
-              <button key={e} onClick={() => setFiltroEstado(e)}
-                className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium border transition-all flex-shrink-0
-                  ${filtroEstado === e
-                    ? isYAW ? 'bg-purple-600 border-purple-600 text-white' : 'bg-mandarina-500 border-mandarina-500 text-white'
-                    : 'border-gray-700 text-gray-500'}`}>
-                {e === 'TODOS' ? 'Todos' : ESTADO_LABELS[e] || e}
-              </button>
-            ))}
-          </div>
-
-          {/* Panel colapsable: tienda + fecha + expandir */}
-          {mostrarFiltrosExtra && (
-            <div className="mt-2 p-3 rounded-xl border border-gray-800 bg-gray-900/50 space-y-3">
-              {/* Tienda */}
-              {!isYAW && (
-                <div className="flex gap-2 flex-wrap">
-                  <span className="text-xs text-gray-500 self-center">Tienda:</span>
-                  {['TODAS','MANDARINA','INDSTORE'].map(t => (
-                    <button key={t} onClick={() => setFiltroTienda(t)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all
-                        ${filtroTienda === t ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
-                      {t === 'TODAS' ? 'Todas' : t === 'MANDARINA' ? '🍊 Mandarina' : 'Indstore'}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {/* Fecha */}
-              <div className="flex gap-2 items-end">
-                <div className="flex-1"><label className="text-xs text-gray-500 mb-1 block">Desde</label><input type="date" className="input text-sm" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} /></div>
-                <div className="flex-1"><label className="text-xs text-gray-500 mb-1 block">Hasta</label><input type="date" className="input text-sm" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} /></div>
-                {hayFecha && <button onClick={() => { setFechaDesde(''); setFechaHasta('') }} className="text-xs text-gray-500 hover:text-red-400 pb-2 px-1">✕</button>}
-              </div>
-              {/* Expandir / contraer */}
-              <div className="flex gap-2">
-                <button onClick={expandirTodos} className="flex-1 py-1.5 rounded-xl border border-gray-700 text-gray-400 text-xs hover:text-white hover:border-gray-500 transition-all">⊞ Expandir todos</button>
-                <button onClick={contraerTodos}  className="flex-1 py-1.5 rounded-xl border border-gray-700 text-gray-400 text-xs hover:text-white hover:border-gray-500 transition-all">⊟ Contraer todos</button>
-              </div>
+          {/* Fila 2: 3 combos lado a lado */}
+          <div className="flex gap-2">
+            {/* Estado */}
+            <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Estado</span>
+              <select
+                value={filtroEstado}
+                onChange={e => setFiltroEstado(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                  ${filtroEstado !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
+                <option value="TODOS">Todos</option>
+                <option value="PENDIENTE_FABRICA">Pend. Fábrica</option>
+                <option value="EN_FABRICA">En Producción</option>
+                <option value="DESPACHO">En Despacho</option>
+                <option value="COMPLETADO">Completado</option>
+                <option value="ENTREGADO">Entregado</option>
+              </select>
             </div>
-          )}
+            {/* Tienda */}
+            {!isYAW && (
+              <div className="flex-1 flex flex-col gap-1">
+                <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Tienda</span>
+                <select
+                  value={filtroTienda}
+                  onChange={e => setFiltroTienda(e.target.value)}
+                  className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                    ${filtroTienda !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
+                  <option value="TODAS">Todas</option>
+                  <option value="MANDARINA">🍊 Mandarina</option>
+                  <option value="INDSTORE">Indstore</option>
+                </select>
+              </div>
+            )}
+            {/* Pago */}
+            <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Pago</span>
+              <select
+                value={filtroPago}
+                onChange={e => setFiltroPago(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                  ${filtroPago !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
+                <option value="TODOS">Todos</option>
+                <option value="PENDIENTE">⚠ Pendiente</option>
+                <option value="ABONO">🔶 Abono</option>
+                <option value="PAGADO">✅ Pagado</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
