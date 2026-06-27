@@ -36,20 +36,26 @@ export default function DashboardPage() {
       ? pedidosTodos.filter(p => p.TIENDA_ID === 'YAW')
       : pedidosTodos
 
-    const hoy = now.toISOString().split('T')[0]
-    const mesActual = now.toISOString().slice(0, 7)
+    const hoy = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+    const mesActual = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
 
     function parseFecha(str) {
       if (!str) return null
-      if (str.match(/^\d{4}-/)) return new Date(str)
-      const months = {Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11}
+      // Formato ISO: 2026-06-26 o 2026-06-26T...
+      if (str.match(/^\d{4}-/)) {
+        const d = str.slice(0,10) // YYYY-MM-DD sin conversión UTC
+        return { iso: d, mes: d.slice(0,7) }
+      }
+      // Formato: 26Jun2026 12:34:56
+      const months = {Ene:'01',Feb:'02',Mar:'03',Abr:'04',May:'05',Jun:'06',Jul:'07',Ago:'08',Sep:'09',Oct:'10',Nov:'11',Dic:'12'}
       const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
       if (!m) return null
-      return new Date(parseInt(m[3]), months[m[2]], parseInt(m[1]))
+      const d = `${m[3]}-${months[m[2]]}-${m[1]}`
+      return { iso: d, mes: d.slice(0,7) }
     }
 
-    const pedidosHoy = pedidos.filter(p => { const f = parseFecha(p.FECHA_PEDIDO); return f && f.toISOString().split('T')[0] === hoy })
-    const pedidosMes = pedidos.filter(p => { const f = parseFecha(p.FECHA_PEDIDO); return f && f.toISOString().slice(0, 7) === mesActual })
+    const pedidosHoy = pedidos.filter(p => { const f = parseFecha(p.FECHA_PEDIDO); return f && f.iso === hoy })
+    const pedidosMes = pedidos.filter(p => { const f = parseFecha(p.FECHA_PEDIDO); return f && f.mes === mesActual })
 
     const ventasMes = pedidosMes.reduce((s, p) => s + parseFloat(p.MONTO_TOTAL || 0), 0)
     const ventasHoy = pedidosHoy.reduce((s, p) => s + parseFloat(p.MONTO_TOTAL || 0), 0)
@@ -66,7 +72,7 @@ export default function DashboardPage() {
     const atrasados = pedidos.filter(p => {
       if (!p.FECHA_ENTREGA_PROMETIDA) return false
       if (p.ESTADO_PEDIDO === 'ENTREGADO' || p.ESTADO_PEDIDO === 'CANCELADO') return false
-      return new Date(p.FECHA_ENTREGA_PROMETIDA) < now
+      return p.FECHA_ENTREGA_PROMETIDA.slice(0,10) < hoy
     })
 
     const porVendedor = {}
@@ -89,7 +95,7 @@ export default function DashboardPage() {
     allItems.forEach(i => { const a = i.AREA || 'SIN ÁREA'; if (!porArea[a]) porArea[a] = 0; porArea[a]++ })
 
     const misRecientes = [...pedidos]
-      .sort((a, b) => { const fa = parseFecha(a.FECHA_PEDIDO)||new Date(0); const fb = parseFecha(b.FECHA_PEDIDO)||new Date(0); return fb - fa })
+      .sort((a, b) => { const fa = parseFecha(a.FECHA_PEDIDO)?.iso||''; const fb = parseFecha(b.FECHA_PEDIDO)?.iso||''; return fb.localeCompare(fa) })
       .slice(0, 5)
 
     // Para despacho: listos y en despacho
