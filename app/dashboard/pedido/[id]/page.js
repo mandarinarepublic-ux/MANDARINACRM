@@ -42,10 +42,11 @@ export default function PedidoDetailPage() {
     try {
       const res = await fetch(`/api/pedidos?rol=ADMIN`)
       const data = await res.json()
-      const p = data.pedidos?.find(p => p.PEDIDO_ID === params.id)
+      const lista = Array.isArray(data.pedidos) ? data.pedidos : []
+      const p = lista.find(p => p.PEDIDO_ID === params.id)
       if (!p) return
-      setPedido(p)
-      setItems(p.items || [])
+      setPedido({ ...p, pagos: Array.isArray(p.pagos) ? p.pagos : [], items: Array.isArray(p.items) ? p.items : [] })
+      setItems(Array.isArray(p.items) ? p.items : [])
       const cr = await fetch(`/api/clientes?id=${encodeURIComponent(p.CLIENTE_ID || '')}`)
       const cd = await cr.json()
       setCliente(cd.clientes?.[0] || null)
