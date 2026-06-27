@@ -443,73 +443,47 @@ export default function ProduccionPage() {
             <Link href="/dashboard/impresion" className="btn-secondary text-xs px-3 py-2">🖨️ Imprimir</Link>
           </div>
 
-          <div className="flex gap-2 mb-3">
-            <input className="input flex-1" placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
+          <div className="mb-2">
+            <input className="input w-full" placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-            <button onClick={() => setMostrarFecha(v => !v)}
-              className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0
-                ${hayFecha ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
-              📅 {hayFecha ? 'Fecha ✓' : 'Fecha'}
-            </button>
           </div>
 
-          {mostrarFecha && (
-            <div className="flex gap-2 mb-3 items-end">
-              <div className="flex-1">
-                <label className="text-xs text-gray-500 mb-1 block">Desde</label>
-                <input type="date" className="input text-sm" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
-              </div>
-              <div className="flex-1">
-                <label className="text-xs text-gray-500 mb-1 block">Hasta</label>
-                <input type="date" className="input text-sm" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
-              </div>
-              {hayFecha && <button onClick={() => {setFechaDesde('');setFechaHasta('')}} className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>}
+          <div className="flex gap-2">
+            {/* Subestado */}
+            <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Estado</span>
+              <select value={filtroSubestado} onChange={e => setFiltroSubestado(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                  ${filtroSubestado !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
+                <option value="TODOS">Todos</option>
+                <option value="SOLICITADO">⏳ Solicitado</option>
+                <option value="EN_PROCESO">🔧 En proceso</option>
+                <option value="ENVIADO_APROBACION">📤 Aprobación</option>
+                <option value="LISTO">✅ Listo</option>
+              </select>
             </div>
-          )}
-
-          <div className="flex gap-2 mt-2 mb-2">
-            <button onClick={expandirTodos}
-              className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all flex-shrink-0">
-              ⊞ Expandir todos
-            </button>
-            <button onClick={contraerTodos}
-              className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all flex-shrink-0">
-              ⊟ Contraer todos
-            </button>
-          </div>
-
-          <div className="flex gap-1.5 overflow-x-auto pb-1 flex-wrap">
-            {[
-              { key: 'TODOS', label: 'Todos' },
-              { key: 'SOLICITADO', label: '⏳ Solicitado' },
-              { key: 'EN_PROCESO', label: '🔧 En proceso' },
-              { key: 'ENVIADO_APROBACION', label: '📤 Enviado aprobación' },
-              { key: 'LISTO', label: '✅ Listo' },
-            ].map(f => (
-              <button key={f.key} onClick={() => setFiltroSubestado(f.key)}
-                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0
-                  ${filtroSubestado === f.key ? 'bg-mandarina-500 border-mandarina-500 text-white' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
-                {f.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Filtro por área — solo ADMIN */}
-          {user?.rol === 'ADMIN' && (
-            <div className="flex gap-1.5 overflow-x-auto pb-1 flex-wrap mt-2">
-              {[
-                { key: 'TODAS',      label: '📌 Áreas',        color: filtroArea === 'TODAS'      ? 'bg-gray-600 border-gray-600 text-white' : 'border-gray-700 text-gray-500 hover:text-gray-300' },
-                { key: 'ESTAMPADO',  label: '🎨 Estampado',   color: filtroArea === 'ESTAMPADO'  ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-700 text-orange-400 hover:text-orange-300' },
-                { key: 'BORDADO',    label: '🧵 Bordado',     color: filtroArea === 'BORDADO'    ? 'bg-purple-500 border-purple-500 text-white' : 'border-gray-700 text-purple-400 hover:text-purple-300' },
-                { key: 'SUBLIMACION',label: '💙 Sublimación', color: filtroArea === 'SUBLIMACION'? 'bg-blue-500 border-blue-500 text-white'   : 'border-gray-700 text-blue-400 hover:text-blue-300' },
-              ].map(f => (
-                <button key={f.key} onClick={() => setFiltroArea(f.key)}
-                  className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0 ${f.color}`}>
-                  {f.label}
-                </button>
-              ))}
+            {/* Área — solo ADMIN */}
+            {user?.rol === 'ADMIN' && (
+              <div className="flex-1 flex flex-col gap-1">
+                <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Área</span>
+                <select value={filtroArea} onChange={e => setFiltroArea(e.target.value)}
+                  className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                    ${filtroArea !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
+                  <option value="TODAS">Todas</option>
+                  <option value="ESTAMPADO">🎨 Estampado</option>
+                  <option value="BORDADO">🧵 Bordado</option>
+                  <option value="SUBLIMACION">💙 Sublimación</option>
+                </select>
+              </div>
+            )}
+            {/* Fecha */}
+            <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Fecha desde</span>
+              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
+                value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
             </div>
-          )}
+          </div>
         </div>
       </div>
 

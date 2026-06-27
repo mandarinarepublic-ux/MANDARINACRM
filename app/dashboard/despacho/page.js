@@ -164,32 +164,23 @@ export default function DespachosPage() {
             </button>
           </div>
 
-          <div className="flex gap-2 mb-2">
-            <input className="input flex-1" placeholder="Buscar por pedido, nombre, cédula o celular..."
+          <div className="mb-2">
+            <input className="input w-full" placeholder="Buscar por pedido, nombre, cédula o celular..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-            <button onClick={() => setMostrarFecha(v => !v)}
-              className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all flex-shrink-0
-                ${hayFecha ? 'border-mandarina-500 text-mandarina-400 bg-mandarina-500/10' : 'border-gray-700 text-gray-500'}`}>
-              📅 {hayFecha ? '✓' : 'Fecha'}
-            </button>
           </div>
-          {mostrarFecha && (
-            <div className="flex gap-2 items-end mb-2">
-              <div className="flex-1"><label className="text-xs text-gray-500 mb-1 block">Desde</label><input type="date" className="input text-sm" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} /></div>
-              <div className="flex-1"><label className="text-xs text-gray-500 mb-1 block">Hasta</label><input type="date" className="input text-sm" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} /></div>
-              {hayFecha && <button onClick={() => { setFechaDesde(''); setFechaHasta('') }} className="text-xs text-gray-500 hover:text-red-400 pb-2 px-2">✕</button>}
+          <div className="flex gap-2">
+            <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Fecha desde</span>
+              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
+                value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
             </div>
-          )}
-
-          <div className="flex gap-2 mt-1">
-            <button onClick={expandirTodos}
-              className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all flex-shrink-0">
-              ⊞ Expandir todos
-            </button>
-            <button onClick={contraerTodos}
-              className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all flex-shrink-0">
-              ⊟ Contraer todos
-            </button>
+            <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Fecha hasta</span>
+              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                ${fechaHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
+                value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+            </div>
           </div>
         </div>
       </div>
