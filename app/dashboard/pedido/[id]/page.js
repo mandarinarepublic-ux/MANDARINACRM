@@ -364,7 +364,7 @@ export default function PedidoDetailPage() {
             <div className="card p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-white">💳 Pagos</h3>
-                {canAddAbono && pedido.ESTADO_PEDIDO !== 'COMPLETADO' && pedido.ESTADO_PEDIDO !== 'CANCELADO' && (
+                {canAddAbono && pedido.ESTADO_PEDIDO !== 'CANCELADO' && (
                   <button onClick={() => setShowModalAbono(true)}
                     className="text-xs px-3 py-1.5 rounded-lg font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-all">
                     + Abono
@@ -404,7 +404,7 @@ export default function PedidoDetailPage() {
           )}
 
           {/* Botón abono cuando no hay pagos todavía */}
-          {canAddAbono && (!pedido.pagos || pedido.pagos.length === 0) && pedido.ESTADO_PEDIDO !== 'COMPLETADO' && pedido.ESTADO_PEDIDO !== 'CANCELADO' && (
+          {canAddAbono && (!pedido.pagos || pedido.pagos.length === 0) && pedido.ESTADO_PEDIDO !== 'CANCELADO' && montoPendiente > 0 && (
             <div className="card p-4 flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold text-white">💳 Pagos</div>
