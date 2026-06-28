@@ -7,7 +7,7 @@ import ItemProducto from '@/components/pedido/ItemProducto'
 import BuscadorCliente from '@/components/pedido/BuscadorCliente'
 import SeccionPago from '@/components/pedido/SeccionPago'
 
-const TIENDAS = ['MANDARINA', 'INDSTORE']
+const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
 
 const TIENDA_COLORS = {
   MANDARINA: '#FF6B00',
@@ -103,6 +103,11 @@ export default function NuevoPedidoPage() {
   const [error, setError] = useState('')
   const [step, setStep] = useState(1)
 
+  // Sucursal
+  const [sucursalProductos, setSucursalProductos] = useState([])
+  const [loadingSucursal, setLoadingSucursal] = useState(false)
+  const [sucursalIdVendido, setSucursalIdVendido] = useState(null)
+
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
@@ -117,6 +122,37 @@ export default function NuevoPedidoPage() {
       setStep(2)
     }
   }, [])
+
+  useEffect(() => {
+    if (tienda === 'SUCURSAL') loadSucursal()
+  }, [tienda])
+
+  async function loadSucursal() {
+    setLoadingSucursal(true)
+    try {
+      const res = await fetch('/api/sucursal')
+      const data = await res.json()
+      setSucursalProductos(data.productos || [])
+    } catch (e) { console.error(e) }
+    finally { setLoadingSucursal(false) }
+  }
+
+  function agregarDesdeSucursal(prod) {
+    setSucursalIdVendido(prod.ID)
+    setItems(p => [...p, {
+      tipo: 'SUCURSAL',
+      sucursalId: prod.ID,
+      nombre: prod.NOMBRE,
+      talla: prod.TALLA,
+      color: prod.COLOR,
+      foto: prod.FOTO_URL,
+      cantidad: 1,
+      precioUnit: prod.PRECIO || '',
+      area: '',
+      descripcion: `${prod.NOMBRE} - Talla ${prod.TALLA}${prod.COLOR ? ' - ' + prod.COLOR : ''}`,
+    }])
+    setTienda('MANDARINA') // volver a Shopify después de agregar
+  }
 
   useEffect(() => {
     if (items.length === 0) return
@@ -458,14 +494,55 @@ export default function NuevoPedidoPage() {
               {/* Selector de tienda — oculto para YAW */}
               {!isYAW && (
                 <div className="flex gap-2">
-                  {TIENDAS.map(t => (
-                    <button key={t} onClick={() => setTienda(t)}
+                  {[
+                    { key: 'MANDARINA', label: '🍊 Mandarina', color: '#FF6B00' },
+                    { key: 'INDSTORE',  label: '🏪 Indstore',  color: '#E91E8C' },
+                    { key: 'SUCURSAL',  label: '🏬 Sucursal',  color: '#10B981' },
+                  ].map(t => (
+                    <button key={t.key} onClick={() => setTienda(t.key)}
                       className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border
-                        ${tienda === t ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
-                      style={tienda === t ? { backgroundColor: TIENDA_COLORS[t] } : {}}>
-                      {t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}
+                        ${tienda === t.key ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
+                      style={tienda === t.key ? { backgroundColor: t.color } : {}}>
+                      {t.label}
                     </button>
                   ))}
+                </div>
+              )}
+
+              {/* Vista Sucursal */}
+              {tienda === 'SUCURSAL' && !isYAW && (
+                <div>
+                  {loadingSucursal ? (
+                    <div className="flex justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : sucursalProductos.length === 0 ? (
+                    <div className="card p-6 text-center text-gray-500 border-dashed">
+                      <div className="text-3xl mb-2">🏬</div>
+                      <div className="text-sm">No hay productos en sucursal con stock disponible</div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {sucursalProductos.map(p => (
+                        <button key={p.ID} onClick={() => agregarDesdeSucursal(p)}
+                          className="card text-left hover:border-green-500/50 overflow-hidden transition-all">
+                          <div className="aspect-square bg-gray-800">
+                            {p.FOTO_URL
+                              ? <img src={p.FOTO_URL} alt={p.NOMBRE} className="w-full h-full object-cover" />
+                              : <div className="w-full h-full flex items-center justify-center text-3xl text-gray-600">👕</div>}
+                          </div>
+                          <div className="p-2">
+                            <div className="text-xs font-medium text-white line-clamp-2 mb-1">{p.NOMBRE}</div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500">{p.TALLA}{p.COLOR ? ` · ${p.COLOR}` : ''}</span>
+                              <span className="text-xs font-bold text-green-400">{p.STOCK} uds</span>
+                            </div>
+                            {p.PRECIO > 0 && <div className="text-xs text-mandarina-400 font-medium mt-1">${parseFloat(p.PRECIO).toFixed(2)}</div>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {/* Banner YAW — muestra tienda y cliente fijo */}
