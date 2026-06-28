@@ -193,8 +193,8 @@ export async function PATCH(req) {
     fila[idx('ULTIMA_MODIFICACION')] = ahora
     fila[idx('MODIFICADO_POR')] = usuario || ''
 
-    // Escribir fila actualizada (rowIndex+1 porque Sheets es 1-based)
-    const rangoFila = `${HOJA}!A${rowIndex + 1}:N${rowIndex + 1}`
+    // rowIndex de readSheet es 0-based desde fila 4 (filas 1-3 son header/vacías)
+    const rangoFila = `${HOJA}!A${rowIndex + 4}:N${rowIndex + 4}`
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
       range: rangoFila,

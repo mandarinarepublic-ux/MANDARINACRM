@@ -320,6 +320,25 @@ export default function NuevoPedidoPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+
+      // Descontar stock de sucursal si hay items de sucursal
+      const itemsSucursal = items.filter(i => i.tipo === 'SUCURSAL' && i.sucursalId)
+      for (const item of itemsSucursal) {
+        try {
+          await fetch('/api/sucursal', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: item.sucursalId,
+              accion: 'vender',
+              usuario: user?.nombre || user?.id || 'desconocido',
+            }),
+          })
+        } catch (e) {
+          console.error('Error descontando stock sucursal:', e)
+        }
+      }
+
       if (emitirFactura) {
         dispararFactura(data.pedidoId, { ...cliente, cedula: String(cliente.cedula), celular: String(cliente.celular) }, montoTotal)
       }
