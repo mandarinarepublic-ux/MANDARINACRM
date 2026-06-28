@@ -70,7 +70,8 @@ export async function POST(req) {
     // Subir foto a Cloudinary si viene en base64
     let fotoFinal = foto_url || ''
     if (foto_base64 && foto_base64.startsWith('data:')) {
-      fotoFinal = await uploadToCloudinary(foto_base64, `sucursal_${Date.now()}`)
+      const result = await uploadToCloudinary(foto_base64, `sucursal_${Date.now()}`, 'sucursal')
+      fotoFinal = result.url
     }
 
     const ahora = formatFecha(new Date())
@@ -181,7 +182,8 @@ export async function PATCH(req) {
 
       // Subir nueva foto si viene en base64
       if (campos.foto_base64 && campos.foto_base64.startsWith('data:')) {
-        fila[idx('FOTO_URL')] = await uploadToCloudinary(campos.foto_base64, `sucursal_${Date.now()}`)
+        const result = await uploadToCloudinary(campos.foto_base64, `sucursal_${Date.now()}`, 'sucursal')
+        fila[idx('FOTO_URL')] = result.url
       }
     }
 
