@@ -6,10 +6,12 @@ export const dynamic = 'force-dynamic'
 const SHEET_ID = process.env.SHEET_ID
 const HOJA = 'SUCURSAL'
 
-// Columnas en orden exacto de la hoja
+// Columnas en orden exacto de la hoja SUCURSAL
+// A    B        C        D        E      F       G       H           I        J               K            L                    N
+// ID NOMBRE  TIENDA  PRECIO   TALLA  COLOR   STOCK  RESERVADO  FOTO_URL  ACTIVO  FECHA_CREACION  CREADO_POR  ULTIMA_MODIFICACION  MODIFICADO_POR
 const COLS = [
-  'ID', 'NOMBRE', 'TIENDA', 'TALLA', 'COLOR',
-  'STOCK', 'RESERVADO', 'PRECIO', 'FOTO_URL', 'ACTIVO',
+  'ID', 'NOMBRE', 'TIENDA', 'PRECIO', 'TALLA', 'COLOR',
+  'STOCK', 'RESERVADO', 'FOTO_URL', 'ACTIVO',
   'FECHA_CREACION', 'CREADO_POR', 'ULTIMA_MODIFICACION', 'MODIFICADO_POR'
 ]
 
@@ -78,20 +80,20 @@ export async function POST(req) {
     const id = `SUC-${Date.now()}`
 
     const fila = [
-      id,                          // ID
-      nombre,                      // NOMBRE
-      tienda,                      // TIENDA
-      talla || 'U',               // TALLA
-      color || '',                 // COLOR
-      parseInt(stock),             // STOCK
-      0,                           // RESERVADO
-      parseFloat(precio || 0),     // PRECIO
-      fotoFinal,                   // FOTO_URL
-      'TRUE',                      // ACTIVO
-      ahora,                       // FECHA_CREACION
-      usuario || '',               // CREADO_POR
-      ahora,                       // ULTIMA_MODIFICACION
-      usuario || '',               // MODIFICADO_POR
+      id,                          // A - ID
+      nombre,                      // B - NOMBRE
+      tienda,                      // C - TIENDA
+      parseFloat(precio || 0),     // D - PRECIO
+      talla || 'U',                // E - TALLA
+      color || '',                 // F - COLOR
+      parseInt(stock),             // G - STOCK
+      0,                           // H - RESERVADO
+      fotoFinal,                   // I - FOTO_URL
+      'TRUE',                      // J - ACTIVO
+      ahora,                       // K - FECHA_CREACION
+      usuario || '',               // L - CREADO_POR
+      ahora,                       // M - ULTIMA_MODIFICACION
+      usuario || '',               // N - MODIFICADO_POR
     ]
 
     const sheets = await getSheets()
