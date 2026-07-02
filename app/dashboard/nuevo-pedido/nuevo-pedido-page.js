@@ -461,7 +461,7 @@ export default function NuevoPedidoPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Dirección completa *</p>
-                      <textarea ref={refDireccion} autoComplete="off" name="x-direccion" rows={3}
+                      <textarea ref={refDireccion} autoComplete="new-password" name="x-direccion-custom" rows={3}
                         className={`input resize-none ${!cliente.direccion.trim() ? 'border-yellow-500/40' : ''}`}
                         placeholder={`Ej:\nAv. 10 de Agosto y Orellana\nEdificio Torre Norte, piso 3\nReferencia: junto a Burger King`}
                         value={cliente.direccion}
