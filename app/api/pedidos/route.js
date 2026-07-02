@@ -242,6 +242,38 @@ export async function POST(req) {
       ])
     }
 
+    // ── META CAPI ── fire & forget, no bloquea la respuesta
+    try {
+      const celularRaw = String(cliente.celular || '')
+      const celularNorm = celularRaw.startsWith('0')
+        ? '593' + celularRaw.slice(1)
+        : celularRaw
+
+      const tiendaMeta = (tiendaId || '').toUpperCase().includes('IND')
+        ? 'INDSTORE'
+        : 'MANDARINA'
+
+      const capiPayload = {
+        'Event ID': pedidoId,
+        'Tienda':   tiendaMeta,
+        'nombre':   cliente.nombre   || '',
+        'apellido': '',
+        'correo':   cliente.email    || '',
+        'celular':  celularNorm,
+        'dni':      String(cliente.cedula || ''),
+        'ciudad':   cliente.ciudad   || '',
+        'valor':    parseFloat(montoTotal || 0).toFixed(2),
+      }
+
+      fetch('https://hook.us2.make.com/6yme139yby51ejizn4l8dhg4rai7d7bn', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(capiPayload),
+      }).catch(err => console.error('META CAPI webhook error:', err.message))
+    } catch (capiErr) {
+      console.error('META CAPI build error:', capiErr.message)
+    }
+
     return Response.json({ pedidoId, montoTotal, diasCalculado })
   } catch (e) {
     console.error('POST pedido error:', e)
