@@ -116,6 +116,7 @@ export default function PedidoDetailPage() {
       const impuesto = parseFloat((total - sinImp).toFixed(2))
 
       const payload = {
+        pedido_id:   pedido.PEDIDO_ID,
         numero:      (cliente.CELULAR || '').replace(/\D/g, ''),
         CI:          String(cliente.CEDULA),
         tipo_id:     '05',           // persona natural sin RUC
