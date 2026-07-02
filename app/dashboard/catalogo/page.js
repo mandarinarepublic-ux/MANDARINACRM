@@ -111,7 +111,7 @@ export default function CatalogoPage() {
                 </button>
               )}
               <span className="text-xs text-gray-500">
-                {tienda === 'SUCURSAL' ? `${sucursal.length} producto(s)` : `${filtered.length} producto(s)`}
+                {tienda === 'SUCURSAL' ? `${sucursal.filter(p => parseInt(p.STOCK) > 0).length} producto(s)` : `${filtered.length} producto(s)`}
               </span>
             </div>
           </div>
@@ -160,11 +160,9 @@ export default function CatalogoPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {sucursal.map(p => {
-                  const agotado = parseInt(p.STOCK) <= 0
-                  return (
+                {sucursal.filter(p => parseInt(p.STOCK) > 0).map(p => (
                     <div key={p.ID}
-                      className={`card overflow-hidden transition-all ${agotado ? 'opacity-50' : 'hover:border-gray-600'}`}>
+                      className="card overflow-hidden transition-all hover:border-gray-600">
                       {/* Imagen */}
                       <div className="aspect-square bg-gray-800 relative">
                         {p.FOTO_URL
@@ -177,12 +175,6 @@ export default function CatalogoPage() {
                             {p.TIENDA === 'Mandarina' ? 'MAN' : 'IND'}
                           </span>
                         </div>
-                        {/* Badge agotado */}
-                        {agotado && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-                            <span className="text-xs font-bold text-red-400 bg-gray-900 px-2 py-1 rounded-lg">AGOTADO</span>
-                          </div>
-                        )}
                       </div>
                       {/* Info */}
                       <div className="p-3">
@@ -199,8 +191,7 @@ export default function CatalogoPage() {
                         )}
                       </div>
                     </div>
-                  )
-                })}
+                  ))}
               </div>
             )
           )}
