@@ -28,6 +28,7 @@ function Ficha({ label, value, color, big }) {
 
 export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
   const esMandarina = pedido?.TIENDA_ID === 'MANDARINA'
+  const esYaw       = pedido?.TIENDA_ID === 'YAW'
   const nombreCorto = cliente?.NOMBRE?.split(' ')[0] || 'Cliente'
   const logo = esMandarina ? LOGO_MANDARINA : LOGO_INDSTORE
   const cupon = esMandarina ? CUPON.MANDARINA : CUPON.INDSTORE
@@ -44,25 +45,35 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
         <div style={{ position:'absolute', bottom:'-60px', left:'30%', width:'200px', height:'200px', borderRadius:'50%', backgroundColor:'rgba(255,255,255,0.06)' }} />
         <div style={{ position:'relative', zIndex:2, overflow:'hidden' }}>
           <div style={{ float:'left', width:'140px', marginRight:'20px' }}>
-            <img src={logo} style={{ width:'140px', height:'140px', objectFit:'contain', display:'block' }} alt="logo" />
+            {esYaw
+              ? <div style={{ width:'140px', height:'140px', backgroundColor:'#fff', borderRadius:'16px', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(0,0,0,0.2)' }}>
+                  <span style={{ fontSize:'52px', fontWeight:'900', color:'#1a1a1a', letterSpacing:'-2px' }}>YAW</span>
+                </div>
+              : <img src={logo} style={{ width:'140px', height:'140px', objectFit:'contain', display:'block' }} alt="logo" />
+            }
           </div>
           <div style={{ float:'right', width:'210px' }}>
-            <div style={{ backgroundColor:'#fff', borderRadius:'16px', padding:'14px 16px', position:'relative', boxShadow:'0 8px 32px rgba(0,0,0,0.25)' }}>
-              <div style={{ position:'absolute', left:'-9px', top:'50%', marginTop:'-9px', width:'18px', height:'18px', borderRadius:'50%', backgroundColor:esMandarina?'#c94800':'#6a0dad' }} />
-              <div style={{ position:'absolute', right:'-9px', top:'50%', marginTop:'-9px', width:'18px', height:'18px', borderRadius:'50%', backgroundColor:esMandarina?'#c94800':'#6a0dad' }} />
-              <div style={{ fontSize:'10px', color:'#1a1a1a', marginBottom:'4px', fontWeight:'600' }}>🎁 Tenemos un regalo para ti:</div>
-              <div style={{ fontSize:'12px', fontWeight:'800', color:'#1a1a1a', marginBottom:'4px', lineHeight:1.3 }}>10% de descuento en tu próxima compra</div>
-              <div style={{ fontSize:'10px', color:'#1a1a1a', marginBottom:'8px' }}>Cupón <strong>{cupon.codigo}</strong> en {cupon.web}</div>
-              <div style={{ borderTop:'1.5px dashed #ccc', marginBottom:'8px' }} />
-              <div style={{ textAlign:'center', marginBottom:'4px' }}>
-                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(cupon.url)}&color=1a1a1a&bgcolor=ffffff&margin=2`}
-                  style={{ width:'80px', height:'80px', borderRadius:'6px', display:'inline-block' }} alt="QR" />
-              </div>
-              <div style={{ fontSize:'9px', color:'#1a1a1a', textAlign:'center' }}>↗ Escanea para tu descuento</div>
-            </div>
+            {esYaw
+              ? <div style={{ backgroundColor:'#fff', borderRadius:'16px', padding:'14px 16px', boxShadow:'0 8px 32px rgba(0,0,0,0.25)', display:'flex', alignItems:'center', justifyContent:'center', height:'140px', boxSizing:'border-box' }}>
+                  <span style={{ fontSize:'64px', fontWeight:'900', color:'#1a1a1a', letterSpacing:'-3px' }}>YAW</span>
+                </div>
+              : <div style={{ backgroundColor:'#fff', borderRadius:'16px', padding:'14px 16px', position:'relative', boxShadow:'0 8px 32px rgba(0,0,0,0.25)' }}>
+                  <div style={{ position:'absolute', left:'-9px', top:'50%', marginTop:'-9px', width:'18px', height:'18px', borderRadius:'50%', backgroundColor:esMandarina?'#c94800':'#6a0dad' }} />
+                  <div style={{ position:'absolute', right:'-9px', top:'50%', marginTop:'-9px', width:'18px', height:'18px', borderRadius:'50%', backgroundColor:esMandarina?'#c94800':'#6a0dad' }} />
+                  <div style={{ fontSize:'10px', color:'#1a1a1a', marginBottom:'4px', fontWeight:'600' }}>🎁 Tenemos un regalo para ti:</div>
+                  <div style={{ fontSize:'12px', fontWeight:'800', color:'#1a1a1a', marginBottom:'4px', lineHeight:1.3 }}>10% de descuento en tu próxima compra</div>
+                  <div style={{ fontSize:'10px', color:'#1a1a1a', marginBottom:'8px' }}>Cupón <strong>{cupon.codigo}</strong> en {cupon.web}</div>
+                  <div style={{ borderTop:'1.5px dashed #ccc', marginBottom:'8px' }} />
+                  <div style={{ textAlign:'center', marginBottom:'4px' }}>
+                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(cupon.url)}&color=1a1a1a&bgcolor=ffffff&margin=2`}
+                      style={{ width:'80px', height:'80px', borderRadius:'6px', display:'inline-block' }} alt="QR" />
+                  </div>
+                  <div style={{ fontSize:'9px', color:'#1a1a1a', textAlign:'center' }}>↗ Escanea para tu descuento</div>
+                </div>
+            }
           </div>
           <div style={{ overflow:'hidden' }}>
-            <div style={{ fontSize:'12px', color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'3px', marginBottom:'6px', fontWeight:'700' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</div>
+            <div style={{ fontSize:'12px', color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'3px', marginBottom:'6px', fontWeight:'700' }}>{esMandarina?'MANDARINA REPUBLIC':esYaw?'YAW':'INDSTORE'}</div>
             <div style={{ fontSize:'38px', fontWeight:'900', color:'#fff', lineHeight:1.05, marginBottom:'10px', letterSpacing:'-1px', textShadow:'0 2px 8px rgba(0,0,0,0.35)' }}>
               ¡Gracias,<br />{nombreCorto}!
             </div>
@@ -167,7 +178,7 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
 
       <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'9px 48px', backgroundColor:'#f5f5f5', borderTop:'1px solid #e0e0e0', overflow:'hidden', boxSizing:'border-box' }}>
         <span style={{ float:'left', fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>{pedido?.PEDIDO_ID}</span>
-        <span style={{ float:'right', fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</span>
+        <span style={{ float:'right', fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>{esMandarina?'MANDARINA REPUBLIC':esYaw?'YAW':'INDSTORE'}</span>
         <div style={{ clear:'both' }} />
       </div>
 
@@ -177,6 +188,7 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
 
 export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, totalPaginas, offsetIdx }) {
   const esMandarina = pedido?.TIENDA_ID === 'MANDARINA'
+  const esYaw       = pedido?.TIENDA_ID === 'YAW'
   const logo = esMandarina ? LOGO_MANDARINA : LOGO_INDSTORE
   const now = new Date()
   const entrega = pedido?.FECHA_ENTREGA_PROMETIDA ? new Date(pedido.FECHA_ENTREGA_PROMETIDA) : null
@@ -190,7 +202,12 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
 
       <div style={{ borderBottom:`4px solid ${tiendaColor}`, padding:'10px 48px', backgroundColor:'#fafafa', overflow:'hidden', boxSizing:'border-box' }}>
         <div style={{ float:'left', overflow:'hidden' }}>
-          <img src={logo} style={{ float:'left', width:'40px', height:'40px', objectFit:'contain', marginRight:'10px', marginTop:'4px' }} alt="logo" />
+          {esYaw
+            ? <div style={{ float:'left', width:'40px', height:'40px', backgroundColor:'#fff', border:'2px solid #e0e0e0', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center', marginRight:'10px', marginTop:'4px', boxSizing:'border-box' }}>
+                <span style={{ fontSize:'13px', fontWeight:'900', color:'#1a1a1a', letterSpacing:'-0.5px' }}>YAW</span>
+              </div>
+            : <img src={logo} style={{ float:'left', width:'40px', height:'40px', objectFit:'contain', marginRight:'10px', marginTop:'4px' }} alt="logo" />
+          }
           <div style={{ float:'left' }}>
             <div style={{ fontSize:'8px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'2px', marginBottom:'3px', fontWeight:'700' }}>Orden de Producción Interna</div>
             <div style={{ fontSize:'22px', fontWeight:'900', color:'#1a1a1a', fontFamily:'monospace', letterSpacing:'-0.5px', lineHeight:1 }}>{pedido?.PEDIDO_ID}</div>
@@ -333,8 +350,11 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
 
       <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'8px 48px', backgroundColor:'#f5f5f5', borderTop:'2px solid #e0e0e0', overflow:'hidden', boxSizing:'border-box' }}>
         <div style={{ float:'left', overflow:'hidden' }}>
-          <img src={logo} style={{ float:'left', width:'18px', height:'18px', objectFit:'contain', opacity:0.6, marginRight:'7px', marginTop:'2px' }} alt="logo" />
-          <span style={{ float:'left', fontSize:'8px', color:'#1a1a1a', lineHeight:'22px', fontWeight:'600' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</span>
+          {esYaw
+            ? <span style={{ float:'left', fontSize:'8px', color:'#1a1a1a', lineHeight:'22px', fontWeight:'900' }}>YAW</span>
+            : <><img src={logo} style={{ float:'left', width:'18px', height:'18px', objectFit:'contain', opacity:0.6, marginRight:'7px', marginTop:'2px' }} alt="logo" />
+               <span style={{ float:'left', fontSize:'8px', color:'#1a1a1a', lineHeight:'22px', fontWeight:'600' }}>{esMandarina?'MANDARINA REPUBLIC':'INDSTORE'}</span></>
+          }
         </div>
         <span style={{ display:'block', textAlign:'center', fontSize:'8px', color:'#1a1a1a', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.5px', lineHeight:'22px' }}>USO INTERNO — NO INCLUYE PRECIOS</span>
         <span style={{ float:'right', fontSize:'8px', color:'#1a1a1a', lineHeight:'22px', fontWeight:'600' }}>
