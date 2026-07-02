@@ -91,6 +91,64 @@ export default function CatalogoPage() {
     finally { setGuardando(false) }
   }
 
+  const [modalEditar, setModalEditar] = useState(false)
+  const [editForm, setEditForm]       = useState(null)
+  const [editando, setEditando]       = useState(false)
+  const editFileRef = useRef()
+
+  function abrirEditar(p) {
+    setEditForm({
+      id:           p.ID,
+      nombre:       p.NOMBRE,
+      tienda:       p.TIENDA,
+      talla:        p.TALLA || 'U',
+      color:        p.COLOR || '',
+      stock:        p.STOCK,
+      precio:       p.PRECIO,
+      foto_base64:  '',
+      foto_preview: p.FOTO_URL || '',
+    })
+    setModalEditar(true)
+  }
+
+  function handleFotoEditar(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setEditForm(f => ({ ...f, foto_base64: ev.target.result, foto_preview: ev.target.result }))
+    reader.readAsDataURL(file)
+  }
+
+  async function handleGuardarEdicion() {
+    if (!editForm.nombre || !editForm.stock) return alert('Nombre y stock son obligatorios')
+    setEditando(true)
+    try {
+      const res = await fetch('/api/sucursal', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id:       editForm.id,
+          usuario:  user?.nombre || user?.email || 'desconocido',
+          nombre:   editForm.nombre,
+          tienda:   editForm.tienda,
+          talla:    editForm.talla,
+          color:    editForm.color,
+          stock:    editForm.stock,
+          precio:   editForm.precio,
+          ...(editForm.foto_base64 ? { foto_base64: editForm.foto_base64 } : {}),
+        })
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setModalEditar(false)
+        setEditForm(null)
+        await loadSucursal()
+      } else { alert('Error: ' + data.error) }
+    } catch (e) { alert('Error al guardar') }
+    finally { setEditando(false) }
+  }
+
+
   const tallasOpciones = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'U']
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -161,8 +219,8 @@ export default function CatalogoPage() {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {sucursal.filter(p => parseInt(p.STOCK) > 0).map(p => (
-                    <div key={p.ID}
-                      className="card overflow-hidden transition-all hover:border-gray-600">
+                    <div key={p.ID} onClick={() => abrirEditar(p)}
+                      className="card overflow-hidden transition-all hover:border-gray-600 cursor-pointer">
                       {/* Imagen */}
                       <div className="aspect-square bg-gray-800 relative">
                         {p.FOTO_URL
@@ -293,6 +351,103 @@ export default function CatalogoPage() {
           )}
         </div>
       </div>
+
+      {/* ── Modal Editar Sucursal ── */}
+      {modalEditar && editForm && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end md:items-center justify-center p-4"
+          onClick={e => e.target === e.currentTarget && setModalEditar(false)}>
+          <div className="bg-gray-900 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gray-900 flex items-center justify-between p-4 border-b border-gray-800">
+              <h3 className="font-semibold text-white">Editar producto</h3>
+              <button onClick={() => setModalEditar(false)} className="text-gray-500 hover:text-white">✕</button>
+            </div>
+            <div className="p-4 space-y-4">
+
+              {/* Foto */}
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Foto del producto</label>
+                <div onClick={() => editFileRef.current?.click()}
+                  className="w-full h-36 rounded-xl border-2 border-dashed border-gray-700 flex items-center justify-center cursor-pointer hover:border-gray-500 overflow-hidden transition-all">
+                  {editForm.foto_preview
+                    ? <img src={editForm.foto_preview} className="w-full h-full object-cover" />
+                    : <div className="text-center text-gray-600"><div className="text-2xl mb-1">📷</div><div className="text-xs">Subir imagen</div></div>
+                  }
+                </div>
+                <input ref={editFileRef} type="file" accept="image/*" className="hidden" onChange={handleFotoEditar} />
+              </div>
+
+              {/* Nombre */}
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Nombre *</label>
+                <input className="input" value={editForm.nombre}
+                  onChange={e => setEditForm(f => ({ ...f, nombre: e.target.value }))} />
+              </div>
+
+              {/* Tienda */}
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Tienda *</label>
+                <div className="flex gap-2">
+                  {['Mandarina', 'Indstore'].map(t => (
+                    <button key={t} onClick={() => setEditForm(f => ({ ...f, tienda: t }))}
+                      className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all
+                        ${editForm.tienda === t ? 'text-white border-transparent' : 'border-gray-700 text-gray-500'}`}
+                      style={editForm.tienda === t ? { backgroundColor: t === 'Mandarina' ? '#FF6B00' : '#E91E8C' } : {}}>
+                      {t === 'Mandarina' ? '🍊 Mandarina' : '🏣 Indstore'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Talla */}
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Talla</label>
+                <div className="flex gap-2 flex-wrap">
+                  {tallasOpciones.map(t => (
+                    <button key={t} onClick={() => setEditForm(f => ({ ...f, talla: t }))}
+                      className={`px-3 py-1.5 rounded-xl text-sm font-semibold border transition-all
+                        ${editForm.talla === t ? 'bg-gray-600 border-gray-500 text-white' : 'border-gray-700 text-gray-500'}`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Color */}
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Color</label>
+                <input className="input" placeholder="Ej: Negro, Rojo..." value={editForm.color}
+                  onChange={e => setEditForm(f => ({ ...f, color: e.target.value }))} />
+              </div>
+
+              {/* Stock y Precio */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Stock *</label>
+                  <input className="input" type="number" min="0" value={editForm.stock}
+                    onChange={e => setEditForm(f => ({ ...f, stock: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Precio $</label>
+                  <input className="input" type="number" step="0.01" value={editForm.precio}
+                    onChange={e => setEditForm(f => ({ ...f, precio: e.target.value }))} />
+                </div>
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setModalEditar(false)}
+                  className="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-semibold hover:border-gray-500 transition-all">
+                  Cancelar
+                </button>
+                <button onClick={handleGuardarEdicion} disabled={editando}
+                  className="flex-1 py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-all disabled:opacity-50">
+                  {editando ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal Agregar Sucursal ── */}
       {modalAgregar && (
