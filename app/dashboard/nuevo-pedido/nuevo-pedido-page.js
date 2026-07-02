@@ -99,6 +99,27 @@ export default function NuevoPedidoPage() {
   }, [])
 
   useEffect(() => {
+    const raw = sessionStorage.getItem('sucursal_preselecc')
+    if (!raw) return
+    sessionStorage.removeItem('sucursal_preselecc')
+    try {
+      const p = JSON.parse(raw)
+      setItems([{
+        tipo:       'SUCURSAL',
+        sucursalId: p.sucursalId,
+        nombre:     p.nombre,
+        talla:      p.talla  || 'U',
+        color:      p.color  || '',
+        cantidad:   1,
+        precioUnit: p.precio || '',
+        area:       '',
+        notas:      '',
+      }])
+      setStep(2)
+    } catch (e) { console.error('preselecc parse error', e) }
+  }, [])
+
+  useEffect(() => {
     if (items.length === 0) return
     const areas = [...new Set(items.map(i => (i.area || '').replace(/\s*\+\s*/g, ',').split(',').map(x => x.trim())).flat())].sort()
     const combos = {

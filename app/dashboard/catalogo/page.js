@@ -219,8 +219,7 @@ export default function CatalogoPage() {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {sucursal.filter(p => parseInt(p.STOCK) > 0).map(p => (
-                    <div key={p.ID} onClick={() => abrirEditar(p)}
-                      className="card overflow-hidden transition-all hover:border-gray-600 cursor-pointer">
+                    <div key={p.ID} className="card overflow-hidden transition-all hover:border-gray-600">
                       {/* Imagen */}
                       <div className="aspect-square bg-gray-800 relative">
                         {p.FOTO_URL
@@ -244,9 +243,29 @@ export default function CatalogoPage() {
                         {p.PRECIO > 0 && (
                           <div className="text-xs text-mandarina-400 font-medium mt-1">${parseFloat(p.PRECIO).toFixed(2)}</div>
                         )}
-                        {p.MODIFICADO_POR && (
-                          <div className="text-xs text-gray-700 mt-1 truncate">por {p.MODIFICADO_POR}</div>
-                        )}
+                        {/* Acciones */}
+                        <button
+                          onClick={() => {
+                            sessionStorage.setItem('sucursal_preselecc', JSON.stringify({
+                              tipo: 'SUCURSAL',
+                              sucursalId: p.ID,
+                              nombre: p.NOMBRE,
+                              talla: p.TALLA,
+                              color: p.COLOR,
+                              precio: p.PRECIO,
+                              tienda: p.TIENDA,
+                            }))
+                            router.push('/dashboard/nuevo-pedido')
+                          }}
+                          className="w-full mt-2 py-1.5 rounded-lg text-xs font-bold text-white transition-all"
+                          style={{ backgroundColor: p.TIENDA === 'Mandarina' ? '#FF6B00' : '#E91E8C' }}>
+                          Comprar
+                        </button>
+                        <button
+                          onClick={() => abrirEditar(p)}
+                          className="w-full mt-1 text-center text-xs text-gray-600 hover:text-gray-400 transition-all">
+                          Editar
+                        </button>
                       </div>
                     </div>
                   ))}
