@@ -10,6 +10,7 @@ export default function CatalogoPage() {
   const [loading, setLoading] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [selected, setSelected] = useState(null)
+  const [sincronizando, setSincronizando] = useState(false)
 
   // Sucursal
   const [sucursal, setSucursal] = useState([])
@@ -41,6 +42,27 @@ export default function CatalogoPage() {
       setProductos(data.products || [])
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
+  }
+
+  // Sincroniza el catálogo desde Shopify hacia la hoja PRODUCTOS_SHOPIFY (ambas tiendas),
+  // luego recarga la vista. Para el caso raro de subir un producto y quererlo ver ya.
+  async function handleSync() {
+    setSincronizando(true)
+    try {
+      const res = await fetch('/api/shopify/sync', { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        const detalle = Object.entries(data.porTienda || {}).map(([k, v]) => `${k}: ${v}`).join(' · ')
+        alert(`Catálogo actualizado ✓  (${data.total} productos)\n${detalle}`)
+        await loadProductos(busqueda)
+      } else {
+        alert('No se pudo actualizar: ' + (data.error || 'error desconocido'))
+      }
+    } catch (e) {
+      alert('Error al sincronizar con Shopify')
+    } finally {
+      setSincronizando(false)
+    }
   }
 
   function handleBusqueda(val) {
@@ -166,6 +188,13 @@ export default function CatalogoPage() {
                 <button onClick={() => setModalAgregar(true)}
                   className="text-xs px-3 py-1.5 rounded-xl bg-mandarina-500 text-white font-semibold hover:bg-mandarina-600 transition-all">
                   + Agregar
+                </button>
+              )}
+              {tienda !== 'SUCURSAL' && (
+                <button onClick={handleSync} disabled={sincronizando}
+                  title="Trae los productos más recientes desde Shopify"
+                  className="text-xs px-3 py-1.5 rounded-xl border border-gray-700 text-gray-300 font-semibold hover:border-gray-500 transition-all disabled:opacity-50 min-h-[44px] md:min-h-0">
+                  {sincronizando ? 'Actualizando…' : '↻ Actualizar'}
                 </button>
               )}
               <span className="text-xs text-gray-500">
