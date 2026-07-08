@@ -339,14 +339,15 @@ export default function PedidoDetailPage() {
           )}
 
           {/* Factura — si ya fue procesada por Make/Dátil */}
-          {pedido.FACTURA_PDF_URL && (
+          {(pedido.FACTURA_ID || pedido.FACTURA_PDF_URL) && (
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 flex items-center gap-3">
               <span className="text-2xl">🧾</span>
               <div className="flex-1">
                 <div className="text-blue-400 font-semibold text-sm">Factura electrónica emitida</div>
                 {pedido.FACTURA_ID && <div className="text-gray-500 text-xs mt-0.5">Dátil ID: {pedido.FACTURA_ID}</div>}
               </div>
-              <a href={pedido.FACTURA_PDF_URL} target="_blank" rel="noopener noreferrer"
+              <a href={pedido.FACTURA_ID ? `/api/factura/${pedido.FACTURA_ID}/ride` : pedido.FACTURA_PDF_URL}
+                target="_blank" rel="noopener noreferrer"
                 className="btn-primary text-xs px-4 py-2" style={{backgroundColor:'#3b82f6'}}>
                 📄 Ver RIDE
               </a>
