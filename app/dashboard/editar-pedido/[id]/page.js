@@ -4,6 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
+import { subirFoto } from '@/lib/subirImagen'
 
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
@@ -16,18 +17,14 @@ function ItemEditor({ item, onSave }) {
   const [uploading, setUploading] = useState({})
   const [uploadError, setUploadError] = useState('')
 
-  // Sube a Cloudinary a calidad ORIGINAL (sin reescalar ni recomprimir). Solo se guarda la URL.
+  // Sube la foto a Cloudinary. Se reescala a buena calidad antes de subir para
+  // no exceder el límite de tamaño de request de Vercel. Solo se guarda la URL.
   async function handleFoto(key, file) {
     if (!file) return
     setUploading(u=>({...u,[key]:true})); setUploadError('')
     try {
-      const form = new FormData()
-      form.append('file', file)
-      form.append('tipo', 'diseno')
-      const res = await fetch('/api/upload', { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok || !data.url) throw new Error(data.error || 'Error al subir')
-      setFotos(f=>({...f,[key]:data.url}))
+      const url = await subirFoto(file, 'diseno')
+      setFotos(f=>({...f,[key]:url}))
     } catch(e) {
       setUploadError(e.message)
     } finally {

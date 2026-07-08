@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { subirFoto, subirArchivo } from '@/lib/subirImagen'
 
 const TALLAS = ['4XL','3XL','2XL','XL','L','M','S','XS','12','10','9','8','7','6','5','4','3','2','1 AÑO']
 const AREAS = [
@@ -21,19 +22,17 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
   const cantidadValida = cantidad >= 1
   const precioValido = precio >= 0
 
-  // Sube el archivo a Cloudinary a calidad ORIGINAL (sin reescalar ni recomprimir).
-  // Solo se guarda la URL, así el payload queda liviano sin perder calidad.
+  // Sube a Cloudinary y guarda solo la URL. Las fotos (pecho/espalda/mangas) se
+  // reescalan a buena calidad antes de subir para no exceder el límite de tamaño
+  // de request de Vercel; el archivo de diseño se sube sin recomprimir.
   async function handleFoto(key, file) {
     if (!file) return
     setUploading(u => ({ ...u, [key]: true })); setUploadError('')
     try {
-      const form = new FormData()
-      form.append('file', file)
-      form.append('tipo', 'diseno')
-      const res = await fetch('/api/upload', { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok || !data.url) throw new Error(data.error || 'Error al subir')
-      onChange({ ...item, [key]: data.url })
+      const url = key === 'archivoDiseno'
+        ? await subirArchivo(file, 'diseno')
+        : await subirFoto(file, 'diseno')
+      onChange({ ...item, [key]: url })
     } catch (e) {
       setUploadError(e.message)
     } finally {
