@@ -179,24 +179,27 @@ function ArchivoCloudinary({ fotos, onChange }) {
 }
 
 function FotoUploader({ fotos, onChange }) {
-  function handleFoto(key, file) {
+  const [uploading, setUploading] = useState({})
+  const [error, setError] = useState('')
+
+  // Sube la foto a Cloudinary a calidad ORIGINAL (sin reescalar ni recomprimir),
+  // igual que el archivo de diseño. Solo se guarda la URL, así el payload queda liviano.
+  async function handleFoto(key, file) {
     if (!file) return
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      const MAX = 800
-      let w = img.width, h = img.height
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round(h * MAX / w); w = MAX }
-        else { w = Math.round(w * MAX / h); h = MAX }
-      }
-      canvas.width = w; canvas.height = h
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-      URL.revokeObjectURL(url)
-      onChange({ ...fotos, [key]: canvas.toDataURL('image/jpeg', 0.75) })
+    setUploading(u => ({ ...u, [key]: true })); setError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('tipo', 'diseno')
+      const res = await fetch('/api/upload', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok || !data.url) throw new Error(data.error || 'Error al subir')
+      onChange({ ...fotos, [key]: data.url })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setUploading(u => ({ ...u, [key]: false }))
     }
-    img.src = url
   }
 
   const slots = [
@@ -213,20 +216,27 @@ function FotoUploader({ fotos, onChange }) {
         {slots.map(([key, label]) => (
           <div key={key} className="flex flex-col gap-1">
             <label className={`relative flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer transition-all overflow-hidden
-              ${fotos[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}`}>
+              ${fotos[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}
+              ${uploading[key] ? 'opacity-60 pointer-events-none' : ''}`}>
               <input type="file" accept="image/*" className="hidden"
                 onChange={e => handleFoto(key, e.target.files[0])} />
-              {fotos[key]
+              {uploading[key] ? (
+                <div className="flex flex-col items-center gap-1">
+                  <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-[10px] text-gray-500">Subiendo...</span>
+                </div>
+              ) : fotos[key]
                 ? <img src={fotos[key]} className="w-full h-full object-cover" />
                 : <span className="text-xs text-gray-500 text-center px-2">{label}</span>}
             </label>
-            {fotos[key] && (
+            {fotos[key] && !uploading[key] && (
               <button onClick={() => onChange({ ...fotos, [key]: null })}
                 className="text-xs text-red-400 hover:text-red-300 text-center">✕ quitar</button>
             )}
           </div>
         ))}
       </div>
+      {error && <div className="text-red-400 text-xs">⚠️ {error}</div>}
       <ArchivoCloudinary fotos={fotos} onChange={onChange} />
     </div>
   )
