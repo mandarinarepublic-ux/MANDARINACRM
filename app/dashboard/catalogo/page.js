@@ -252,7 +252,7 @@ export default function CatalogoPage() {
                       {/* Imagen */}
                       <div className="aspect-square bg-gray-800 relative">
                         {p.FOTO_URL
-                          ? <img src={p.FOTO_URL} alt={p.NOMBRE} className="w-full h-full object-cover" />
+                          ? <img src={p.FOTO_URL} alt={p.NOMBRE} loading="lazy" className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center text-gray-600 text-3xl">👕</div>}
                         {/* Badge tienda */}
                         <div className="absolute top-2 right-2">
@@ -321,7 +321,7 @@ export default function CatalogoPage() {
                       ${selected?.id === p.id ? 'border-mandarina-500' : ''}`}>
                     <div className="aspect-square bg-gray-800 relative">
                       {p.image
-                        ? <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
+                        ? <img src={p.image} alt={p.title} loading="lazy" className="w-full h-full object-cover" />
                         : <div className="w-full h-full flex items-center justify-center text-gray-600 text-3xl">👕</div>}
                       <div className="absolute top-2 right-2">
                         <span className="text-xs px-1.5 py-0.5 rounded-full text-white"
@@ -333,7 +333,10 @@ export default function CatalogoPage() {
                     <div className="p-3">
                       <div className="text-xs font-medium text-white leading-tight mb-1 line-clamp-2">{p.title}</div>
                       <div className="text-xs text-mandarina-400 font-medium">
-                        desde ${Math.min(...(p.variants || []).map(v => parseFloat(v.price || 0))).toFixed(2)}
+                        {(() => {
+                          const precios = (p.variants || []).map(v => parseFloat(v.price || 0)).filter(n => !isNaN(n))
+                          return precios.length ? `desde $${Math.min(...precios).toFixed(2)}` : 'Sin precio'
+                        })()}
                       </div>
                       <div className="text-xs text-gray-600 mt-0.5">{p.variants?.length || 0} variante(s)</div>
                     </div>

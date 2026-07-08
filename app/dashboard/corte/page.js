@@ -75,19 +75,20 @@ function CorteCard({ item, userId, onCorteChange }) {
           {fotos.length > 0 ? (
             <>
               <div className="w-28 h-28 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 cursor-pointer mb-2"
-                onDoubleClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
-                <img src={item[fotoActiva || fotos[0].key]} className="w-full h-full object-cover" alt="foto" />
+                onClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
+                <img src={item[fotoActiva || fotos[0].key]} loading="lazy" className="w-full h-full object-cover" alt="foto" />
               </div>
               {fotos.length > 1 && (
                 <div className="flex gap-1 justify-center flex-wrap">
                   {fotos.map(f => (
                     <button key={f.key} onClick={() => setFotoActiva(f.key)}
                       className={`p-0.5 rounded border transition-all ${(fotoActiva||fotos[0].key)===f.key ? 'border-mandarina-500' : 'border-gray-700'}`}>
-                      <img src={f.url} className="w-8 h-8 rounded object-cover" />
+                      <img src={f.url} loading="lazy" className="w-8 h-8 rounded object-cover" />
                     </button>
                   ))}
                 </div>
               )}
+              <div className="text-xs text-gray-600 mt-1 text-center">👆 Toca para ampliar</div>
             </>
           ) : (
             <div className="w-28 h-28 rounded-xl border border-gray-800 bg-gray-800/50 flex items-center justify-center">
@@ -128,6 +129,10 @@ export default function CortePage() {
   const [filtro, setFiltro] = useState('PENDIENTE')
   const [busqueda, setBusqueda] = useState('')
   const [expandedPedido, setExpandedPedido] = useState(null)
+  const [visibles, setVisibles] = useState(20)
+  const PAGE_SIZE_C = 20
+
+  useEffect(() => { setVisibles(20) }, [busqueda, filtro])
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -186,6 +191,8 @@ export default function CortePage() {
   })).filter(p => p.itemsFiltrados.length > 0)
 
   const totalItems = filtered.reduce((s, p) => s + p.itemsFiltrados.length, 0)
+  const paginados = filtered.slice(0, visibles)
+  const hayMas = filtered.length > visibles
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
@@ -234,8 +241,9 @@ export default function CortePage() {
               <div className="font-medium text-white">Sin ítems en este estado</div>
             </div>
           ) : (
+            <>
             <div className="space-y-3">
-              {filtered.map(pedido => {
+              {paginados.map(pedido => {
                 const diasR = pedido.FECHA_ENTREGA_PROMETIDA
                   ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) : null
                 const urgente = diasR !== null && diasR <= 2
@@ -254,7 +262,7 @@ export default function CortePage() {
                           {urgente && <span className="badge bg-red-500/20 text-red-400 text-xs">🚨 Urgente</span>}
                           <span className="text-xs text-gray-600">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                           {/* Dots de estado corte */}
-                          <div className="flex gap-1 ml-auto">
+                          <div className="flex gap-1 ml-auto flex-wrap justify-end max-w-[45%]">
                             {pedido.itemsFiltrados.map(i => (
                               <span key={i.ITEM_ID}
                                 className={`w-2.5 h-2.5 rounded-full ${
@@ -284,6 +292,14 @@ export default function CortePage() {
                 )
               })}
             </div>
+            {hayMas && (
+              <button
+                onClick={() => setVisibles(v => v + PAGE_SIZE_C)}
+                className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
+                Cargar más ({filtered.length - visibles} restantes)
+              </button>
+            )}
+            </>
           )}
         </div>
       </div>

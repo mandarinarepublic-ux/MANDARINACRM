@@ -124,15 +124,15 @@ export default function HistorialPage() {
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
           </div>
 
-          {/* Fila 2: 3 combos lado a lado */}
-          <div className="flex gap-2">
+          {/* Fila 2: combos — 2 por fila en movil, 3 en desktop */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {/* Estado */}
-            <div className="flex-1 flex flex-col gap-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Estado</span>
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Estado</span>
               <select
                 value={filtroEstado}
                 onChange={e => setFiltroEstado(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
                   ${filtroEstado !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                 <option value="TODOS">Todos</option>
                 <option value="PENDIENTE_FABRICA">Pend. Fábrica</option>
@@ -144,12 +144,12 @@ export default function HistorialPage() {
             </div>
             {/* Tienda */}
             {!isYAW && (
-              <div className="flex-1 flex flex-col gap-1">
-                <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Tienda</span>
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Tienda</span>
                 <select
                   value={filtroTienda}
                   onChange={e => setFiltroTienda(e.target.value)}
-                  className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                  className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
                     ${filtroTienda !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                   <option value="TODAS">Todas</option>
                   <option value="MANDARINA">🍊 Mandarina</option>
@@ -157,29 +157,19 @@ export default function HistorialPage() {
                 </select>
               </div>
             )}
-            {/* Pago + expandir/contraer */}
-            <div className="flex-1 flex flex-col gap-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Pago</span>
-              <div className="flex gap-1">
-                <select
-                  value={filtroPago}
-                  onChange={e => setFiltroPago(e.target.value)}
-                  className={`flex-1 min-w-0 bg-gray-800 border rounded-xl px-2 py-1.5 text-xs outline-none cursor-pointer transition-all
-                    ${filtroPago !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
-                  <option value="TODOS">Todos</option>
-                  <option value="PENDIENTE">⚠ Pendiente</option>
-                  <option value="ABONO">🔶 Abono</option>
-                  <option value="PAGADO">✅ Pagado</option>
-                </select>
-                <button onClick={expandirTodos} title="Expandir todos"
-                  className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-xl px-2 py-1.5 text-gray-400 hover:text-white hover:border-gray-500 transition-all text-xs">
-                  ⊞
-                </button>
-                <button onClick={contraerTodos} title="Contraer todos"
-                  className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-xl px-2 py-1.5 text-gray-400 hover:text-white hover:border-gray-500 transition-all text-xs">
-                  ⊟
-                </button>
-              </div>
+            {/* Pago */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Pago</span>
+              <select
+                value={filtroPago}
+                onChange={e => setFiltroPago(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                  ${filtroPago !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
+                <option value="TODOS">Todos</option>
+                <option value="PENDIENTE">⚠ Pendiente</option>
+                <option value="ABONO">🔶 Abono</option>
+                <option value="PAGADO">✅ Pagado</option>
+              </select>
             </div>
           </div>
         </div>
@@ -187,12 +177,22 @@ export default function HistorialPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
-          <div className="text-xs text-gray-600 mb-3">
-            {loading
-              ? 'Cargando...'
-              : hayMas
-                ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)`
-                : `${filtered.length} pedido(s)`}
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs text-gray-600">
+              {loading
+                ? 'Cargando...'
+                : hayMas
+                  ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)`
+                  : `${filtered.length} pedido(s)`}
+            </div>
+            {!loading && filtered.length > 0 && (
+              <div className="flex gap-2">
+                <button onClick={expandirTodos}
+                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊞ Expandir</button>
+                <button onClick={contraerTodos}
+                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊟ Contraer</button>
+              </div>
+            )}
           </div>
           {loading ? (
             <SkeletonList count={6} />
