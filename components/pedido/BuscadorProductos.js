@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { subirFoto, subirArchivo } from '@/lib/subirImagen'
 
 const TALLAS = ['4XL','3XL','2XL','XL','L','M','S','XS','12','10','9','8','7','6','5','4','3','2','1 AÑO']
 
@@ -123,13 +124,8 @@ function ArchivoCloudinary({ fotos, onChange }) {
     if (!file) return
     setUploading(true); setError('')
     try {
-      const form = new FormData()
-      form.append('file', file)
-      form.append('tipo', 'diseno')
-      const res = await fetch('/api/upload', { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok || !data.url) throw new Error(data.error || 'Error al subir')
-      onChange({ ...fotos, archivoDiseno: data.url })
+      const url = await subirArchivo(file, 'diseno')
+      onChange({ ...fotos, archivoDiseno: url })
     } catch(e) {
       setError(e.message)
     } finally {
@@ -182,19 +178,14 @@ function FotoUploader({ fotos, onChange }) {
   const [uploading, setUploading] = useState({})
   const [error, setError] = useState('')
 
-  // Sube la foto a Cloudinary a calidad ORIGINAL (sin reescalar ni recomprimir),
-  // igual que el archivo de diseño. Solo se guarda la URL, así el payload queda liviano.
+  // Sube la foto a Cloudinary. Se reescala a buena calidad antes de subir para
+  // no exceder el límite de tamaño de request de Vercel. Solo se guarda la URL.
   async function handleFoto(key, file) {
     if (!file) return
     setUploading(u => ({ ...u, [key]: true })); setError('')
     try {
-      const form = new FormData()
-      form.append('file', file)
-      form.append('tipo', 'diseno')
-      const res = await fetch('/api/upload', { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok || !data.url) throw new Error(data.error || 'Error al subir')
-      onChange({ ...fotos, [key]: data.url })
+      const url = await subirFoto(file, 'diseno')
+      onChange({ ...fotos, [key]: url })
     } catch (e) {
       setError(e.message)
     } finally {
