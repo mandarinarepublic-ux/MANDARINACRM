@@ -261,15 +261,20 @@ export default function CortePage() {
                           </Link>
                           {urgente && <span className="badge bg-red-500/20 text-red-400 text-xs">🚨 Urgente</span>}
                           <span className="text-xs text-gray-600">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
-                          {/* Dots de estado corte */}
-                          <div className="flex gap-1 ml-auto flex-wrap justify-end max-w-[45%]">
-                            {pedido.itemsFiltrados.map(i => (
-                              <span key={i.ITEM_ID}
-                                className={`w-2.5 h-2.5 rounded-full ${
-                                  (i.SUBESTADO_CORTE||'PENDIENTE') === 'CORTADO' ? 'bg-green-500'
-                                  : (i.SUBESTADO_CORTE||'PENDIENTE') === 'SOLICITADO' ? 'bg-yellow-500' : 'bg-gray-600'
-                                }`} title={i.PRODUCTO_NOMBRE} />
-                            ))}
+                          {/* Estado corte: resumen + dots */}
+                          <div className="flex items-center gap-1.5 ml-auto flex-wrap justify-end max-w-[55%]">
+                            <span className="text-xs font-medium text-gray-400">
+                              {pedido.itemsFiltrados.filter(i => (i.SUBESTADO_CORTE||'PENDIENTE') === 'CORTADO').length}/{pedido.itemsFiltrados.length} cortados
+                            </span>
+                            <div className="flex gap-1 flex-wrap justify-end">
+                              {pedido.itemsFiltrados.map(i => (
+                                <span key={i.ITEM_ID}
+                                  className={`w-2.5 h-2.5 rounded-full ${
+                                    (i.SUBESTADO_CORTE||'PENDIENTE') === 'CORTADO' ? 'bg-green-500'
+                                    : (i.SUBESTADO_CORTE||'PENDIENTE') === 'SOLICITADO' ? 'bg-yellow-500' : 'bg-gray-600'
+                                  }`} title={i.PRODUCTO_NOMBRE} />
+                              ))}
+                            </div>
                           </div>
                         </div>
                         <div className="text-xs text-gray-500">

@@ -87,6 +87,7 @@ export default function NuevoPedidoPage() {
   const [cliente, setCliente] = useState({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' })
   const [cedulaError, setCedulaError] = useState('')
   const [celularError, setCelularError] = useState('')
+  const [clienteExistente, setClienteExistente] = useState(null)
   const refDireccion = useRef(null)
   const [emitirFactura, setEmitirFactura] = useState(true)
   const [usarMapa, setUsarMapa] = useState(false)
@@ -393,6 +394,36 @@ export default function NuevoPedidoPage() {
             </div>
           )}
 
+          {/* Modal: cliente ya existe (reemplaza window.confirm nativo) */}
+          {clienteExistente && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4"
+              onClick={e => e.target === e.currentTarget && setClienteExistente(null)}>
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">👤</span>
+                  <h3 className="text-white font-semibold text-base">Cliente ya registrado</h3>
+                </div>
+                <div className="bg-gray-800/60 rounded-xl px-4 py-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-4"><span className="text-gray-500">Nombre</span><span className="text-white text-right">{clienteExistente.NOMBRE}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-gray-500">Celular</span><span className="text-white text-right">{clienteExistente.CELULAR || '—'}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-gray-500">Dirección</span><span className="text-white text-right">{clienteExistente.DIRECCION || 'No registrada'}</span></div>
+                </div>
+                <p className="text-gray-400 text-sm">¿Autocompletar los datos de este cliente?</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setClienteExistente(null)}
+                    className="btn-secondary flex-1 py-3">No, seguir</button>
+                  <button onClick={() => {
+                    const f = clienteExistente
+                    setClienteId(f.CLIENTE_ID)
+                    setCliente({ nombre: f.NOMBRE||'', cedula: String(f.CEDULA||''), celular: String(f.CELULAR||''), email: f.EMAIL||'', ciudad: f.CIUDAD||'', direccion: f.DIRECCION||'' })
+                    setClienteKey(k => k+1)
+                    setClienteExistente(null)
+                  }} className="btn-primary flex-1 py-3">Sí, autocompletar</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* STEP 1 — oculto para YAW (saltan directo al 2) */}
           {step === 1 && !isYAW && (
             <div className="space-y-4">
@@ -435,14 +466,7 @@ export default function NuevoPedidoPage() {
                         const r = await fetch(`/api/clientes?q=${encodeURIComponent(ced)}`)
                         const d = await r.json()
                         const found = (d.clientes||[]).find(c => String(c.CEDULA)===String(ced))
-                        if (found) {
-                          const usar = window.confirm(`⚠️ Cliente ya existe:\n\nNombre: ${found.NOMBRE}\nCelular: ${found.CELULAR}\nDirección: ${found.DIRECCION||'No registrada'}\n\n¿Autocompletar datos?`)
-                          if (usar) {
-                            setClienteId(found.CLIENTE_ID)
-                            setCliente({ nombre: found.NOMBRE||'', cedula: String(found.CEDULA||''), celular: String(found.CELULAR||''), email: found.EMAIL||'', ciudad: found.CIUDAD||'', direccion: found.DIRECCION||'' })
-                            setClienteKey(k => k+1)
-                          }
-                        }
+                        if (found) setClienteExistente(found)
                       } catch(err) {}
                     }} />
                   {cedulaError && <p className="text-red-400 text-xs mt-1">{cedulaError}</p>}

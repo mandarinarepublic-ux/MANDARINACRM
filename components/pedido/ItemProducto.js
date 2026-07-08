@@ -134,7 +134,7 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
                     </label>
                     {item[key] && (
                       <button onClick={() => onChange({...item, [key]: null})}
-                        className="text-xs text-red-400 mt-0.5 w-full text-center">✕ quitar</button>
+                        className="text-xs text-red-400 mt-0.5 w-full text-center py-1.5 rounded-lg hover:bg-red-500/10 transition-all">✕ quitar</button>
                     )}
                   </div>
                 ))}

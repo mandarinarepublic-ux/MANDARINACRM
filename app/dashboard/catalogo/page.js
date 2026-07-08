@@ -292,8 +292,8 @@ export default function CatalogoPage() {
                         </button>
                         <button
                           onClick={() => abrirEditar(p)}
-                          className="w-full mt-1 text-center text-xs text-gray-600 hover:text-gray-400 transition-all">
-                          Editar
+                          className="w-full mt-1 py-2 text-center text-xs text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-all">
+                          ✏️ Editar
                         </button>
                       </div>
                     </div>
