@@ -65,10 +65,10 @@ export default function CatalogoPage() {
     }
   }
 
+  // Filtrado 100% client-side: al cambiar de tienda ya cargamos todos sus productos
+  // en `productos`, así que buscar es filtrar en memoria (0 llamadas a Sheets por tecla).
   function handleBusqueda(val) {
     setBusqueda(val)
-    if (val.length === 0) loadProductos()
-    else if (val.length >= 2) loadProductos(val)
   }
 
   const filtered = productos.filter(p =>
