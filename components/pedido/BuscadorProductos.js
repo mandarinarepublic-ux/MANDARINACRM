@@ -282,13 +282,13 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
         </div>
         <div>
           <label className="label">Cantidad *</label>
-          <input type="number" className="input" min="1" placeholder="0"
+          <input type="number" inputMode="numeric" className="input" min="1" placeholder="0"
             value={cantidad || ''}
             onChange={e => setCantidad(parseInt(e.target.value) || 0)} />
         </div>
         <div>
           <label className="label">Precio $ *</label>
-          <input type="number" className="input" step="0.50" min="0"
+          <input type="number" inputMode="decimal" className="input" step="0.50" min="0"
             value={precioEdit}
             onChange={e => setPrecioEdit(parseFloat(e.target.value) || 0)} />
           {precioEdit !== parseFloat(variant?.price || 0) && (
@@ -412,13 +412,13 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false }) {
         </div>
         <div>
           <label className="label">Cantidad *</label>
-          <input type="number" className="input" min="1" placeholder="0"
+          <input type="number" inputMode="numeric" className="input" min="1" placeholder="0"
             value={data.cantidad}
             onChange={e => setData(p => ({...p, cantidad: parseInt(e.target.value) || 0}))} />
         </div>
         <div>
           <label className="label">Precio $ *</label>
-          <input type="number" className="input" step="0.50" min="0" placeholder="0.00"
+          <input type="number" inputMode="decimal" className="input" step="0.50" min="0" placeholder="0.00"
             value={data.precio}
             onChange={e => setData(p => ({...p, precio: parseFloat(e.target.value) || 0}))} />
         </div>

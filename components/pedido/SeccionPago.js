@@ -23,7 +23,7 @@ function PagoItem({ pago, index, onChange, onRemove, montoTotal, totalOtrosPagos
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-white">Pago {index + 1}</span>
         {index > 0 && (
-          <button onClick={onRemove} className="text-red-400 text-xs hover:text-red-300">✕ Eliminar</button>
+          <button onClick={onRemove} className="text-red-400 text-sm hover:text-red-300 px-2 py-1.5">✕ Eliminar</button>
         )}
       </div>
 
@@ -31,7 +31,7 @@ function PagoItem({ pago, index, onChange, onRemove, montoTotal, totalOtrosPagos
       <div className="flex gap-2">
         {TIPOS.map(t => (
           <button key={t} onClick={() => onChange({ ...pago, tipo: t })}
-            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all border
+            className={`flex-1 py-3 min-h-[44px] rounded-xl text-xs font-semibold transition-all border
               ${pago.tipo === t ? 'bg-mandarina-500 border-mandarina-500 text-white' : 'border-gray-700 text-gray-500'}`}>
             {t === 'EFECTIVO' ? '💵' : t === 'TRANSFERENCIA' ? '🏦' : '🔗'} {t.replace('_',' ')}
           </button>
@@ -41,7 +41,7 @@ function PagoItem({ pago, index, onChange, onRemove, montoTotal, totalOtrosPagos
       {/* Monto */}
       <div>
         <label className="label">Monto recibido $</label>
-        <input type="number" step="0.50" min="0"
+        <input type="number" step="0.50" min="0" inputMode="decimal"
           className={`input text-xl font-bold ${superaTotal ? 'border-red-500' : ''}`}
           value={pago.monto || ''}
           placeholder="0.00"

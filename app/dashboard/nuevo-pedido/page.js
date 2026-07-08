@@ -99,6 +99,7 @@ export default function NuevoPedidoPage() {
   const [diasCalculado, setDiasCalculado] = useState(4)
   const [notasVendedor, setNotasVendedor] = useState('')
   const pagoRef = useRef(null)
+  const errorRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [step, setStep] = useState(1)
@@ -216,15 +217,19 @@ export default function NuevoPedidoPage() {
     return true
   }
 
+  function scrollToError() {
+    setTimeout(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100)
+  }
+
   function goToStep(s) {
     if (s > step) {
       if (step === 1) {
         const err = validateStep1()
-        if (err) { setError(err); return }
+        if (err) { setError(err); scrollToError(); return }
       }
       if (step === 2) {
         const err = validateStep2()
-        if (err) { setError(err); return }
+        if (err) { setError(err); scrollToError(); return }
       }
       if (step === 3) {
         const err = validateStep3()
@@ -366,7 +371,7 @@ export default function NuevoPedidoPage() {
             {steps.map((s, i) => (
               <div key={s} className="flex items-center gap-1 flex-1">
                 <button onClick={() => goToStep(i + 1)}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all flex-shrink-0
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all flex-shrink-0
                     ${step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'text-white' : 'bg-gray-800 text-gray-500'}
                     ${canGoToStep(i + 1) ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
                   style={step === i + 1 ? { backgroundColor: tiendaColor } : {}}>
@@ -383,7 +388,7 @@ export default function NuevoPedidoPage() {
       <div className="flex-1 overflow-y-auto pb-28">
         <div className="max-w-2xl mx-auto px-4 pt-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4">
+            <div ref={errorRef} className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4 scroll-mt-20">
               {error}
             </div>
           )}
