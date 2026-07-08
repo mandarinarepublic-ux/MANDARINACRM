@@ -163,30 +163,30 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex flex-col sm:flex-row gap-4">
         {/* Fotos */}
-        <div className="w-36 flex-shrink-0">
+        <div className="w-full sm:w-36 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
-              <div className="w-36 h-36 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
-                onDoubleClick={() => setFotoFullscreen(item[fotoActiva||fotos[0].key])}>
+              <div className="w-full h-52 sm:w-36 sm:h-36 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
+                onClick={() => setFotoFullscreen(item[fotoActiva||fotos[0].key])}>
                 <img src={item[fotoActiva||fotos[0].key]} className="w-full h-full object-contain" alt="foto" />
               </div>
               {fotos.length > 1 && (
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-2 flex-wrap">
                   {fotos.map(f=>(
                     <button key={f.key} onClick={()=>setFotoActiva(f.key)}
-                      className={`flex flex-col items-center p-0.5 rounded-lg border transition-all ${(fotoActiva||fotos[0].key)===f.key?'border-mandarina-500':'border-gray-700'}`}>
-                      <img src={item[f.key]} className="w-9 h-9 rounded object-cover" alt={f.label}/>
-                      <span className="text-xs text-gray-600">{f.label}</span>
+                      className={`flex flex-col items-center p-1 rounded-lg border transition-all ${(fotoActiva||fotos[0].key)===f.key?'border-mandarina-500':'border-gray-700'}`}>
+                      <img src={item[f.key]} className="w-11 h-11 sm:w-9 sm:h-9 rounded object-cover" alt={f.label}/>
+                      <span className="text-[10px] text-gray-500">{f.label}</span>
                     </button>
                   ))}
                 </div>
               )}
-              <div className="text-xs text-gray-700 mt-1 text-center">2× = pantalla completa</div>
+              <div className="text-xs text-gray-600 mt-1 text-center">👆 Toca para ampliar</div>
             </>
           ) : (
-            <div className="w-36 h-36 rounded-xl border border-gray-800 bg-gray-800/30 flex items-center justify-center">
+            <div className="w-full h-40 sm:w-36 sm:h-36 rounded-xl border border-gray-800 bg-gray-800/30 flex items-center justify-center">
               <span className="text-gray-700 text-xs">Sin fotos</span>
             </div>
           )}
@@ -194,14 +194,14 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
 
         {/* Info + acciones */}
         <div className="flex-1 min-w-0 space-y-2">
-          <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5 text-xs">
+          <div className="bg-gray-800/50 rounded-xl px-3 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
             <div><span className="text-gray-500">Color:</span> <span className="text-gray-300">{item.COLOR||'—'}</span></div>
             <div><span className="text-gray-500">Talla:</span> <span className="text-gray-300">{item.TALLA||'—'}</span></div>
             <div><span className="text-gray-500">Cant.:</span> <span className="text-gray-300">{item.CANTIDAD}</span></div>
-            <div><span className="text-gray-500">Área:</span> <span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
-            {item.DETALLE_PERSONALIZADO&&<div><span className="text-gray-500">Detalle:</span> <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>}
+            <div className="col-span-2"><span className="text-gray-500">Área:</span> <span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
+            {item.DETALLE_PERSONALIZADO&&<div className="col-span-2"><span className="text-gray-500">Detalle:</span> <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>}
             {/* Diseño: nombre del diseño si existe */}
-            {item.DISENO&&<div><span className="text-gray-500">Diseño:</span> <span className="text-gray-300">{item.DISENO}</span></div>}
+            {item.DISENO&&<div className="col-span-2"><span className="text-gray-500">Diseño:</span> <span className="text-gray-300">{item.DISENO}</span></div>}
           </div>
 
           {/* Nota */}
@@ -238,7 +238,7 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
               <div className="flex gap-1">
                 {CORTE_ESTADOS.map(s => (
                   <button key={s.key} onClick={() => cambiarCorte(s.key)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all
+                    className={`flex-1 py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-all
                       ${subestadoCorte === s.key ? `${s.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
                     {s.label}
                   </button>
@@ -269,10 +269,10 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
                     <div key={area} className={`rounded-xl border p-2 ${esMiArea ? 'border-gray-700' : 'border-gray-800 opacity-60'}`}>
                       <div className={`text-xs font-bold mb-1.5 ${colorBadge}`}>{area}</div>
                       {esMiArea ? (
-                        <div className="grid grid-cols-2 gap-1">
+                        <div className="grid grid-cols-2 gap-1.5">
                           {SUBESTADOS_ORDEN.map(s => (
                             <button key={s} onClick={() => cambiarSubestado(s, area)}
-                              className={`py-1.5 rounded-lg text-xs font-semibold transition-all ${estadoArea===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                              className={`py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-all ${estadoArea===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
                               {SUBESTADO_LABELS[s]}
                             </button>
                           ))}
@@ -292,10 +292,10 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
               </div>
             ) : (
               // ÁREA SIMPLE: botones normales
-              <div className="grid grid-cols-2 gap-1">
+              <div className="grid grid-cols-2 gap-1.5">
                 {SUBESTADOS_ORDEN.map(s=>(
                   <button key={s} onClick={()=>cambiarSubestado(s, null)}
-                    className={`py-1.5 rounded-xl text-xs font-semibold transition-all ${subestadoActual===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                    className={`py-2.5 min-h-[44px] rounded-xl text-xs font-semibold transition-all ${subestadoActual===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
                     {SUBESTADO_LABELS[s]}
                   </button>
                 ))}

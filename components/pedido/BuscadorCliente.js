@@ -50,7 +50,7 @@ export default function BuscadorCliente({ onSelect }) {
             <div className="text-xs text-gray-400">{seleccionado.CEDULA} · {seleccionado.CELULAR}</div>
           </div>
           <button onClick={() => { setSeleccionado(null); setQuery('') }}
-            className="text-gray-500 hover:text-white text-xs ml-4">✕ Cambiar</button>
+            className="text-gray-400 hover:text-white text-sm ml-4 px-3 py-2 rounded-lg hover:bg-gray-800 transition-all flex-shrink-0">✕ Cambiar</button>
         </div>
       )}
       {!seleccionado && (

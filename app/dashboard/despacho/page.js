@@ -42,8 +42,12 @@ export default function DespachosPage() {
   const [mostrarFecha, setMostrarFecha] = useState(false)
   const [tab, setTab] = useState('PENDIENTE')
   const [expandedPedidos, setExpandedPedidos] = useState(new Set())
+  const [visibles, setVisibles] = useState(20)
+  const PAGE_SIZE_D = 20
 
-  function handleTab(t) { setTab(t); setExpandedPedidos(new Set()) }
+  function handleTab(t) { setTab(t); setExpandedPedidos(new Set()); setVisibles(20) }
+
+  useEffect(() => { setVisibles(20) }, [busqueda, fechaDesde, fechaHasta])
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -93,7 +97,10 @@ export default function DespachosPage() {
     return true
   })
 
-  function expandirTodos() { setExpandedPedidos(new Set(filtered.map(p => p.PEDIDO_ID))) }
+  const paginados = filtered.slice(0, visibles)
+  const hayMas = filtered.length > visibles
+
+  function expandirTodos() { setExpandedPedidos(new Set(paginados.map(p => p.PEDIDO_ID))) }
   function contraerTodos()  { setExpandedPedidos(new Set()) }
 
   const pendienteCount = pedidos.filter(p => p.ESTADO_PEDIDO !== 'COMPLETADO' && p.ESTADO_PEDIDO !== 'DESPACHO').length
@@ -168,28 +175,18 @@ export default function DespachosPage() {
             <input className="input w-full" placeholder="Buscar por pedido, nombre, cédula o celular..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
           </div>
-          <div className="flex gap-2">
-            <div className="flex-1 flex flex-col gap-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Fecha desde</span>
-              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha desde</span>
+              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
                 ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
                 value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
             </div>
-            <div className="flex-1 flex flex-col gap-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Fecha hasta</span>
-              <div className="flex gap-1">
-                <input type="date" className={`flex-1 min-w-0 bg-gray-800 border rounded-xl px-2 py-1.5 text-xs outline-none cursor-pointer transition-all
-                  ${fechaHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
-                  value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
-                <button onClick={expandirTodos} title="Expandir todos"
-                  className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-xl px-2 py-1.5 text-gray-400 hover:text-white hover:border-gray-500 transition-all text-xs">
-                  ⊞
-                </button>
-                <button onClick={contraerTodos} title="Contraer todos"
-                  className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-xl px-2 py-1.5 text-gray-400 hover:text-white hover:border-gray-500 transition-all text-xs">
-                  ⊟
-                </button>
-              </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha hasta</span>
+              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                ${fechaHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
+                value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
             </div>
           </div>
         </div>
@@ -209,8 +206,20 @@ export default function DespachosPage() {
               </div>
             </div>
           ) : (
+            <>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs text-gray-600">
+                {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={expandirTodos}
+                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊞ Expandir</button>
+                <button onClick={contraerTodos}
+                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊟ Contraer</button>
+              </div>
+            </div>
             <div className="space-y-2">
-              {filtered.map(p => {
+              {paginados.map(p => {
                 const esCompletado = p.ESTADO_PEDIDO === 'COMPLETADO' || p.ESTADO_PEDIDO === 'DESPACHO'
                 const montoTotal = parseFloat(p.MONTO_TOTAL || 0)
                 const montoPendiente = parseFloat(p.MONTO_PENDIENTE || 0)
@@ -361,6 +370,14 @@ export default function DespachosPage() {
                 )
               })}
             </div>
+            {hayMas && (
+              <button
+                onClick={() => setVisibles(v => v + PAGE_SIZE_D)}
+                className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
+                Cargar más ({filtered.length - visibles} restantes)
+              </button>
+            )}
+            </>
           )}
         </div>
       </div>

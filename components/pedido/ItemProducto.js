@@ -56,32 +56,32 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
           {(!cantidadValida || !precioValido) && <div className="text-xs text-yellow-400">⚠️ Completa cantidad y precio</div>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={() => setExpanded(e => !e)} className="text-gray-500 hover:text-white p-1 text-xs">
+          <button onClick={() => setExpanded(e => !e)} className="text-gray-500 hover:text-white p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-sm">
             {expanded ? '▲' : '▼'}
           </button>
           {confirmDelete ? (
             <div className="flex items-center gap-1 bg-gray-800 rounded-xl px-2 py-1">
               <span className="text-xs text-red-400">¿Eliminar?</span>
-              <button onClick={onRemove} className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-lg ml-1">Sí</button>
-              <button onClick={() => setConfirmDelete(false)} className="text-xs bg-gray-700 text-white px-2 py-0.5 rounded-lg">No</button>
+              <button onClick={onRemove} className="text-sm bg-red-500 text-white px-3 py-1.5 rounded-lg ml-1">Sí</button>
+              <button onClick={() => setConfirmDelete(false)} className="text-sm bg-gray-700 text-white px-3 py-1.5 rounded-lg">No</button>
             </div>
           ) : (
-            <button onClick={() => setConfirmDelete(true)} className="text-gray-600 hover:text-red-400 p-1 text-sm transition-colors">✕</button>
+            <button onClick={() => setConfirmDelete(true)} className="text-gray-600 hover:text-red-400 p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-base transition-colors">✕</button>
           )}
         </div>
       </div>
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-gray-800 pt-3 space-y-3">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <div>
               <label className="label">Color</label>
-              <input className="input text-sm py-2" placeholder="Ej: Celeste/blanco" value={item.color || ''}
+              <input className="input text-sm py-3" placeholder="Ej: Celeste/blanco" value={item.color || ''}
                 onChange={e => onChange({...item, color: e.target.value})} />
             </div>
             <div>
               <label className="label">Talla</label>
-              <select className="input text-sm py-2" value={item.talla || ''}
+              <select className="input text-sm py-3" value={item.talla || ''}
                 onChange={e => onChange({...item, talla: e.target.value})}>
                 <option value="">-</option>
                 {TALLAS.map(t => <option key={t}>{t}</option>)}
@@ -89,28 +89,28 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
             </div>
             <div>
               <label className="label">Cantidad *</label>
-              <input type="number" min="1"
-                className={`input text-sm py-2 ${!cantidadValida ? 'border-red-500' : ''}`}
+              <input type="number" min="1" inputMode="numeric"
+                className={`input text-sm py-3 ${!cantidadValida ? 'border-red-500' : ''}`}
                 placeholder="1" value={item.cantidad !== undefined ? item.cantidad : ''}
                 onChange={e => onChange({...item, cantidad: e.target.value})} />
               {!cantidadValida && <p className="text-red-400 text-xs mt-0.5">Mín. 1</p>}
             </div>
             <div>
               <label className="label">Precio $ *</label>
-              <input type="number" min="0" step="0.5"
-                className={`input text-sm py-2 ${!precioValido ? 'border-red-500' : ''}`}
+              <input type="number" min="0" step="0.5" inputMode="decimal"
+                className={`input text-sm py-3 ${!precioValido ? 'border-red-500' : ''}`}
                 placeholder="0.00" value={item.precioUnit !== undefined ? item.precioUnit : ''}
                 onChange={e => onChange({...item, precioUnit: e.target.value})} />
               {!precioValido && <p className="text-red-400 text-xs mt-0.5">Ingresa precio</p>}
             </div>
             <div className="col-span-2">
               <label className="label">Área</label>
-              <select className="input text-sm py-2" value={item.area || ''}
+              <select className="input text-sm py-3" value={item.area || ''}
                 onChange={e => onChange({...item, area: e.target.value})}>
                 {AREAS.map(a => <option key={a}>{a}</option>)}
               </select>
             </div>
-            <div className="col-span-3">
+            <div className="col-span-2 sm:col-span-3">
               <label className="label">Detalle</label>
               <textarea className="input resize-none text-sm" rows={2}
                 placeholder="Descripción del diseño..." value={item.detalle || ''}
@@ -134,7 +134,7 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
                     </label>
                     {item[key] && (
                       <button onClick={() => onChange({...item, [key]: null})}
-                        className="text-xs text-red-400 mt-0.5 w-full text-center">✕ quitar</button>
+                        className="text-xs text-red-400 mt-0.5 w-full text-center py-1.5 rounded-lg hover:bg-red-500/10 transition-all">✕ quitar</button>
                     )}
                   </div>
                 ))}

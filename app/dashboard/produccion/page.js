@@ -32,6 +32,7 @@ function itemEsDeUsuario(itemArea, u) {
 
 const AREAS_BASE_P = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
 const ORDEN_P = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO','ENTREGADO_TIENDA','ELIMINADO']
+const PAGE_SIZE_P = 20
 
 function parseSubestadoP(str, areaStr) {
   if (!str) return null
@@ -154,30 +155,30 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
         </span>
       </div>
 
-      <div className="flex gap-4">
-        <div className="w-40 flex-shrink-0">
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="w-full sm:w-40 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
-              <div className="w-40 h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
-                onDoubleClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
+              <div className="w-full h-56 sm:w-40 sm:h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
+                onClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
                 <img src={item[fotoActiva || fotos[0].key]} className="w-full h-full object-contain" alt="foto" />
               </div>
               {fotos.length > 1 && (
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-2 flex-wrap">
                   {fotos.map(f => (
                     <button key={f.key} onClick={() => setFotoActiva(f.key)}
-                      className={`flex flex-col items-center gap-0.5 p-0.5 rounded-lg border transition-all
+                      className={`flex flex-col items-center gap-0.5 p-1 rounded-lg border transition-all
                         ${(fotoActiva || fotos[0].key) === f.key ? 'border-mandarina-500' : 'border-gray-700'}`}>
-                      <img src={item[f.key]} className="w-10 h-10 rounded object-cover" alt={f.label} />
-                      <span className="text-xs text-gray-500">{f.label}</span>
+                      <img src={item[f.key]} className="w-11 h-11 sm:w-10 sm:h-10 rounded object-cover" alt={f.label} />
+                      <span className="text-[10px] text-gray-500">{f.label}</span>
                     </button>
                   ))}
                 </div>
               )}
-              <div className="text-xs text-gray-600 mt-1 text-center">2× clic = pantalla completa</div>
+              <div className="text-xs text-gray-600 mt-1 text-center">👆 Toca para ampliar</div>
             </>
           ) : (
-            <div className="w-40 h-40 rounded-xl border border-gray-800 bg-gray-800/50 flex items-center justify-center">
+            <div className="w-full h-40 sm:w-40 sm:h-40 rounded-xl border border-gray-800 bg-gray-800/50 flex items-center justify-center">
               <span className="text-gray-600 text-xs text-center px-2">Sin fotos de diseño</span>
             </div>
           )}
@@ -218,7 +219,7 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
               <div className="flex gap-1">
                 {CORTE_CONFIG.map(s => (
                   <button key={s.key} onClick={() => handleCorte(s.key)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all
+                    className={`flex-1 py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-all
                       ${subestadoCorte===s.key ? `${s.cls} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
                     {s.label}
                   </button>
@@ -245,10 +246,10 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
                   <div key={area} className={`rounded-xl border p-2 ${esMiArea ? 'border-gray-700' : 'border-gray-800 opacity-50'}`}>
                     <div className={`text-xs font-bold mb-1.5 ${AREA_COLORS[area]||'text-gray-400'}`}>{area}</div>
                     {esMiArea ? (
-                      <div className="grid grid-cols-2 gap-1">
+                      <div className="grid grid-cols-2 gap-1.5">
                         {SUBESTADOS_ORDEN.map(s => (
                           <button key={s} onClick={() => handleSubestado(s, area)}
-                            className={`py-1.5 rounded-lg text-xs font-semibold transition-all
+                            className={`py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-all
                               ${estadoArea===s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
                             {SUBESTADO_CONFIG[s]?.label}
                           </button>
@@ -267,7 +268,7 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
             <div className="grid grid-cols-2 gap-1.5 mt-auto">
               {SUBESTADOS_ORDEN.map(s => (
                 <button key={s} onClick={() => handleSubestado(s, null)}
-                  className={`py-2 rounded-xl text-xs font-semibold transition-all
+                  className={`py-2.5 min-h-[44px] rounded-xl text-xs font-semibold transition-all
                     ${subestadoActual===s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
                   {SUBESTADO_CONFIG[s]?.label}
                 </button>
@@ -301,6 +302,9 @@ export default function ProduccionPage() {
   const [generandoPdf, setGenerandoPdf] = useState(null)
   const [pdfPreviewPedido, setPdfPreviewPedido] = useState(null)
   const [filtroArea, setFiltroArea] = useState('TODAS')
+  const [visibles, setVisibles] = useState(PAGE_SIZE_P)
+
+  useEffect(() => { setVisibles(PAGE_SIZE_P) }, [busqueda, filtroSubestado, filtroArea, fechaDesde, fechaHasta])
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -401,7 +405,10 @@ export default function ProduccionPage() {
   const areaLabel = user?.rol === 'ADMIN' ? '' :
     (user?.areas?.length > 0 && user.areas[0] !== 'TODAS') ? ` · ${user.areas.join(', ')}` : ` · ${user?.rol}`
 
-  function expandirTodos() { setExpandedPedidos(new Set(filtered.map(p => p.PEDIDO_ID))) }
+  const paginados = filtered.slice(0, visibles)
+  const hayMas = filtered.length > visibles
+
+  function expandirTodos() { setExpandedPedidos(new Set(paginados.map(p => p.PEDIDO_ID))) }
   function contraerTodos()  { setExpandedPedidos(new Set()) }
 
   function handleVerPdf(e, pedido) {
@@ -448,12 +455,12 @@ export default function ProduccionPage() {
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
           </div>
 
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {/* Subestado */}
-            <div className="flex-1 flex flex-col gap-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Estado</span>
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Estado</span>
               <select value={filtroSubestado} onChange={e => setFiltroSubestado(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
                   ${filtroSubestado !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                 <option value="TODOS">Todos</option>
                 <option value="SOLICITADO">⏳ Solicitado</option>
@@ -464,10 +471,10 @@ export default function ProduccionPage() {
             </div>
             {/* Área — solo ADMIN */}
             {user?.rol === 'ADMIN' && (
-              <div className="flex-1 flex flex-col gap-1">
-                <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Área</span>
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Área</span>
                 <select value={filtroArea} onChange={e => setFiltroArea(e.target.value)}
-                  className={`w-full bg-gray-800 border rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer transition-all
+                  className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
                     ${filtroArea !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                   <option value="TODAS">Todas</option>
                   <option value="ESTAMPADO">🎨 Estampado</option>
@@ -476,22 +483,12 @@ export default function ProduccionPage() {
                 </select>
               </div>
             )}
-            {/* Fecha + expandir/contraer */}
-            <div className="flex-1 flex flex-col gap-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Fecha desde</span>
-              <div className="flex gap-1">
-                <input type="date" className={`flex-1 min-w-0 bg-gray-800 border rounded-xl px-2 py-1.5 text-xs outline-none cursor-pointer transition-all
-                  ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
-                  value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
-                <button onClick={expandirTodos} title="Expandir todos"
-                  className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-xl px-2 py-1.5 text-gray-400 hover:text-white hover:border-gray-500 transition-all text-xs">
-                  ⊞
-                </button>
-                <button onClick={contraerTodos} title="Contraer todos"
-                  className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-xl px-2 py-1.5 text-gray-400 hover:text-white hover:border-gray-500 transition-all text-xs">
-                  ⊟
-                </button>
-              </div>
+            {/* Fecha */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha desde</span>
+              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
+                value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
             </div>
           </div>
         </div>
@@ -515,8 +512,20 @@ export default function ProduccionPage() {
               <div className="text-sm text-gray-500 mt-1">No hay ítems pendientes en tu área</div>
             </div>
           ) : (
+            <>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs text-gray-600">
+                {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={expandirTodos}
+                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊞ Expandir</button>
+                <button onClick={contraerTodos}
+                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊟ Contraer</button>
+              </div>
+            </div>
             <div className="space-y-3">
-              {filtered.map(pedido => {
+              {paginados.map(pedido => {
                 const diasR = pedido.FECHA_ENTREGA_PROMETIDA
                   ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) : null
                 const urgente = diasR !== null && diasR <= 2
@@ -579,6 +588,14 @@ export default function ProduccionPage() {
                 )
               })}
             </div>
+            {hayMas && (
+              <button
+                onClick={() => setVisibles(v => v + PAGE_SIZE_P)}
+                className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
+                Cargar más ({filtered.length - visibles} restantes)
+              </button>
+            )}
+            </>
           )}
         </div>
       </div>
