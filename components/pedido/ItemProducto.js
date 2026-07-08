@@ -12,6 +12,8 @@ const AREAS = [
 export default function ItemProducto({ item, index, onChange, onRemove }) {
   const [expanded, setExpanded] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [uploading, setUploading] = useState({})
+  const [uploadError, setUploadError] = useState('')
 
   const cantidad = parseInt(item.cantidad || 0)
   const precio = parseFloat(item.precioUnit !== '' && item.precioUnit !== undefined ? item.precioUnit : -1)
@@ -19,26 +21,24 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
   const cantidadValida = cantidad >= 1
   const precioValido = precio >= 0
 
-  function handleFoto(key, file) {
+  // Sube el archivo a Cloudinary a calidad ORIGINAL (sin reescalar ni recomprimir).
+  // Solo se guarda la URL, así el payload queda liviano sin perder calidad.
+  async function handleFoto(key, file) {
     if (!file) return
-    // Compress image before storing to avoid request size limits
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      const MAX = 800 // max dimension
-      let w = img.width, h = img.height
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round(h * MAX / w); w = MAX }
-        else { w = Math.round(w * MAX / h); h = MAX }
-      }
-      canvas.width = w; canvas.height = h
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-      const compressed = canvas.toDataURL('image/jpeg', 0.75)
-      URL.revokeObjectURL(url)
-      onChange({ ...item, [key]: compressed })
+    setUploading(u => ({ ...u, [key]: true })); setUploadError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('tipo', 'diseno')
+      const res = await fetch('/api/upload', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok || !data.url) throw new Error(data.error || 'Error al subir')
+      onChange({ ...item, [key]: data.url })
+    } catch (e) {
+      setUploadError(e.message)
+    } finally {
+      setUploading(u => ({ ...u, [key]: false }))
     }
-    img.src = url
   }
 
   return (
@@ -125,27 +125,35 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
                 {[['fotoPecho','Pecho'],['fotoEspalda','Espalda'],['fotoMangaD','Manga derecha'],['fotoMangaI','Manga izquierda']].map(([key, label]) => (
                   <div key={key}>
                     <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all
-                      ${item[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}`}>
+                      ${item[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}
+                      ${uploading[key] ? 'opacity-60 pointer-events-none' : ''}`}>
                       <input type="file" accept="image/*" className="hidden"
                         onChange={e => handleFoto(key, e.target.files[0])} />
-                      {item[key]
+                      {uploading[key] ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+                          <span className="text-[10px] text-gray-500">Subiendo...</span>
+                        </div>
+                      ) : item[key]
                         ? <img src={item[key]} className="w-full h-full object-cover" />
                         : <span className="text-xs text-gray-500 text-center px-2">{label}</span>}
                     </label>
-                    {item[key] && (
+                    {item[key] && !uploading[key] && (
                       <button onClick={() => onChange({...item, [key]: null})}
                         className="text-xs text-red-400 mt-0.5 w-full text-center py-1.5 rounded-lg hover:bg-red-500/10 transition-all">✕ quitar</button>
                     )}
                   </div>
                 ))}
               </div>
-              <label className="mt-2 flex items-center gap-2 border border-dashed border-gray-700 rounded-xl p-3 cursor-pointer hover:border-gray-500">
-                <input type="file" accept=".ai,.psd,.pdf,.jpg,.png" className="hidden"
+              <label className={`mt-2 flex items-center gap-2 border border-dashed border-gray-700 rounded-xl p-3 cursor-pointer hover:border-gray-500
+                ${uploading.archivoDiseno ? 'opacity-60 pointer-events-none' : ''}`}>
+                <input type="file" accept=".ai,.psd,.pdf,.jpg,.png,.eps,.svg" className="hidden"
                   onChange={e => handleFoto('archivoDiseno', e.target.files[0])} />
                 <span className="text-gray-500 text-sm">
-                  {item.archivoDiseno ? '✓ Archivo — click para cambiar' : '📎 Subir archivo AI/PSD/PDF'}
+                  {uploading.archivoDiseno ? 'Subiendo a Cloudinary...' : item.archivoDiseno ? '✓ Archivo — click para cambiar' : '📎 Subir archivo AI/PSD/PDF'}
                 </span>
               </label>
+              {uploadError && <div className="text-red-400 text-xs mt-1">⚠️ {uploadError}</div>}
             </div>
           )}
         </div>

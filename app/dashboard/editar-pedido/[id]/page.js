@@ -13,17 +13,26 @@ function ItemEditor({ item, onSave }) {
   const [data, setData] = useState({ PRODUCTO_NOMBRE:item.PRODUCTO_NOMBRE||'', COLOR:item.COLOR||'', TALLA:item.TALLA||'', CANTIDAD:item.CANTIDAD||1, PRECIO_UNIT:item.PRECIO_UNIT||'0', AREA:item.AREA||'ESTAMPADO', DETALLE_PERSONALIZADO:item.DETALLE_PERSONALIZADO||'' })
   const [fotos, setFotos] = useState({ FOTO_PECHO_URL:item.FOTO_PECHO_URL||'', FOTO_ESPALDA_URL:item.FOTO_ESPALDA_URL||'', FOTO_MANGA_D_URL:item.FOTO_MANGA_D_URL||'', FOTO_MANGA_I_URL:item.FOTO_MANGA_I_URL||'' })
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState({})
+  const [uploadError, setUploadError] = useState('')
 
-  function handleFoto(key, file) {
+  // Sube a Cloudinary a calidad ORIGINAL (sin reescalar ni recomprimir). Solo se guarda la URL.
+  async function handleFoto(key, file) {
     if (!file) return
-    const img = new Image(); const url = URL.createObjectURL(file)
-    img.onload = () => {
-      const canvas = document.createElement('canvas'); const MAX = 800
-      let w = img.width, h = img.height
-      if (w > MAX || h > MAX) { if(w>h){h=Math.round(h*MAX/w);w=MAX}else{w=Math.round(w*MAX/h);h=MAX} }
-      canvas.width=w; canvas.height=h; canvas.getContext('2d').drawImage(img,0,0,w,h); URL.revokeObjectURL(url)
-      setFotos(f=>({...f,[key]:canvas.toDataURL('image/jpeg',0.75)}))
-    }; img.src=url
+    setUploading(u=>({...u,[key]:true})); setUploadError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('tipo', 'diseno')
+      const res = await fetch('/api/upload', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok || !data.url) throw new Error(data.error || 'Error al subir')
+      setFotos(f=>({...f,[key]:data.url}))
+    } catch(e) {
+      setUploadError(e.message)
+    } finally {
+      setUploading(u=>({...u,[key]:false}))
+    }
   }
 
   const subtotal = (parseFloat(data.PRECIO_UNIT||0)*parseInt(data.CANTIDAD||1)).toFixed(2)
@@ -43,14 +52,17 @@ function ItemEditor({ item, onSave }) {
         <div className="grid grid-cols-2 gap-2">
           {[['FOTO_PECHO_URL','Pecho'],['FOTO_ESPALDA_URL','Espalda'],['FOTO_MANGA_D_URL','M. Derecha'],['FOTO_MANGA_I_URL','M. Izquierda']].map(([key,label])=>(
             <div key={key}>
-              <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all ${fotos[key]?'border-mandarina-500':'border-gray-700 hover:border-gray-500'}`}>
+              <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-all ${fotos[key]?'border-mandarina-500':'border-gray-700 hover:border-gray-500'} ${uploading[key]?'opacity-60 pointer-events-none':''}`}>
                 <input type="file" accept="image/*" className="hidden" onChange={e=>handleFoto(key,e.target.files[0])} />
-                {fotos[key]?<img src={fotos[key]} className="w-full h-full object-cover" />:<span className="text-xs text-gray-500 text-center px-1">{label}</span>}
+                {uploading[key]
+                  ? <div className="flex flex-col items-center gap-1"><div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" /><span className="text-[10px] text-gray-500">Subiendo...</span></div>
+                  : fotos[key]?<img src={fotos[key]} className="w-full h-full object-cover" />:<span className="text-xs text-gray-500 text-center px-1">{label}</span>}
               </label>
-              {fotos[key]&&<button onClick={()=>setFotos(f=>({...f,[key]:''}))} className="text-xs text-red-400 mt-0.5 w-full text-center">✕ quitar</button>}
+              {fotos[key]&&!uploading[key]&&<button onClick={()=>setFotos(f=>({...f,[key]:''}))} className="text-xs text-red-400 mt-0.5 w-full text-center">✕ quitar</button>}
             </div>
           ))}
         </div>
+        {uploadError && <div className="text-red-400 text-xs mt-1">⚠️ {uploadError}</div>}
       </div>
       <div className="flex items-center justify-between">
         <span className="text-sm text-gray-400">Subtotal: <span className="text-white font-bold">${subtotal}</span></span>
