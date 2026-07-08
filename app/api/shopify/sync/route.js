@@ -24,38 +24,62 @@ async function runSync() {
 
   const porTienda = {}
   const errores = {}
-  let allRows = []
+  const syncedRows = {} // { TIENDA_ID: [fila, ...] } SOLO de las tiendas que respondieron
 
-  // Cada tienda por separado: si una falla (token vencido, etc.) el resto igual se sincroniza.
+  // Cada tienda por separado: si una falla (token vencido, etc.) el resto igual se
+  // sincroniza y la que falló NO pierde su catálogo (se preserva más abajo).
   for (const t of tiendas) {
     try {
-      const rows = await fetchShopifyProducts(t.id, t.store, t.token)
+      const rows = await fetchShopifyProducts(t.id, t.store, t.clientId, t.clientSecret)
+      syncedRows[t.id] = rows
       porTienda[t.id] = rows.length
-      allRows = allRows.concat(rows)
     } catch (e) {
       console.error(`sync ${t.id} falló:`, e.message)
       errores[t.id] = e.message
     }
   }
 
-  // Si TODAS fallaron, no toques la hoja (no borres el catálogo bueno por un error transitorio).
-  if (allRows.length === 0) {
+  const syncedIds = Object.keys(syncedRows)
+
+  // Si NINGUNA tienda respondió, no toques la hoja (no borres el catálogo bueno
+  // por un error transitorio de red/token).
+  if (syncedIds.length === 0) {
     throw new Error('Ninguna tienda devolvió productos. Detalle: ' + JSON.stringify(errores))
   }
 
   const sheets = await getSheets()
   const spreadsheetId = sheetId()
 
-  // Reemplazo completo del tab: limpiar A:G y reescribir header + filas.
+  // Preservar las filas de las tiendas que NO se sincronizaron esta vez (fallaron o
+  // no están configuradas). Así un fallo de una sola tienda (p.ej. INDSTORE con token
+  // vencido) nunca borra su catálogo: solo se reemplaza el bloque de las que sí respondieron.
+  const syncedUpper = new Set(syncedIds.map(id => id.toUpperCase()))
+  let preservadas = []
+  try {
+    const prev = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${TAB}!A:G` })
+    const prevRows = prev.data.values || []
+    const dataRows = prevRows[0]?.[0]?.toUpperCase() === 'TIENDA' ? prevRows.slice(1) : prevRows
+    preservadas = dataRows.filter(r => r[0] && !syncedUpper.has(String(r[0]).toUpperCase()))
+  } catch (e) {
+    console.warn('No se pudo leer la hoja previa para preservar filas:', e.message)
+  }
+
+  const preservado = {}
+  for (const r of preservadas) preservado[r[0]] = (preservado[r[0]] || 0) + 1
+
+  const freshRows = syncedIds.flatMap(id => syncedRows[id])
+  const finalRows = [...freshRows, ...preservadas]
+
+  // Reemplazo del tab: limpiar A:G y reescribir header + filas (frescas + preservadas).
   await sheets.spreadsheets.values.clear({ spreadsheetId, range: `${TAB}!A:G` })
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `${TAB}!A1`,
     valueInputOption: 'RAW',
-    requestBody: { values: [HEADER, ...allRows] },
+    requestBody: { values: [HEADER, ...finalRows] },
   })
 
-  return { ok: true, total: allRows.length, porTienda, errores, at: new Date().toISOString() }
+  return { ok: true, total: finalRows.length, porTienda, preservado, errores, at: new Date().toISOString() }
 }
 
 // Autorización: el cron de Vercel envía Authorization: Bearer $CRON_SECRET.

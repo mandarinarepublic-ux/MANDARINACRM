@@ -53,7 +53,13 @@ export default function CatalogoPage() {
       const data = await res.json()
       if (data.ok) {
         const detalle = Object.entries(data.porTienda || {}).map(([k, v]) => `${k}: ${v}`).join(' · ')
-        alert(`Catálogo actualizado ✓  (${data.total} productos)\n${detalle}`)
+        const errs = Object.entries(data.errores || {})
+        let msg = `Catálogo actualizado ✓  (${data.total} productos)\n${detalle}`
+        if (errs.length) {
+          const errDetalle = errs.map(([k, v]) => `⚠️ ${k}: ${v}`).join('\n')
+          msg += `\n\nTiendas con problemas (se conservó su catálogo anterior):\n${errDetalle}`
+        }
+        alert(msg)
         await loadProductos(busqueda)
       } else {
         alert('No se pudo actualizar: ' + (data.error || 'error desconocido'))
