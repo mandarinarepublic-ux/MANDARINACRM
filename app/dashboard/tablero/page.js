@@ -16,6 +16,13 @@ const AREA_META = {
   BORDADO:     { label: 'Bordado',     icon: '🧵', text: 'text-purple-400', dot: 'bg-purple-500' },
 }
 
+// Sub-áreas para "Pendientes por área": Corte (por SUBESTADO_CORTE) + las 3 de producción
+const SUBAREAS = ['CORTE', 'ESTAMPADO', 'SUBLIMACION', 'BORDADO']
+const SUBAREA_META = {
+  CORTE: { label: 'Corte', icon: '✂️', text: 'text-amber-400', dot: 'bg-amber-500' },
+  ...AREA_META,
+}
+
 const ETAPAS = {
   CORTE: {
     key: 'CORTE', label: 'Corte', icon: '✂️',
@@ -274,6 +281,7 @@ export default function TableroPage() {
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtroTienda, setFiltroTienda] = useState('TODAS')
+  const [filtroArea, setFiltroArea] = useState('TODAS')
   const [incluirDespachados, setIncluirDespachados] = useState(false)
   const [tabMovil, setTabMovil] = useState('CORTE')
   // Filtros de fecha
@@ -307,11 +315,24 @@ export default function TableroPage() {
     } finally { setLoading(false) }
   }, [])
 
+  // ¿La prenda tiene trabajo PENDIENTE (no LISTO) en el área de producción dada?
+  const itemPendienteEnArea = (i, area) => {
+    const est = estadosPorArea(i)
+    return est[area] && est[area] !== 'LISTO'
+  }
+  // ¿Pendiente en la sub-área dada? CORTE = aún no cortada; resto = área no LISTA
+  const itemPendienteEnSub = (i, sub) => {
+    if (sub === 'CORTE') return etapaItem(i) === 'CORTE'
+    return itemPendienteEnArea(i, sub)
+  }
+
   // Clasificar + filtrar
-  const { columnas, totales } = useMemo(() => {
+  const { columnas, totales, pendientesPorArea } = useMemo(() => {
     const cols = { CORTE: [], PRODUCCION: [], DESPACHO: [] }
 
-    const clasificados = pedidos
+    // Base: aplica todos los filtros EXCEPTO el de área (así el resumen por
+    // área siempre muestra las 3 y se puede alternar entre ellas)
+    const base = pedidos
       .filter(p => {
         if (filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
         if (busqueda && !coincideBusqueda(p, busqueda)) return false
@@ -327,6 +348,25 @@ export default function TableroPage() {
       .map(p => ({ p, clasif: clasificarPedido(p) }))
       .filter(x => x.clasif)
       .filter(x => incluirDespachados || x.clasif.sub !== 'DESPACHADO')
+
+    // ── Pendientes por sub-área (global, sobre `base`) ──
+    // Corte = prendas aún sin cortar; Estampado/Sublimación/Bordado = área no LISTA.
+    const pendientesPorArea = { CORTE: { und: 0, prendas: 0 }, ESTAMPADO: { und: 0, prendas: 0 }, SUBLIMACION: { und: 0, prendas: 0 }, BORDADO: { und: 0, prendas: 0 } }
+    base.forEach(({ p }) => {
+      const activos = (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
+      activos.forEach(i => {
+        SUBAREAS.forEach(sub => {
+          if (itemPendienteEnSub(i, sub)) { pendientesPorArea[sub].und += uds(i); pendientesPorArea[sub].prendas += 1 }
+        })
+      })
+    })
+
+    // Filtro por sub-área: deja solo pedidos con trabajo pendiente en esa sub-área
+    const clasificados = base.filter(({ p }) => {
+      if (filtroArea === 'TODAS') return true
+      const activos = (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
+      return activos.some(i => itemPendienteEnSub(i, filtroArea))
+    })
 
     // Ordenar: urgentes primero, luego por fecha de pedido desc
     clasificados.sort((a, b) => {
@@ -353,19 +393,23 @@ export default function TableroPage() {
         const activos = (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
         // Unidades/prendas cuyo item cae físicamente en esta etapa
         activos.forEach(i => {
-          const eItem = etapaItem(i)
-          const cuenta = key === 'DESPACHO'
-            ? true                         // en despacho contamos todo el pedido
-            : eItem === key
-          if (cuenta) {
-            unidades += uds(i); prendas += 1
-            // Para producción: cada área que aún no está LISTA suma su carga
-            if (key === 'PRODUCCION') {
-              const estados = estadosPorArea(i)
-              Object.entries(estados).forEach(([a, e]) => {
-                if (AREAS_BASE.includes(a) && e !== 'LISTO') { areaCount[a].und += uds(i); areaCount[a].prendas += 1 }
-              })
-            }
+          let cuenta
+          if (filtroArea !== 'TODAS') {
+            // Con filtro de sub-área: cuentan las prendas de ese pedido con esa
+            // sub-área pendiente (así el total por columna cuadra con el resumen)
+            cuenta = itemPendienteEnSub(i, filtroArea)
+          } else {
+            // Sin filtro: cada prenda cuenta en la columna de su etapa física
+            cuenta = key === 'DESPACHO' ? true : etapaItem(i) === key
+          }
+          if (!cuenta) return
+          unidades += uds(i); prendas += 1
+          // Para producción (sin filtro): cada área que aún no está LISTA suma su carga
+          if (filtroArea === 'TODAS' && key === 'PRODUCCION') {
+            const estados = estadosPorArea(i)
+            Object.entries(estados).forEach(([a, e]) => {
+              if (AREAS_BASE.includes(a) && e !== 'LISTO') { areaCount[a].und += uds(i); areaCount[a].prendas += 1 }
+            })
           }
         })
         subCount[clasif.sub] = (subCount[clasif.sub] || 0) + 1
@@ -385,10 +429,11 @@ export default function TableroPage() {
       resumen[key] = { pedidos: lista.length, unidades, prendas, desglose, areas }
     }
 
-    // Totales globales
+    // Totales globales (respetan el filtro de área)
     const totActivos = clasificados.filter(x => x.clasif.sub !== 'DESPACHADO')
     const totUnidades = totActivos.reduce((s, { p }) => {
       const activos = (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
+      if (filtroArea !== 'TODAS') return s + activos.filter(i => itemPendienteEnSub(i, filtroArea)).reduce((ss, i) => ss + uds(i), 0)
       return s + activos.reduce((ss, i) => ss + uds(i), 0)
     }, 0)
     const urgentes = totActivos.filter(({ p }) => { const d = diasRestantes(p); return d !== null && d <= 2 }).length
@@ -396,8 +441,9 @@ export default function TableroPage() {
     return {
       columnas: { cols, resumen },
       totales: { pedidos: totActivos.length, unidades: totUnidades, urgentes },
+      pendientesPorArea,
     }
-  }, [pedidos, busqueda, filtroTienda, incluirDespachados, creacionDesde, creacionHasta, entregaDesde, entregaHasta])
+  }, [pedidos, busqueda, filtroTienda, filtroArea, incluirDespachados, creacionDesde, creacionHasta, entregaDesde, entregaHasta])
 
   const { cols, resumen } = columnas
 
@@ -500,6 +546,42 @@ export default function TableroPage() {
             </div>
           ) : (
             <>
+              {/* Pendientes por área — resumen + filtro (clic para enfocar un área) */}
+              <div className="card p-3 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-400 uppercase tracking-wide">🧩 Pendientes por área</span>
+                  {filtroArea !== 'TODAS' && (
+                    <button onClick={() => setFiltroArea('TODAS')}
+                      className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1 transition-all">
+                      ✕ Ver todas
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {SUBAREAS.map(a => {
+                    const d = pendientesPorArea[a]
+                    const meta = SUBAREA_META[a]
+                    const activo = filtroArea === a
+                    return (
+                      <button key={a} onClick={() => setFiltroArea(activo ? 'TODAS' : a)}
+                        className={`rounded-xl border-2 px-2 py-2.5 text-center transition-all
+                          ${activo ? `${meta.text} border-current bg-gray-800` : 'border-gray-800 bg-gray-900 hover:border-gray-600'}`}>
+                        <div className={`text-2xl font-black leading-none ${meta.text}`}>{d.und}</div>
+                        <div className="text-[11px] text-gray-300 mt-1 flex items-center justify-center gap-1">
+                          <span>{meta.icon}</span>{meta.label}
+                        </div>
+                        <div className="text-[10px] text-gray-500">{d.prendas} prenda{d.prendas !== 1 ? 's' : ''} · und</div>
+                      </button>
+                    )
+                  })}
+                </div>
+                {filtroArea !== 'TODAS' && (
+                  <div className="text-[11px] text-gray-500 mt-2">
+                    Mostrando solo pedidos con {SUBAREA_META[filtroArea].icon} <span className={SUBAREA_META[filtroArea].text}>{SUBAREA_META[filtroArea].label}</span> pendiente.
+                  </div>
+                )}
+              </div>
+
               {/* Pipeline resumen — barra superior con flechas (desktop) */}
               <div className="hidden md:flex items-stretch gap-2 mb-5">
                 {ETAPA_ORDEN.map((key, idx) => {
