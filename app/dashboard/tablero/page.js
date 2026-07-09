@@ -9,6 +9,13 @@ import { parseFecha } from '@/lib/parseFecha'
 // El flujo físico de una prenda: ✂️ CORTE → 🏭 PRODUCCIÓN → 🚚 DESPACHO
 const ORDEN_SUB = ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO', 'ENTREGADO_TIENDA', 'ELIMINADO']
 
+const AREAS_BASE = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
+const AREA_META = {
+  ESTAMPADO:   { label: 'Estampado',   icon: '🎨', text: 'text-orange-400', dot: 'bg-orange-500' },
+  SUBLIMACION: { label: 'Sublimación', icon: '💙', text: 'text-blue-400',   dot: 'bg-blue-500' },
+  BORDADO:     { label: 'Bordado',     icon: '🧵', text: 'text-purple-400', dot: 'bg-purple-500' },
+}
+
 const ETAPAS = {
   CORTE: {
     key: 'CORTE', label: 'Corte', icon: '✂️',
@@ -60,6 +67,25 @@ function etapaItem(item) {
 
 // ¿Cuántas unidades tiene una prenda?
 const uds = (item) => parseInt(item.CANTIDAD || 1) || 1
+
+// Áreas base que tiene una prenda ("ESTAMPADO + BORDADO" → ['ESTAMPADO','BORDADO'])
+function areasItem(areaStr) {
+  return (areaStr || '').split(/\s*\+\s*|\s*,\s*/).map(a => a.trim().toUpperCase()).filter(a => AREAS_BASE.includes(a))
+}
+
+// Estado de cada área de una prenda → { ESTAMPADO: 'EN_PROCESO', BORDADO: 'SOLICITADO' }
+function estadosPorArea(item) {
+  const s = item.SUBESTADO || ''
+  const areas = areasItem(item.AREA)
+  const r = {}
+  if (s.includes(':')) {
+    s.split('|').forEach(p => { const [a, e] = p.split(':'); if (a && e) r[a.trim().toUpperCase()] = e.trim() })
+    areas.forEach(a => { if (!r[a]) r[a] = 'SOLICITADO' })
+    return r
+  }
+  areas.forEach(a => { r[a] = s || 'SOLICITADO' })
+  return r
+}
 
 // Etapa "principal" del PEDIDO — el cuello de botella: la etapa más atrasada
 // de sus prendas activas. Con eso ubicamos el pedido en una sola columna.
@@ -197,6 +223,24 @@ function Columna({ etapaKey, resumen, pedidos }) {
             ))}
           </div>
         )}
+
+        {/* Desglose por área — solo Producción: unidades pendientes por área */}
+        {resumen.areas && resumen.areas.length > 0 && (
+          <div className="mt-2.5 pt-2.5 border-t border-gray-700/40">
+            <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5">Carga por área</div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {resumen.areas.map(a => (
+                <div key={a.key} className="rounded-lg bg-gray-900/60 border border-gray-700/40 px-2 py-1.5 text-center">
+                  <div className={`text-base font-black leading-none ${a.text}`}>{a.und}</div>
+                  <div className="text-[9px] text-gray-500 mt-0.5 flex items-center justify-center gap-0.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${a.dot}`} />{a.label}
+                  </div>
+                  <div className="text-[9px] text-gray-600">{a.prendas} prenda{a.prendas !== 1 ? 's' : ''}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Lista de pedidos */}
@@ -287,6 +331,8 @@ export default function TableroPage() {
       const lista = cols[key]
       let unidades = 0, prendas = 0
       const subCount = {}
+      // Desglose de trabajo pendiente por área (solo Producción)
+      const areaCount = { ESTAMPADO: { und: 0, prendas: 0 }, SUBLIMACION: { und: 0, prendas: 0 }, BORDADO: { und: 0, prendas: 0 } }
       lista.forEach(({ p, clasif }) => {
         const activos = (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
         // Unidades/prendas cuyo item cae físicamente en esta etapa
@@ -295,7 +341,16 @@ export default function TableroPage() {
           const cuenta = key === 'DESPACHO'
             ? true                         // en despacho contamos todo el pedido
             : eItem === key
-          if (cuenta) { unidades += uds(i); prendas += 1 }
+          if (cuenta) {
+            unidades += uds(i); prendas += 1
+            // Para producción: cada área que aún no está LISTA suma su carga
+            if (key === 'PRODUCCION') {
+              const estados = estadosPorArea(i)
+              Object.entries(estados).forEach(([a, e]) => {
+                if (AREAS_BASE.includes(a) && e !== 'LISTO') { areaCount[a].und += uds(i); areaCount[a].prendas += 1 }
+              })
+            }
+          }
         })
         subCount[clasif.sub] = (subCount[clasif.sub] || 0) + 1
       })
@@ -307,7 +362,11 @@ export default function TableroPage() {
       const desglose = Object.entries(subCount)
         .map(([k, count]) => ({ label: desgloseLabels[k] || k, count }))
 
-      resumen[key] = { pedidos: lista.length, unidades, prendas, desglose }
+      const areas = key === 'PRODUCCION'
+        ? AREAS_BASE.map(a => ({ key: a, ...AREA_META[a], ...areaCount[a] })).filter(a => a.und > 0)
+        : []
+
+      resumen[key] = { pedidos: lista.length, unidades, prendas, desglose, areas }
     }
 
     // Totales globales
@@ -405,6 +464,18 @@ export default function TableroPage() {
                             <div className="text-[11px] text-gray-500 uppercase tracking-wide mt-1">unidades</div>
                           </div>
                         </div>
+                        {/* Carga por área — solo Producción */}
+                        {r.areas && r.areas.length > 0 && (
+                          <div className="flex gap-3 mt-3 pt-3 border-t border-gray-700/40">
+                            {r.areas.map(a => (
+                              <div key={a.key} className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${a.dot}`} />
+                                <span className="text-xs text-gray-400">{a.label}</span>
+                                <span className={`text-sm font-bold ${a.text}`}>{a.und}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       {idx < ETAPA_ORDEN.length - 1 && (
                         <div className="flex items-center px-1 text-gray-700 text-2xl">→</div>
