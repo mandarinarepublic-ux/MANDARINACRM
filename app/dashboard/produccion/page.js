@@ -302,9 +302,10 @@ export default function ProduccionPage() {
   const [generandoPdf, setGenerandoPdf] = useState(null)
   const [pdfPreviewPedido, setPdfPreviewPedido] = useState(null)
   const [filtroArea, setFiltroArea] = useState('TODAS')
+  const [filtroTienda, setFiltroTienda] = useState('TODAS')
   const [visibles, setVisibles] = useState(PAGE_SIZE_P)
 
-  useEffect(() => { setVisibles(PAGE_SIZE_P) }, [busqueda, filtroSubestado, filtroArea, fechaDesde, fechaHasta])
+  useEffect(() => { setVisibles(PAGE_SIZE_P) }, [busqueda, filtroSubestado, filtroArea, filtroTienda, fechaDesde, fechaHasta])
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -383,6 +384,7 @@ export default function ProduccionPage() {
     }))
     .filter(p => {
       if (p.itemsFiltrados.length === 0) return false
+      if (filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
       if (busqueda) {
         const q = busqueda.toLowerCase()
         const matchPedidoOCliente = coincideBusqueda(p, busqueda)
@@ -483,6 +485,18 @@ export default function ProduccionPage() {
                 </select>
               </div>
             )}
+            {/* Tienda */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Tienda</span>
+              <select value={filtroTienda} onChange={e => setFiltroTienda(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                  ${filtroTienda !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
+                <option value="TODAS">Todas</option>
+                <option value="MANDARINA">🍊 Mandarina</option>
+                <option value="INDSTORE">🏪 Indstore</option>
+                <option value="YAW">🟣 YAW</option>
+              </select>
+            </div>
             {/* Fecha */}
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha desde</span>
