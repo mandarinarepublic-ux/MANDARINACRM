@@ -26,28 +26,56 @@ const CLIENTE_YAW = {
   direccion:'TIENDA YAW- CENTRO COMERCIAL VILLA CUMBAYA',
 }
 
-function validarCedulaRUC(v) {
-  if (!v) return 'Requerido'
-  if (!/^\d+$/.test(v)) return 'Solo números'
-  if (v.length === 10) {
-    const prov = parseInt(v.substring(0, 2))
-    if (prov < 1 || prov > 24) return 'Provincia inválida'
-    const d = v.split('').map(Number)
-    let suma = 0
-    for (let i = 0; i < 9; i++) {
-      let val = d[i] * (i % 2 === 0 ? 2 : 1)
-      if (val > 9) val -= 9
-      suma += val
-    }
-    const ver = suma % 10 === 0 ? 0 : 10 - (suma % 10)
-    if (ver !== d[9]) return 'Cédula inválida'
+// Tipos de identificación (código = tipo_identificacion del SRI/Dátil)
+const TIPOS_ID = [
+  { key: 'CEDULA',    label: 'Cédula',    codigo: '05', placeholder: '1712345678',    inputMode: 'numeric', factura: true },
+  { key: 'RUC',       label: 'RUC',       codigo: '04', placeholder: '1712345678001', inputMode: 'numeric', factura: true },
+  { key: 'PASAPORTE', label: 'Pasaporte', codigo: '06', placeholder: 'AB123456',      inputMode: 'text',    factura: false },
+]
+const tipoIdMeta = (key) => TIPOS_ID.find(t => t.key === key) || TIPOS_ID[0]
+
+function validarCedula10(v) {
+  const prov = parseInt(v.substring(0, 2))
+  if (prov < 1 || prov > 24) return 'Provincia inválida'
+  const d = v.split('').map(Number)
+  let suma = 0
+  for (let i = 0; i < 9; i++) {
+    let val = d[i] * (i % 2 === 0 ? 2 : 1)
+    if (val > 9) val -= 9
+    suma += val
+  }
+  const ver = suma % 10 === 0 ? 0 : 10 - (suma % 10)
+  if (ver !== d[9]) return 'Cédula inválida'
+  return null
+}
+
+// Validación según el tipo seleccionado
+function validarIdentificacion(tipo, v) {
+  const val = String(v || '').trim()
+  if (!val) return 'Requerido'
+  if (tipo === 'CEDULA') {
+    if (!/^\d{10}$/.test(val)) return 'La cédula debe tener 10 dígitos'
+    return validarCedula10(val)
+  }
+  if (tipo === 'RUC') {
+    if (!/^\d{13}$/.test(val)) return 'El RUC debe tener 13 dígitos'
+    if (val.substring(10) !== '001') return 'RUC debe terminar en 001'
     return null
   }
-  if (v.length === 13) {
-    if (v.substring(10) !== '001') return 'RUC debe terminar en 001'
+  if (tipo === 'PASAPORTE') {
+    if (!/^[A-Za-z0-9-]{3,20}$/.test(val)) return 'Pasaporte: 3 a 20 caracteres (letras/números)'
     return null
   }
-  return 'Debe tener 10 (cédula) o 13 dígitos (RUC)'
+  return null
+}
+
+// Inferir el tipo desde un identificador ya guardado (cliente reutilizado)
+function inferirTipo(idStr) {
+  const s = String(idStr || '').trim()
+  if (/^\d{13}$/.test(s)) return 'RUC'
+  if (/^\d{10}$/.test(s)) return 'CEDULA'
+  if (s && !/^\d+$/.test(s)) return 'PASAPORTE'
+  return 'CEDULA'
 }
 
 function validarCelular(v) {
@@ -85,6 +113,7 @@ export default function NuevoPedidoPage() {
   const [clienteId, setClienteId] = useState(null)
   const [clienteKey, setClienteKey] = useState(0)
   const [cliente, setCliente] = useState({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' })
+  const [tipoId, setTipoId] = useState('CEDULA')
   const [cedulaError, setCedulaError] = useState('')
   const [celularError, setCelularError] = useState('')
   const [clienteExistente, setClienteExistente] = useState(null)
@@ -185,10 +214,18 @@ export default function NuevoPedidoPage() {
     return `${ciudad}: ${dir}`
   }
 
+  // Cambiar tipo de identificación: revalida y ajusta la factura.
+  // Pasaporte no tiene validación SRI → desactiva y bloquea la factura.
+  function cambiarTipoId(nuevo) {
+    setTipoId(nuevo)
+    setCedulaError(cliente.cedula ? (validarIdentificacion(nuevo, cliente.cedula) || '') : '')
+    setEmitirFactura(tipoIdMeta(nuevo).factura)
+  }
+
   function validateStep1() {
     // Para YAW el step 1 siempre es válido (cliente prellenado)
     if (isYAW) return null
-    const errCedula = validarCedulaRUC(cliente.cedula)
+    const errCedula = validarIdentificacion(tipoId, cliente.cedula)
     const errCelular = validarCelular(cliente.celular)
     if (!cliente.nombre.trim()) return 'El nombre es obligatorio'
     if (errCedula) return errCedula
@@ -258,7 +295,7 @@ export default function NuevoPedidoPage() {
           pedido_id:    pedidoId,
           numero:       (clienteData.celular || '').replace(/\D/g, ''),
           CI:           cedula,
-          tipo_id:      cedula.length === 13 ? '04' : '05',
+          tipo_id:      clienteData.tipoCodigo || (cedula.length === 13 ? '04' : '05'),
           cliente:      clienteData.nombre,
           email:        clienteData.email || 'info@mandarinaec.com',
           total:        montoTotal.toFixed(2),
@@ -346,7 +383,7 @@ export default function NuevoPedidoPage() {
       }
 
       if (emitirFactura) {
-        dispararFactura(data.pedidoId, { ...cliente, cedula: String(cliente.cedula), celular: String(cliente.celular) }, montoTotal)
+        dispararFactura(data.pedidoId, { ...cliente, cedula: String(cliente.cedula), celular: String(cliente.celular), tipoCodigo: tipoIdMeta(tipoId).codigo }, montoTotal)
       }
       router.push(`/dashboard/pedido/${data.pedidoId}?nuevo=1`)
     } catch (e) {
@@ -415,7 +452,9 @@ export default function NuevoPedidoPage() {
                   <button onClick={() => {
                     const f = clienteExistente
                     setClienteId(f.CLIENTE_ID)
-                    setCliente({ nombre: f.NOMBRE||'', cedula: String(f.CEDULA||''), celular: String(f.CELULAR||''), email: f.EMAIL||'', ciudad: f.CIUDAD||'', direccion: f.DIRECCION||'' })
+                    const ced = String(f.CEDULA||'')
+                    setCliente({ nombre: f.NOMBRE||'', cedula: ced, celular: String(f.CELULAR||''), email: f.EMAIL||'', ciudad: f.CIUDAD||'', direccion: f.DIRECCION||'' })
+                    const t = inferirTipo(ced); setTipoId(t); setEmitirFactura(tipoIdMeta(t).factura)
                     setClienteKey(k => k+1)
                     setClienteExistente(null)
                   }} className="btn-primary flex-1 py-3">Sí, autocompletar</button>
@@ -429,7 +468,9 @@ export default function NuevoPedidoPage() {
             <div className="space-y-4">
               <BuscadorCliente onSelect={c => {
                 setClienteId(c.CLIENTE_ID || c.id || null)
-                setCliente({ nombre: c.NOMBRE||c.nombre||'', cedula: String(c.CEDULA||c.cedula||''), celular: String(c.CELULAR||c.celular||''), email: c.EMAIL||c.email||'', ciudad: c.CIUDAD||c.ciudad||'', direccion: c.DIRECCION||c.direccion||'' })
+                const ced = String(c.CEDULA||c.cedula||'')
+                setCliente({ nombre: c.NOMBRE||c.nombre||'', cedula: ced, celular: String(c.CELULAR||c.celular||''), email: c.EMAIL||c.email||'', ciudad: c.CIUDAD||c.ciudad||'', direccion: c.DIRECCION||c.direccion||'' })
+                const t = inferirTipo(ced); setTipoId(t); setEmitirFactura(tipoIdMeta(t).factura)
                 setClienteKey(k => k + 1)
                 setUsarMapa(false)
                 setCedulaError(''); setCelularError('')
@@ -440,7 +481,7 @@ export default function NuevoPedidoPage() {
                     <span className="text-green-400 text-sm">✅</span>
                     <span className="text-green-400 text-xs font-medium">Cliente existente cargado</span>
                   </div>
-                  <button onClick={() => { setClienteId(null); setClienteKey(k => k + 1); setCliente({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' }) }}
+                  <button onClick={() => { setClienteId(null); setClienteKey(k => k + 1); setCliente({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' }); setTipoId('CEDULA'); setEmitirFactura(true) }}
                     className="text-xs text-gray-500 hover:text-red-400">
                     ✕ Limpiar
                   </button>
@@ -453,15 +494,27 @@ export default function NuevoPedidoPage() {
                     autoComplete="off"
                     onChange={e => setCliente(p => ({...p, nombre: e.target.value}))} />
                 </div>
-                <div>
-                  <label className="label">Cédula / RUC *</label>
+                <div className="col-span-2">
+                  <label className="label">Tipo de identificación *</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TIPOS_ID.map(t => (
+                      <button key={t.key} type="button" onClick={() => cambiarTipoId(t.key)}
+                        className={`py-2.5 min-h-[44px] rounded-xl text-sm font-semibold border-2 transition-all
+                          ${tipoId === t.key ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 bg-gray-800/50 text-gray-400 hover:text-white'}`}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <label className="label">{tipoIdMeta(tipoId).label} *</label>
                   <input className={`input ${cedulaError ? 'border-red-500' : ''}`}
-                    placeholder="1712345678" value={cliente.cedula}
-                    autoComplete="off" inputMode="numeric" name="x-cedula"
-                    onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarCedulaRUC(e.target.value) || '') }}
+                    placeholder={tipoIdMeta(tipoId).placeholder} value={cliente.cedula}
+                    autoComplete="off" inputMode={tipoIdMeta(tipoId).inputMode} name="x-cedula"
+                    onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarIdentificacion(tipoId, e.target.value) || '') }}
                     onBlur={async e => {
                       const ced = e.target.value.trim()
-                      if (ced.length < 10) return
+                      if (ced.length < 5) return
                       try {
                         const r = await fetch(`/api/clientes?q=${encodeURIComponent(ced)}`)
                         const d = await r.json()
@@ -489,14 +542,24 @@ export default function NuevoPedidoPage() {
                   )}
                 </div>
               </div>
-              <label className="flex items-center gap-3 card p-4 cursor-pointer hover:border-gray-600 transition-all">
-                <input type="checkbox" checked={emitirFactura} onChange={e => setEmitirFactura(e.target.checked)}
-                  className="w-5 h-5 accent-orange-500" />
-                <div>
-                  <div className="text-white text-sm font-medium">Emitir factura electrónica</div>
-                  <div className="text-gray-500 text-xs">Se enviará al SRI via Dátil</div>
+              {tipoId === 'PASAPORTE' ? (
+                <div className="flex items-center gap-3 card p-4 opacity-70">
+                  <span className="text-xl">🚫</span>
+                  <div>
+                    <div className="text-gray-300 text-sm font-medium">Factura electrónica no disponible</div>
+                    <div className="text-gray-500 text-xs">Con pasaporte no se emite factura al SRI (sin validación).</div>
+                  </div>
                 </div>
-              </label>
+              ) : (
+                <label className="flex items-center gap-3 card p-4 cursor-pointer hover:border-gray-600 transition-all">
+                  <input type="checkbox" checked={emitirFactura} onChange={e => setEmitirFactura(e.target.checked)}
+                    className="w-5 h-5 accent-orange-500" />
+                  <div>
+                    <div className="text-white text-sm font-medium">Emitir factura electrónica</div>
+                    <div className="text-gray-500 text-xs">Se enviará al SRI via Dátil</div>
+                  </div>
+                </label>
+              )}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="label mb-0">Dirección de entrega *</label>
@@ -655,8 +718,9 @@ export default function NuevoPedidoPage() {
                 {[
                   ['Tienda', tienda],
                   ['Cliente', cliente.nombre],
+                  [tipoIdMeta(tipoId).label, cliente.cedula],
                   ['Dirección', buildDireccion() || cliente.direccion],
-                  ['Factura', emitirFactura ? '✅ Sí' : '❌ No'],
+                  ['Factura', tipoId === 'PASAPORTE' ? '🚫 No (pasaporte)' : emitirFactura ? '✅ Sí' : '❌ No'],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4">
                     <span className="text-gray-500 shrink-0">{k}</span>
