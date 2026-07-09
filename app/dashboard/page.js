@@ -198,6 +198,14 @@ function DashboardAdmin({ data, user }) {
           </div>
         </div>
       </div>
+      <Link href="/dashboard/tablero" className="card p-4 mb-3 flex items-center gap-4 border-mandarina-500/30 hover:border-mandarina-500/60 transition-all group">
+        <div className="w-11 h-11 rounded-xl bg-mandarina-500/20 flex items-center justify-center text-xl flex-shrink-0">📊</div>
+        <div className="flex-1">
+          <div className="font-semibold text-white text-sm">Tablero de Producción</div>
+          <div className="text-xs text-gray-500">Dónde está cada pedido: corte · producción · despacho</div>
+        </div>
+        <span className="text-gray-600 group-hover:text-mandarina-400 text-xl">→</span>
+      </Link>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           {href:'/dashboard/nuevo-pedido',icon:'➕',label:'Nueva Venta'},

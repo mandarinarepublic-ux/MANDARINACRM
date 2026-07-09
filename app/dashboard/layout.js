@@ -10,6 +10,7 @@ import ToastHost from '@/components/ToastHost'
 
 const NAV_ALL = [
   { href:'/dashboard',              label:'Inicio',       icon:'🏠', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
+  { href:'/dashboard/tablero',      label:'Tablero',      icon:'📊', roles:['ADMIN','CORTE','DESPACHO','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO'] },
   { href:'/dashboard/nuevo-pedido', label:'Nueva Venta',  icon:'➕', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'] },
   { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'] },
   { href:'/dashboard/historial',    label:'Historial',    icon:'📋', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
@@ -30,7 +31,7 @@ const ROL_PRIORITY = {
   BORDADO:     ['produccion','historial','impresion'],
   CORTE:       ['corte','historial'],
   DESPACHO:    ['despacho','historial'],
-  ADMIN:       ['nuevo-pedido','historial','produccion','despacho','usuarios'],
+  ADMIN:       ['tablero','nuevo-pedido','historial','produccion','despacho','usuarios'],
 }
 
 function getNavItems(rol) {
