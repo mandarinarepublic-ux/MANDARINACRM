@@ -276,6 +276,15 @@ export default function TableroPage() {
   const [filtroTienda, setFiltroTienda] = useState('TODAS')
   const [incluirDespachados, setIncluirDespachados] = useState(false)
   const [tabMovil, setTabMovil] = useState('CORTE')
+  // Filtros de fecha
+  const [creacionDesde, setCreacionDesde] = useState('')
+  const [creacionHasta, setCreacionHasta] = useState('')
+  const [entregaDesde, setEntregaDesde] = useState('')
+  const [entregaHasta, setEntregaHasta] = useState('')
+  const [mostrarFiltros, setMostrarFiltros] = useState(false)
+
+  const filtrosFechaActivos = [creacionDesde, creacionHasta, entregaDesde, entregaHasta].filter(Boolean).length
+  function limpiarFechas() { setCreacionDesde(''); setCreacionHasta(''); setEntregaDesde(''); setEntregaHasta('') }
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -306,6 +315,13 @@ export default function TableroPage() {
       .filter(p => {
         if (filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
         if (busqueda && !coincideBusqueda(p, busqueda)) return false
+        // Fecha de creación (FECHA_PEDIDO) — soporta formato ISO y "16Jun2026"
+        if (creacionDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(creacionDesde)) return false }
+        if (creacionHasta) { const f = parseFecha(p.FECHA_PEDIDO); const h = new Date(creacionHasta); h.setHours(23, 59, 59); if (!f || f > h) return false }
+        // Fecha comprometida de entrega (FECHA_ENTREGA_PROMETIDA, formato YYYY-MM-DD)
+        const entrega = (p.FECHA_ENTREGA_PROMETIDA || '').slice(0, 10)
+        if (entregaDesde) { if (!entrega || entrega < entregaDesde) return false }
+        if (entregaHasta) { if (!entrega || entrega > entregaHasta) return false }
         return true
       })
       .map(p => ({ p, clasif: clasificarPedido(p) }))
@@ -381,7 +397,7 @@ export default function TableroPage() {
       columnas: { cols, resumen },
       totales: { pedidos: totActivos.length, unidades: totUnidades, urgentes },
     }
-  }, [pedidos, busqueda, filtroTienda, incluirDespachados])
+  }, [pedidos, busqueda, filtroTienda, incluirDespachados, creacionDesde, creacionHasta, entregaDesde, entregaHasta])
 
   const { cols, resumen } = columnas
 
@@ -418,12 +434,54 @@ export default function TableroPage() {
               <option value="INDSTORE">🏪 Indstore</option>
               <option value="YAW">🟣 YAW</option>
             </select>
+            <button onClick={() => setMostrarFiltros(v => !v)}
+              className={`text-sm px-3 py-2.5 min-h-[44px] rounded-xl border transition-all whitespace-nowrap flex items-center justify-center gap-1.5
+                ${filtrosFechaActivos > 0 ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 text-gray-400 hover:text-white'}`}>
+              📅 Fechas
+              {filtrosFechaActivos > 0 && <span className="bg-mandarina-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{filtrosFechaActivos}</span>}
+              <span className="text-[10px]">{mostrarFiltros ? '▲' : '▼'}</span>
+            </button>
             <button onClick={() => setIncluirDespachados(v => !v)}
               className={`text-sm px-3 py-2.5 min-h-[44px] rounded-xl border transition-all whitespace-nowrap
                 ${incluirDespachados ? 'border-green-500/50 bg-green-500/10 text-green-400' : 'border-gray-700 text-gray-400 hover:text-white'}`}>
               {incluirDespachados ? '✅ Con despachados' : '➕ Ver despachados'}
             </button>
           </div>
+
+          {/* Panel de filtros de fecha */}
+          {mostrarFiltros && (
+            <div className="mt-2 card p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <div className="text-[11px] text-gray-400 uppercase tracking-wider px-1 mb-1.5 flex items-center gap-1">🗓️ Fecha de creación</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" aria-label="Creación desde" value={creacionDesde} onChange={e => setCreacionDesde(e.target.value)}
+                    className={`w-full bg-gray-800 border rounded-xl px-2.5 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                      ${creacionDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`} />
+                  <input type="date" aria-label="Creación hasta" value={creacionHasta} onChange={e => setCreacionHasta(e.target.value)}
+                    className={`w-full bg-gray-800 border rounded-xl px-2.5 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                      ${creacionHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`} />
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-gray-400 uppercase tracking-wider px-1 mb-1.5 flex items-center gap-1">🚩 Entrega comprometida</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" aria-label="Entrega desde" value={entregaDesde} onChange={e => setEntregaDesde(e.target.value)}
+                    className={`w-full bg-gray-800 border rounded-xl px-2.5 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                      ${entregaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`} />
+                  <input type="date" aria-label="Entrega hasta" value={entregaHasta} onChange={e => setEntregaHasta(e.target.value)}
+                    className={`w-full bg-gray-800 border rounded-xl px-2.5 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                      ${entregaHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`} />
+                </div>
+              </div>
+              {filtrosFechaActivos > 0 && (
+                <div className="sm:col-span-2 flex justify-end">
+                  <button onClick={limpiarFechas} className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">
+                    ✕ Limpiar fechas
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {totales.urgentes > 0 && (
             <div className="mt-2 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-1.5">
