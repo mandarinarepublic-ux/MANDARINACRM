@@ -5,6 +5,7 @@ import Link from 'next/link'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { subirFoto } from '@/lib/subirImagen'
+import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/identificacion'
 
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
@@ -89,6 +90,9 @@ export default function EditarPedidoPage() {
   const [direccionEdit, setDireccionEdit] = useState('')
   const [emailEdit, setEmailEdit] = useState('')
   const [celularEdit, setCelularEdit] = useState('')
+  const [cedulaEdit, setCedulaEdit] = useState('')
+  const [tipoIdEdit, setTipoIdEdit] = useState('CEDULA')
+  const [cedulaErrorEdit, setCedulaErrorEdit] = useState('')
 
   const [nuevoPago, setNuevoPago] = useState({ tipo:'EFECTIVO', monto:'', notas:'' })
   const [showNuevoProducto, setShowNuevoProducto] = useState(false)
@@ -118,7 +122,10 @@ export default function EditarPedidoPage() {
       const cd = await cr.json()
       const c = cd.clientes?.[0] || null
       setCliente(c)
-      if (c) { setCiudadEdit(c.CIUDAD||''); setEmailEdit(c.EMAIL||''); setCelularEdit(c.CELULAR||'') }
+      if (c) {
+        setCiudadEdit(c.CIUDAD||''); setEmailEdit(c.EMAIL||''); setCelularEdit(c.CELULAR||'')
+        const ced = String(c.CEDULA||''); setCedulaEdit(ced); setTipoIdEdit(inferirTipo(ced)); setCedulaErrorEdit('')
+      }
     } finally { setLoading(false) }
   }
 
@@ -127,6 +134,9 @@ export default function EditarPedidoPage() {
   const montoPendiente = montoTotal - montoAbonado
 
   async function saveDireccion() {
+    // Validar la identificación según el tipo antes de guardar
+    const errId = validarIdentificacion(tipoIdEdit, cedulaEdit)
+    if (errId) { setCedulaErrorEdit(errId); setError(`Identificación: ${errId}`); return }
     setSaving(true); setError(''); setSuccess('')
     try {
       const dirCompleta = ciudadEdit ? `${ciudadEdit}: ${direccionEdit}` : direccionEdit
@@ -137,7 +147,7 @@ export default function EditarPedidoPage() {
       if (cliente) {
         await fetch(`/api/clientes/${cliente.CLIENTE_ID}`, {
           method:'PATCH', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ NOMBRE:cliente.NOMBRE, CEDULA:String(cliente.CEDULA||''), CELULAR:celularEdit, EMAIL:emailEdit, CIUDAD:ciudadEdit, DIRECCION:direccionEdit }),
+          body: JSON.stringify({ NOMBRE:cliente.NOMBRE, CEDULA:String(cedulaEdit||''), CELULAR:celularEdit, EMAIL:emailEdit, CIUDAD:ciudadEdit, DIRECCION:direccionEdit }),
         })
       }
       setSuccess('Dirección actualizada')
@@ -209,9 +219,27 @@ export default function EditarPedidoPage() {
                 {editingDireccion ? '✕ Cancelar' : '✏️ Editar'}
               </button>
             </div>
-            {cliente && <div className="text-xs text-gray-500 mb-2">{cliente.NOMBRE} · {celularEdit}{emailEdit&&` · ${emailEdit}`}</div>}
+            {cliente && <div className="text-xs text-gray-500 mb-2">{cliente.NOMBRE} · {tipoIdMeta(tipoIdEdit).label} {cedulaEdit} · {celularEdit}{emailEdit&&` · ${emailEdit}`}</div>}
             {editingDireccion ? (
               <div className="space-y-2 mb-3">
+                <div>
+                  <div className="text-[11px] text-gray-400 uppercase tracking-wide mb-1">Tipo de identificación</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TIPOS_ID.map(t => (
+                      <button key={t.key} type="button"
+                        onClick={() => { setTipoIdEdit(t.key); setCedulaErrorEdit(cedulaEdit ? (validarIdentificacion(t.key, cedulaEdit) || '') : '') }}
+                        className={`py-2 min-h-[40px] rounded-xl text-xs font-semibold border-2 transition-all
+                          ${tipoIdEdit === t.key ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 bg-gray-800/50 text-gray-400 hover:text-white'}`}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input className={`input text-sm ${cedulaErrorEdit ? 'border-red-500' : ''}`}
+                  placeholder={tipoIdMeta(tipoIdEdit).placeholder} value={cedulaEdit}
+                  inputMode={tipoIdMeta(tipoIdEdit).inputMode}
+                  onChange={e => { setCedulaEdit(e.target.value); setCedulaErrorEdit(validarIdentificacion(tipoIdEdit, e.target.value) || '') }} />
+                {cedulaErrorEdit && <p className="text-red-400 text-xs">{cedulaErrorEdit}</p>}
                 <input className="input text-sm" placeholder="Ciudad (ej: Quito)" value={ciudadEdit} onChange={e=>setCiudadEdit(e.target.value)} />
                 <textarea className="input resize-none text-sm" rows={2} value={direccionEdit} onChange={e=>setDireccionEdit(e.target.value)} placeholder="Av. 6 de Diciembre y Mercurio..." />
                 <input className="input text-sm" placeholder="Email" value={emailEdit} onChange={e=>setEmailEdit(e.target.value)} />
