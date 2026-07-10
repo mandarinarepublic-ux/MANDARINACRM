@@ -4,6 +4,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { ESTADO_LABELS, ESTADO_LABELS_LARGO } from '@/lib/labels'
+import { parseFecha } from '@/lib/parseFecha'
 import { PdfGracias, PdfConfeccion, PdfConfeccionPagina } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 
@@ -515,6 +516,17 @@ export default function PedidoDetailPage() {
           <div className="card p-4">
             <h3 className="text-base font-semibold text-white mb-2">📦 Entrega</h3>
             <div className="text-base text-gray-400">
+              Fecha creación de pedido:
+              <span className="text-white ml-2">
+                {(() => {
+                  const f = parseFecha(pedido.FECHA_PEDIDO)
+                  return f
+                    ? f.toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'})
+                    : '-'
+                })()}
+              </span>
+            </div>
+            <div className="text-base text-gray-400 mt-1">
               Fecha comprometida:
               <span className="text-white ml-2">
                 {pedido.FECHA_ENTREGA_PROMETIDA
