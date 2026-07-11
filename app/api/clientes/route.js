@@ -6,8 +6,16 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url)
     const q = searchParams.get('q')?.toLowerCase() || ''
     const byId = searchParams.get('id') || ''
+    const all = searchParams.get('all')
 
     const clientes = await readSheet('CLIENTES')
+
+    // Devuelve TODA la hoja en UNA sola lectura. Lo usa la impresión masiva
+    // para no disparar N lecturas paralelas a Sheets (que provocaban 429 y
+    // pedidos impresos sin la sección de datos del cliente).
+    if (all) {
+      return Response.json({ clientes })
+    }
 
     if (byId) {
       const found = clientes.find(c => c.CLIENTE_ID === byId)

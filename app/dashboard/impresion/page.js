@@ -47,13 +47,15 @@ export default function ImpresionPage() {
         p.ESTADO_PEDIDO === 'EN_FABRICA' || p.ESTADO_PEDIDO === 'PENDIENTE_FABRICA'
       )
       setPedidos(enFabrica)
+      // UNA sola lectura de toda la hoja CLIENTES. Antes se hacía un fetch por
+      // pedido en paralelo (hasta 30), lo que saturaba Google Sheets (429) y
+      // dejaba pedidos sin la sección de datos del cliente de forma aleatoria.
+      const r = await fetch('/api/clientes?all=1')
+      const d = await r.json()
       const map = {}
-      await Promise.all(enFabrica.map(async p => {
-        if (!p.CLIENTE_ID || map[p.CLIENTE_ID]) return
-        const r = await fetch(`/api/clientes?id=${encodeURIComponent(p.CLIENTE_ID)}`)
-        const d = await r.json()
-        if (d.clientes?.[0]) map[p.CLIENTE_ID] = d.clientes[0]
-      }))
+      for (const c of (d.clientes || [])) {
+        if (c.CLIENTE_ID) map[c.CLIENTE_ID] = c
+      }
       setClientesMap(map)
     } finally { setLoading(false) }
   }
