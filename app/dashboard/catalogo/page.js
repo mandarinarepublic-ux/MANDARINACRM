@@ -2,6 +2,33 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
+// Redimensiona y comprime la foto en el navegador ANTES de subirla.
+// Evita el 413 de Vercel (límite 4.5MB de body) con fotos de celular grandes.
+function comprimirImagen(file, maxLado = 1200, calidad = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen'))
+    reader.onload = () => {
+      const img = new Image()
+      img.onerror = () => reject(new Error('Imagen inválida'))
+      img.onload = () => {
+        let { width, height } = img
+        if (width > maxLado || height > maxLado) {
+          if (width >= height) { height = Math.round(height * maxLado / width); width = maxLado }
+          else { width = Math.round(width * maxLado / height); height = maxLado }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', calidad))
+      }
+      img.src = reader.result
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function CatalogoPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -92,12 +119,13 @@ export default function CatalogoPage() {
     finally { setLoadingSuc(false) }
   }
 
-  function handleFoto(e) {
+  async function handleFoto(e) {
     const file = e.target.files[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => setForm(f => ({ ...f, foto_base64: ev.target.result, foto_preview: ev.target.result }))
-    reader.readAsDataURL(file)
+    try {
+      const dataUrl = await comprimirImagen(file)
+      setForm(f => ({ ...f, foto_base64: dataUrl, foto_preview: dataUrl }))
+    } catch (err) { alert('No se pudo procesar la foto: ' + err.message) }
   }
 
   async function handleGuardar() {
@@ -139,12 +167,13 @@ export default function CatalogoPage() {
     setModalEditar(true)
   }
 
-  function handleFotoEditar(e) {
+  async function handleFotoEditar(e) {
     const file = e.target.files[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => setEditForm(f => ({ ...f, foto_base64: ev.target.result, foto_preview: ev.target.result }))
-    reader.readAsDataURL(file)
+    try {
+      const dataUrl = await comprimirImagen(file)
+      setEditForm(f => ({ ...f, foto_base64: dataUrl, foto_preview: dataUrl }))
+    } catch (err) { alert('No se pudo procesar la foto: ' + err.message) }
   }
 
   async function handleGuardarEdicion() {
