@@ -415,6 +415,7 @@ Detectada en el mapeo del modelo actual:
 - Pendiente de Fase 4: correr la reconciliación con credenciales reales y recorrer el checklist de flujos (§4 arriba) antes del cutover.
 
 ### ▶️ Schema `inbox` (v1 creado — prep en paralelo, wiring después del CRM)
+> ⚠️ **Ver §9 (2026-07-13):** el inbox NO se construye en el CRM. Esta subsección quedó histórica: el schema/backfill/`lib/db/inbox.js` se conservan como INSUMO para migrar la app real (`wa-inbox-v2`), pero las rutas `/api/inbox/*` y la UI se ELIMINARON del CRM.
 - **DDL aplicado** (`db/inbox_schema.sql`): tablas `inbox.conversaciones` + `inbox.mensajes` (una cuenta por columna `cuenta='IND'|'MANDI'`), índices, RLS activado (como en crm).
 - **Unión CRM ↔ inbox por teléfono resuelta y PROBADA**: vista `crm.cliente_conversacion` + función `inbox.norm_telefono(text)` (toma los últimos 9 dígitos → cruza `09XXXXXXXX` de `crm.clientes.celular` con `5939XXXXXXXX` de WhatsApp). Test end-to-end: conversación `593959263396` unió correctamente al cliente con celular `0959263396`.
 - **Capa de datos lista y probada**: `lib/db/inbox.js` + `getSupabaseInbox()` en `lib/supabase.js`.
@@ -448,36 +449,55 @@ Detectada en el mapeo del modelo actual:
 
 ---
 
-## 9. 🧠 MEMORIA DE SESIÓN — retomar aquí (2026-07-13)
+## 9. 🧠 MEMORIA DE SESIÓN — retomar aquí (act. 2026-07-13)
 
-Todo el trabajo de esta sesión vive en la branch **`claude/supermandadina-q1ykfz`** → **PR #12** (abierto contra `main`, NO mergeado aún). Nada está en producción todavía (prod corre `main`, código viejo).
+### 🎯 ALCANCE REAL DE "SUPERMANDADINA" (corregido — manda sobre todo lo demás)
+El **único** objetivo es **reemplazar la base de datos de Excel/Google Sheets por Supabase**, para las apps que YA existen, dejándolas funcionando igual:
+1. **MANDARINACRM** (este repo) — el CRM. → migración Sheets→Supabase **en curso** (dual-write).
+2. **El inbox de WhatsApp** — que vive en repos SEPARADOS, NO en el CRM.
+
+> **Corrección de rumbo (2026-07-13):** en sesiones previas me "pasé de rosca" y construí un inbox DENTRO del CRM (`/dashboard/inbox`, `/api/inbox/*`, envío Meta, etc.). Eso era **redundante** con la app de inbox que el usuario ya tiene. El usuario eligió: **el inbox se queda en su app (wa-inbox-v2); NO se construye inbox en el CRM.** Ese código ya fue **ELIMINADO** del CRM hoy (commit `5e74dea`).
+
+### 📦 Las apps del inbox (repos separados, misma estructura)
+- **`mandarinarepublic-ux/wa-inbox-v2`** = inbox **MANDI** (Mandarina). Es la app viva. Clonada en `/workspace/wa-inbox-v2` (en scope de la sesión, `can_push`). Último commit: `ded7648`.
+- **`mandarinarepublic-ux/ind-inbox-v2`** = inbox **IND** (repo separado, misma estructura). Aún no clonado.
+- (Repos viejos, ignorar: `wainboxmandarina`, `ind-inbox`.)
 
 ### Referencias clave
-- **Supabase**: proyecto `mandarina-DATA` id `piingkecjgoisnxccvaa` (plan **Pro**, activado hoy). Schemas `crm` + `inbox`.
-- **Vercel**: proyecto `mandarina-pro-sales` (id `prj_tcRidmjG670ag4jdrPGF4sopj4pq`, team `team_Sk65ztrHF0ybuWBRPQoS0hzp`).
-- **Sheets inbox** (públicos): MANDI `1ZQ_vIhKsDBnAUjitOB3zP-4MDbdmsv7hdDgnqNbOkak` ("WhatsAppMandarinaSales"), IND `1ObNIff1ypeFW7PfuAjeoiGBJCDyZU4etIsbGpyB-Nqk` ("WhatsAppINDLoversCHAT", ⚠️ anyone-writer).
-- **Make** (org 6191488, team 1738463): `EsuchaWhatsAppBusiness` (4471276), `IND_ESCUCHA_WHATSAPP` (5471227), `CONSULTA_LINKPAGO` (5304064).
-- **Proveedor WhatsApp = Meta Cloud API**. phone_number_id MANDI = `1024077200794372`. LINKPAGO = pasarela **dLocal Go**.
-- ⚠️ Secrets en texto plano en los blueprints de Make (token Meta + API key dLocal) → **rotar**.
+- **Supabase**: proyecto `mandarina-DATA` id `piingkecjgoisnxccvaa` (plan **Pro**). Schemas `crm` + `inbox`.
+- **Vercel**: CRM = `mandarina-pro-sales` (`prj_tcRidmjG670ag4jdrPGF4sopj4pq`, team `team_Sk65ztrHF0ybuWBRPQoS0hzp`). El inbox se despliega en su propio proyecto Vercel.
+- **Sheets inbox** (públicos): MANDI `1ZQ_vIhKsDBnAUjitOB3zP-4MDbdmsv7hdDgnqNbOkak` ("WhatsAppMandarinaSales"), IND `1ObNIff1ypeFW7PfuAjeoiGBJCDyZU4etIsbGpyB-Nqk` ("WhatsAppINDLoversCHAT", ⚠️ anyone-writer → restringir).
+- **Make** (org 6191488): `EsuchaWhatsAppBusiness` (4471276), `IND_ESCUCHA_WHATSAPP` (5471227), `CONSULTA_LINKPAGO` (5304064). ⚠️ Secrets en texto plano en los blueprints (token Meta + API key dLocal) → **rotar**.
+- **Proveedor WhatsApp = Meta Cloud API**. phone_number_id MANDI = `1024077200794372`. LINKPAGO = pasarela **dLocal Go**. wa-inbox-v2 envía por Meta directo (`META_TOKEN`/`META_PHONE_ID`) y cae a Make solo si falta el token.
 
-### Estado por track
-- **CRM (Sheets→Supabase)**: Fases 0–3 ✅ (dual-write cableado en TODAS las mutaciones + shadow reads + deudas #1/#2/#3/#10 + clamp sobrepagos). Fase 4 tooling ✅ (`/api/admin/reconcile` + script). **Falta**: desplegar, correr reconcile, cutover (`DATA_BACKEND=supabase`), limpieza. ~75%.
-- **Inbox (bot WhatsApp→Supabase)**: schema v2 + `wa_message_id` ✅, repo `lib/db/inbox.js` ✅, backfill (script + `/api/admin/inbox-backfill`) ✅, rutas API ✅, **UI `/dashboard/inbox`** ✅ (auto-refresh, media, integración pedido↔chat), **webhook Meta-nativo** ✅, **envío saliente por Meta** (`lib/whatsapp.js`, env-gated) ✅. **NO desplegado, backfill NO corrido.** ~85% del *núcleo humano*.
+### Track A — CRM (este repo, branch `claude/supermandadina-q1ykfz` → PR #12, NO mergeado)
+Sin cambios de rumbo: Fases 0–3 ✅ (dual-write cableado en TODAS las mutaciones + shadow reads + deudas #1/#2/#3/#10 + clamp sobrepagos). Fase 4 tooling ✅ (`/api/admin/reconcile` + script). **Falta**: desplegar PR #12, correr reconcile, cutover (`DATA_BACKEND=supabase`), limpieza Fase 6. ~75%.
 
-### 🔴 Decisión ABIERTA (bloquea el plan del finde de "eliminar Make")
-El usuario quiere **apagar Make este finde**. PERO lo construido es la **capa humana + plomería**; NO migra el **cerebro del bot**: IA/auto-respuestas, **LINKPAGO** (pagos), base de conocimiento, respuestas rápidas, leads. Si se apaga Make hoy, el WhatsApp queda **100% manual**.
-Opciones planteadas (falta que elija): **A)** inbox 100% manual (lo hecho alcanza; se pierde IA + LINKPAGO automáticos). **B)** reconstruir el bot en la app (IA con Anthropic + LINKPAGO dLocal + KB — proyecto grande). **C)** híbrido/convivencia (Make sigue con bot/LINKPAGO; inbox = consola humana).
+### Limpieza del inbox-app del CRM — ✅ HECHA hoy (commit `5e74dea`, pusheado)
+- **Borrado**: `app/dashboard/inbox/page.js`, `app/api/inbox/*` (webhook, conversaciones, mensajes), `lib/whatsapp.js`, `lib/inboxAuth.js`, item "Inbox" del nav + entradas en `ROL_PRIORITY` (`app/dashboard/layout.js`), reverse-link "Ver conversación de WhatsApp" en `pedido/[id]`, y env vars WhatsApp/webhook de `.env.example`. `next build` OK.
+- **Conservado como INSUMO para migrar el inbox** (no se usa en el CRM, pero es la receta): `db/inbox_schema.sql`, `lib/db/inbox.js`, `scripts/migrate-inbox-to-supabase.mjs`, `app/api/admin/inbox-backfill/route.js`, `getSupabaseInbox()` en `lib/supabase.js`. El schema `inbox` (conversaciones + mensajes + vista `crm.cliente_conversacion` + `inbox.norm_telefono`) YA está aplicado en Supabase.
 
-### ⚠️ A confirmar con el usuario
-- **`EsuchaWhatsAppBusiness` no ejecuta desde 2026-07-11 23:02** (verificado en Make). ¿Lo apagó el usuario o hay mensajes entrantes perdiéndose? Nuestro webhook aún NO está desplegado.
+### Track B — Migrar wa-inbox-v2 (MANDI) Sheets→Supabase — MAPEO ✅, código PENDIENTE
+**Cómo usa Sheets hoy** (Service Account; su spreadsheet `SHEET_ID`=1ZQ_ para MANDI):
+| Hoja | Uso | Columnas | Escrita por |
+|---|---|---|---|
+| **MENSAJES** | read tail(3000)+full, append | A=ID(wamid) B=Telefono C=Nombre D=Tipo E=Contenido F=MediaURL G=Fecha H=Direccion(ENTRANTE/SALIENTE) I=MediaID J=RespuestaIA K=FotoIA L=ContextoID | `api/webhook` (entrante), `api/saliente` (saliente) |
+| **CONTACTOS** | read full, append+updateCell | A=Telefono B=Nombre C=Alias D=Estado E=WaId F=? G=ModoIA(IA/HUMANO) H=IdVenta I=Notas J=Refuerzo1 K=Refuerzo2 | `lib/contactos` (estado/notas/alias/idVenta/modoIA), webhook (upsert entrante) |
+| **RESPUESTAS_RAPIDAS** | read, append/updateRow | A=ID B=Texto C..L=ImagenURL1..10 M=Botones(`\|`) | `lib/respuestas` (CRUD) |
+| **SOCIAL** | append | ID,canal,sender_id,sender_id,'',fecha,message,'ATENDIDO','TRUE' | `api/social/saliente` (DMs IG/FB) |
+| CRM (read-only, spreadsheet 13MiI4…) | PEDIDOS, DETALLE_PEDIDO, CLIENTES | headers en fila 2, datos fila 4+ | `lib/crm.js` (feature cliente-pedidos + dashboard) |
 
-### Pendientes del usuario (para activar todo)
-1. Mergear PR #12 → deploy.
-2. Correr backfill CRM ya hecho; correr **backfill inbox**: `GET /api/admin/inbox-backfill?key=<CRON_SECRET>&cuenta=MANDI&sheetId=1ZQ_...` y `&cuenta=IND&sheetId=1ObN...`.
-3. Correr `/api/admin/reconcile?key=<CRON_SECRET>` (validación Fase 4).
-4. Env vars Meta en Vercel: `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_ID_MANDI`(=1024077200794372)/`_IND`, `WHATSAPP_TOKEN`.
-5. Conectar entrada en vivo: módulo HTTP en "Escucha" → `…/api/inbox/webhook?cuenta=…` (o apuntar Meta directo).
-6. Seguridad: rotar tokens Make; restringir Sheet IND (anyone-writer).
+- Capa de caché `lib/cache.js` (unstable_cache 8–30s) sobre las lecturas de polling. Dashboard combina MANDI+IND vía `readSheetFrom`.
+- **Mapeo a Supabase**: MENSAJES→`inbox.mensajes`, CONTACTOS→`inbox.conversaciones` (ambas ya existen). **Faltan 2 tablas**: `inbox.respuestas_rapidas` y `inbox.social` → **decisión: agregarlas** (para no perder funcionalidad). Lectura del CRM: cuando el CRM esté en Supabase, `lib/crm.js` puede leer de `crm.*` en vez del Sheet.
 
-### Endpoints temporales a borrar en Fase 6
+**Plan de migración wa-inbox-v2** (mismo patrón que el CRM): (1) añadir `lib/db/` + cliente Supabase (schema `inbox`) al repo; (2) crear tablas faltantes; (3) dual-write en `webhook`/`saliente`/`contactos`/`respuestas`/`social` (Sheets primario, Supabase espejo, gate por env); (4) backfill (ya existe `migrate-inbox-to-supabase.mjs`, extenderlo a respuestas/social); (5) lectura-sombra → cutover `DATA_BACKEND=supabase`. Luego repetir en **ind-inbox-v2** (misma receta, `cuenta=IND`).
+
+### ⚠️ Decisión de alcance ABIERTA (la última pregunta quedó sin responder directo)
+¿Migro **ambos** repos (wa-inbox-v2 + ind-inbox-v2) o **solo wa-inbox-v2** primero? (Objetivo real = que **ninguna** app quede en Excel → tender a ambos, MANDI como plantilla.)
+
+### Notas heredadas (contexto, ya NO son el objetivo)
+- El "apagar Make este finde" y "reconstruir el cerebro del bot (IA/LINKPAGO/KB)" eran ideas de sesiones previas fuera del alcance real (solo-BD). El escenario Make `EsuchaWhatsAppBusiness` no ejecuta desde 2026-07-11 23:02 porque el commit "elimina Make" de wa-inbox-v2 repuntó el webhook de Meta hacia esa app (no se perdieron mensajes).
+- Seguridad pendiente (independiente): rotar tokens en blueprints de Make; restringir Sheet IND (anyone-writer).
+
+### Endpoints temporales a borrar en Fase 6 (CRM)
 `shopify/seed`, `admin/reconcile`, `admin/inbox-backfill`.
