@@ -1,4 +1,7 @@
-import { validateLogin } from '@/lib/auth'
+// validateLogin de lib/db/usuarios maneja AMBOS formatos de contraseña:
+// texto plano (usuarios existentes) y bcrypt (creados tras la migración).
+// El lib/auth viejo solo comparaba texto plano → rompía el login de usuarios nuevos.
+import { validateLogin } from '@/lib/db/usuarios'
 
 export async function POST(req) {
   try {
