@@ -331,7 +331,7 @@ El switch:
 
 ### Fase 6 — Limpieza
 - [ ] Quitar dual-write y `lib/sheets.js`.
-- [ ] Borrar endpoints temporales: `shopify/seed` y `admin/reconcile` (validación Fase 4).
+- [ ] Borrar endpoints temporales: `shopify/seed`, `admin/reconcile` (Fase 4) y `admin/inbox-backfill`.
 - [ ] Borrar deuda: hacks `safeCell`, fallbacks hardcoded ya innecesarios.
 - [ ] (Opcional, más adelante) endurecer RLS; evaluar Supabase Auth y Storage.
 
@@ -433,7 +433,10 @@ Detectada en el mapeo del modelo actual:
   - `PATCH /api/inbox/conversaciones/[id]` (marcar leída / soporte / humano / vincular venta)
   - `POST /api/inbox/webhook` (entrante; payload YA normalizado — el parsing crudo + verificación depende del proveedor).
 - **Superposición con el CRM** (sobre ~882 teléfonos del inbox): 17 coinciden con un cliente por teléfono, 13 con `id_venta` (el inbox es mayormente prospectos que aún no compran; `id_venta` es el puente fuerte de los compradores).
-- **Pendiente**: correr el backfill (necesita el `--sheet-id` del spreadsheet del inbox de cada cuenta); definir el **proveedor de WhatsApp** para el parsing del webhook + envío real de salida; UI del inbox. Canales sociales y backend del bot (KB, etc.) = fases posteriores.
+- **Backfill server-side listo**: `GET /api/admin/inbox-backfill?key=<CRON_SECRET>&cuenta=&sheetId=` (temporal, a borrar). Corre en Vercel con las creds existentes — no requiere node local. Sheets del inbox (públicos, no hay que compartir nada):
+  - MANDI "WhatsAppMandarinaSales": `1ZQ_vIhKsDBnAUjitOB3zP-4MDbdmsv7hdDgnqNbOkak`
+  - IND "WhatsAppINDLoversCHAT": `1ObNIff1ypeFW7PfuAjeoiGBJCDyZU4etIsbGpyB-Nqk`  ⚠️ este está como `anyone writer` (editable por cualquiera con el link) — conviene restringirlo.
+- **Pendiente**: desplegar y correr el backfill (2 URLs); definir el **proveedor de WhatsApp** para el parsing del webhook + envío real de salida; UI del inbox. Canales sociales y backend del bot (KB, etc.) = fases posteriores.
 
 ### ⏳ Pendiente aparte (no bloquea)
 - Fix "Error al guardar" (compresión de foto en catálogo): commit local **`5d12d57f` NO pusheado**. Falta `git push origin main`.
