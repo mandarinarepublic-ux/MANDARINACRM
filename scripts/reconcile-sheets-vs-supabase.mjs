@@ -144,7 +144,10 @@ function reconcilePedidosMontos(pedidosSheets, pedidosSupa, issues) {
     const bad = [];
     if (!near(s.monto_total, p.monto_total)) bad.push(`total ${money(s.monto_total)}≠${money(p.monto_total)}`);
     if (!near(s.monto_abonado, p.monto_abonado)) bad.push(`abonado ${money(s.monto_abonado)}≠${money(p.monto_abonado)}`);
-    if (!near(s.monto_pendiente, p.monto_pendiente)) bad.push(`pendiente ${money(s.monto_pendiente)}≠${money(p.monto_pendiente)}`);
+    // pendiente se compara clampeado a 0: un sobrepago (envío) deja pendiente
+    // negativo en Sheets pero 0 en Supabase (normalizado); ambos = "sin saldo".
+    const penS = Math.max(0, money(s.monto_pendiente)), penP = Math.max(0, money(p.monto_pendiente));
+    if (!near(penS, penP)) bad.push(`pendiente ${money(s.monto_pendiente)}≠${money(p.monto_pendiente)}`);
     if (bad.length) diffs.push(`${s.pedido_id}: ${bad.join(', ')}`);
   }
   console.log(`  Σ monto_total   sheets=${sumTS.toFixed(2)}  supabase=${sumTP.toFixed(2)}  ${near(sumTS, sumTP) ? '✅' : '❌ Δ ' + (sumTP - sumTS).toFixed(2)}`);

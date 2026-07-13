@@ -42,7 +42,7 @@ export async function PATCH(req, { params }) {
     if (body.MONTO_TOTAL !== undefined) {
       updated.MONTO_TOTAL     = String(body.MONTO_TOTAL)
       updated.MONTO_ABONADO   = String(body.MONTO_ABONADO || pedido.MONTO_ABONADO)
-      updated.MONTO_PENDIENTE = String(body.MONTO_PENDIENTE || 0)
+      updated.MONTO_PENDIENTE = String(Math.max(0, Number(body.MONTO_PENDIENTE) || 0))
       updated.ESTADO_PAGO     = body.ESTADO_PAGO || pedido.ESTADO_PAGO
     }
 

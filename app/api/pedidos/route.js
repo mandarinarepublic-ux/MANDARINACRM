@@ -128,7 +128,9 @@ export async function POST(req) {
     const montoTotal    = items.reduce((sum, i) => sum + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
     const pagosArray    = Array.isArray(pagosInput) ? pagosInput : []
     const montoAbonado  = pagosArray.reduce((sum, p) => sum + parseFloat(p.monto || 0), 0)
-    const montoPendiente = montoTotal - montoAbonado
+    // Clamp a 0: si el abono inicial incluye envío/flete puede superar el total
+    // del producto; el excedente NO es saldo negativo, es dinero extra ya cobrado.
+    const montoPendiente = Math.max(0, montoTotal - montoAbonado)
 
     const areas = items.map(i => i.area || '').filter(a => a !== 'ENTREGA EN TIENDA')
     const diasCalculado = await calcularDiasEntregaDesdeSheet(areas)

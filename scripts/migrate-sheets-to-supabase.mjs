@@ -178,7 +178,7 @@ export const TABLES = [
       estado_pago: r.ESTADO_PAGO || 'PENDIENTE',
       monto_total: toNum(r.MONTO_TOTAL) ?? 0,
       monto_abonado: toNum(r.MONTO_ABONADO) ?? 0,
-      monto_pendiente: toNum(r.MONTO_PENDIENTE) ?? 0,
+      monto_pendiente: Math.max(0, toNum(r.MONTO_PENDIENTE) ?? 0), // clamp: sobrepagos (envío) no son saldo negativo
       factura_solicitada: toBool(r.FACTURA_SOLICITADA),
       factura_datil_id: r.FACTURA_DATIL_ID || null,
       factura_id: r.FACTURA_ID || null,
