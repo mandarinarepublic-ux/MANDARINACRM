@@ -445,3 +445,39 @@ Detectada en el mapeo del modelo actual:
 
 ### ⏳ Pendiente aparte (no bloquea)
 - Fix "Error al guardar" (compresión de foto en catálogo): commit local **`5d12d57f` NO pusheado**. Falta `git push origin main`.
+
+---
+
+## 9. 🧠 MEMORIA DE SESIÓN — retomar aquí (2026-07-13)
+
+Todo el trabajo de esta sesión vive en la branch **`claude/supermandadina-q1ykfz`** → **PR #12** (abierto contra `main`, NO mergeado aún). Nada está en producción todavía (prod corre `main`, código viejo).
+
+### Referencias clave
+- **Supabase**: proyecto `mandarina-DATA` id `piingkecjgoisnxccvaa` (plan **Pro**, activado hoy). Schemas `crm` + `inbox`.
+- **Vercel**: proyecto `mandarina-pro-sales` (id `prj_tcRidmjG670ag4jdrPGF4sopj4pq`, team `team_Sk65ztrHF0ybuWBRPQoS0hzp`).
+- **Sheets inbox** (públicos): MANDI `1ZQ_vIhKsDBnAUjitOB3zP-4MDbdmsv7hdDgnqNbOkak` ("WhatsAppMandarinaSales"), IND `1ObNIff1ypeFW7PfuAjeoiGBJCDyZU4etIsbGpyB-Nqk` ("WhatsAppINDLoversCHAT", ⚠️ anyone-writer).
+- **Make** (org 6191488, team 1738463): `EsuchaWhatsAppBusiness` (4471276), `IND_ESCUCHA_WHATSAPP` (5471227), `CONSULTA_LINKPAGO` (5304064).
+- **Proveedor WhatsApp = Meta Cloud API**. phone_number_id MANDI = `1024077200794372`. LINKPAGO = pasarela **dLocal Go**.
+- ⚠️ Secrets en texto plano en los blueprints de Make (token Meta + API key dLocal) → **rotar**.
+
+### Estado por track
+- **CRM (Sheets→Supabase)**: Fases 0–3 ✅ (dual-write cableado en TODAS las mutaciones + shadow reads + deudas #1/#2/#3/#10 + clamp sobrepagos). Fase 4 tooling ✅ (`/api/admin/reconcile` + script). **Falta**: desplegar, correr reconcile, cutover (`DATA_BACKEND=supabase`), limpieza. ~75%.
+- **Inbox (bot WhatsApp→Supabase)**: schema v2 + `wa_message_id` ✅, repo `lib/db/inbox.js` ✅, backfill (script + `/api/admin/inbox-backfill`) ✅, rutas API ✅, **UI `/dashboard/inbox`** ✅ (auto-refresh, media, integración pedido↔chat), **webhook Meta-nativo** ✅, **envío saliente por Meta** (`lib/whatsapp.js`, env-gated) ✅. **NO desplegado, backfill NO corrido.** ~85% del *núcleo humano*.
+
+### 🔴 Decisión ABIERTA (bloquea el plan del finde de "eliminar Make")
+El usuario quiere **apagar Make este finde**. PERO lo construido es la **capa humana + plomería**; NO migra el **cerebro del bot**: IA/auto-respuestas, **LINKPAGO** (pagos), base de conocimiento, respuestas rápidas, leads. Si se apaga Make hoy, el WhatsApp queda **100% manual**.
+Opciones planteadas (falta que elija): **A)** inbox 100% manual (lo hecho alcanza; se pierde IA + LINKPAGO automáticos). **B)** reconstruir el bot en la app (IA con Anthropic + LINKPAGO dLocal + KB — proyecto grande). **C)** híbrido/convivencia (Make sigue con bot/LINKPAGO; inbox = consola humana).
+
+### ⚠️ A confirmar con el usuario
+- **`EsuchaWhatsAppBusiness` no ejecuta desde 2026-07-11 23:02** (verificado en Make). ¿Lo apagó el usuario o hay mensajes entrantes perdiéndose? Nuestro webhook aún NO está desplegado.
+
+### Pendientes del usuario (para activar todo)
+1. Mergear PR #12 → deploy.
+2. Correr backfill CRM ya hecho; correr **backfill inbox**: `GET /api/admin/inbox-backfill?key=<CRON_SECRET>&cuenta=MANDI&sheetId=1ZQ_...` y `&cuenta=IND&sheetId=1ObN...`.
+3. Correr `/api/admin/reconcile?key=<CRON_SECRET>` (validación Fase 4).
+4. Env vars Meta en Vercel: `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_ID_MANDI`(=1024077200794372)/`_IND`, `WHATSAPP_TOKEN`.
+5. Conectar entrada en vivo: módulo HTTP en "Escucha" → `…/api/inbox/webhook?cuenta=…` (o apuntar Meta directo).
+6. Seguridad: rotar tokens Make; restringir Sheet IND (anyone-writer).
+
+### Endpoints temporales a borrar en Fase 6
+`shopify/seed`, `admin/reconcile`, `admin/inbox-backfill`.
