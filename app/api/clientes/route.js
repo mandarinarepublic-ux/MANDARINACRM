@@ -1,7 +1,6 @@
-import { readSheet, appendRow, fechaAhora } from '@/lib/sheets'
-import { v4 as uuid } from 'uuid'
+import { readSheet } from '@/lib/sheets'
 import { shadow } from '@/lib/db/_backend'
-import { listClientesSupabase } from '@/lib/db/clientes'
+import { listClientesSupabase, createCliente } from '@/lib/db/clientes'
 
 export async function GET(req) {
   try {
@@ -43,11 +42,15 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const body = await req.json()
-    const id = uuid()
-    await appendRow('CLIENTES', [
-      id, body.nombre, String(body.cedula), String(body.celular),
-      body.email || '', body.ciudad || '', body.direccion || '', fechaAhora(),
-    ])
+    // dual-write: Sheets (primario) + Supabase (espejo). Misma fila de Sheets que antes.
+    const id = await createCliente({
+      nombre: body.nombre,
+      cedula: body.cedula,
+      celular: body.celular,
+      email: body.email,
+      ciudad: body.ciudad,
+      direccion: body.direccion,
+    })
     return Response.json({ id })
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })
