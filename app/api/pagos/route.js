@@ -69,7 +69,14 @@ export async function POST(req) {
     await updateCell('PEDIDOS', pedidoIdx, 'O', montoPendiente)
 
     // 4. Registrar en bitácora
-    await logCambio(pedidoId, vendedorNombre || vendedorId || 'VENDEDOR', 'PAGO_AGREGADO', '', `${tipo} $${montoNum.toFixed(2)}${notas ? ' · ' + notas : ''}`)
+    // firma: logCambio(pedidoId, campo, antes, despues, usuario)
+    await logCambio(
+      pedidoId,
+      'PAGO_AGREGADO',
+      '',
+      `${tipo} $${montoNum.toFixed(2)}${notas ? ' · ' + notas : ''}`,
+      vendedorNombre || vendedorId || 'VENDEDOR'
+    )
 
     return Response.json({
       ok: true,

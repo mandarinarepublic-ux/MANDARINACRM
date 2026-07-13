@@ -86,7 +86,7 @@ async function hashPw(stored) {
 }
 
 // ─── Clientes de Google Sheets y Supabase ─────────────────────────────────────
-function getSheetsClient() {
+export function getSheetsClient() {
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -97,8 +97,8 @@ function getSheetsClient() {
   return google.sheets({ version: 'v4', auth });
 }
 
-const SHEET_ID = process.env.SHEET_ID;
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+export const SHEET_ID = process.env.SHEET_ID;
+export const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   db: { schema: 'crm' },
   auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -108,7 +108,7 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
  * Detecta la fila de encabezado buscando `headerKey` (tolera header en fila 0/1/2
  * y una fila-descripción intermedia). Filtra filas cuya celda `pkCol` esté vacía.
  */
-async function readSheet(sheets, name, headerKey, pkCol) {
+export async function readSheet(sheets, name, headerKey, pkCol) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range: `${name}!A:AZ`,
@@ -128,7 +128,7 @@ async function readSheet(sheets, name, headerKey, pkCol) {
 }
 
 // ─── Definición de tablas (orden = respeta FKs) ───────────────────────────────
-const TABLES = [
+export const TABLES = [
   {
     name: 'usuarios', sheet: 'USUARIOS', headerKey: 'USUARIO_ID', pkCol: 'USUARIO_ID',
     conflict: 'usuario_id',
@@ -415,4 +415,9 @@ async function main() {
   console.log(totalFail ? `\n⚠️  ${totalFail} filas con error — revisa arriba.` : '\n✅ Sin errores.');
 }
 
-main().catch((e) => { console.error('\n💥 Falla general:', e); process.exit(1); });
+// Solo ejecuta el backfill si se corre directamente (no al importarlo p.ej. desde
+// scripts/reconcile-sheets-vs-supabase.mjs, que reutiliza TABLES/transforms/clientes).
+const _isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (_isMain) {
+  main().catch((e) => { console.error('\n💥 Falla general:', e); process.exit(1); });
+}

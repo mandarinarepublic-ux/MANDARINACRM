@@ -358,13 +358,24 @@ Detectada en el mapeo del modelo actual:
 - **RLS activado** en las 11 tablas (sin políticas). Rationale: la app usa solo `service_role` server-side, que ignora RLS → no rompe nada; y bloquea anon/authenticated si la anon key se filtrara. (Esto adelanta el "endurecer RLS" que estaba para Fase 6.)
 - El proyecto viejo `mandarina-inbox` (id `umsdhojdwgzpmwmqojdl`) quedó **vacío y sin usar** (candidato a borrar).
 
-### ▶️ Siguiente paso (Fase 0 + Fase 2, sin tocar producción)
-En el repo `C:\Users\RodrigoWork\Desktop\MANDARINACRM`:
-1. `npm i @supabase/supabase-js`.
-2. Env vars en Vercel + `.env.local`: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `DATA_BACKEND=sheets`.
-3. `lib/supabase.js` — cliente con service_role, **solo server-side**, apuntando al schema `crm` (`db: { schema: 'crm' }`).
-4. `lib/db/` — un repo por entidad (pedidos, clientes, usuarios, pagos, guias, sucursal, catalogo, logs) con ambos backends detrás de `DATA_BACKEND` (dual-write).
-5. `scripts/migrate-sheets-to-supabase.mjs` — backfill idempotente (ver transformaciones en Fase 2).
+### ✅ Fase 0/1/2 completas
+- `@supabase/supabase-js` instalado; env vars en Vercel; `lib/supabase.js` (service_role, server-side, schema `crm`).
+- `lib/db/` con repo por entidad (pedidos, clientes, usuarios, pagos, guias, sucursal, catalogo, logs, detalle, facturas, diasEntrega) — ambos backends detrás de `DATA_BACKEND`, patrón dual-write en `_backend.js`.
+- `scripts/migrate-sheets-to-supabase.mjs` — backfill idempotente ejecutado. Poblado: usuarios 14, clientes 675, pedidos 268, detalle 520, pagos 285, guias 37, logs 1466, sucursal 77, prod_shopify 429, prod_catalogo 42, dias_entrega 8. Integridad: 0 FKs huérfanas, 0 nulls en FKs.
+
+### ✅ Fase 3 (dual-write + lectura-sombra) — completa
+- **Dual-write activo** en todas las mutaciones vía `write()` de `_backend.js`.
+- Cerrado el hueco de **logs**: `lib/pedidos.js logCambio` delegaba solo a Sheets; ahora delega en `lib/db/logs` (dual-write). Antes `crm.logs_pedidos` se congelaba tras el backfill.
+- **Lectura-sombra** (`SHADOW_READ=1`) en los GET: pedidos.list, clientes.all, usuarios.list, sucursal.list, catalogo.list, shopify.products y **logs.byPedido** (esta última recién migrada del acceso crudo a googleapis al repo).
+- Corregida deuda #3: orden de argumentos de `logCambio` en `pagos/route.js`.
+
+### ▶️ Fase 4 (validación / gate al cutover) — en curso
+- **`scripts/reconcile-sheets-vs-supabase.mjs`** (nuevo): compara paridad Sheets⇄Supabase (solo lectura) reutilizando las MISMAS transforms del backfill. Chequea conteos, conjuntos de PK, y montos de pedidos + pagos (total y por pedido). El backfill se refactorizó para exportar `TABLES`/clientes/`readSheet` y sólo corre su `main()` si se invoca directo.
+  - Correr local con `.env.local`: `node scripts/reconcile-sheets-vs-supabase.mjs [--only=pedidos,pagos] [--verbose]`. Exit 0 = paridad total, 1 = discrepancias.
+- **Hallazgo de calidad de datos (pre-existente en Sheets, migrado fiel — NO tocar sin decisión):**
+  - 17 pedidos con `monto_pendiente` negativo por **sobrepago** (abonado > total); la app hoy clamparía a 0.
+  - 2 pedidos con `monto_abonado ≠ Σpagos`: `MAN-JAC-5093` (abonado 100, pagos 150) y `MAN-JAC-5009` (abonado 15, sin fila de pago).
+- Pendiente de Fase 4: correr la reconciliación con credenciales reales y recorrer el checklist de flujos (§4 arriba) antes del cutover.
 
 ### ⏳ Pendiente aparte (no bloquea)
 - Schema `inbox` (tablas `conversaciones` + `mensajes`) — se hace después del CRM.
