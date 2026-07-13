@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { enviarMensaje, getConversacion } from '@/lib/db/inbox'
 import { envioActivo, enviarWhatsAppTexto } from '@/lib/whatsapp'
+import { requireUser, authError } from '@/lib/inboxAuth'
 
 // POST /api/inbox/conversaciones/[id]/mensajes → enviar mensaje SALIENTE (agente/IA)
 // body: { texto, tipo?, mediaUrl?, autor?, respuestaIa?, contextoId? }
@@ -8,6 +9,8 @@ import { envioActivo, enviarWhatsAppTexto } from '@/lib/whatsapp'
 // Si el envío por Meta está configurado (env por cuenta) y hay texto, se manda por
 // WhatsApp y se guarda su wamid. Si no, solo se persiste en Supabase (como antes).
 export async function POST(req, { params }) {
+  const auth = await requireUser(req)
+  if (!auth.ok) return authError(auth)
   try {
     const { id } = params
     const b = await req.json()
@@ -26,7 +29,7 @@ export async function POST(req, { params }) {
       tipo: b.tipo,
       texto: b.texto,
       mediaUrl: b.mediaUrl,
-      nombreContacto: b.autor,
+      nombreContacto: auth.user?.nombre || b.autor,
       respuestaIa: b.respuestaIa,
       contextoId: b.contextoId,
       waMessageId: whatsapp.waMessageId,

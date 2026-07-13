@@ -1,10 +1,13 @@
 export const dynamic = 'force-dynamic'
 import { listConversaciones, conversacionesConCliente } from '@/lib/db/inbox'
+import { requireUser, authError } from '@/lib/inboxAuth'
 
 // GET /api/inbox/conversaciones?cuenta=MANDI&soporte=&humano=&conCliente=1&limit=100
 // Lista de conversaciones para el panel del inbox (más reciente primero).
 // conCliente=1 usa la vista que adjunta el cliente del CRM (unión por teléfono).
 export async function GET(req) {
+  const auth = await requireUser(req)
+  if (!auth.ok) return authError(auth)
   try {
     const { searchParams } = new URL(req.url)
     const cuenta = searchParams.get('cuenta') || undefined

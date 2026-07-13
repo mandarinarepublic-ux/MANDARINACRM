@@ -1,8 +1,11 @@
 export const dynamic = 'force-dynamic'
 import { getConversacion, listMensajes, marcarLeidas, setSoporte, setHumano, setIdVenta } from '@/lib/db/inbox'
+import { requireUser, authError } from '@/lib/inboxAuth'
 
 // GET /api/inbox/conversaciones/[id] → { conversacion, mensajes }  (el hilo completo)
 export async function GET(req, { params }) {
+  const auth = await requireUser(req)
+  if (!auth.ok) return authError(auth)
   try {
     const { id } = params
     const conversacion = await getConversacion(id)
@@ -18,6 +21,8 @@ export async function GET(req, { params }) {
 // PATCH /api/inbox/conversaciones/[id] → marcar leída / cambiar soporte / humano / vincular venta
 // body: { leer?, soporte?, humano?, idVenta? }
 export async function PATCH(req, { params }) {
+  const auth = await requireUser(req)
+  if (!auth.ok) return authError(auth)
   try {
     const { id } = params
     const body = await req.json()

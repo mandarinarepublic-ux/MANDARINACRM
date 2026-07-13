@@ -1,6 +1,28 @@
 export const dynamic = 'force-dynamic'
+import crypto from 'node:crypto'
 import { recibirMensaje } from '@/lib/db/inbox'
 import { cuentaPorPhoneId } from '@/lib/whatsapp'
+
+// Autoriza el POST del webhook. Dos mecanismos (el que esté configurado):
+//  - Firma de Meta X-Hub-Signature-256 (HMAC-SHA256 del body con WHATSAPP_APP_SECRET).
+//  - Secreto compartido ?key=<INBOX_WEBHOOK_SECRET> (para el fork de Make).
+// Si NINGUNO está configurado, se permite (para no romper antes de configurar).
+function webhookAutorizado(req, rawBody) {
+  const shared = process.env.INBOX_WEBHOOK_SECRET
+  const appSecret = process.env.WHATSAPP_APP_SECRET
+  if (!shared && !appSecret) return true
+
+  if (shared && new URL(req.url).searchParams.get('key') === shared) return true
+
+  if (appSecret) {
+    const sig = req.headers.get('x-hub-signature-256') || ''
+    const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBody, 'utf8').digest('hex')
+    try {
+      if (sig && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return true
+    } catch { /* longitudes distintas → no coincide */ }
+  }
+  return false
+}
 
 // Webhook de WhatsApp Cloud API (Meta). ADITIVO: no reemplaza el flujo de Make;
 // se puede apuntar Meta acá directamente, o agregar en el escenario "Escucha" un
@@ -51,8 +73,13 @@ function mediaDe(msg) {
 }
 
 export async function POST(req) {
+  // Body crudo para validar la firma; luego se parsea.
+  const rawBody = await req.text().catch(() => '')
+  if (!webhookAutorizado(req, rawBody)) {
+    return Response.json({ error: 'no autorizado' }, { status: 401 })
+  }
   let body
-  try { body = await req.json() } catch { body = null }
+  try { body = JSON.parse(rawBody) } catch { body = null }
   // Meta exige responder 200 rápido siempre (si no, reintenta y desactiva el webhook).
   try {
     const { searchParams } = new URL(req.url)

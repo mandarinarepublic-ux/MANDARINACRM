@@ -19,6 +19,14 @@ function fmtHora(ts) {
     : d.toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit' })
 }
 
+// Header de identidad para las rutas del inbox (validado server-side).
+function authHeaders() {
+  try {
+    const u = JSON.parse(localStorage.getItem('mp_user') || '{}')
+    return u?.id ? { 'x-mp-user-id': u.id } : {}
+  } catch { return {} }
+}
+
 function esImagen(m) {
   if (m.tipo && /image|imagen|photo|foto|sticker/i.test(m.tipo)) return true
   return m.media_url && /\.(jpe?g|png|gif|webp)(\?|$)/i.test(m.media_url)
@@ -56,7 +64,7 @@ export default function InboxPage() {
   const loadConvs = useCallback(async () => {
     setLoadingConvs(true)
     try {
-      const res = await fetch(`/api/inbox/conversaciones?cuenta=${cuenta}&conCliente=1&limit=200`)
+      const res = await fetch(`/api/inbox/conversaciones?cuenta=${cuenta}&conCliente=1&limit=200`, { headers: authHeaders() })
       const data = await res.json()
       setConvs(data.conversaciones || [])
     } catch { setConvs([]) }
@@ -68,12 +76,12 @@ export default function InboxPage() {
   async function abrir(c) {
     setSel(c); setLoadingHilo(true); setMensajes([])
     try {
-      const res = await fetch(`/api/inbox/conversaciones/${c.conversacion_id}`)
+      const res = await fetch(`/api/inbox/conversaciones/${c.conversacion_id}`, { headers: authHeaders() })
       const data = await res.json()
       setMensajes(data.mensajes || [])
       if (c.no_leidos > 0) {
         fetch(`/api/inbox/conversaciones/${c.conversacion_id}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ leer: true }),
         }).catch(() => {})
         setConvs((cs) => cs.map((x) => x.conversacion_id === c.conversacion_id ? { ...x, no_leidos: 0 } : x))
@@ -88,7 +96,7 @@ export default function InboxPage() {
     setEnviando(true)
     try {
       const res = await fetch(`/api/inbox/conversaciones/${sel.conversacion_id}/mensajes`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ texto: texto.trim(), autor: user?.nombre || 'Agente' }),
       })
       const data = await res.json()
@@ -113,7 +121,7 @@ export default function InboxPage() {
     if (!sel) return
     const t = setInterval(async () => {
       try {
-        const res = await fetch(`/api/inbox/conversaciones/${sel.conversacion_id}`)
+        const res = await fetch(`/api/inbox/conversaciones/${sel.conversacion_id}`, { headers: authHeaders() })
         const data = await res.json()
         setMensajes((prev) => (data.mensajes && data.mensajes.length !== prev.length ? data.mensajes : prev))
       } catch {}
