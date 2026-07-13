@@ -12,7 +12,7 @@
 // Gate: token embebido (temporal; la DB destino está vacía y el backfill es
 // idempotente por upsert, así que el riesgo es mínimo). Se elimina con la ruta.
 
-import { runBackfill } from '@/lib/backfill';
+import { runBackfill, peekSheet } from '@/lib/backfill';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,6 +25,16 @@ export async function GET(req) {
 
   if (searchParams.get('key') !== TOKEN) {
     return Response.json({ error: 'no autorizado' }, { status: 401 });
+  }
+
+  // Diagnóstico: ?peek=NOMBRE_HOJA devuelve las primeras filas crudas.
+  const peek = searchParams.get('peek');
+  if (peek) {
+    try {
+      return Response.json(await peekSheet(peek, Number(searchParams.get('n')) || 8));
+    } catch (e) {
+      return Response.json({ error: e.message }, { status: 500 });
+    }
   }
 
   // Seguridad: por defecto DRY-RUN. Solo escribe con ?dry=0 explícito.
