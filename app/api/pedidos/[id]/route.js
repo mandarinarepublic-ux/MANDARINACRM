@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic'
-import { readSheet, fechaAhora } from '@/lib/sheets'
+import { fechaAhora } from '@/lib/sheets'
 import { logCambio, subestadoInicial } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
-import { updatePedido, markImpreso } from '@/lib/db/pedidos'
+import { updatePedido, markImpreso, getPedidoById } from '@/lib/db/pedidos'
 import { createGuia } from '@/lib/db/guias'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
@@ -13,8 +13,8 @@ export async function PATCH(req, { params }) {
     const body = await req.json()
     const usuarioId = body._usuarioId || 'SISTEMA'
 
-    const pedidos = await readSheet('PEDIDOS')
-    const pedido = pedidos.find(p => p.PEDIDO_ID === id)
+    // Lectura vía repo (respeta DATA_BACKEND) para diffear contra el valor actual.
+    const pedido = await getPedidoById(id)
     if (!pedido) return Response.json({ error: 'Pedido no encontrado' }, { status: 404 })
 
     const now = fechaAhora()

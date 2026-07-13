@@ -1,5 +1,4 @@
 export const dynamic = 'force-dynamic'
-import { readSheet } from '@/lib/sheets'
 import { logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { parseSubestados, serializeSubestados } from '@/lib/subestados'
@@ -9,8 +8,9 @@ import {
   updateNotasArea,
   updateSubestadoCorte,
   softDeleteItem,
+  getItemById,
 } from '@/lib/db/detalle'
-import { setEstado } from '@/lib/db/pedidos'
+import { setEstado, todosItemsListos, getPedidoById } from '@/lib/db/pedidos'
 
 export async function PATCH(req, { params }) {
   try {
@@ -19,11 +19,8 @@ export async function PATCH(req, { params }) {
     const usuarioId = body._usuarioId || 'SISTEMA'
 
     // Buscar el ítem (se necesita para logs y auto-avance; las escrituras van por repo).
-    const detalles = await readSheet('DETALLE_PEDIDO')
-    const idx = detalles.findIndex(d => d.ITEM_ID === id)
-    if (idx === -1) return Response.json({ error: 'Ítem no encontrado' }, { status: 404 })
-
-    const item = detalles[idx]
+    const item = await getItemById(id)
+    if (!item) return Response.json({ error: 'Ítem no encontrado' }, { status: 404 })
     const bodyKeys = Object.keys(body).filter(k => !k.startsWith('_'))
 
     // ── CASO 1: solo NOTAS_AREA ──────────────────────────────────────────────
@@ -62,25 +59,12 @@ export async function PATCH(req, { params }) {
       await logCambio(item.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}${areaRol ? ` (${areaRol})` : ''}`, item.SUBESTADO, nuevoValor, usuarioId).catch(() => {})
 
       // ── Auto-avance a DESPACHO si TODOS los ítems del pedido están LISTO ──
+      // updateSubestado ya escribió (dual-write); todosItemsListos relee del backend
+      // activo e incluye el valor recién guardado. getPedidoById respeta DATA_BACKEND.
       try {
-        const todosDetalles = await readSheet('DETALLE_PEDIDO')
-        const itemsDelPedido = todosDetalles.filter(
-          d => d.PEDIDO_ID === item.PEDIDO_ID && d.SUBESTADO !== 'ELIMINADO' && d.SUBESTADO !== 'ENTREGADO_TIENDA'
-        )
-        // Reflejar en memoria el valor recién guardado del ítem actual.
-        const itemsActualizados = itemsDelPedido.map(d =>
-          d.ITEM_ID === id ? { ...d, SUBESTADO: nuevoValor } : d
-        )
-        const todosListos = itemsActualizados.every(d => {
-          const sub = d.SUBESTADO || ''
-          if (sub.includes(':')) {
-            return sub.split('|').every(p => p.split(':')[1]?.trim() === 'LISTO')
-          }
-          return sub === 'LISTO'
-        })
+        const todosListos = await todosItemsListos(item.PEDIDO_ID)
         if (todosListos) {
-          const pedidos = await readSheet('PEDIDOS')
-          const pedido = pedidos.find(p => p.PEDIDO_ID === item.PEDIDO_ID)
+          const pedido = await getPedidoById(item.PEDIDO_ID)
           if (pedido && pedido.ESTADO_PEDIDO === 'EN_FABRICA') {
             // dual-write: solo la celda ESTADO_PEDIDO (Sheets + Supabase).
             await setEstado(item.PEDIDO_ID, 'DESPACHO')
@@ -160,8 +144,7 @@ export async function DELETE(req, { params }) {
     const usuarioId = body._usuarioId || 'SISTEMA'
 
     // Se lee para el log (PRODUCTO_NOMBRE / PEDIDO_ID); la escritura va por repo.
-    const detalles = await readSheet('DETALLE_PEDIDO')
-    const item = detalles.find(d => d.ITEM_ID === id)
+    const item = await getItemById(id)
     if (!item) return Response.json({ error: 'Ítem no encontrado' }, { status: 404 })
 
     // Soft-delete dual-write: Sheets SUBESTADO='ELIMINADO', Supabase eliminado=true.
