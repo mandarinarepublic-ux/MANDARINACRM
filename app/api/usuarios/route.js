@@ -1,15 +1,10 @@
-import { readSheet } from '@/lib/sheets'
-import { shadow } from '@/lib/db/_backend'
-import { listUsuariosSupabase, createUsuario, updateUsuario } from '@/lib/db/usuarios'
+import { listUsuarios, createUsuario, updateUsuario } from '@/lib/db/usuarios'
 
 export async function GET() {
   try {
-    const usuarios = await readSheet('USUARIOS')
-    await shadow('usuarios.list', usuarios, () => listUsuariosSupabase())
-    // Don't expose passwords
-    return Response.json({
-      usuarios: usuarios.map(u => ({ ...u, PASSWORD_HASH: undefined }))
-    })
+    // Lectura vía repo (respeta DATA_BACKEND). listUsuarios ya normaliza y NO expone password.
+    const usuarios = await listUsuarios()
+    return Response.json({ usuarios })
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })
   }

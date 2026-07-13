@@ -1,54 +1,5 @@
 export const dynamic = 'force-dynamic'
-import { google } from 'googleapis'
-import { shadow } from '@/lib/db/_backend'
-import { listProductosShopifySupabase } from '@/lib/db/productosShopify'
-
-async function readProductosShopify(tiendaId, query = '') {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  })
-  const sheets = google.sheets({ version: 'v4', auth })
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SHEET_ID,
-    range: 'PRODUCTOS_SHOPIFY!A:G',
-  })
-
-  const rows = res.data.values || []
-  if (rows.length < 2) return []
-
-  // Skip header row if present
-  let dataRows = rows
-  if (rows[0][0]?.toUpperCase() === 'TIENDA') {
-    dataRows = rows.slice(1)
-  }
-
-  return dataRows
-    .filter(r => {
-      if (!r[2]) return false // no name
-      if (r[6] === 'FALSE') return false // inactive
-      if (tiendaId && r[0]?.toUpperCase() !== tiendaId.toUpperCase()) return false
-      if (query && !r[2]?.toLowerCase().includes(query.toLowerCase())) return false
-      return true
-    })
-    .map(r => ({
-      id: r[1] || r[2],
-      title: r[2],
-      price: r[3] || '35.00',
-      image: r[5] || null,
-      variants: (r[4] || '').split(',').map(t => t.trim()).filter(Boolean).map(t => ({
-        id: `${r[1]}_${t}`,
-        title: t,
-        price: r[3] || '35.00',
-      })),
-      options: [{ name: 'Talla', values: (r[4] || '').split(',').map(t => t.trim()) }],
-      tags: '',
-      tienda: r[0],
-    }))
-}
+import { listProductosShopify } from '@/lib/db/productosShopify'
 
 export async function GET(req) {
   try {
@@ -56,9 +7,8 @@ export async function GET(req) {
     const tiendaId = searchParams.get('tienda') || 'MANDARINA'
     const query = searchParams.get('q') || ''
 
-    const products = await readProductosShopify(tiendaId, query)
-
-    await shadow('shopify.products', products, () => listProductosShopifySupabase({ tienda: tiendaId, q: query }))
+    // Lectura vía repo (respeta DATA_BACKEND). Mismos filtros y shape de hoy.
+    const products = await listProductosShopify({ tienda: tiendaId, q: query })
 
     // Fallback to hardcoded if sheet is empty
     if (products.length === 0) {

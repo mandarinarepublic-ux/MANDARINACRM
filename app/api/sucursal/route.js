@@ -1,8 +1,6 @@
-import { readSheet } from '@/lib/sheets'
 import { uploadToCloudinary } from '@/lib/cloudinary'
-import { shadow } from '@/lib/db/_backend'
 import {
-  listSucursalSupabase,
+  listSucursal,
   createSucursalProducto,
   updateSucursalProducto,
   ajustarStock,
@@ -21,31 +19,9 @@ export async function GET(req) {
     const tiendaFiltro = searchParams.get('tienda')
     const todos = searchParams.get('todos') === 'true'
 
-    let productos = await readSheet(HOJA)
-
-    // Filtrar por tienda si se especifica
-    if (tiendaFiltro) {
-      productos = productos.filter(p =>
-        p.TIENDA?.toLowerCase() === tiendaFiltro.toLowerCase()
-      )
-    }
-
-    // Por defecto solo mostrar activos con stock > 0
-    if (!todos) {
-      productos = productos.filter(p =>
-        p.ACTIVO === 'TRUE' && parseInt(p.STOCK || '0') > 0
-      )
-    }
-
-    // Parsear numéricos
-    productos = productos.map(p => ({
-      ...p,
-      STOCK: parseInt(p.STOCK || '0'),
-      RESERVADO: parseInt(p.RESERVADO || '0'),
-      PRECIO: parseFloat(p.PRECIO || '0'),
-    }))
-
-    await shadow('sucursal.list', productos, () => listSucursalSupabase({ tienda: tiendaFiltro, todos }))
+    // Lectura vía repo (respeta DATA_BACKEND). listSucursal aplica el filtro por
+    // tienda, el default activos+stock>0, y parsea numéricos (mismo shape de hoy).
+    const productos = await listSucursal({ tienda: tiendaFiltro, todos })
 
     return Response.json({ productos })
   } catch (e) {

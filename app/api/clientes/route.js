@@ -1,6 +1,4 @@
-import { readSheet } from '@/lib/sheets'
-import { shadow } from '@/lib/db/_backend'
-import { listClientesSupabase, createCliente } from '@/lib/db/clientes'
+import { listClientes, createCliente } from '@/lib/db/clientes'
 
 export async function GET(req) {
   try {
@@ -9,13 +7,13 @@ export async function GET(req) {
     const byId = searchParams.get('id') || ''
     const all = searchParams.get('all')
 
-    const clientes = await readSheet('CLIENTES')
+    // Lectura vía repo (respeta DATA_BACKEND). La ruta aplica los mismos modos.
+    const clientes = await listClientes()
 
-    // Devuelve TODA la hoja en UNA sola lectura. Lo usa la impresión masiva
-    // para no disparar N lecturas paralelas a Sheets (que provocaban 429 y
-    // pedidos impresos sin la sección de datos del cliente).
+    // Devuelve TODA la lista en UNA sola lectura. Lo usa la impresión masiva
+    // para no disparar N lecturas paralelas (que provocaban 429 y pedidos
+    // impresos sin la sección de datos del cliente).
     if (all) {
-      await shadow('clientes.all', clientes, () => listClientesSupabase())
       return Response.json({ clientes })
     }
 

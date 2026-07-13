@@ -1,8 +1,7 @@
-import { readSheet, fechaAhora } from '@/lib/sheets'
+import { fechaAhora } from '@/lib/sheets'
 import { generatePedidoId, generateItemId, calcularDiasEntregaDesdeSheet, subestadoInicial, logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
-import { shadow } from '@/lib/db/_backend'
-import { listPedidosSupabase, createPedido } from '@/lib/db/pedidos'
+import { listPedidos, listPedidoIds, createPedido } from '@/lib/db/pedidos'
 import { upsertClienteByCedula } from '@/lib/db/clientes'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
@@ -12,55 +11,14 @@ export const dynamic = 'force-dynamic'
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
-    const vendedorId = searchParams.get('vendedor')
-    const rol = searchParams.get('rol')
-
-    let pedidos  = await readSheet('PEDIDOS')
-    let detalles = await readSheet('DETALLE_PEDIDO')
-    let pagos    = await readSheet('PAGOS')
-    let clientes = await readSheet('CLIENTES')
-    let guias    = await readSheet('GUIAS_DESPACHO')
-
-    if (rol === 'VENDEDOR' && searchParams.get('scope') === 'mios') {
-      const vendedorNombreParam = searchParams.get('vendedor') || ''
-      const vendedorIdParam     = searchParams.get('vendedorId') || vendedorId || ''
-      pedidos = pedidos.filter(p =>
-        p.VENDEDOR_ID === vendedorNombreParam ||
-        p.VENDEDOR_ID === vendedorIdParam
-      )
-    }
-
-    const result = pedidos.map(p => {
-      const guiasPedido = guias
-        .filter(g => g.PEDIDO_ID === p.PEDIDO_ID)
-        .sort((a, b) => (b.FECHA_DESPACHO || '').localeCompare(a.FECHA_DESPACHO || ''))
-
-      const guia = guiasPedido[0] || null
-      const clienteInfo = clientes.find(c => c.CLIENTE_ID === p.CLIENTE_ID) || null
-
-      return {
-        ...p,
-        items: detalles.filter(d => d.PEDIDO_ID === p.PEDIDO_ID && d.SUBESTADO !== 'ELIMINADO'),
-        pagos: pagos.filter(pg => pg.PEDIDO_ID === p.PEDIDO_ID),
-        CLIENTE_NOMBRE:  clienteInfo?.NOMBRE  || '',
-        CLIENTE_CEDULA:  clienteInfo?.CEDULA  || '',
-        CLIENTE_CELULAR: clienteInfo?.CELULAR || '',
-        GUIA_NUMERO:       guia?.NUMERO_GUIA       || p.GUIA_NUMERO       || '',
-        GUIA_TRANSPORTISTA:guia?.TRANSPORTISTA      || p.GUIA_TRANSPORTISTA || '',
-        GUIA_FOTO_URL:     guia?.FOTO_GUIA_URL      || '',
-        GUIA_FECHA:        guia?.FECHA_DESPACHO     || '',
-        GUIA_ID:           guia?.GUIA_ID            || '',
-      }
-    })
-
-    // Lectura-sombra (Fase 3): compara contra Supabase en logs. NO cambia la
-    // respuesta (sigue siendo el resultado de Sheets). Best-effort, gated por SHADOW_READ.
-    await shadow('pedidos.list', result, () => listPedidosSupabase({
-      vendedor: searchParams.get('vendedor'),
+    // Lectura vía repo: respeta DATA_BACKEND (Sheets hoy, Supabase tras el cutover).
+    // El join (items/pagos/cliente/guía) y el filtro scope='mios' viven en listPedidos.
+    const result = await listPedidos({
+      vendedor:   searchParams.get('vendedor'),
       vendedorId: searchParams.get('vendedorId'),
-      rol,
-      scope: searchParams.get('scope'),
-    }))
+      rol:        searchParams.get('rol'),
+      scope:      searchParams.get('scope'),
+    })
 
     return Response.json({ pedidos: result })
   } catch (e) {
@@ -109,10 +67,12 @@ export async function POST(req) {
     // tienda (MAN-AND-2432 e IND-XAV-2432 compartían el 2432).
     let pedidoId = await generatePedidoId(tiendaId, vendedorCodigo)
     {
-      const yaExisten = await readSheet('PEDIDOS')
+      // Anti-colisión leyendo del backend activo (Sheets hoy, Supabase tras cutover)
+      // para no generar un PEDIDO_ID duplicado si el espejo del otro store va desfasado.
+      const idsExistentes = await listPedidoIds()
       const numerosUsados = new Set(
-        yaExisten
-          .map(p => parseInt((p.PEDIDO_ID || '').split('-').pop(), 10))
+        idsExistentes
+          .map(id => parseInt((id || '').split('-').pop(), 10))
           .filter(n => !isNaN(n))
       )
       const parts = pedidoId.split('-')
