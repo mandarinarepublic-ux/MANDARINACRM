@@ -417,10 +417,15 @@ Detectada en el mapeo del modelo actual:
 ### ▶️ Schema `inbox` (v1 creado — prep en paralelo, wiring después del CRM)
 - **DDL aplicado** (`db/inbox_schema.sql`): tablas `inbox.conversaciones` + `inbox.mensajes` (una cuenta por columna `cuenta='IND'|'MANDI'`), índices, RLS activado (como en crm).
 - **Unión CRM ↔ inbox por teléfono resuelta y PROBADA**: vista `crm.cliente_conversacion` + función `inbox.norm_telefono(text)` (toma los últimos 9 dígitos → cruza `09XXXXXXXX` de `crm.clientes.celular` con `5939XXXXXXXX` de WhatsApp). Test end-to-end: conversación `593959263396` unió correctamente al cliente con celular `0959263396`.
-- **Pendiente** (necesita la estructura real del inbox actual, hoy en Sheets):
-  - Afinar columnas de `conversaciones`/`mensajes` contra los campos reales.
-  - Backfill de los dos inbox → Supabase.
-  - Wiring de la app del inbox (lecturas/escrituras) — se hace DESPUÉS del cutover del CRM.
+- **Capa de datos lista y probada**: `lib/db/inbox.js` + `getSupabaseInbox()` en `lib/supabase.js`.
+  - Conversaciones: list/get/upsert (por cuenta+telefono), marcarLeidas, cambiarEstado, asignar.
+  - Mensajes: listMensajes (hilo), addMensaje (idempotente por `wa_message_id`).
+  - Flujos: `recibirMensaje` (entrante: upsert conv + msg IN + no_leidos++) y `enviarMensaje` (saliente).
+  - Puente CRM: `conversacionesConCliente` / `conversacionesDeCliente` (leen la vista).
+  - Simulación end-to-end en SQL: hilo ordenado, dedup por wa_message_id, no_leidos, y unión al cliente — todo OK. Datos de prueba borrados.
+- **Pendiente** (necesita input externo):
+  - **Estructura real del inbox actual** (¿qué Sheet(s)? ¿qué columnas?) → afinar `conversaciones`/`mensajes` y armar el **backfill**.
+  - **Wiring**: webhook de entrada (según el proveedor de WhatsApp) + rutas API + UI. Se hace DESPUÉS del cutover del CRM.
 
 ### ⏳ Pendiente aparte (no bloquea)
 - Fix "Error al guardar" (compresión de foto en catálogo): commit local **`5d12d57f` NO pusheado**. Falta `git push origin main`.
