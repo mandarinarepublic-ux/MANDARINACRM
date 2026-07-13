@@ -19,6 +19,11 @@ function fmtHora(ts) {
     : d.toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit' })
 }
 
+function esImagen(m) {
+  if (m.tipo && /image|imagen|photo|foto|sticker/i.test(m.tipo)) return true
+  return m.media_url && /\.(jpe?g|png|gif|webp)(\?|$)/i.test(m.media_url)
+}
+
 export default function InboxPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -95,6 +100,26 @@ export default function InboxPage() {
   useEffect(() => {
     if (hiloRef.current) hiloRef.current.scrollTop = hiloRef.current.scrollHeight
   }, [mensajes])
+
+  // Auto-refresh de la lista de conversaciones (cada 20s).
+  useEffect(() => {
+    if (!user) return
+    const t = setInterval(() => { loadConvs() }, 20000)
+    return () => clearInterval(t)
+  }, [user, loadConvs])
+
+  // Auto-refresh del hilo abierto (cada 10s); solo re-renderiza si hay mensajes nuevos.
+  useEffect(() => {
+    if (!sel) return
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/inbox/conversaciones/${sel.conversacion_id}`)
+        const data = await res.json()
+        setMensajes((prev) => (data.mensajes && data.mensajes.length !== prev.length ? data.mensajes : prev))
+      } catch {}
+    }, 10000)
+    return () => clearInterval(t)
+  }, [sel])
 
   // Auto-abrir la conversación que matchea el teléfono del deep-link.
   useEffect(() => {
@@ -200,8 +225,9 @@ export default function InboxPage() {
                   return (
                     <div key={m.mensaje_id} className={`flex ${out ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[78%] rounded-2xl px-3 py-2 text-sm ${out ? 'bg-mandarina-500 text-white rounded-br-sm' : 'bg-gray-800 text-gray-100 rounded-bl-sm'}`}>
-                        {m.media_url && (
-                          <a href={m.media_url} target="_blank" rel="noreferrer" className="block underline text-xs mb-1 opacity-90">📎 adjunto</a>
+                        {m.media_url && (esImagen(m)
+                          ? <a href={m.media_url} target="_blank" rel="noreferrer"><img src={m.media_url} alt="adjunto" className="rounded-lg max-w-full max-h-60 mb-1" /></a>
+                          : <a href={m.media_url} target="_blank" rel="noreferrer" className="block underline text-xs mb-1 opacity-90">📎 adjunto</a>
                         )}
                         {m.texto && <div className="whitespace-pre-wrap break-words">{m.texto}</div>}
                         <div className={`text-[10px] mt-0.5 ${out ? 'text-white/70' : 'text-gray-500'}`}>
