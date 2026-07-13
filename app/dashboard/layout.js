@@ -11,6 +11,7 @@ import ToastHost from '@/components/ToastHost'
 const NAV_ALL = [
   { href:'/dashboard',              label:'Inicio',       icon:'🏠', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/tablero',      label:'Tablero',      icon:'📊', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
+  { href:'/dashboard/calendario',   label:'Calendario',   icon:'📅', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/nuevo-pedido', label:'Nueva Venta',  icon:'➕', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'] },
   { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'] },
   { href:'/dashboard/historial',    label:'Historial',    icon:'📋', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
