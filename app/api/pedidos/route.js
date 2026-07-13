@@ -2,6 +2,8 @@ import { readSheet, appendRow, findRow, fechaAhora } from '@/lib/sheets'
 import { generatePedidoId, generateItemId, calcularDiasEntrega, calcularDiasEntregaDesdeSheet, subestadoInicial, logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
 import { v4 as uuid } from 'uuid'
+import { shadow } from '@/lib/db/_backend'
+import { listPedidosSupabase } from '@/lib/db/pedidos'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +50,15 @@ export async function GET(req) {
         GUIA_ID:           guia?.GUIA_ID            || '',
       }
     })
+
+    // Lectura-sombra (Fase 3): compara contra Supabase en logs. NO cambia la
+    // respuesta (sigue siendo el resultado de Sheets). Best-effort, gated por SHADOW_READ.
+    await shadow('pedidos.list', result, () => listPedidosSupabase({
+      vendedor: searchParams.get('vendedor'),
+      vendedorId: searchParams.get('vendedorId'),
+      rol,
+      scope: searchParams.get('scope'),
+    }))
 
     return Response.json({ pedidos: result })
   } catch (e) {
