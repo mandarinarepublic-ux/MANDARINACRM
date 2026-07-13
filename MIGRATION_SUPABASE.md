@@ -436,7 +436,12 @@ Detectada en el mapeo del modelo actual:
 - **Backfill server-side listo**: `GET /api/admin/inbox-backfill?key=<CRON_SECRET>&cuenta=&sheetId=` (temporal, a borrar). Corre en Vercel con las creds existentes — no requiere node local. Sheets del inbox (públicos, no hay que compartir nada):
   - MANDI "WhatsAppMandarinaSales": `1ZQ_vIhKsDBnAUjitOB3zP-4MDbdmsv7hdDgnqNbOkak`
   - IND "WhatsAppINDLoversCHAT": `1ObNIff1ypeFW7PfuAjeoiGBJCDyZU4etIsbGpyB-Nqk`  ⚠️ este está como `anyone writer` (editable por cualquiera con el link) — conviene restringirlo.
-- **Pendiente**: desplegar y correr el backfill (2 URLs); definir el **proveedor de WhatsApp** para el parsing del webhook + envío real de salida; UI del inbox. Canales sociales y backend del bot (KB, etc.) = fases posteriores.
+- **Proveedor identificado = Meta WhatsApp Cloud API** (inspeccionando el escenario Make "EsuchaWhatsAppBusiness"). El flujo LINKPAGO (dLocal Go → Meta) es independiente; el inbox no lo toca.
+- **Wiring en vivo LISTO (aditivo, env-gated)**:
+  - Webhook Meta-nativo `GET/POST /api/inbox/webhook?cuenta=MANDI|IND` (verificación + parseo del payload real, replicando el mapeo del escenario; dedup por `wa_message_id`).
+  - Envío saliente real por Meta desde la UI (`lib/whatsapp.js`), gateado por env; si no está configurado, solo persiste.
+  - `mensajes.wa_message_id` (unique) para idempotencia; probado.
+- **Pendiente**: desplegar + correr backfill (2 URLs); setear env vars de Meta (`WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_ID_MANDI/_IND`, `WHATSAPP_TOKEN`); agregar en el escenario "Escucha" un módulo HTTP que reenvíe el payload a `/api/inbox/webhook` (o apuntar Meta directo). Canales sociales y backend del bot = fases posteriores.
 
 ### ⏳ Pendiente aparte (no bloquea)
 - Fix "Error al guardar" (compresión de foto en catálogo): commit local **`5d12d57f` NO pusheado**. Falta `git push origin main`.

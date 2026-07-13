@@ -108,17 +108,17 @@ export async function GET(req) {
         direccion: dir, tipo: clean(m.Tipo), texto: clean(m.Contenido), media_url: clean(m.MediaURL),
         media_id: clean(m.MediaID), respuesta_ia: clean(m.Respuesta_IA), foto_ia: clean(m.Foto_IA),
         contexto_id: clean(m.Contexto_ID),
+        wa_message_id: id || null, // id de origen → dedup en re-runs
       }
-      if (id && UUID_RE.test(id)) row.mensaje_id = id
       const ts = toTs(m.Fecha); if (ts) row.fecha = ts
       msgRows.push(row)
     }
     let okMsg = 0
     for (const batch of chunk(msgRows, 500)) {
-      const conId = batch.filter((m) => m.mensaje_id)
-      const sinId = batch.filter((m) => !m.mensaje_id)
-      if (conId.length) { const { error } = await sb.from('mensajes').upsert(conId, { onConflict: 'mensaje_id' }); if (error) throw new Error(`mensajes upsert: ${error.message}`) }
-      if (sinId.length) { const { error } = await sb.from('mensajes').insert(sinId); if (error) throw new Error(`mensajes insert: ${error.message}`) }
+      const conWa = batch.filter((m) => m.wa_message_id)
+      const sinWa = batch.filter((m) => !m.wa_message_id)
+      if (conWa.length) { const { error } = await sb.from('mensajes').upsert(conWa, { onConflict: 'wa_message_id' }); if (error) throw new Error(`mensajes upsert: ${error.message}`) }
+      if (sinWa.length) { const { error } = await sb.from('mensajes').insert(sinWa); if (error) throw new Error(`mensajes insert: ${error.message}`) }
       okMsg += batch.length
     }
 

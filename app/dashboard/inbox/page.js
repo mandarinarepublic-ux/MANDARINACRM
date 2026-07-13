@@ -249,7 +249,7 @@ export default function InboxPage() {
                 </button>
               </form>
               <div className="px-3 pb-2 text-[10px] text-gray-600">
-                El mensaje se guarda en la conversación. El envío real por WhatsApp se conecta con el proveedor (pendiente).
+                El mensaje se guarda siempre. Si el envío por Meta está configurado (env por cuenta), además se manda por WhatsApp.
               </div>
             </>
           )}

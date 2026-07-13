@@ -53,6 +53,7 @@ create table inbox.mensajes (
   respuesta_ia     text,                          -- Respuesta_IA
   foto_ia          text,                          -- Foto_IA
   contexto_id      text,                          -- Contexto_ID
+  wa_message_id    text,                          -- id externo (wamid de Meta / ID del sheet) para dedup
   fecha            timestamptz not null default now()
 );
 
@@ -61,6 +62,7 @@ create index on inbox.conversaciones (telefono);
 create index on inbox.conversaciones (id_venta) where id_venta is not null;
 create index on inbox.mensajes (conversacion_id, fecha);
 create index on inbox.mensajes (cuenta, telefono);
+create unique index on inbox.mensajes (wa_message_id) where wa_message_id is not null;
 
 alter table inbox.conversaciones enable row level security;
 alter table inbox.mensajes       enable row level security;

@@ -167,13 +167,13 @@ async function main() {
     if (!dir) continue; // sin dirección → se salta
     const id = clean(m.ID);
     msgRows.push({
-      mensaje_id: id && UUID_RE.test(id) ? id : undefined, // si no es uuid, la BD genera uno
       conversacion_id: convId,
       cuenta: CUENTA, telefono: tel || null, nombre: clean(m.Nombre),
       direccion: dir, tipo: clean(m.Tipo), texto: clean(m.Contenido),
       media_url: clean(m.MediaURL), media_id: clean(m.MediaID),
       respuesta_ia: clean(m.Respuesta_IA), foto_ia: clean(m.Foto_IA),
       contexto_id: clean(m.Contexto_ID), fecha: toTs(m.Fecha) || undefined,
+      wa_message_id: id || null, // id de origen → dedup en re-runs
     });
   }
   console.log(`mensajes a cargar: ${msgRows.length}${sinConv ? `  (⚠️ ${sinConv} sin conversación, saltados)` : ''}`);
@@ -181,15 +181,15 @@ async function main() {
   if (!DRY) {
     let ok = 0;
     for (const batch of chunk(msgRows.filter((m) => m.conversacion_id), 500)) {
-      // upsert por PK (mensaje_id) para idempotencia; los sin mensaje_id se insertan.
-      const conId = batch.filter((m) => m.mensaje_id);
-      const sinId = batch.filter((m) => !m.mensaje_id);
-      if (conId.length) {
-        const { error } = await sb.from('mensajes').upsert(conId, { onConflict: 'mensaje_id' });
+      // dedup por wa_message_id (id de origen); los sin id se insertan.
+      const conWa = batch.filter((m) => m.wa_message_id);
+      const sinWa = batch.filter((m) => !m.wa_message_id);
+      if (conWa.length) {
+        const { error } = await sb.from('mensajes').upsert(conWa, { onConflict: 'wa_message_id' });
         if (error) throw new Error(`upsert mensajes: ${error.message}`);
       }
-      if (sinId.length) {
-        const { error } = await sb.from('mensajes').insert(sinId);
+      if (sinWa.length) {
+        const { error } = await sb.from('mensajes').insert(sinWa);
         if (error) throw new Error(`insert mensajes: ${error.message}`);
       }
       ok += batch.length;
