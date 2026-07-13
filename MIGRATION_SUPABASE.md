@@ -364,10 +364,23 @@ Detectada en el mapeo del modelo actual:
 - `scripts/migrate-sheets-to-supabase.mjs` — backfill idempotente ejecutado. Poblado: usuarios 14, clientes 675, pedidos 268, detalle 520, pagos 285, guias 37, logs 1466, sucursal 77, prod_shopify 429, prod_catalogo 42, dias_entrega 8. Integridad: 0 FKs huérfanas, 0 nulls en FKs.
 
 ### ✅ Fase 3 (dual-write + lectura-sombra) — completa
-- **Dual-write activo** en todas las mutaciones vía `write()` de `_backend.js`.
+- **Dual-write CABLEADO en TODAS las mutaciones.** ⚠️ Hallazgo clave: los repos `lib/db/*` tenían el dual-write listo pero **las rutas nunca los llamaban para escribir** — seguían usando `appendRow`/`updateRow`/`spreadsheets.values.update` directos a Sheets, así que Supabase solo tenía la foto del backfill. Ya se cablearon todas:
+  - `clientes` POST/PATCH → createCliente/updateCliente
+  - `productos` POST → addCatalogo
+  - `pagos` POST → createPago + recalcPago
+  - `sucursal` POST/PATCH → createSucursalProducto/updateSucursalProducto/ajustarStock (corrige bug `rowIndex+4`, deuda #10)
+  - `pedidos/item/[id]` PATCH/DELETE → updateItem/updateSubestado/updateNotasArea/updateSubestadoCorte/softDeleteItem; auto-avance DESPACHO via setEstado
+  - `pedidos/[id]` PATCH → updatePedido/markImpreso/createGuia/createItem/createPago (createItem incluye ARCHIVO_DISENO, deuda #2)
+  - `pedidos` POST → upsertClienteByCedula/createPedido/createItem/createPago (conserva anti-colisión de PEDIDO_ID y webhook META CAPI)
+  - `usuarios` POST/PATCH → createUsuario (bcrypt, deuda #1)/updateUsuario
+  - `factura-callback` → setFactura; `shopify/sync` → replaceProductosShopify
+  - Único pendiente: `shopify/seed` (endpoint temporal §6, a borrar) sigue solo-Sheets.
+- Corregido bug en `createPedido`: escribía placeholders de FACTURA en las columnas 22-23 (que son LATITUD/LONGITUD), perdiendo lat/long en Sheets.
 - Cerrado el hueco de **logs**: `lib/pedidos.js logCambio` delegaba solo a Sheets; ahora delega en `lib/db/logs` (dual-write). Antes `crm.logs_pedidos` se congelaba tras el backfill.
-- **Lectura-sombra** (`SHADOW_READ=1`) en los GET: pedidos.list, clientes.all, usuarios.list, sucursal.list, catalogo.list, shopify.products y **logs.byPedido** (esta última recién migrada del acceso crudo a googleapis al repo).
-- Corregida deuda #3: orden de argumentos de `logCambio` en `pagos/route.js`.
+- **Lectura-sombra** (`SHADOW_READ=1`) en los GET: pedidos.list, clientes.all, usuarios.list, sucursal.list, catalogo.list, shopify.products y logs.byPedido.
+- Corregida deuda #3 (orden de args de `logCambio` en pagos) y #1 (bcrypt en alta de usuarios).
+
+> **Nota de consistencia del espejo:** `write()` corre la escritura secundaria (Supabase en Fase 3) como *best-effort no bloqueante*. En flujos multi-paso (p.ej. createPago→recalcPago) el mirror de Supabase puede ir un paso atrás momentáneamente; se auto-corrige en la siguiente escritura, y un backfill final antes del cutover reconcilia cualquier deriva. Sheets sigue siendo la verdad y no se afecta.
 
 ### ▶️ Fase 4 (validación / gate al cutover) — en curso
 - **`scripts/reconcile-sheets-vs-supabase.mjs`** (nuevo): compara paridad Sheets⇄Supabase (solo lectura) reutilizando las MISMAS transforms del backfill. Chequea conteos, conjuntos de PK, y montos de pedidos + pagos (total y por pedido). El backfill se refactorizó para exportar `TABLES`/clientes/`readSheet` y sólo corre su `main()` si se invoca directo.
