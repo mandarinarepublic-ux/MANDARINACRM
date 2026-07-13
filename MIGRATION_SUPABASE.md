@@ -414,6 +414,13 @@ Detectada en el mapeo del modelo actual:
   - 2 pedidos con `monto_abonado ≠ Σpagos`: `MAN-JAC-5093` (abonado 100, pagos 150) y `MAN-JAC-5009` (abonado 15, sin fila de pago).
 - Pendiente de Fase 4: correr la reconciliación con credenciales reales y recorrer el checklist de flujos (§4 arriba) antes del cutover.
 
+### ▶️ Schema `inbox` (v1 creado — prep en paralelo, wiring después del CRM)
+- **DDL aplicado** (`db/inbox_schema.sql`): tablas `inbox.conversaciones` + `inbox.mensajes` (una cuenta por columna `cuenta='IND'|'MANDI'`), índices, RLS activado (como en crm).
+- **Unión CRM ↔ inbox por teléfono resuelta y PROBADA**: vista `crm.cliente_conversacion` + función `inbox.norm_telefono(text)` (toma los últimos 9 dígitos → cruza `09XXXXXXXX` de `crm.clientes.celular` con `5939XXXXXXXX` de WhatsApp). Test end-to-end: conversación `593959263396` unió correctamente al cliente con celular `0959263396`.
+- **Pendiente** (necesita la estructura real del inbox actual, hoy en Sheets):
+  - Afinar columnas de `conversaciones`/`mensajes` contra los campos reales.
+  - Backfill de los dos inbox → Supabase.
+  - Wiring de la app del inbox (lecturas/escrituras) — se hace DESPUÉS del cutover del CRM.
+
 ### ⏳ Pendiente aparte (no bloquea)
-- Schema `inbox` (tablas `conversaciones` + `mensajes`) — se hace después del CRM.
 - Fix "Error al guardar" (compresión de foto en catálogo): commit local **`5d12d57f` NO pusheado**. Falta `git push origin main`.
