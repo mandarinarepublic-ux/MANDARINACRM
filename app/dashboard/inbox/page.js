@@ -31,12 +31,21 @@ export default function InboxPage() {
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [q, setQ] = useState('')
+  const [pendingTel, setPendingTel] = useState(null)
   const hiloRef = useRef(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
     setUser(JSON.parse(stored))
+    // Deep-link desde un pedido: ?cuenta=MANDI&tel=09... abre esa conversación.
+    try {
+      const sp = new URLSearchParams(window.location.search)
+      const cta = (sp.get('cuenta') || '').toUpperCase()
+      if (cta === 'MANDI' || cta === 'IND') setCuenta(cta)
+      const tel = sp.get('tel')
+      if (tel) setPendingTel(tel)
+    } catch {}
   }, [])
 
   const loadConvs = useCallback(async () => {
@@ -86,6 +95,17 @@ export default function InboxPage() {
   useEffect(() => {
     if (hiloRef.current) hiloRef.current.scrollTop = hiloRef.current.scrollHeight
   }, [mensajes])
+
+  // Auto-abrir la conversación que matchea el teléfono del deep-link.
+  useEffect(() => {
+    if (!pendingTel || loadingConvs || convs.length === 0) return
+    const norm = (t) => String(t || '').replace(/\D/g, '').slice(-9)
+    const target = norm(pendingTel)
+    const c = convs.find((x) => norm(x.telefono) === target)
+    if (c) abrir(c)
+    setPendingTel(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTel, loadingConvs, convs])
 
   const filtered = convs.filter((c) => {
     if (!q) return true
