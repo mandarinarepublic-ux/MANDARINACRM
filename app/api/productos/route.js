@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic'
 import { appendRow } from '@/lib/sheets'
 import { google } from 'googleapis'
+import { shadow } from '@/lib/db/_backend'
+import { listCatalogoSupabase } from '@/lib/db/catalogo'
 
 async function readProductosCatalogo() {
   const auth = new google.auth.GoogleAuth({
@@ -38,6 +40,7 @@ export async function GET() {
   try {
     const productos = await readProductosCatalogo()
     if (productos.length === 0) throw new Error('empty')
+    await shadow('catalogo.list', productos, () => listCatalogoSupabase())
     return Response.json({ productos })
   } catch (e) {
     // Fallback defaults

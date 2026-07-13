@@ -1,5 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { google } from 'googleapis'
+import { shadow } from '@/lib/db/_backend'
+import { listProductosShopifySupabase } from '@/lib/db/productosShopify'
 
 async function readProductosShopify(tiendaId, query = '') {
   const auth = new google.auth.GoogleAuth({
@@ -55,6 +57,8 @@ export async function GET(req) {
     const query = searchParams.get('q') || ''
 
     const products = await readProductosShopify(tiendaId, query)
+
+    await shadow('shopify.products', products, () => listProductosShopifySupabase({ tienda: tiendaId, q: query }))
 
     // Fallback to hardcoded if sheet is empty
     if (products.length === 0) {

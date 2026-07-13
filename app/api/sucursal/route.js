@@ -1,5 +1,7 @@
 import { readSheet, getSheets, formatFecha } from '@/lib/sheets'
 import { uploadToCloudinary } from '@/lib/cloudinary'
+import { shadow } from '@/lib/db/_backend'
+import { listSucursalSupabase } from '@/lib/db/sucursal'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +49,8 @@ export async function GET(req) {
       RESERVADO: parseInt(p.RESERVADO || '0'),
       PRECIO: parseFloat(p.PRECIO || '0'),
     }))
+
+    await shadow('sucursal.list', productos, () => listSucursalSupabase({ tienda: tiendaFiltro, todos }))
 
     return Response.json({ productos })
   } catch (e) {

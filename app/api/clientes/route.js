@@ -1,5 +1,7 @@
 import { readSheet, appendRow, fechaAhora } from '@/lib/sheets'
 import { v4 as uuid } from 'uuid'
+import { shadow } from '@/lib/db/_backend'
+import { listClientesSupabase } from '@/lib/db/clientes'
 
 export async function GET(req) {
   try {
@@ -14,6 +16,7 @@ export async function GET(req) {
     // para no disparar N lecturas paralelas a Sheets (que provocaban 429 y
     // pedidos impresos sin la sección de datos del cliente).
     if (all) {
+      await shadow('clientes.all', clientes, () => listClientesSupabase())
       return Response.json({ clientes })
     }
 

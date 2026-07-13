@@ -1,5 +1,7 @@
 import { readSheet, appendRow, updateRow, findRow, updateCell } from '@/lib/sheets'
 import { v4 as uuid } from 'uuid'
+import { shadow } from '@/lib/db/_backend'
+import { listUsuariosSupabase } from '@/lib/db/usuarios'
 
 // Columnas de la hoja USUARIOS (mismo orden que usa el POST/appendRow):
 // A USUARIO_ID · B NOMBRE · C CODIGO · D EMAIL · E PASSWORD_HASH · F ROL
@@ -9,6 +11,7 @@ const COL = { rol: 'F', areas: 'G', tiendas: 'H', activo: 'I' }
 export async function GET() {
   try {
     const usuarios = await readSheet('USUARIOS')
+    await shadow('usuarios.list', usuarios, () => listUsuariosSupabase())
     // Don't expose passwords
     return Response.json({
       usuarios: usuarios.map(u => ({ ...u, PASSWORD_HASH: undefined }))
