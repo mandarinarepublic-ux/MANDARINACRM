@@ -60,7 +60,9 @@ export default function DashboardPage() {
     const ventasMes = pedidosMes.reduce((s, p) => s + parseFloat(p.MONTO_TOTAL || 0), 0)
     const ventasHoy = pedidosHoy.reduce((s, p) => s + parseFloat(p.MONTO_TOTAL || 0), 0)
     const cobradoMes = pedidosMes.reduce((s, p) => s + parseFloat(p.MONTO_ABONADO || 0), 0)
-    const pendienteTotal = pedidos.reduce((s, p) => s + parseFloat(p.MONTO_PENDIENTE || 0), 0)
+    // Clamp por fila: un sobrepago (envío incluido en el abono) deja MONTO_PENDIENTE
+    // negativo en datos históricos; no debe restar del total "por cobrar".
+    const pendienteTotal = pedidos.reduce((s, p) => s + Math.max(0, parseFloat(p.MONTO_PENDIENTE || 0)), 0)
 
     const porEstado = {
       PENDIENTE_FABRICA: pedidos.filter(p => p.ESTADO_PEDIDO === 'PENDIENTE_FABRICA').length,

@@ -3,6 +3,7 @@ export const maxDuration = 60
 
 import { getSheets } from '@/lib/sheets'
 import { fetchShopifyProducts, getTiendasConfig } from '@/lib/shopify'
+import { replaceProductosShopify } from '@/lib/db/productosShopify'
 
 // Sync de productos Shopify -> Google Sheets.
 //
@@ -47,39 +48,33 @@ async function runSync() {
     throw new Error('Ninguna tienda devolvió productos. Detalle: ' + JSON.stringify(errores))
   }
 
-  const sheets = await getSheets()
-  const spreadsheetId = sheetId()
+  const freshRows = syncedIds.flatMap(id => syncedRows[id])
 
-  // Preservar las filas de las tiendas que NO se sincronizaron esta vez (fallaron o
-  // no están configuradas). Así un fallo de una sola tienda (p.ej. INDSTORE con token
-  // vencido) nunca borra su catálogo: solo se reemplaza el bloque de las que sí respondieron.
+  // Resumen de filas preservadas (tiendas NO sincronizadas) para el reporte.
+  // El reemplazo real (Sheets + Supabase) lo hace replaceProductosShopify.
   const syncedUpper = new Set(syncedIds.map(id => id.toUpperCase()))
-  let preservadas = []
+  const preservado = {}
+  let preservadasCount = 0
   try {
-    const prev = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${TAB}!A:G` })
+    const sheets = await getSheets()
+    const prev = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId(), range: `${TAB}!A:G` })
     const prevRows = prev.data.values || []
     const dataRows = prevRows[0]?.[0]?.toUpperCase() === 'TIENDA' ? prevRows.slice(1) : prevRows
-    preservadas = dataRows.filter(r => r[0] && !syncedUpper.has(String(r[0]).toUpperCase()))
+    for (const r of dataRows) {
+      if (r[0] && !syncedUpper.has(String(r[0]).toUpperCase())) {
+        preservado[r[0]] = (preservado[r[0]] || 0) + 1
+        preservadasCount++
+      }
+    }
   } catch (e) {
-    console.warn('No se pudo leer la hoja previa para preservar filas:', e.message)
+    console.warn('No se pudo leer la hoja previa para el resumen:', e.message)
   }
 
-  const preservado = {}
-  for (const r of preservadas) preservado[r[0]] = (preservado[r[0]] || 0) + 1
+  // Reemplazo dual-write: Sheets (preserva no-sincronizadas + clear + reescribe) y
+  // Supabase (borra filas de las tiendas sincronizadas + inserta las frescas).
+  await replaceProductosShopify(freshRows, { tiendasSincronizadas: syncedIds })
 
-  const freshRows = syncedIds.flatMap(id => syncedRows[id])
-  const finalRows = [...freshRows, ...preservadas]
-
-  // Reemplazo del tab: limpiar A:G y reescribir header + filas (frescas + preservadas).
-  await sheets.spreadsheets.values.clear({ spreadsheetId, range: `${TAB}!A:G` })
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `${TAB}!A1`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [HEADER, ...finalRows] },
-  })
-
-  return { ok: true, total: finalRows.length, porTienda, preservado, errores, at: new Date().toISOString() }
+  return { ok: true, total: freshRows.length + preservadasCount, porTienda, preservado, errores, at: new Date().toISOString() }
 }
 
 // Autorización: el cron de Vercel envía Authorization: Bearer $CRON_SECRET.

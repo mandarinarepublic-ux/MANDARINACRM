@@ -1,8 +1,7 @@
 export const dynamic = 'force-dynamic'
-import { appendRow } from '@/lib/sheets'
 import { google } from 'googleapis'
 import { shadow } from '@/lib/db/_backend'
-import { listCatalogoSupabase } from '@/lib/db/catalogo'
+import { listCatalogoSupabase, addCatalogo } from '@/lib/db/catalogo'
 
 async function readProductosCatalogo() {
   const auth = new google.auth.GoogleAuth({
@@ -61,7 +60,8 @@ export async function POST(req) {
   try {
     const { nombre } = await req.json()
     if (!nombre?.trim()) return Response.json({ error: 'Nombre requerido' }, { status: 400 })
-    await appendRow('PRODUCTOS_CATALOGO', [nombre.trim().toUpperCase(), 'TRUE'])
+    // dual-write: Sheets (append [NOMBRE,'TRUE']) + Supabase (upsert por nombre).
+    await addCatalogo(nombre)
     return Response.json({ ok: true })
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })

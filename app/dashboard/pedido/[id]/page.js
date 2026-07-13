@@ -304,6 +304,11 @@ export default function PedidoDetailPage() {
                   </div>
                 )}
                 {pedido.LATITUD && <a href={`https://maps.google.com/?q=${pedido.LATITUD},${pedido.LONGITUD}`} target="_blank" className="text-mandarina-400 text-xs hover:underline">📍 Ver en Google Maps</a>}
+                {cliente.CELULAR && (
+                  <Link
+                    href={`/dashboard/inbox?cuenta=${(pedido.TIENDA_ID || '').toUpperCase().includes('IND') ? 'IND' : 'MANDI'}&tel=${encodeURIComponent((cliente.CELULAR || '').replace(/\D/g, ''))}`}
+                    className="text-mandarina-400 text-xs hover:underline block">💬 Ver conversación de WhatsApp</Link>
+                )}
               </div>
             </div>
           )}

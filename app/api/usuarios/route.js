@@ -1,12 +1,6 @@
-import { readSheet, appendRow, updateRow, findRow, updateCell } from '@/lib/sheets'
-import { v4 as uuid } from 'uuid'
+import { readSheet } from '@/lib/sheets'
 import { shadow } from '@/lib/db/_backend'
-import { listUsuariosSupabase } from '@/lib/db/usuarios'
-
-// Columnas de la hoja USUARIOS (mismo orden que usa el POST/appendRow):
-// A USUARIO_ID · B NOMBRE · C CODIGO · D EMAIL · E PASSWORD_HASH · F ROL
-// G AREAS · H TIENDAS · I ACTIVO · J FECHA
-const COL = { rol: 'F', areas: 'G', tiendas: 'H', activo: 'I' }
+import { listUsuariosSupabase, createUsuario, updateUsuario } from '@/lib/db/usuarios'
 
 export async function GET() {
   try {
@@ -24,16 +18,11 @@ export async function GET() {
 export async function POST(req) {
   try {
     const body = await req.json()
-    const { nombre, codigo, email, password, rol, areas, tiendas } = body
+    const { nombre, codigo, email, username, password, rol, areas, tiendas } = body
 
-    const id = uuid()
-    const now = new Date().toISOString()
-
-    await appendRow('USUARIOS', [
-      id, nombre, codigo, email, password,
-      rol, areas?.join(',') || '', tiendas?.join(',') || '',
-      'TRUE', now,
-    ])
+    // dual-write: Sheets (append) + Supabase (insert). createUsuario hashea la
+    // contraseña con bcrypt antes de guardar (cierra la deuda #1).
+    const { id } = await createUsuario({ nombre, codigo, email, username, password, rol, areas, tiendas })
 
     return Response.json({ id })
   } catch (e) {
@@ -48,16 +37,12 @@ export async function PATCH(req) {
     const { id, rol, areas, tiendas, activo } = await req.json()
     if (!id) return Response.json({ error: 'id requerido' }, { status: 400 })
 
-    const { index } = await findRow('USUARIOS', 'USUARIO_ID', id)
-    if (index < 0) return Response.json({ error: 'Usuario no encontrado' }, { status: 404 })
-
-    if (rol !== undefined)     await updateCell('USUARIOS', index, COL.rol, rol)
-    if (areas !== undefined)   await updateCell('USUARIOS', index, COL.areas, Array.isArray(areas) ? areas.join(',') : (areas || ''))
-    if (tiendas !== undefined) await updateCell('USUARIOS', index, COL.tiendas, Array.isArray(tiendas) ? tiendas.join(',') : (tiendas || ''))
-    if (activo !== undefined)  await updateCell('USUARIOS', index, COL.activo, activo ? 'TRUE' : 'FALSE')
+    // dual-write: Sheets (updateCell por columna) + Supabase (update parcial).
+    await updateUsuario(id, { rol, areas, tiendas, activo })
 
     return Response.json({ ok: true })
   } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 })
+    const notFound = /no encontrado/i.test(e.message || '')
+    return Response.json({ error: e.message }, { status: notFound ? 404 : 500 })
   }
 }

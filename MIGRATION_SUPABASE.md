@@ -302,13 +302,37 @@ Checklist de paridad por flujo (probar cada uno contra Supabase y comparar con S
 - [ ] **Reconciliación**: conteos de filas y sumas de montos por pedido coinciden Sheets vs Supabase.
 
 ### Fase 5 — Cutover (el "switch")
-- [ ] Cambiar `DATA_BACKEND=supabase` en Vercel.
-- [ ] Mantener **dual-write hacia Sheets** en modo respaldo de solo lectura 2–3 semanas.
-- [ ] Monitorear errores en Vercel y feedback del equipo.
+
+**Checklist de cutover (en ORDEN — no saltear pasos):**
+
+Pre-requisitos (infraestructura, ANTES de tocar el switch):
+- [x] **Subir Supabase a Pro** (motivo: backups automáticos + sin pausa por inactividad).
+      Es cambio de facturación, cero impacto técnico: no cambian URL, keys ni project id
+      (`piingkecjgoisnxccvaa`), sin downtime. Hecho el 2026-07-13.
+- [ ] Verificar en el dashboard: *Database → Backups* muestra **backups diarios** activos.
+- [ ] *Settings → Billing*: **spend cap ACTIVADO** (fija el costo en ~$25/mes, evita overage).
+- [ ] NO activar PITR (add-on ~$100/mes, innecesario para este volumen).
+
+Validación (Fase 4 completa antes de seguir):
+- [ ] Reconciliar paridad Sheets⇄Supabase. Dos opciones:
+      - **Endpoint** (recomendado, sin credenciales locales): `GET /api/admin/reconcile?key=<CRON_SECRET>`
+        corre del lado del servidor en Vercel (usa las env vars ya cargadas) y devuelve el reporte JSON.
+      - CLI local: `node scripts/reconcile-sheets-vs-supabase.mjs` (necesita `.env.local`).
+- [ ] Recorrer el checklist de flujos (§3, Fase 4) contra Supabase.
+- [ ] **Backfill final** justo antes del switch para reconciliar cualquier deriva del
+      espejo best-effort (ver nota de consistencia en §8).
+
+El switch:
+- [ ] Cambiar `DATA_BACKEND=supabase` en Vercel (Supabase pasa a ser la verdad).
+- [ ] Ahora el dual-write invierte: Supabase primario, **Sheets queda como espejo/respaldo**
+      de solo lectura 2–3 semanas.
+- [ ] Apagar `SHADOW_READ` (ya no aplica; la sombra era para comparar durante Fase 3).
+- [ ] Monitorear errores en Vercel y feedback del equipo unos días.
 
 ### Fase 6 — Limpieza
 - [ ] Quitar dual-write y `lib/sheets.js`.
-- [ ] Borrar deuda: endpoint temporal `shopify/seed`, hacks `safeCell`, fallbacks hardcoded ya innecesarios.
+- [ ] Borrar endpoints temporales: `shopify/seed`, `admin/reconcile` (Fase 4) y `admin/inbox-backfill`.
+- [ ] Borrar deuda: hacks `safeCell`, fallbacks hardcoded ya innecesarios.
 - [ ] (Opcional, más adelante) endurecer RLS; evaluar Supabase Auth y Storage.
 
 ---
@@ -358,14 +382,102 @@ Detectada en el mapeo del modelo actual:
 - **RLS activado** en las 11 tablas (sin políticas). Rationale: la app usa solo `service_role` server-side, que ignora RLS → no rompe nada; y bloquea anon/authenticated si la anon key se filtrara. (Esto adelanta el "endurecer RLS" que estaba para Fase 6.)
 - El proyecto viejo `mandarina-inbox` (id `umsdhojdwgzpmwmqojdl`) quedó **vacío y sin usar** (candidato a borrar).
 
-### ▶️ Siguiente paso (Fase 0 + Fase 2, sin tocar producción)
-En el repo `C:\Users\RodrigoWork\Desktop\MANDARINACRM`:
-1. `npm i @supabase/supabase-js`.
-2. Env vars en Vercel + `.env.local`: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `DATA_BACKEND=sheets`.
-3. `lib/supabase.js` — cliente con service_role, **solo server-side**, apuntando al schema `crm` (`db: { schema: 'crm' }`).
-4. `lib/db/` — un repo por entidad (pedidos, clientes, usuarios, pagos, guias, sucursal, catalogo, logs) con ambos backends detrás de `DATA_BACKEND` (dual-write).
-5. `scripts/migrate-sheets-to-supabase.mjs` — backfill idempotente (ver transformaciones en Fase 2).
+### ✅ Fase 0/1/2 completas
+- `@supabase/supabase-js` instalado; env vars en Vercel; `lib/supabase.js` (service_role, server-side, schema `crm`).
+- `lib/db/` con repo por entidad (pedidos, clientes, usuarios, pagos, guias, sucursal, catalogo, logs, detalle, facturas, diasEntrega) — ambos backends detrás de `DATA_BACKEND`, patrón dual-write en `_backend.js`.
+- `scripts/migrate-sheets-to-supabase.mjs` — backfill idempotente ejecutado. Poblado: usuarios 14, clientes 675, pedidos 268, detalle 520, pagos 285, guias 37, logs 1466, sucursal 77, prod_shopify 429, prod_catalogo 42, dias_entrega 8. Integridad: 0 FKs huérfanas, 0 nulls en FKs.
+
+### ✅ Fase 3 (dual-write + lectura-sombra) — completa
+- **Dual-write CABLEADO en TODAS las mutaciones.** ⚠️ Hallazgo clave: los repos `lib/db/*` tenían el dual-write listo pero **las rutas nunca los llamaban para escribir** — seguían usando `appendRow`/`updateRow`/`spreadsheets.values.update` directos a Sheets, así que Supabase solo tenía la foto del backfill. Ya se cablearon todas:
+  - `clientes` POST/PATCH → createCliente/updateCliente
+  - `productos` POST → addCatalogo
+  - `pagos` POST → createPago + recalcPago
+  - `sucursal` POST/PATCH → createSucursalProducto/updateSucursalProducto/ajustarStock (corrige bug `rowIndex+4`, deuda #10)
+  - `pedidos/item/[id]` PATCH/DELETE → updateItem/updateSubestado/updateNotasArea/updateSubestadoCorte/softDeleteItem; auto-avance DESPACHO via setEstado
+  - `pedidos/[id]` PATCH → updatePedido/markImpreso/createGuia/createItem/createPago (createItem incluye ARCHIVO_DISENO, deuda #2)
+  - `pedidos` POST → upsertClienteByCedula/createPedido/createItem/createPago (conserva anti-colisión de PEDIDO_ID y webhook META CAPI)
+  - `usuarios` POST/PATCH → createUsuario (bcrypt, deuda #1)/updateUsuario
+  - `factura-callback` → setFactura; `shopify/sync` → replaceProductosShopify
+  - Único pendiente: `shopify/seed` (endpoint temporal §6, a borrar) sigue solo-Sheets.
+- Corregido bug en `createPedido`: escribía placeholders de FACTURA en las columnas 22-23 (que son LATITUD/LONGITUD), perdiendo lat/long en Sheets.
+- Cerrado el hueco de **logs**: `lib/pedidos.js logCambio` delegaba solo a Sheets; ahora delega en `lib/db/logs` (dual-write). Antes `crm.logs_pedidos` se congelaba tras el backfill.
+- **Lectura-sombra** (`SHADOW_READ=1`) en los GET: pedidos.list, clientes.all, usuarios.list, sucursal.list, catalogo.list, shopify.products y logs.byPedido.
+- Corregida deuda #3 (orden de args de `logCambio` en pagos) y #1 (bcrypt en alta de usuarios).
+
+> **Nota de consistencia del espejo:** `write()` corre la escritura secundaria (Supabase en Fase 3) como *best-effort no bloqueante*. En flujos multi-paso (p.ej. createPago→recalcPago) el mirror de Supabase puede ir un paso atrás momentáneamente; se auto-corrige en la siguiente escritura, y un backfill final antes del cutover reconcilia cualquier deriva. Sheets sigue siendo la verdad y no se afecta.
+
+### ▶️ Fase 4 (validación / gate al cutover) — en curso
+- **`scripts/reconcile-sheets-vs-supabase.mjs`** (nuevo): compara paridad Sheets⇄Supabase (solo lectura) reutilizando las MISMAS transforms del backfill. Chequea conteos, conjuntos de PK, y montos de pedidos + pagos (total y por pedido). El backfill se refactorizó para exportar `TABLES`/clientes/`readSheet` y sólo corre su `main()` si se invoca directo.
+  - Correr local con `.env.local`: `node scripts/reconcile-sheets-vs-supabase.mjs [--only=pedidos,pagos] [--verbose]`. Exit 0 = paridad total, 1 = discrepancias.
+- **Hallazgo de calidad de datos (pre-existente en Sheets, migrado fiel — NO tocar sin decisión):**
+  - 17 pedidos con `monto_pendiente` negativo por **sobrepago** (abonado > total); la app hoy clamparía a 0.
+  - 2 pedidos con `monto_abonado ≠ Σpagos`: `MAN-JAC-5093` (abonado 100, pagos 150) y `MAN-JAC-5009` (abonado 15, sin fila de pago).
+- Pendiente de Fase 4: correr la reconciliación con credenciales reales y recorrer el checklist de flujos (§4 arriba) antes del cutover.
+
+### ▶️ Schema `inbox` (v1 creado — prep en paralelo, wiring después del CRM)
+- **DDL aplicado** (`db/inbox_schema.sql`): tablas `inbox.conversaciones` + `inbox.mensajes` (una cuenta por columna `cuenta='IND'|'MANDI'`), índices, RLS activado (como en crm).
+- **Unión CRM ↔ inbox por teléfono resuelta y PROBADA**: vista `crm.cliente_conversacion` + función `inbox.norm_telefono(text)` (toma los últimos 9 dígitos → cruza `09XXXXXXXX` de `crm.clientes.celular` con `5939XXXXXXXX` de WhatsApp). Test end-to-end: conversación `593959263396` unió correctamente al cliente con celular `0959263396`.
+- **Capa de datos lista y probada**: `lib/db/inbox.js` + `getSupabaseInbox()` en `lib/supabase.js`.
+  - Conversaciones: list/get/upsert (por cuenta+telefono), marcarLeidas, cambiarEstado, asignar.
+  - Mensajes: listMensajes (hilo), addMensaje (idempotente por `wa_message_id`).
+  - Flujos: `recibirMensaje` (entrante: upsert conv + msg IN + no_leidos++) y `enviarMensaje` (saliente).
+  - Puente CRM: `conversacionesConCliente` / `conversacionesDeCliente` (leen la vista).
+  - Simulación end-to-end en SQL: hilo ordenado, dedup por wa_message_id, no_leidos, y unión al cliente — todo OK. Datos de prueba borrados.
+- **Estructura real conocida** (export del bot): hojas CONTACTOS (51k filas, ~890 reales; el resto vacías) + MENSAJES (12k) + auxiliares (SOCIAL, KB, respuestas rápidas, sesiones, leads, franquicias, ads). Alcance elegido: **solo WhatsApp core** (CONTACTOS + MENSAJES). Cuenta del export: **MANDI**.
+- **Backfill listo**: `scripts/migrate-inbox-to-supabase.mjs` — lee CONTACTOS + MENSAJES del Sheet del inbox, idempotente (upsert conv por cuenta+telefono, msgs por mensaje_id). Correr por cuenta:
+  `node scripts/migrate-inbox-to-supabase.mjs --cuenta=MANDI --sheet-id=<idInbox>` (y otra vez con `--cuenta=IND`).
+- **Rutas API listas** (usan `lib/db/inbox`):
+  - `GET /api/inbox/conversaciones` (lista; `conCliente=1` adjunta cliente CRM)
+  - `GET /api/inbox/conversaciones/[id]` (conversación + hilo)
+  - `POST /api/inbox/conversaciones/[id]/mensajes` (enviar saliente)
+  - `PATCH /api/inbox/conversaciones/[id]` (marcar leída / soporte / humano / vincular venta)
+  - `POST /api/inbox/webhook` (entrante; payload YA normalizado — el parsing crudo + verificación depende del proveedor).
+- **Superposición con el CRM** (sobre ~882 teléfonos del inbox): 17 coinciden con un cliente por teléfono, 13 con `id_venta` (el inbox es mayormente prospectos que aún no compran; `id_venta` es el puente fuerte de los compradores).
+- **Backfill server-side listo**: `GET /api/admin/inbox-backfill?key=<CRON_SECRET>&cuenta=&sheetId=` (temporal, a borrar). Corre en Vercel con las creds existentes — no requiere node local. Sheets del inbox (públicos, no hay que compartir nada):
+  - MANDI "WhatsAppMandarinaSales": `1ZQ_vIhKsDBnAUjitOB3zP-4MDbdmsv7hdDgnqNbOkak`
+  - IND "WhatsAppINDLoversCHAT": `1ObNIff1ypeFW7PfuAjeoiGBJCDyZU4etIsbGpyB-Nqk`  ⚠️ este está como `anyone writer` (editable por cualquiera con el link) — conviene restringirlo.
+- **Proveedor identificado = Meta WhatsApp Cloud API** (inspeccionando el escenario Make "EsuchaWhatsAppBusiness"). El flujo LINKPAGO (dLocal Go → Meta) es independiente; el inbox no lo toca.
+- **Wiring en vivo LISTO (aditivo, env-gated)**:
+  - Webhook Meta-nativo `GET/POST /api/inbox/webhook?cuenta=MANDI|IND` (verificación + parseo del payload real, replicando el mapeo del escenario; dedup por `wa_message_id`).
+  - Envío saliente real por Meta desde la UI (`lib/whatsapp.js`), gateado por env; si no está configurado, solo persiste.
+  - `mensajes.wa_message_id` (unique) para idempotencia; probado.
+- **Pendiente**: desplegar + correr backfill (2 URLs); setear env vars de Meta (`WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_ID_MANDI/_IND`, `WHATSAPP_TOKEN`); agregar en el escenario "Escucha" un módulo HTTP que reenvíe el payload a `/api/inbox/webhook` (o apuntar Meta directo). Canales sociales y backend del bot = fases posteriores.
 
 ### ⏳ Pendiente aparte (no bloquea)
-- Schema `inbox` (tablas `conversaciones` + `mensajes`) — se hace después del CRM.
 - Fix "Error al guardar" (compresión de foto en catálogo): commit local **`5d12d57f` NO pusheado**. Falta `git push origin main`.
+
+---
+
+## 9. 🧠 MEMORIA DE SESIÓN — retomar aquí (2026-07-13)
+
+Todo el trabajo de esta sesión vive en la branch **`claude/supermandadina-q1ykfz`** → **PR #12** (abierto contra `main`, NO mergeado aún). Nada está en producción todavía (prod corre `main`, código viejo).
+
+### Referencias clave
+- **Supabase**: proyecto `mandarina-DATA` id `piingkecjgoisnxccvaa` (plan **Pro**, activado hoy). Schemas `crm` + `inbox`.
+- **Vercel**: proyecto `mandarina-pro-sales` (id `prj_tcRidmjG670ag4jdrPGF4sopj4pq`, team `team_Sk65ztrHF0ybuWBRPQoS0hzp`).
+- **Sheets inbox** (públicos): MANDI `1ZQ_vIhKsDBnAUjitOB3zP-4MDbdmsv7hdDgnqNbOkak` ("WhatsAppMandarinaSales"), IND `1ObNIff1ypeFW7PfuAjeoiGBJCDyZU4etIsbGpyB-Nqk` ("WhatsAppINDLoversCHAT", ⚠️ anyone-writer).
+- **Make** (org 6191488, team 1738463): `EsuchaWhatsAppBusiness` (4471276), `IND_ESCUCHA_WHATSAPP` (5471227), `CONSULTA_LINKPAGO` (5304064).
+- **Proveedor WhatsApp = Meta Cloud API**. phone_number_id MANDI = `1024077200794372`. LINKPAGO = pasarela **dLocal Go**.
+- ⚠️ Secrets en texto plano en los blueprints de Make (token Meta + API key dLocal) → **rotar**.
+
+### Estado por track
+- **CRM (Sheets→Supabase)**: Fases 0–3 ✅ (dual-write cableado en TODAS las mutaciones + shadow reads + deudas #1/#2/#3/#10 + clamp sobrepagos). Fase 4 tooling ✅ (`/api/admin/reconcile` + script). **Falta**: desplegar, correr reconcile, cutover (`DATA_BACKEND=supabase`), limpieza. ~75%.
+- **Inbox (bot WhatsApp→Supabase)**: schema v2 + `wa_message_id` ✅, repo `lib/db/inbox.js` ✅, backfill (script + `/api/admin/inbox-backfill`) ✅, rutas API ✅, **UI `/dashboard/inbox`** ✅ (auto-refresh, media, integración pedido↔chat), **webhook Meta-nativo** ✅, **envío saliente por Meta** (`lib/whatsapp.js`, env-gated) ✅. **NO desplegado, backfill NO corrido.** ~85% del *núcleo humano*.
+
+### 🔴 Decisión ABIERTA (bloquea el plan del finde de "eliminar Make")
+El usuario quiere **apagar Make este finde**. PERO lo construido es la **capa humana + plomería**; NO migra el **cerebro del bot**: IA/auto-respuestas, **LINKPAGO** (pagos), base de conocimiento, respuestas rápidas, leads. Si se apaga Make hoy, el WhatsApp queda **100% manual**.
+Opciones planteadas (falta que elija): **A)** inbox 100% manual (lo hecho alcanza; se pierde IA + LINKPAGO automáticos). **B)** reconstruir el bot en la app (IA con Anthropic + LINKPAGO dLocal + KB — proyecto grande). **C)** híbrido/convivencia (Make sigue con bot/LINKPAGO; inbox = consola humana).
+
+### ⚠️ A confirmar con el usuario
+- **`EsuchaWhatsAppBusiness` no ejecuta desde 2026-07-11 23:02** (verificado en Make). ¿Lo apagó el usuario o hay mensajes entrantes perdiéndose? Nuestro webhook aún NO está desplegado.
+
+### Pendientes del usuario (para activar todo)
+1. Mergear PR #12 → deploy.
+2. Correr backfill CRM ya hecho; correr **backfill inbox**: `GET /api/admin/inbox-backfill?key=<CRON_SECRET>&cuenta=MANDI&sheetId=1ZQ_...` y `&cuenta=IND&sheetId=1ObN...`.
+3. Correr `/api/admin/reconcile?key=<CRON_SECRET>` (validación Fase 4).
+4. Env vars Meta en Vercel: `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_ID_MANDI`(=1024077200794372)/`_IND`, `WHATSAPP_TOKEN`.
+5. Conectar entrada en vivo: módulo HTTP en "Escucha" → `…/api/inbox/webhook?cuenta=…` (o apuntar Meta directo).
+6. Seguridad: rotar tokens Make; restringir Sheet IND (anyone-writer).
+
+### Endpoints temporales a borrar en Fase 6
+`shopify/seed`, `admin/reconcile`, `admin/inbox-backfill`.

@@ -1,9 +1,11 @@
-import { readSheet, appendRow, findRow, fechaAhora } from '@/lib/sheets'
-import { generatePedidoId, generateItemId, calcularDiasEntrega, calcularDiasEntregaDesdeSheet, subestadoInicial, logCambio } from '@/lib/pedidos'
+import { readSheet, fechaAhora } from '@/lib/sheets'
+import { generatePedidoId, generateItemId, calcularDiasEntregaDesdeSheet, subestadoInicial, logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
-import { v4 as uuid } from 'uuid'
 import { shadow } from '@/lib/db/_backend'
-import { listPedidosSupabase } from '@/lib/db/pedidos'
+import { listPedidosSupabase, createPedido } from '@/lib/db/pedidos'
+import { upsertClienteByCedula } from '@/lib/db/clientes'
+import { createItem } from '@/lib/db/detalle'
+import { createPago } from '@/lib/db/pagos'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,58 +79,22 @@ export async function POST(req) {
       notasVendedor, direccionTexto, latitud, longitud,
     } = body
 
-    // Handle cliente
-    let clienteId
-    const { row: existingCliente } = await findRow('CLIENTES', 'CEDULA', String(cliente.cedula))
-    if (existingCliente) {
-      clienteId = existingCliente.CLIENTE_ID
-      try {
-        const clientes = await readSheet('CLIENTES')
-        const cIdx = clientes.findIndex(c => c.CLIENTE_ID === clienteId)
-        if (cIdx !== -1) {
-          const cUpdated = {
-            ...clientes[cIdx],
-            NOMBRE:    cliente.nombre    || clientes[cIdx].NOMBRE,
-            CELULAR:   String(cliente.celular || clientes[cIdx].CELULAR),
-            EMAIL:     cliente.email     || clientes[cIdx].EMAIL,
-            CIUDAD:    cliente.ciudad    || clientes[cIdx].CIUDAD,
-            DIRECCION: direccionTexto    || cliente.direccion || clientes[cIdx].DIRECCION,
-          }
-          const { getSheets } = await import('@/lib/sheets')
-          const sheets = await getSheets()
-          const hRes = await sheets.spreadsheets.values.get({
-            spreadsheetId: process.env.SHEET_ID,
-            range: 'CLIENTES!A2:Z2',
-          })
-          const headers = hRes.data.values?.[0] || []
-          const row = headers.map(h => String(cUpdated[h] || ''))
-          const sheetRow = cIdx + 4
-          const lastCol = String.fromCharCode(65 + headers.length - 1)
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: process.env.SHEET_ID,
-            range: `CLIENTES!A${sheetRow}:${lastCol}${sheetRow}`,
-            valueInputOption: 'RAW',
-            requestBody: { values: [row] },
-          })
-        }
-      } catch (updateErr) {
-        console.error('Error actualizando cliente existente:', updateErr.message)
-      }
-    } else {
-      clienteId = uuid()
-      await appendRow('CLIENTES', [
-        clienteId, cliente.nombre,
-        String(cliente.cedula), String(cliente.celular),
-        cliente.email || '', cliente.ciudad || '',
-        direccionTexto || cliente.direccion || '',
-        fechaAhora(),
-      ])
-    }
+    // Cliente: upsert por cédula (dual-write). Si existe, actualiza conservando
+    // lo previo cuando el nuevo venga vacío; si no, lo crea. Devuelve su CLIENTE_ID.
+    const clienteId = await upsertClienteByCedula(String(cliente.cedula), {
+      nombre:    cliente.nombre,
+      celular:   cliente.celular,
+      email:     cliente.email,
+      ciudad:    cliente.ciudad,
+      direccion: direccionTexto || cliente.direccion,
+    })
 
     const montoTotal    = items.reduce((sum, i) => sum + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
     const pagosArray    = Array.isArray(pagosInput) ? pagosInput : []
     const montoAbonado  = pagosArray.reduce((sum, p) => sum + parseFloat(p.monto || 0), 0)
-    const montoPendiente = montoTotal - montoAbonado
+    // Clamp a 0: si el abono inicial incluye envío/flete puede superar el total
+    // del producto; el excedente NO es saldo negativo, es dinero extra ya cobrado.
+    const montoPendiente = Math.max(0, montoTotal - montoAbonado)
 
     const areas = items.map(i => i.area || '').filter(a => a !== 'ENTREGA EN TIENDA')
     const diasCalculado = await calcularDiasEntregaDesdeSheet(areas)
@@ -156,31 +122,40 @@ export async function POST(req) {
       pedidoId = parts.join('-')
     }
 
-    await appendRow('PEDIDOS', [
-      pedidoId, tiendaId, vendedorNombre || vendedorId, clienteId,
-      now, now, fechaEntregaPrometida || '',
-      String(diasCalculado), String(diasCalculado),
-      'FALSE',
-      'EN_FABRICA',
-      montoAbonado >= montoTotal ? 'PAGADO' : montoAbonado > 0 ? 'ABONO' : 'PENDIENTE',
-      String(montoTotal.toFixed(2)),
-      String(montoAbonado.toFixed(2)),
-      String(montoPendiente.toFixed(2)),
-      emitirFactura ? 'TRUE' : 'FALSE', '',
-      notasVendedor || '', '', '',
-      direccionTexto || cliente.direccion || '',
-      latitud ? String(latitud) : '',
-      longitud ? String(longitud) : '',
-    ])
+    const estadoPago = montoAbonado >= montoTotal ? 'PAGADO' : montoAbonado > 0 ? 'ABONO' : 'PENDIENTE'
+
+    // Fila del pedido (dual-write). Mismo orden de columnas que el append previo.
+    await createPedido({
+      pedidoId,
+      tiendaId,
+      vendedorId: vendedorNombre || vendedorId,   // se guarda en VENDEDOR_ID tal cual
+      clienteId,
+      fechaPedido: now,
+      fechaActualizacion: now,
+      fechaEntregaPrometida: fechaEntregaPrometida || '',
+      diasCalculado,
+      diasPrometido: diasCalculado,
+      alertaEntrega: false,
+      estadoPedido: 'EN_FABRICA',
+      estadoPago,
+      montoTotal: montoTotal.toFixed(2),
+      montoAbonado: montoAbonado.toFixed(2),
+      montoPendiente: montoPendiente.toFixed(2),
+      facturaSolicitada: !!emitirFactura,
+      facturaDatilId: '',
+      notasVendedor: notasVendedor || '',
+      direccionPedido: direccionTexto || cliente.direccion || '',
+      latitud: latitud || null,
+      longitud: longitud || null,
+    })
 
     await logCambio(pedidoId, 'CREACION', '', 'EN_FABRICA', vendedorId)
 
-    // Items
+    // Items (dual-write). Las fotos/archivo se suben aquí; createItem recibe URLs.
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
       const itemId = await generateItemId(pedidoId, i + 1)
       const cloudFolder = `mandarina-pro/pedidos/${pedidoId}`
-      const initSubestado = subestadoInicial(item.area)
 
       let fotoPecho = '', fotoEspalda = '', fotoMangaD = '', fotoMangaI = '', archivoDiseno = ''
 
@@ -207,27 +182,28 @@ export async function POST(req) {
         if (item.fotoPecho?.startsWith('http')) fotoPecho = item.fotoPecho
       }
 
-      await appendRow('DETALLE_PEDIDO', [
-        itemId, pedidoId, tiendaId,
-        item.productoNombre, item.detalle || '', item.esPersonalizado ? 'TRUE' : 'FALSE',
-        item.color || '', item.talla || '',
-        String(item.cantidad || 1),
-        String(item.precioUnit || 0),
-        String((parseFloat(item.precioUnit || 0) * parseInt(item.cantidad || 1)).toFixed(2)),
-        item.area || '', initSubestado,
+      await createItem(pedidoId, {
+        itemId,
+        tiendaId,
+        productoNombre: item.productoNombre,
+        detalle: item.detalle || '',
+        esPersonalizado: item.esPersonalizado,
+        color: item.color || '',
+        talla: item.talla || '',
+        cantidad: item.cantidad || 1,
+        precioUnit: item.precioUnit || 0,
+        area: item.area || '',
+        subestado: subestadoInicial(item.area),
         fotoPecho, fotoEspalda, fotoMangaD, fotoMangaI,
         archivoDiseno,
-        item.shopifyVariantId || '',
-        now,
-        '',
-      ])
+        shopifyVariantId: item.shopifyVariantId || '',
+      })
     }
 
-    // Pagos
+    // Pagos (dual-write). El comprobante se sube a Cloudinary (solo URL).
     for (const pago of pagosArray) {
       if (!pago || parseFloat(pago.monto || 0) <= 0) continue
 
-      // ✅ FIX: subir comprobante a Cloudinary y guardar SOLO la URL (no base64).
       let comprobanteUrl = pago.fotoComprobante || ''
       if (comprobanteUrl.startsWith('data:')) {
         try {
@@ -243,14 +219,14 @@ export async function POST(req) {
         }
       }
 
-      await appendRow('PAGOS', [
-        uuid(), pedidoId, pago.tipo || 'EFECTIVO',
-        String(parseFloat(pago.monto || 0).toFixed(2)),
-        now,
-        pago.tipo === 'LINK_PAGO' ? 'PENDIENTE' : 'PAGADO',
-        '', '', '', comprobanteUrl,
-        vendedorId, pago.notas || '',
-      ])
+      // estado por defecto de createPago: LINK_PAGO→PENDIENTE, resto→PAGADO (igual que antes).
+      await createPago(pedidoId, {
+        tipo: pago.tipo || 'EFECTIVO',
+        monto: parseFloat(pago.monto || 0),
+        comprobanteUrl,
+        vendedorId,
+        notas: pago.notas || '',
+      })
     }
 
     // ── META CAPI ── fire & forget, no bloquea la respuesta

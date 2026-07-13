@@ -1,7 +1,6 @@
-import { readSheet, appendRow, updateRow, updateCell, fechaAhora } from '@/lib/sheets'
 import { logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
-import { v4 as uuid } from 'uuid'
+import { createPago, recalcPago } from '@/lib/db/pagos'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +14,6 @@ export async function POST(req) {
     }
 
     const montoNum = parseFloat(monto)
-    const now = fechaAhora()
 
     // 1. Subir foto comprobante si viene en base64
     let comprobanteUrl = fotoComprobante || ''
@@ -33,53 +31,39 @@ export async function POST(req) {
       }
     }
 
-    // 2. Insertar en hoja PAGOS
-    const pagoId = uuid()
-    await appendRow('PAGOS', [
-      pagoId, pedidoId, tipo,
-      montoNum.toFixed(2),
-      now,
-      tipo === 'LINK_PAGO' ? 'PENDIENTE' : 'PAGADO',
-      '', '', '', comprobanteUrl,
-      vendedorId || '', notas || '',
-    ])
+    // 2. Crear el pago (dual-write: Sheets append 12-col + Supabase insert).
+    const pagoId = await createPago(pedidoId, {
+      tipo,
+      monto: montoNum,
+      comprobanteUrl,
+      vendedorId,
+      notas,
+    })
 
-    // 3. Actualizar MONTO_ABONADO y ESTADO_PAGO en PEDIDOS
-    const pedidos = await readSheet('PEDIDOS')
-    const pedido = pedidos.find(p => p.PEDIDO_ID === pedidoId)
-    if (!pedido) {
-      return Response.json({ error: 'Pedido no encontrado' }, { status: 404 })
-    }
-
-    // Leer todos los pagos existentes + el nuevo para calcular total abonado
-    const pagos = await readSheet('PAGOS')
-    const todosPagos = pagos.filter(pg => pg.PEDIDO_ID === pedidoId)
-    const totalAbonado = todosPagos.reduce((sum, pg) => sum + parseFloat(pg.MONTO || 0), 0)
-    const montoTotal = parseFloat(pedido.MONTO_TOTAL || 0)
-    const montoPendiente = Math.max(0, montoTotal - totalAbonado).toFixed(2)
-
-    let estadoPago = 'PENDIENTE'
-    if (totalAbonado >= montoTotal) estadoPago = 'PAGADO'
-    else if (totalAbonado > 0) estadoPago = 'ABONO'
-
-    const pedidoIdx = pedidos.findIndex(p => p.PEDIDO_ID === pedidoId)
-    // Usar updateCell para no depender del orden de columnas del array
-    await updateCell('PEDIDOS', pedidoIdx, 'L', estadoPago)
-    await updateCell('PEDIDOS', pedidoIdx, 'N', totalAbonado.toFixed(2))
-    await updateCell('PEDIDOS', pedidoIdx, 'O', montoPendiente)
+    // 3. Recalcular montos del pedido (dual-write updateCell L/N/O + Supabase update).
+    //    recalcPago lanza 'Pedido no encontrado' → 404, igual que antes.
+    const { totalAbonado, montoPendiente, estadoPago } = await recalcPago(pedidoId)
 
     // 4. Registrar en bitácora
-    await logCambio(pedidoId, vendedorNombre || vendedorId || 'VENDEDOR', 'PAGO_AGREGADO', '', `${tipo} $${montoNum.toFixed(2)}${notas ? ' · ' + notas : ''}`)
+    // firma: logCambio(pedidoId, campo, antes, despues, usuario)
+    await logCambio(
+      pedidoId,
+      'PAGO_AGREGADO',
+      '',
+      `${tipo} $${montoNum.toFixed(2)}${notas ? ' · ' + notas : ''}`,
+      vendedorNombre || vendedorId || 'VENDEDOR'
+    )
 
     return Response.json({
       ok: true,
       pagoId,
       totalAbonado: totalAbonado.toFixed(2),
-      montoPendiente,
+      montoPendiente: montoPendiente.toFixed(2),
       estadoPago,
     })
   } catch (e) {
     console.error('POST /api/pagos error:', e)
-    return Response.json({ error: e.message }, { status: 500 })
+    const notFound = /no encontrado/i.test(e.message || '')
+    return Response.json({ error: e.message }, { status: notFound ? 404 : 500 })
   }
 }

@@ -1,50 +1,16 @@
 export const dynamic = 'force-dynamic'
-import { readSheet, getSheets, fechaAhora } from '@/lib/sheets'
+import { readSheet } from '@/lib/sheets'
 import { logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
-import { parseSubestados, serializeSubestados, subestadoGlobal } from '@/lib/subestados'
-
-const SHEET_ID = process.env.SHEET_ID
-
-// DETALLE_PEDIDO: fila1=título, fila2=headers, fila3=descrip, fila4+=datos
-// idx es 0-based en array de datos → fila real en Sheet = idx + 4
-function dataIdxToSheetRow(idx) { return idx + 4 }
-
-// Escribe UNA celda en DETALLE_PEDIDO
-async function writeCellDetalle(idx, colLetter, value) {
-  const sheets = await getSheets()
-  const sheetRow = dataIdxToSheetRow(idx)
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
-    range: `DETALLE_PEDIDO!${colLetter}${sheetRow}`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [[String(value ?? '')]] },
-  })
-}
-
-// Escribe toda la fila del ítem
-async function writeRowDetalle(idx, item) {
-  const sheets = await getSheets()
-
-  // Leer headers reales de fila 2
-  const hRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: 'DETALLE_PEDIDO!A2:Z2',
-  })
-  const headers = hRes.data.values?.[0] || []
-
-  const row = headers.map(h => String(item[h] ?? ''))
-
-  const sheetRow = dataIdxToSheetRow(idx)
-  const lastCol = String.fromCharCode(65 + headers.length - 1)
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
-    range: `DETALLE_PEDIDO!A${sheetRow}:${lastCol}${sheetRow}`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [row] },
-  })
-}
+import { parseSubestados, serializeSubestados } from '@/lib/subestados'
+import {
+  updateItem,
+  updateSubestado,
+  updateNotasArea,
+  updateSubestadoCorte,
+  softDeleteItem,
+} from '@/lib/db/detalle'
+import { setEstado } from '@/lib/db/pedidos'
 
 export async function PATCH(req, { params }) {
   try {
@@ -52,7 +18,7 @@ export async function PATCH(req, { params }) {
     const body = await req.json()
     const usuarioId = body._usuarioId || 'SISTEMA'
 
-    // Buscar el ítem
+    // Buscar el ítem (se necesita para logs y auto-avance; las escrituras van por repo).
     const detalles = await readSheet('DETALLE_PEDIDO')
     const idx = detalles.findIndex(d => d.ITEM_ID === id)
     if (idx === -1) return Response.json({ error: 'Ítem no encontrado' }, { status: 404 })
@@ -60,119 +26,64 @@ export async function PATCH(req, { params }) {
     const item = detalles[idx]
     const bodyKeys = Object.keys(body).filter(k => !k.startsWith('_'))
 
-    // ── CASO 1: solo NOTAS_AREA → escribe directo en columna U ───────────────
+    // ── CASO 1: solo NOTAS_AREA ──────────────────────────────────────────────
     if (bodyKeys.length === 1 && bodyKeys[0] === 'NOTAS_AREA') {
-      // Columna U = índice 20 = letra U
-      // Pero usamos los headers reales para estar seguros
-      const sheets = await getSheets()
-      const hRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: 'DETALLE_PEDIDO!A2:Z2',
-      })
-      const headers = hRes.data.values?.[0] || []
-      const colIdx = headers.indexOf('NOTAS_AREA')
-      const colLetter = colIdx >= 0 ? String.fromCharCode(65 + colIdx) : 'U'
-
-      await writeCellDetalle(idx, colLetter, body.NOTAS_AREA ?? '')
-
+      await updateNotasArea(id, body.NOTAS_AREA ?? '')
       if (body.NOTAS_AREA) {
         await logCambio(item.PEDIDO_ID, `NOTA ${item.PRODUCTO_NOMBRE}`, '', body.NOTAS_AREA, usuarioId).catch(() => {})
       }
-      return Response.json({ ok: true, col: colLetter, row: dataIdxToSheetRow(idx) })
-    }
-
-    // ── CASO 1b: solo SUBESTADO_CORTE → escribe directo en columna SUBESTADO_CORTE ──
-    if (bodyKeys.length === 1 && bodyKeys[0] === 'SUBESTADO_CORTE') {
-      const sheets = await getSheets()
-      const hRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: 'DETALLE_PEDIDO!A2:Z2',
-      })
-      const headers = hRes.data.values?.[0] || []
-      let colIdx = headers.indexOf('SUBESTADO_CORTE')
-
-      if (colIdx === -1) {
-        // Columna no existe aún — añadirla al final
-        colIdx = headers.length
-        const newHeader = [...headers, 'SUBESTADO_CORTE']
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: 'DETALLE_PEDIDO!A2',
-          valueInputOption: 'RAW',
-          requestBody: { values: [newHeader] },
-        })
-      }
-      const colLetter = String.fromCharCode(65 + colIdx)
-      await writeCellDetalle(idx, colLetter, body.SUBESTADO_CORTE)
-      await logCambio(item.PEDIDO_ID, `CORTE ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO_CORTE||'PENDIENTE', body.SUBESTADO_CORTE, usuarioId).catch(()=>{})
       return Response.json({ ok: true })
     }
 
+    // ── CASO 1b: solo SUBESTADO_CORTE ────────────────────────────────────────
+    if (bodyKeys.length === 1 && bodyKeys[0] === 'SUBESTADO_CORTE') {
+      await updateSubestadoCorte(id, body.SUBESTADO_CORTE)
+      await logCambio(item.PEDIDO_ID, `CORTE ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO_CORTE || 'PENDIENTE', body.SUBESTADO_CORTE, usuarioId).catch(() => {})
+      return Response.json({ ok: true })
+    }
 
+    // ── CASO 2: SUBESTADO (posible multi-área con AREA_ROL) ───────────────────
     if (bodyKeys.length <= 2 && bodyKeys.includes('SUBESTADO')) {
-      const areaRol = body.AREA_ROL // área específica que cambia: 'ESTAMPADO', 'BORDADO', etc.
+      const areaRol = body.AREA_ROL // área específica que cambia
       const nuevoEstado = body.SUBESTADO
 
-      const sheets = await getSheets()
-      const hRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: 'DETALLE_PEDIDO!A2:Z2',
-      })
-      const headers = hRes.data.values?.[0] || []
-      const colIdx = headers.indexOf('SUBESTADO')
-      const colLetter = colIdx >= 0 ? String.fromCharCode(65 + colIdx) : 'M'
-
+      // Valor resultante (para log y chequeo de auto-avance). El repo recomputa
+      // internamente lo mismo para la escritura dual.
       let nuevoValor
       if (areaRol) {
-        // Multi-área: actualizar solo el área del rol
         const subestados = parseSubestados(item.SUBESTADO, item.AREA)
         subestados[areaRol] = nuevoEstado
         nuevoValor = serializeSubestados(subestados)
       } else {
-        // Área simple: guardar directo
         nuevoValor = nuevoEstado
       }
 
-      await writeCellDetalle(idx, colLetter, nuevoValor)
+      await updateSubestado(id, nuevoEstado, areaRol)
       await logCambio(item.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}${areaRol ? ` (${areaRol})` : ''}`, item.SUBESTADO, nuevoValor, usuarioId).catch(() => {})
 
-      // ── Auto-avance a DESPACHO si todos los ítems del pedido están en LISTO ──
+      // ── Auto-avance a DESPACHO si TODOS los ítems del pedido están LISTO ──
       try {
         const todosDetalles = await readSheet('DETALLE_PEDIDO')
         const itemsDelPedido = todosDetalles.filter(
           d => d.PEDIDO_ID === item.PEDIDO_ID && d.SUBESTADO !== 'ELIMINADO' && d.SUBESTADO !== 'ENTREGADO_TIENDA'
         )
-        // Actualizar el ítem actual en memoria con el valor que acabamos de guardar
+        // Reflejar en memoria el valor recién guardado del ítem actual.
         const itemsActualizados = itemsDelPedido.map(d =>
           d.ITEM_ID === id ? { ...d, SUBESTADO: nuevoValor } : d
         )
         const todosListos = itemsActualizados.every(d => {
           const sub = d.SUBESTADO || ''
           if (sub.includes(':')) {
-            // Multi-área: todos los valores deben ser LISTO
             return sub.split('|').every(p => p.split(':')[1]?.trim() === 'LISTO')
           }
           return sub === 'LISTO'
         })
         if (todosListos) {
           const pedidos = await readSheet('PEDIDOS')
-          const pedidoIdx = pedidos.findIndex(p => p.PEDIDO_ID === item.PEDIDO_ID)
-          if (pedidoIdx !== -1 && pedidos[pedidoIdx].ESTADO_PEDIDO === 'EN_FABRICA') {
-            const sheetsClient = await getSheets()
-            const hResPed = await sheetsClient.spreadsheets.values.get({
-              spreadsheetId: SHEET_ID,
-              range: 'PEDIDOS!A:AZ',
-            })
-            const pedHeaders = hResPed.data.values?.[1] || []
-            const pedActualizado = { ...pedidos[pedidoIdx], ESTADO_PEDIDO: 'DESPACHO' }
-            const pedRow = pedHeaders.map(h => String(pedActualizado[h] ?? ''))
-            const sheetRowPed = pedidoIdx + 4
-            await sheetsClient.spreadsheets.values.update({
-              spreadsheetId: SHEET_ID,
-              range: `PEDIDOS!A${sheetRowPed}`,
-              valueInputOption: 'RAW',
-              requestBody: { values: [pedRow] },
-            })
+          const pedido = pedidos.find(p => p.PEDIDO_ID === item.PEDIDO_ID)
+          if (pedido && pedido.ESTADO_PEDIDO === 'EN_FABRICA') {
+            // dual-write: solo la celda ESTADO_PEDIDO (Sheets + Supabase).
+            await setEstado(item.PEDIDO_ID, 'DESPACHO')
             await logCambio(item.PEDIDO_ID, 'ESTADO_PEDIDO', 'EN_FABRICA', 'DESPACHO', 'SISTEMA').catch(() => {})
           }
         }
@@ -184,44 +95,48 @@ export async function PATCH(req, { params }) {
       return Response.json({ ok: true, subestado: nuevoValor })
     }
 
-    // ── CASO 3: actualización general (editar-pedido) ─────────────────────────
-    const updated = { ...item, FECHA_MODIFICACION: fechaAhora() }
-
-    if (body.SUBESTADO !== undefined)             updated.SUBESTADO = body.SUBESTADO
-    if (body.NOTAS_AREA !== undefined)            updated.NOTAS_AREA = body.NOTAS_AREA
-    if (body.PRODUCTO_NOMBRE !== undefined)       updated.PRODUCTO_NOMBRE = body.PRODUCTO_NOMBRE
-    if (body.COLOR !== undefined)                 updated.COLOR = body.COLOR
-    if (body.TALLA !== undefined)                 updated.TALLA = body.TALLA
-    if (body.AREA !== undefined)                  updated.AREA = body.AREA
-    if (body.DETALLE_PERSONALIZADO !== undefined) updated.DETALLE_PERSONALIZADO = body.DETALLE_PERSONALIZADO
+    // ── CASO 3: edición general del ítem (editar-pedido) ──────────────────────
+    // Solo campos de producto (nombre/color/talla/área/cantidad/precio/subtotal/fotos).
+    const campos = {}
+    if (body.PRODUCTO_NOMBRE !== undefined)       campos.PRODUCTO_NOMBRE = body.PRODUCTO_NOMBRE
+    if (body.COLOR !== undefined)                 campos.COLOR = body.COLOR
+    if (body.TALLA !== undefined)                 campos.TALLA = body.TALLA
+    if (body.AREA !== undefined)                  campos.AREA = body.AREA
+    if (body.DETALLE_PERSONALIZADO !== undefined) campos.DETALLE_PERSONALIZADO = body.DETALLE_PERSONALIZADO
     if (body.CANTIDAD !== undefined) {
-      updated.CANTIDAD = String(body.CANTIDAD)
-      updated.SUBTOTAL = String((parseFloat(updated.PRECIO_UNIT || 0) * parseInt(body.CANTIDAD || 1)).toFixed(2))
+      campos.CANTIDAD = String(body.CANTIDAD)
+      campos.SUBTOTAL = String((parseFloat(item.PRECIO_UNIT || 0) * parseInt(body.CANTIDAD || 1)).toFixed(2))
     }
     if (body.PRECIO_UNIT !== undefined) {
-      updated.PRECIO_UNIT = String(body.PRECIO_UNIT)
-      updated.SUBTOTAL = String((parseFloat(body.PRECIO_UNIT) * parseInt(updated.CANTIDAD || 1)).toFixed(2))
+      campos.PRECIO_UNIT = String(body.PRECIO_UNIT)
+      campos.SUBTOTAL = String((parseFloat(body.PRECIO_UNIT) * parseInt(body.CANTIDAD ?? item.CANTIDAD ?? 1)).toFixed(2))
     }
-    if (body.SUBTOTAL !== undefined) updated.SUBTOTAL = String(body.SUBTOTAL)
+    if (body.SUBTOTAL !== undefined) campos.SUBTOTAL = String(body.SUBTOTAL)
 
-    for (const field of ['FOTO_PECHO_URL','FOTO_ESPALDA_URL','FOTO_MANGA_D_URL','FOTO_MANGA_I_URL']) {
-      if (body[field] !== undefined) {
-        if (body[field] === '') { updated[field] = '' }
-        else if (body[field].startsWith('http')) { updated[field] = body[field] }
-        else if (body[field].startsWith('data:')) {
-          try {
-            const r = await uploadToCloudinary(body[field], `${id}_${field}.jpg`, 'mandarina-pro/pedidos')
-            updated[field] = r.url
-          } catch(e) { console.error('Photo upload error:', e.message) }
-        }
+    // Fotos: '' limpia, http se conserva, base64 se sube a Cloudinary.
+    for (const field of ['FOTO_PECHO_URL', 'FOTO_ESPALDA_URL', 'FOTO_MANGA_D_URL', 'FOTO_MANGA_I_URL']) {
+      if (body[field] === undefined) continue
+      if (body[field] === '') { campos[field] = '' }
+      else if (body[field].startsWith('http')) { campos[field] = body[field] }
+      else if (body[field].startsWith('data:')) {
+        try {
+          const r = await uploadToCloudinary(body[field], `${id}_${field}.jpg`, 'mandarina-pro/pedidos')
+          campos[field] = r.url
+        } catch (e) { console.error('Photo upload error:', e.message) }
       }
     }
 
-    await writeRowDetalle(idx, updated)
+    // Escritura principal de campos editables (dual-write, reescribe fila en Sheets).
+    await updateItem(id, campos)
 
-    // Logs
-    if (body.SUBESTADO) await logCambio(updated.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO, body.SUBESTADO, usuarioId).catch(() => {})
-    if (body.NOTAS_AREA && body.NOTAS_AREA !== item.NOTAS_AREA) await logCambio(updated.PEDIDO_ID, `NOTA ${item.PRODUCTO_NOMBRE}`, '', body.NOTAS_AREA, usuarioId).catch(() => {})
+    // Defensivo: SUBESTADO / NOTAS_AREA en una edición general (hoy no los manda
+    // la UI, pero se preservan por compatibilidad). Cada uno es su propio dual-write.
+    if (body.SUBESTADO !== undefined)  await updateSubestado(id, body.SUBESTADO)
+    if (body.NOTAS_AREA !== undefined) await updateNotasArea(id, body.NOTAS_AREA)
+
+    // Logs (idénticos a la versión previa).
+    if (body.SUBESTADO) await logCambio(item.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO, body.SUBESTADO, usuarioId).catch(() => {})
+    if (body.NOTAS_AREA && body.NOTAS_AREA !== item.NOTAS_AREA) await logCambio(item.PEDIDO_ID, `NOTA ${item.PRODUCTO_NOMBRE}`, '', body.NOTAS_AREA, usuarioId).catch(() => {})
 
     const cambios = []
     if (body.COLOR !== undefined && body.COLOR !== item.COLOR) cambios.push(`Color: ${item.COLOR}→${body.COLOR}`)
@@ -229,7 +144,7 @@ export async function PATCH(req, { params }) {
     if (body.CANTIDAD !== undefined && String(body.CANTIDAD) !== String(item.CANTIDAD)) cambios.push(`Cant: ${item.CANTIDAD}→${body.CANTIDAD}`)
     if (body.PRECIO_UNIT !== undefined && String(body.PRECIO_UNIT) !== String(item.PRECIO_UNIT)) cambios.push(`Precio: $${item.PRECIO_UNIT}→$${body.PRECIO_UNIT}`)
     if (body.AREA !== undefined && body.AREA !== item.AREA) cambios.push(`Área: ${item.AREA}→${body.AREA}`)
-    if (cambios.length > 0) await logCambio(updated.PEDIDO_ID, `EDICION ${item.PRODUCTO_NOMBRE}`, '', cambios.join(' | '), usuarioId).catch(() => {})
+    if (cambios.length > 0) await logCambio(item.PEDIDO_ID, `EDICION ${item.PRODUCTO_NOMBRE}`, '', cambios.join(' | '), usuarioId).catch(() => {})
 
     return Response.json({ ok: true })
   } catch (e) {
@@ -244,13 +159,13 @@ export async function DELETE(req, { params }) {
     const body = await req.json()
     const usuarioId = body._usuarioId || 'SISTEMA'
 
+    // Se lee para el log (PRODUCTO_NOMBRE / PEDIDO_ID); la escritura va por repo.
     const detalles = await readSheet('DETALLE_PEDIDO')
-    const idx = detalles.findIndex(d => d.ITEM_ID === id)
-    if (idx === -1) return Response.json({ error: 'Ítem no encontrado' }, { status: 404 })
+    const item = detalles.find(d => d.ITEM_ID === id)
+    if (!item) return Response.json({ error: 'Ítem no encontrado' }, { status: 404 })
 
-    const item = detalles[idx]
-    const updated = { ...item, SUBESTADO: 'ELIMINADO', FECHA_MODIFICACION: fechaAhora() }
-    await writeRowDetalle(idx, updated)
+    // Soft-delete dual-write: Sheets SUBESTADO='ELIMINADO', Supabase eliminado=true.
+    await softDeleteItem(id, usuarioId)
     await logCambio(item.PEDIDO_ID, 'ITEM_ELIMINADO', item.PRODUCTO_NOMBRE, 'ELIMINADO', usuarioId).catch(() => {})
     return Response.json({ ok: true })
   } catch (e) {

@@ -1,21 +1,16 @@
-import { readSheet, getSheets, formatFecha } from '@/lib/sheets'
+import { readSheet } from '@/lib/sheets'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { shadow } from '@/lib/db/_backend'
-import { listSucursalSupabase } from '@/lib/db/sucursal'
+import {
+  listSucursalSupabase,
+  createSucursalProducto,
+  updateSucursalProducto,
+  ajustarStock,
+} from '@/lib/db/sucursal'
 
 export const dynamic = 'force-dynamic'
 
-const SHEET_ID = process.env.SHEET_ID
 const HOJA = 'SUCURSAL'
-
-// Columnas en orden exacto de la hoja SUCURSAL
-// A    B        C        D        E      F       G       H           I        J               K            L                    N
-// ID NOMBRE  TIENDA  PRECIO   TALLA  COLOR   STOCK  RESERVADO  FOTO_URL  ACTIVO  FECHA_CREACION  CREADO_POR  ULTIMA_MODIFICACION  MODIFICADO_POR
-const COLS = [
-  'ID', 'NOMBRE', 'TIENDA', 'PRECIO', 'TALLA', 'COLOR',
-  'STOCK', 'RESERVADO', 'FOTO_URL', 'ACTIVO',
-  'FECHA_CREACION', 'CREADO_POR', 'ULTIMA_MODIFICACION', 'MODIFICADO_POR'
-]
 
 // ─── GET — listar productos de sucursal ──────────────────────────────────────
 // ?tienda=Mandarina | Indstore   (opcional)
@@ -80,35 +75,13 @@ export async function POST(req) {
       fotoFinal = result.url
     }
 
-    const ahora = formatFecha(new Date())
-    const id = `SUC-${Date.now()}`
-
-    const fila = [
-      id,                          // A - ID
-      nombre,                      // B - NOMBRE
-      tienda,                      // C - TIENDA
-      parseFloat(precio || 0),     // D - PRECIO
-      talla || 'U',                // E - TALLA
-      color || '',                 // F - COLOR
-      parseInt(stock),             // G - STOCK
-      0,                           // H - RESERVADO
-      fotoFinal,                   // I - FOTO_URL
-      'TRUE',                      // J - ACTIVO
-      ahora,                       // K - FECHA_CREACION
-      usuario || '',               // L - CREADO_POR
-      ahora,                       // M - ULTIMA_MODIFICACION
-      usuario || '',               // N - MODIFICADO_POR
-    ]
-
-    const sheets = await getSheets()
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: `${HOJA}!A:N`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [fila] },
+    // dual-write: Sheets (append A-N idéntico) + Supabase (insert).
+    const id = await createSucursalProducto({
+      nombre, tienda, talla, color, stock, precio,
+      foto_url: fotoFinal, usuario,
     })
 
-    return Response.json({ ok: true, id, producto: Object.fromEntries(COLS.map((c, i) => [c, fila[i]])) })
+    return Response.json({ ok: true, id })
   } catch (e) {
     console.error('POST sucursal error:', e)
     return Response.json({ error: e.message }, { status: 500 })
@@ -123,96 +96,33 @@ export async function PATCH(req) {
 
     if (!id) return Response.json({ error: 'Falta id' }, { status: 400 })
 
-    const sheets = await getSheets()
-
-    // Leer hoja para encontrar la fila
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: `${HOJA}!A:N`,
-    })
-
-    const rows = res.data.values || []
-    const header = rows[0]
-    const rowIndex = rows.findIndex((r, i) => i > 0 && r[0] === id)
-
-    if (rowIndex === -1) {
-      return Response.json({ error: 'Producto no encontrado' }, { status: 404 })
-    }
-
-    const fila = [...rows[rowIndex]]
-    const idx = (col) => COLS.indexOf(col)
-    const ahora = formatFecha(new Date())
-
-    if (accion === 'vender') {
-      // Descontar 1 unidad al confirmar pedido
-      const stockActual = parseInt(fila[idx('STOCK')] || '0')
-      const reservado = parseInt(fila[idx('RESERVADO')] || '0')
-
-      if (stockActual <= 0) {
-        return Response.json({ error: 'Sin stock disponible' }, { status: 400 })
-      }
-
-      fila[idx('STOCK')] = stockActual - 1
-      fila[idx('RESERVADO')] = reservado + 1
-
-      // Si llega a 0, desactivar
-      if (stockActual - 1 <= 0) {
-        fila[idx('ACTIVO')] = 'FALSE'
-      }
-
-    } else if (accion === 'despachar') {
-      // Confirmar salida física al despachar
-      const reservado = parseInt(fila[idx('RESERVADO')] || '0')
-      fila[idx('RESERVADO')] = Math.max(0, reservado - 1)
-
-    } else if (accion === 'cancelar') {
-      // Devolver unidad si se cancela el pedido
-      const stockActual = parseInt(fila[idx('STOCK')] || '0')
-      const reservado = parseInt(fila[idx('RESERVADO')] || '0')
-      fila[idx('STOCK')] = stockActual + 1
-      fila[idx('RESERVADO')] = Math.max(0, reservado - 1)
-      fila[idx('ACTIVO')] = 'TRUE'
-
+    if (accion === 'vender' || accion === 'despachar' || accion === 'cancelar') {
+      // Ajuste de stock (dual-write). Corrige el bug del rowIndex+4: el repo
+      // localiza la fila por readSheet+updateRow (misma convención de lectura).
+      await ajustarStock(id, accion, usuario)
     } else {
-      // Edición manual de campos
-      if (campos.nombre !== undefined)  fila[idx('NOMBRE')] = campos.nombre
-      if (campos.tienda !== undefined)  fila[idx('TIENDA')] = campos.tienda
-      if (campos.talla !== undefined)   fila[idx('TALLA')]  = campos.talla
-      if (campos.color !== undefined)   fila[idx('COLOR')]  = campos.color
-      if (campos.stock !== undefined) {
-        fila[idx('STOCK')]  = parseInt(campos.stock)
-        fila[idx('ACTIVO')] = parseInt(campos.stock) > 0 ? 'TRUE' : 'FALSE'
-      }
-      if (campos.precio !== undefined)    fila[idx('PRECIO')]   = parseFloat(campos.precio)
-      if (campos.foto_url !== undefined)  fila[idx('FOTO_URL')] = campos.foto_url
-
-      // Subir nueva foto si viene en base64
+      // Edición manual. La foto base64 se sube antes; el repo espera foto_url.
       if (campos.foto_base64 && campos.foto_base64.startsWith('data:')) {
         const result = await uploadToCloudinary(campos.foto_base64, `sucursal_${Date.now()}`, 'sucursal')
-        fila[idx('FOTO_URL')] = result.url
+        campos.foto_url = result.url
       }
+      await updateSucursalProducto(id, {
+        nombre:   campos.nombre,
+        tienda:   campos.tienda,
+        talla:    campos.talla,
+        color:    campos.color,
+        stock:    campos.stock,
+        precio:   campos.precio,
+        foto_url: campos.foto_url,
+      }, usuario)
     }
 
-    // Siempre actualizar quien modificó y cuándo
-    fila[idx('ULTIMA_MODIFICACION')] = ahora
-    fila[idx('MODIFICADO_POR')] = usuario || ''
-
-    // rowIndex de readSheet es 0-based desde fila 4 (filas 1-3 son header/vacías)
-    const rangoFila = `${HOJA}!A${rowIndex + 4}:N${rowIndex + 4}`
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: rangoFila,
-      valueInputOption: 'RAW',
-      requestBody: { values: [fila] },
-    })
-
-    return Response.json({
-      ok: true,
-      stock: parseInt(fila[idx('STOCK')]),
-      activo: fila[idx('ACTIVO')] === 'TRUE',
-    })
+    return Response.json({ ok: true })
   } catch (e) {
     console.error('PATCH sucursal error:', e)
-    return Response.json({ error: e.message }, { status: 500 })
+    const msg = e.message || ''
+    if (/sin stock/i.test(msg))    return Response.json({ error: msg }, { status: 400 })
+    if (/no encontrado/i.test(msg)) return Response.json({ error: msg }, { status: 404 })
+    return Response.json({ error: msg }, { status: 500 })
   }
 }
