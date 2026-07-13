@@ -302,9 +302,29 @@ Checklist de paridad por flujo (probar cada uno contra Supabase y comparar con S
 - [ ] **Reconciliación**: conteos de filas y sumas de montos por pedido coinciden Sheets vs Supabase.
 
 ### Fase 5 — Cutover (el "switch")
-- [ ] Cambiar `DATA_BACKEND=supabase` en Vercel.
-- [ ] Mantener **dual-write hacia Sheets** en modo respaldo de solo lectura 2–3 semanas.
-- [ ] Monitorear errores en Vercel y feedback del equipo.
+
+**Checklist de cutover (en ORDEN — no saltear pasos):**
+
+Pre-requisitos (infraestructura, ANTES de tocar el switch):
+- [x] **Subir Supabase a Pro** (motivo: backups automáticos + sin pausa por inactividad).
+      Es cambio de facturación, cero impacto técnico: no cambian URL, keys ni project id
+      (`piingkecjgoisnxccvaa`), sin downtime. Hecho el 2026-07-13.
+- [ ] Verificar en el dashboard: *Database → Backups* muestra **backups diarios** activos.
+- [ ] *Settings → Billing*: **spend cap ACTIVADO** (fija el costo en ~$25/mes, evita overage).
+- [ ] NO activar PITR (add-on ~$100/mes, innecesario para este volumen).
+
+Validación (Fase 4 completa antes de seguir):
+- [ ] Correr `node scripts/reconcile-sheets-vs-supabase.mjs` → paridad total (exit 0).
+- [ ] Recorrer el checklist de flujos (§3, Fase 4) contra Supabase.
+- [ ] **Backfill final** justo antes del switch para reconciliar cualquier deriva del
+      espejo best-effort (ver nota de consistencia en §8).
+
+El switch:
+- [ ] Cambiar `DATA_BACKEND=supabase` en Vercel (Supabase pasa a ser la verdad).
+- [ ] Ahora el dual-write invierte: Supabase primario, **Sheets queda como espejo/respaldo**
+      de solo lectura 2–3 semanas.
+- [ ] Apagar `SHADOW_READ` (ya no aplica; la sombra era para comparar durante Fase 3).
+- [ ] Monitorear errores en Vercel y feedback del equipo unos días.
 
 ### Fase 6 — Limpieza
 - [ ] Quitar dual-write y `lib/sheets.js`.
