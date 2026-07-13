@@ -314,7 +314,10 @@ Pre-requisitos (infraestructura, ANTES de tocar el switch):
 - [ ] NO activar PITR (add-on ~$100/mes, innecesario para este volumen).
 
 Validación (Fase 4 completa antes de seguir):
-- [ ] Correr `node scripts/reconcile-sheets-vs-supabase.mjs` → paridad total (exit 0).
+- [ ] Reconciliar paridad Sheets⇄Supabase. Dos opciones:
+      - **Endpoint** (recomendado, sin credenciales locales): `GET /api/admin/reconcile?key=<CRON_SECRET>`
+        corre del lado del servidor en Vercel (usa las env vars ya cargadas) y devuelve el reporte JSON.
+      - CLI local: `node scripts/reconcile-sheets-vs-supabase.mjs` (necesita `.env.local`).
 - [ ] Recorrer el checklist de flujos (§3, Fase 4) contra Supabase.
 - [ ] **Backfill final** justo antes del switch para reconciliar cualquier deriva del
       espejo best-effort (ver nota de consistencia en §8).
@@ -328,7 +331,8 @@ El switch:
 
 ### Fase 6 — Limpieza
 - [ ] Quitar dual-write y `lib/sheets.js`.
-- [ ] Borrar deuda: endpoint temporal `shopify/seed`, hacks `safeCell`, fallbacks hardcoded ya innecesarios.
+- [ ] Borrar endpoints temporales: `shopify/seed` y `admin/reconcile` (validación Fase 4).
+- [ ] Borrar deuda: hacks `safeCell`, fallbacks hardcoded ya innecesarios.
 - [ ] (Opcional, más adelante) endurecer RLS; evaluar Supabase Auth y Storage.
 
 ---
