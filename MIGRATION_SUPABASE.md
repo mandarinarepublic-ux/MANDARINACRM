@@ -423,9 +423,17 @@ Detectada en el mapeo del modelo actual:
   - Flujos: `recibirMensaje` (entrante: upsert conv + msg IN + no_leidos++) y `enviarMensaje` (saliente).
   - Puente CRM: `conversacionesConCliente` / `conversacionesDeCliente` (leen la vista).
   - Simulación end-to-end en SQL: hilo ordenado, dedup por wa_message_id, no_leidos, y unión al cliente — todo OK. Datos de prueba borrados.
-- **Pendiente** (necesita input externo):
-  - **Estructura real del inbox actual** (¿qué Sheet(s)? ¿qué columnas?) → afinar `conversaciones`/`mensajes` y armar el **backfill**.
-  - **Wiring**: webhook de entrada (según el proveedor de WhatsApp) + rutas API + UI. Se hace DESPUÉS del cutover del CRM.
+- **Estructura real conocida** (export del bot): hojas CONTACTOS (51k filas, ~890 reales; el resto vacías) + MENSAJES (12k) + auxiliares (SOCIAL, KB, respuestas rápidas, sesiones, leads, franquicias, ads). Alcance elegido: **solo WhatsApp core** (CONTACTOS + MENSAJES). Cuenta del export: **MANDI**.
+- **Backfill listo**: `scripts/migrate-inbox-to-supabase.mjs` — lee CONTACTOS + MENSAJES del Sheet del inbox, idempotente (upsert conv por cuenta+telefono, msgs por mensaje_id). Correr por cuenta:
+  `node scripts/migrate-inbox-to-supabase.mjs --cuenta=MANDI --sheet-id=<idInbox>` (y otra vez con `--cuenta=IND`).
+- **Rutas API listas** (usan `lib/db/inbox`):
+  - `GET /api/inbox/conversaciones` (lista; `conCliente=1` adjunta cliente CRM)
+  - `GET /api/inbox/conversaciones/[id]` (conversación + hilo)
+  - `POST /api/inbox/conversaciones/[id]/mensajes` (enviar saliente)
+  - `PATCH /api/inbox/conversaciones/[id]` (marcar leída / soporte / humano / vincular venta)
+  - `POST /api/inbox/webhook` (entrante; payload YA normalizado — el parsing crudo + verificación depende del proveedor).
+- **Superposición con el CRM** (sobre ~882 teléfonos del inbox): 17 coinciden con un cliente por teléfono, 13 con `id_venta` (el inbox es mayormente prospectos que aún no compran; `id_venta` es el puente fuerte de los compradores).
+- **Pendiente**: correr el backfill (necesita el `--sheet-id` del spreadsheet del inbox de cada cuenta); definir el **proveedor de WhatsApp** para el parsing del webhook + envío real de salida; UI del inbox. Canales sociales y backend del bot (KB, etc.) = fases posteriores.
 
 ### ⏳ Pendiente aparte (no bloquea)
 - Fix "Error al guardar" (compresión de foto en catálogo): commit local **`5d12d57f` NO pusheado**. Falta `git push origin main`.
