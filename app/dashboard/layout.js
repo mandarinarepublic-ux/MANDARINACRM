@@ -13,6 +13,7 @@ const NAV_ALL = [
   { href:'/dashboard/tablero',      label:'Tablero',      icon:'📊', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/calendario',   label:'Calendario',   icon:'📅', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/nuevo-pedido', label:'Nueva Venta',  icon:'➕', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'] },
+  { href:'/dashboard/inbox',        label:'Inbox',        icon:'💬', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'] },
   { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'] },
   { href:'/dashboard/historial',    label:'Historial',    icon:'📋', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/catalogo',     label:'Catálogo',     icon:'🛍️', roles:['ADMIN','VENDEDOR'] },
@@ -24,15 +25,15 @@ const NAV_ALL = [
 ]
 
 const ROL_PRIORITY = {
-  VENDEDOR:    ['nuevo-pedido','mis-pedidos','historial','catalogo','tablero'],
-  VENDEDOR_YAW:['nuevo-pedido','historial','tablero'],
+  VENDEDOR:    ['nuevo-pedido','inbox','mis-pedidos','historial','catalogo','tablero'],
+  VENDEDOR_YAW:['nuevo-pedido','inbox','historial','tablero'],
   DISEÑO:      ['produccion','tablero','historial','impresion'],
   ESTAMPADO:   ['produccion','tablero','historial','impresion'],
   SUBLIMACION: ['produccion','tablero','historial','impresion'],
   BORDADO:     ['produccion','tablero','historial','impresion'],
   CORTE:       ['corte','tablero','historial'],
   DESPACHO:    ['despacho','tablero','historial'],
-  ADMIN:       ['tablero','nuevo-pedido','historial','produccion','despacho','usuarios'],
+  ADMIN:       ['tablero','nuevo-pedido','inbox','historial','produccion','despacho','usuarios'],
 }
 
 function getNavItems(rol) {
