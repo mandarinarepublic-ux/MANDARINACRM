@@ -7,6 +7,7 @@ import { ESTADO_LABELS, ESTADO_LABELS_LARGO } from '@/lib/labels'
 import { parseFecha } from '@/lib/parseFecha'
 import { PdfGracias, PdfConfeccion, PdfConfeccionPagina } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
+import ConversacionPanel from '@/components/pedido/ConversacionPanel'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -24,6 +25,7 @@ export default function PedidoDetailPage() {
   const [logs, setLogs] = useState([])
   const [showBitacora, setShowBitacora] = useState(false)
   const [fotoComprobanteAbierta, setFotoComprobanteAbierta] = useState(null)
+  const [showConversacion, setShowConversacion] = useState(false)
   const [showModalAbono, setShowModalAbono] = useState(false)
   const [abonoTipo, setAbonoTipo] = useState('EFECTIVO')
   const [abonoMonto, setAbonoMonto] = useState('')
@@ -629,6 +631,9 @@ export default function PedidoDetailPage() {
           {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
             <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">📱 WA</button>
           )}
+          {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
+            <button onClick={()=>setShowConversacion(true)} className="btn-secondary flex-1 text-sm">💬 Chat</button>
+          )}
           <button onClick={()=>setShowPdfPreview(true)} className="btn-secondary flex-1 text-sm">👁️ PDF</button>
           {user?.rol==='DESPACHO'&&pedido?.ESTADO_PEDIDO!=='COMPLETADO'&&(
             <Link href="/dashboard/despacho" className="btn-primary flex-1 text-sm flex items-center justify-center gap-1" style={{backgroundColor:'#7C3AED'}}>🚚 Despacho</Link>
@@ -653,6 +658,14 @@ export default function PedidoDetailPage() {
           </div>
         )}
       </div>
+
+      {showConversacion && (
+        <ConversacionPanel
+          celular={cliente?.CELULAR}
+          nombreCliente={cliente?.NOMBRE}
+          onClose={()=>setShowConversacion(false)}
+        />
+      )}
     </div>
   )
 }
