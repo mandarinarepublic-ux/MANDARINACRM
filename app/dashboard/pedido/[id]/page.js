@@ -538,6 +538,17 @@ export default function PedidoDetailPage() {
             </div>
           </div>
 
+          {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
+            <div className="card overflow-hidden">
+              <button onClick={()=>setShowConversacion(true)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-all">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white">💬 Conversación de WhatsApp</span>
+                </div>
+                <span className="text-gray-500">›</span>
+              </button>
+            </div>
+          )}
+
           <div className="card overflow-hidden">
             <button onClick={() => setShowBitacora(b=>!b)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-all">
               <div className="flex items-center gap-2">
@@ -630,9 +641,6 @@ export default function PedidoDetailPage() {
         <div className="flex gap-2 mb-2">
           {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
             <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">📱 WA</button>
-          )}
-          {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
-            <button onClick={()=>setShowConversacion(true)} className="btn-secondary flex-1 text-sm">💬 Chat</button>
           )}
           <button onClick={()=>setShowPdfPreview(true)} className="btn-secondary flex-1 text-sm">👁️ PDF</button>
           {user?.rol==='DESPACHO'&&pedido?.ESTADO_PEDIDO!=='COMPLETADO'&&(

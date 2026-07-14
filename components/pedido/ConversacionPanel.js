@@ -136,7 +136,7 @@ export default function ConversacionPanel({ celular, nombreCliente, onClose }) {
         {/* Footer */}
         {!loading && !vacio && (
           <div className="px-4 py-2 border-t border-gray-800 text-center" style={{ background: '#111c2a' }}>
-            <span className="text-[11px] text-gray-500">Solo lectura · para responder, abrí el Inbox</span>
+            <span className="text-[11px] text-gray-500">Solo lectura ·</span>
           </div>
         )}
       </div>
