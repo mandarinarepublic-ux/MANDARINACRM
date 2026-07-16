@@ -1,5 +1,7 @@
 'use client'
+import { useRef, useState } from 'react'
 import { TECNICAS, tecnicaLabel, calcSubtotalProducto, fmtUSD } from '@/lib/cotizacion'
+import { subirFoto } from '@/lib/subirImagen'
 import TallasGrid from './TallasGrid'
 
 const TECNICA_ICON = { sublimacion: '🖨️', bordado: '🧵', dtf: '🎨' }
@@ -8,6 +10,26 @@ const TECNICA_ICON = { sublimacion: '🖨️', bordado: '🧵', dtf: '🎨' }
 export default function ProductoCard({ index, producto: p, onUpd, onTalla, onToggleTallas, onDup, onRemove, canRemove }) {
   const sub = calcSubtotalProducto(p)
   const set = (field) => (e) => onUpd(p.id, field, e.target.value)
+
+  const fileRef = useRef(null)
+  const [subiendo, setSubiendo] = useState(false)
+  const [errFoto, setErrFoto] = useState('')
+
+  async function onPickFoto(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // permite re-elegir el mismo archivo
+    if (!file) return
+    setErrFoto('')
+    setSubiendo(true)
+    try {
+      const url = await subirFoto(file, 'cotizacion')
+      if (url) onUpd(p.id, 'foto', url)
+    } catch (err) {
+      setErrFoto(err.message || 'No se pudo subir la foto')
+    } finally {
+      setSubiendo(false)
+    }
+  }
 
   return (
     <div className="card p-4 mb-2.5">
@@ -31,12 +53,20 @@ export default function ProductoCard({ index, producto: p, onUpd, onTalla, onTog
 
       {/* Foto + campos */}
       <div className="flex gap-3.5">
-        <div className="flex-shrink-0">
-          {p.foto
-            ? <img src={p.foto} alt="" className="w-20 h-20 rounded-xl object-cover border border-gray-700" onError={(e)=>{e.currentTarget.style.display='none'}} />
-            : <div className="w-20 h-20 rounded-xl bg-gray-800 border border-dashed border-gray-700 flex items-center justify-center text-gray-600 text-2xl">👕</div>}
-          <input value={p.foto || ''} onChange={set('foto')} placeholder="URL foto"
-            className="mt-1.5 w-20 text-[10px] bg-gray-800 border border-gray-700 text-gray-300 rounded px-1 py-1 focus:outline-none focus:border-mandarina-500" />
+        <div className="flex-shrink-0 w-20">
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFoto} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={subiendo}
+            className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-700 hover:border-mandarina-500 transition-all block">
+            {p.foto
+              ? <img src={p.foto} alt="" className="w-20 h-20 object-cover" onError={(e)=>{e.currentTarget.style.display='none'}} />
+              : <div className="w-20 h-20 bg-gray-800 border-dashed flex flex-col items-center justify-center text-gray-500 text-xl gap-0.5"><span>📷</span><span className="text-[9px]">Subir foto</span></div>}
+            {subiendo && <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-[10px] text-white">Subiendo…</div>}
+          </button>
+          {p.foto && !subiendo && (
+            <button type="button" onClick={() => onUpd(p.id, 'foto', '')}
+              className="mt-1 w-full text-[10px] text-gray-500 hover:text-red-400">✕ quitar</button>
+          )}
+          {errFoto && <div className="mt-1 text-[10px] text-red-400 leading-tight">{errFoto}</div>}
         </div>
 
         <div className="flex-1 grid grid-cols-2 gap-3">
