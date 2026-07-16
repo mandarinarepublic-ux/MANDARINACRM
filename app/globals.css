@@ -36,14 +36,27 @@
 }
 
 /* ── Impresión / Exportar PDF (módulo Cotización) ──
-   Oculta todo el chrome del CRM (sidebar, topbar, nav, toolbar) y deja solo el
-   documento blanco del cliente (#cot-doc). */
+   Oculta el chrome del CRM y deja solo el documento blanco del cliente (#cot-doc).
+   Dos claves para que NO se pierda el formato:
+   1) print-color-adjust: exact → conserva fondos/degradados/colores (el navegador
+      los elimina por defecto al imprimir).
+   2) overflow:visible + height:auto en los contenedores → evita que el scroll/alto
+      fijo recorte el documento a una sola página. */
 @media print {
+  /* Ocultar todo lo que no sea el documento */
   aside, header, nav, .no-print { display: none !important; }
-  main { margin: 0 !important; padding: 0 !important; }
-  body { background: #fff !important; }
-  #cot-doc { box-shadow: none !important; max-width: 100% !important; margin: 0 !important; }
-  @page { margin: 12mm; }
+
+  /* Conservar colores, fondos y degradados */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  /* Neutralizar SOLO los contenedores con scroll / alto de pantalla que recortan
+     a una página (no tocar tamaños del contenido, p. ej. las fotos de 140px). */
+  html, body, main { height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  [class*="overflow-"] { overflow: visible !important; }
+  [class*="h-screen"] { height: auto !important; min-height: 0 !important; max-height: none !important; }
+
+  #cot-doc { box-shadow: none !important; max-width: 100% !important; width: 100% !important; margin: 0 !important; }
+  @page { margin: 10mm; }
 }
 
 /* Scrollbar */

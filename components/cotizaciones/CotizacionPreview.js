@@ -55,7 +55,7 @@ export default function CotizacionPreview({ cotizacion: c, totales, asesor }) {
         </div>
         <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {c.productos.map((p) => (
-            <div key={p.id} style={{ display: 'flex', gap: 14, border: '1px solid #eee', borderLeft: `3px solid ${th.accent}`, borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
+            <div key={p.id} style={{ display: 'flex', gap: 14, border: '1px solid #eee', borderLeft: `3px solid ${th.accent}`, borderRadius: 10, overflow: 'hidden', background: '#fff', breakInside: 'avoid' }}>
               {p.foto
                 ? <img src={p.foto} alt="" style={{ width: 140, height: 140, objectFit: 'cover', background: '#f3f4f6', flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = 'none' }} />
                 : <div style={{ width: 140, height: 140, background: '#f3f4f6', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34, color: '#cbd5e1' }}>👕</div>}
