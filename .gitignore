@@ -17,3 +17,7 @@ Thumbs.db
 next-env.d.ts 
 .vercel
 .env*
+
+# Material de diseño (handoff Cotización) - no va al repo
+/Dise*.zip
+/_diseno_base_extract/

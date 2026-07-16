@@ -15,6 +15,7 @@ export default function HistorialPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [pedidos, setPedidos] = useState([])
+  const [cotizaciones, setCotizaciones] = useState([])
   const [loading, setLoading] = useState(true)
   const [filtroEstado, setFiltroEstado] = useState('TODOS')
   const [filtroTienda, setFiltroTienda] = useState('TODAS')
@@ -43,7 +44,18 @@ export default function HistorialPage() {
       } catch (_) {}
     }
     loadPedidos(u)
+    loadCotizaciones(u)
   }, [])
+
+  // Cotizaciones (tabla aparte, NO son pedidos ni entran a producción).
+  // VENDEDOR/VENDEDOR_YAW → solo las suyas; ADMIN → todas.
+  async function loadCotizaciones(u) {
+    try {
+      const res = await fetch(`/api/cotizaciones?createdBy=${encodeURIComponent(u.id || '')}&rol=${encodeURIComponent(u.rol || '')}&_t=${Date.now()}`, { cache: 'no-store' })
+      const data = await res.json()
+      setCotizaciones(data.cotizaciones || [])
+    } catch (_) { /* best-effort: si falla, el historial de pedidos sigue igual */ }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -91,10 +103,34 @@ export default function HistorialPage() {
     return true
   })
 
-  const paginados = filtered.slice(0, visibles)
-  const hayMas = filtered.length > visibles
+  // Cotizaciones (aparte de producción): se muestran solo cuando el filtro es
+  // TODOS o COTIZACIÓN, y sin filtro de pago (no aplican estados/pago de pedido).
+  // No aplican a la vista YAW.
+  const mostrarCot = !isYAW && (filtroEstado === 'TODOS' || filtroEstado === 'COTIZACIÓN') && filtroPago === 'TODOS'
+  const filteredCot = !mostrarCot ? [] : cotizaciones.filter(c => {
+    if (filtroTienda !== 'TODAS') {
+      const tMap = c.tienda === 'indstore' ? 'INDSTORE' : 'MANDARINA'
+      if (tMap !== filtroTienda) return false
+    }
+    if (busquedaDebounced) {
+      const hay = `${c.numero||''} ${c.cliente_nombre||''} ${c.cliente_cedula||''} ${c.cliente_tel||''}`.toLowerCase()
+      if (!hay.includes(busquedaDebounced.toLowerCase())) return false
+    }
+    if (fechaDesde) { const f = new Date(c.fecha); if (isNaN(f) || f < new Date(fechaDesde)) return false }
+    if (fechaHasta) { const f = new Date(c.fecha); const h = new Date(fechaHasta); h.setHours(23,59,59); if (isNaN(f) || f > h) return false }
+    return true
+  })
 
-  function expandirTodos() { setExpandedPedidos(new Set(paginados.map(p => p.PEDIDO_ID))) }
+  // Lista combinada (pedido | cotizacion) ordenada por fecha desc.
+  const combinados = [
+    ...filtered.map(p => ({ _tipo: 'pedido', _fecha: parseFecha(p.FECHA_PEDIDO) || new Date(0), p })),
+    ...filteredCot.map(c => ({ _tipo: 'cotizacion', _fecha: new Date(c.created_at || c.fecha) || new Date(0), c })),
+  ].sort((a, b) => b._fecha - a._fecha)
+
+  const paginados = combinados.slice(0, visibles)
+  const hayMas = combinados.length > visibles
+
+  function expandirTodos() { setExpandedPedidos(new Set(paginados.filter(x => x._tipo === 'pedido').map(x => x.p.PEDIDO_ID))) }
   function contraerTodos()  { setExpandedPedidos(new Set()) }
 
   const estadoColor = {
@@ -140,6 +176,7 @@ export default function HistorialPage() {
                 <option value="DESPACHO">En Despacho</option>
                 <option value="COMPLETADO">Completado</option>
                 <option value="ENTREGADO">Entregado</option>
+                <option value="COTIZACIÓN">📄 Cotizaciones</option>
               </select>
             </div>
             {/* Tienda */}
@@ -182,8 +219,8 @@ export default function HistorialPage() {
               {loading
                 ? 'Cargando...'
                 : hayMas
-                  ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)`
-                  : `${filtered.length} pedido(s)`}
+                  ? `Mostrando ${paginados.length} de ${combinados.length} registro(s)`
+                  : `${combinados.length} registro(s)`}
             </div>
             {!loading && filtered.length > 0 && (
               <div className="flex gap-2">
@@ -196,12 +233,40 @@ export default function HistorialPage() {
           </div>
           {loading ? (
             <SkeletonList count={6} />
-          ) : filtered.length === 0 ? (
-            <div className="card p-8 text-center text-gray-600"><div className="text-3xl mb-3">📭</div>No hay pedidos con estos filtros</div>
+          ) : combinados.length === 0 ? (
+            <div className="card p-8 text-center text-gray-600"><div className="text-3xl mb-3">📭</div>No hay registros con estos filtros</div>
           ) : (
             <>
               <div className="space-y-2">
-                {paginados.map(p => {
+                {paginados.map(row => {
+                  // ── COTIZACIÓN (tarjeta aparte, abre el módulo de cotización) ──
+                  if (row._tipo === 'cotizacion') {
+                    const c = row.c
+                    return (
+                      <Link key={`cot-${c.id}`} href={`/dashboard/cotizacion/${c.id}`}
+                        className="card overflow-hidden block p-4 hover:bg-gray-800/20 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-mandarina-500/15 text-mandarina-400">📄 COTIZACIÓN</span>
+                              <span className="font-mono text-sm font-medium text-white truncate">{c.numero}</span>
+                              <span className="text-gray-600 text-xs">{c.tienda === 'indstore' ? '🏪' : '🍊'}</span>
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">
+                              {c.cliente_nombre || 'Sin cliente'} · {formatFechaCorta(c.fecha)}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end flex-shrink-0">
+                            <span className="text-xs px-2 py-0.5 rounded-full text-gray-300 bg-gray-800">${parseFloat(c.total||0).toFixed(2)}</span>
+                            <span className="text-[10px] text-gray-600 mt-1">solo consulta</span>
+                          </div>
+                          <span className="text-gray-600 text-xs flex-shrink-0">→</span>
+                        </div>
+                      </Link>
+                    )
+                  }
+                  // ── PEDIDO (comportamiento original) ──
+                  const p = row.p
                   const isExpanded = expandedPedidos.has(p.PEDIDO_ID)
                   const itemsActivos = (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO')
                   return (
@@ -280,7 +345,7 @@ export default function HistorialPage() {
                 <button
                   onClick={() => setVisibles(v => v + PAGE_SIZE)}
                   className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
-                  Cargar más ({filtered.length - visibles} restantes)
+                  Cargar más ({combinados.length - visibles} restantes)
                 </button>
               )}
             </>

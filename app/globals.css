@@ -35,6 +35,17 @@
   }
 }
 
+/* ── Impresión / Exportar PDF (módulo Cotización) ──
+   Oculta todo el chrome del CRM (sidebar, topbar, nav, toolbar) y deja solo el
+   documento blanco del cliente (#cot-doc). */
+@media print {
+  aside, header, nav, .no-print { display: none !important; }
+  main { margin: 0 !important; padding: 0 !important; }
+  body { background: #fff !important; }
+  #cot-doc { box-shadow: none !important; max-width: 100% !important; margin: 0 !important; }
+  @page { margin: 12mm; }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #111827; }
