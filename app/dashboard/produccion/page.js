@@ -21,12 +21,18 @@ function itemEsDeUsuario(itemArea, u) {
   if (u.rol === 'ADMIN') return true
   if (u.rol === 'CORTE') return true
   const areas = u.areas || []
-  if (areas.length > 0 && !(areas.length === 1 && areas[0] === 'TODAS')) {
-    return areas.some(a => itemArea.includes(a))
-  }
+  // 'TODAS' es un comodín explícito y es distinto de no tener áreas.
+  if (areas.length === 1 && areas[0] === 'TODAS') return true
+  if (areas.length > 0) return areas.some(a => itemArea.includes(a))
+
+  // Sin áreas asignadas: el rol decide.
   if (u.rol === 'ESTAMPADO')   return itemArea.includes('ESTAMPADO')
   if (u.rol === 'SUBLIMACION') return itemArea.includes('SUBLIMACION')
   if (u.rol === 'BORDADO')     return itemArea.includes('BORDADO')
+  // Un usuario de DISEÑO al que le quitaron TODAS las áreas llegaba hasta el
+  // `return true` de abajo y veía las prendas de todas las áreas — lo contrario
+  // de lo que quiso el admin. Sin áreas, no ve nada.
+  if (u.rol === 'DISEÑO') return false
   return true
 }
 

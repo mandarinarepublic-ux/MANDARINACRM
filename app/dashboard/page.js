@@ -124,10 +124,18 @@ export default function DashboardPage() {
   )
 
   const rol = user.rol
-  if (rol === 'DISEÑO' || rol === 'ESTAMPADO' || rol === 'SUBLIMACION' || rol === 'BORDADO') return <DashboardDiseno data={data} user={user} />
+  // CORTE entra aquí a propósito: al no estar contemplado caía en el `return` de
+  // abajo y veía el panel de ADMIN completo, con ventas, cobrado y saldo por
+  // cobrar. El panel de producción es el que le corresponde.
+  if (rol === 'DISEÑO' || rol === 'ESTAMPADO' || rol === 'SUBLIMACION' || rol === 'BORDADO' || rol === 'CORTE') {
+    return <DashboardDiseno data={data} user={user} />
+  }
   if (rol === 'DESPACHO') return <DashboardDespacho data={data} user={user} />
   if (rol === 'VENDEDOR') return <DashboardVendedor data={data} user={user} />
   if (rol === 'VENDEDOR_YAW') return <DashboardYAW data={data} user={user} />
+  // Solo ADMIN debería llegar hasta acá. Cualquier rol nuevo que se agregue sin
+  // su caso NO debe caer en el panel financiero por descuido.
+  if (rol !== 'ADMIN') return <DashboardDiseno data={data} user={user} />
   return <DashboardAdmin data={data} user={user} />
 }
 
