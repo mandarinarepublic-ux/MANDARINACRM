@@ -330,5 +330,17 @@ console.log('\n== Catalogo de tipos de prenda: orden y busqueda ==')
   check('la opcion de crear va primero', /puedeCrear \? \['__crear__'/.test(sel))
 }
 
+console.log('\n== El filtro por tienda esta en el archivo QUE SE USA ==')
+{
+  // Se perdio una vez: el cambio se aplico a nuevo-pedido-page.js, un archivo
+  // que NADIE importaba, mientras la ruta real es page.js. Compilaba, las
+  // pruebas pasaban, y el filtro simplemente no existia en la app.
+  const real = readFileSync(new URL('../app/dashboard/nuevo-pedido/page.js', import.meta.url), 'utf8')
+  check('la ruta real importa el filtro por tienda', /from '@\/lib\/tiendasUsuario'/.test(real))
+  check('el selector de tienda filtra', /puedeVerTienda\(user, t\.key\)/.test(real))
+  check('corrige la tienda por defecto', /!puedeVerTienda\(u, 'MANDARINA'\)/.test(real))
+  check('SUCURSAL sigue disponible para todos', /t\.key === 'SUCURSAL' \|\|/.test(real))
+}
+
 console.log(`\n${ok} pasaron, ${fail} fallaron\n`)
 process.exit(fail === 0 ? 0 : 1)

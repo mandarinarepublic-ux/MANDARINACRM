@@ -7,6 +7,7 @@ import ItemProducto from '@/components/pedido/ItemProducto'
 import BuscadorCliente from '@/components/pedido/BuscadorCliente'
 import SeccionPago from '@/components/pedido/SeccionPago'
 import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/identificacion'
+import { puedeVerTienda, tiendasDisponibles } from '@/lib/tiendasUsuario'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
 
@@ -100,6 +101,13 @@ export default function NuevoPedidoPage() {
       setCliente(CLIENTE_YAW)
       setEmitirFactura(false)
       setStep(2)
+      return
+    }
+    // La tienda arranca en MANDARINA: si el vendedor no la tiene asignada hay
+    // que moverlo a la suya o registraría la venta en la tienda equivocada.
+    if (!puedeVerTienda(u, 'MANDARINA')) {
+      const suyas = tiendasDisponibles(u, ['MANDARINA', 'INDSTORE'])
+      if (suyas.length > 0) setTienda(suyas[0])
     }
   }, [])
 
@@ -551,14 +559,17 @@ export default function NuevoPedidoPage() {
           {/* STEP 2 */}
           {step === 2 && (
             <div className="space-y-4">
-              {/* Selector de tienda — oculto para YAW */}
+              {/* Selector de tienda — oculto para YAW.
+                  Solo se ofrecen las tiendas asignadas al vendedor en Usuarios.
+                  SUCURSAL no es una tienda: es la vía de venta desde stock de
+                  sucursal, así que se muestra siempre. */}
               {!isYAW && (
                 <div className="flex gap-2">
                   {[
                     { key: 'MANDARINA', label: '🍊 Mandarina', color: '#FF6B00' },
                     { key: 'INDSTORE',  label: '🏪 Indstore',  color: '#E91E8C' },
                     { key: 'SUCURSAL',  label: '🏬 Sucursal',  color: '#10B981' },
-                  ].map(t => (
+                  ].filter(t => t.key === 'SUCURSAL' || puedeVerTienda(user, t.key)).map(t => (
                     <button key={t.key} onClick={() => setTienda(t.key)}
                       className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border
                         ${tienda === t.key ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
