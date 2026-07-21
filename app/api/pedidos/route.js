@@ -5,6 +5,7 @@ import { listPedidos, listPedidoIds, createPedido } from '@/lib/db/pedidos'
 import { upsertClienteByCedula } from '@/lib/db/clientes'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
+import { enviarPurchase, capiConfigurado } from '@/lib/metaCapi'
 
 export const dynamic = 'force-dynamic'
 
@@ -189,34 +190,43 @@ export async function POST(req) {
       })
     }
 
-    // ── META CAPI ── fire & forget, no bloquea la respuesta
+    // ── META CAPI ── fire & forget, no bloquea la respuesta.
+    // Con META_CAPI_TOKEN configurado se envía DIRECTO a Meta (lib/metaCapi.js);
+    // si no, se mantiene el webhook de Make como antes. Así la migración se
+    // activa poniendo las variables en Vercel, sin desplegar de nuevo, y se
+    // revierte quitándolas.
     try {
-      const celularRaw = String(cliente.celular || '')
-      const celularNorm = celularRaw.startsWith('0')
-        ? '593' + celularRaw.slice(1)
-        : celularRaw
+      if (capiConfigurado()) {
+        enviarPurchase({ pedidoId, tiendaId, cliente, montoTotal })
+          .catch(err => console.error('META CAPI error:', err.message))
+      } else {
+        const celularRaw = String(cliente.celular || '')
+        const celularNorm = celularRaw.startsWith('0')
+          ? '593' + celularRaw.slice(1)
+          : celularRaw
 
-      const tiendaMeta = (tiendaId || '').toUpperCase().includes('IND')
-        ? 'INDSTORE'
-        : 'MANDARINA'
+        const tiendaMeta = (tiendaId || '').toUpperCase().includes('IND')
+          ? 'INDSTORE'
+          : 'MANDARINA'
 
-      const capiPayload = {
-        'Event ID': pedidoId,
-        'Tienda':   tiendaMeta,
-        'nombre':   cliente.nombre   || '',
-        'apellido': '',
-        'correo':   cliente.email    || '',
-        'celular':  celularNorm,
-        'dni':      String(cliente.cedula || ''),
-        'ciudad':   cliente.ciudad   || '',
-        'valor':    parseFloat(montoTotal || 0).toFixed(2),
+        const capiPayload = {
+          'Event ID': pedidoId,
+          'Tienda':   tiendaMeta,
+          'nombre':   cliente.nombre   || '',
+          'apellido': '',
+          'correo':   cliente.email    || '',
+          'celular':  celularNorm,
+          'dni':      String(cliente.cedula || ''),
+          'ciudad':   cliente.ciudad   || '',
+          'valor':    parseFloat(montoTotal || 0).toFixed(2),
+        }
+
+        fetch('https://hook.us2.make.com/6yme139yby51ejizn4l8dhg4rai7d7bn', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(capiPayload),
+        }).catch(err => console.error('META CAPI webhook error:', err.message))
       }
-
-      fetch('https://hook.us2.make.com/6yme139yby51ejizn4l8dhg4rai7d7bn', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(capiPayload),
-      }).catch(err => console.error('META CAPI webhook error:', err.message))
     } catch (capiErr) {
       console.error('META CAPI build error:', capiErr.message)
     }
