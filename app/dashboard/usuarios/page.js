@@ -279,6 +279,10 @@ export default function UsuariosPage() {
 
             <div>
               <label className="label">Tiendas con acceso</label>
+              <p className="text-xs text-gray-500 mb-1.5">
+                Un VENDEDOR solo ve y registra pedidos de las tiendas marcadas. Los roles de
+                fábrica y ADMIN no se restringen por tienda.
+              </p>
               <TiendasPicker valor={form.tiendas} onChange={tiendas => setForm(f => ({...f, tiendas}))} />
             </div>
 
@@ -411,6 +415,10 @@ export default function UsuariosPage() {
 
                   <div>
                     <label className="label">Tiendas con acceso</label>
+              <p className="text-xs text-gray-500 mb-1.5">
+                Un VENDEDOR solo ve y registra pedidos de las tiendas marcadas. Los roles de
+                fábrica y ADMIN no se restringen por tienda.
+              </p>
                     <TiendasPicker valor={editForm.tiendas}
                       onChange={tiendas => setEditForm(f => ({ ...f, tiendas }))} />
                   </div>

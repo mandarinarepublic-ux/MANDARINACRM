@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, diasHastaEntrega } from '@/lib/parseFecha'
+import { filtrarPedidosPorTienda } from '@/lib/tiendasUsuario'
 
 // ─── Constantes de etapa ───────────────────────────────────────────────────────
 // El flujo físico de una prenda: ✂️ CORTE → 🏭 PRODUCCIÓN → 🚚 DESPACHO
@@ -310,7 +311,9 @@ export default function TableroPage() {
         setTimeout(() => loadPedidos(intentos + 1), 1500)
         return
       }
-      setPedidos(data.pedidos || [])
+      // Acceso por tienda: solo afecta a los roles de venta (ver lib/tiendasUsuario).
+      const u = JSON.parse(localStorage.getItem('mp_user') || '{}')
+      setPedidos(filtrarPedidosPorTienda(u, data.pedidos || []))
     } finally { setLoading(false) }
   }, [])
 

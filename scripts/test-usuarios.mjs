@@ -18,6 +18,7 @@ async function cargar(rel) {
 }
 
 const { ROLES, ROL_LABEL, AREAS, esRolValido, usaAreas, avisoSinAreas } = await cargar('../lib/roles.js')
+const { filtrarPedidosPorTienda, puedeVerTienda, tiendasDisponibles } = await cargar('../lib/tiendasUsuario.js')
 
 let ok = 0, fail = 0
 function check(nombre, condicion, detalle = '') {
@@ -221,6 +222,55 @@ console.log('\n== Aviso de areas segun el rol ==')
   check('ESTAMPADO: explica que vera lo suyo',
     /únicamente las prendas de ESTAMPADO/i.test(avisoSinAreas('ESTAMPADO')))
   check('VENDEDOR no tiene aviso de areas', avisoSinAreas('VENDEDOR') === '')
+}
+
+console.log('\n== Acceso por tienda ==')
+{
+  const ADMIN   = { rol: 'ADMIN', tiendas: ['MANDARINA'] }
+  const GRACE   = { rol: 'VENDEDOR', tiendas: ['MANDARINA'] }          // caso real
+  const MAJO    = { rol: 'VENDEDOR', tiendas: ['INDSTORE'] }           // caso real
+  const CLEVER  = { rol: 'VENDEDOR', tiendas: ['INDSTORE', 'MANDARINA'] }
+  const SIN     = { rol: 'VENDEDOR', tiendas: [] }
+  const BORDA   = { rol: 'DISEÑO', tiendas: ['MANDARINA'] }            // Christian Garzon
+  const CORTE_U = { rol: 'CORTE', tiendas: ['MANDARINA'] }
+
+  const pedidos = [
+    { PEDIDO_ID: 'MAN-1', TIENDA_ID: 'MANDARINA' },
+    { PEDIDO_ID: 'IND-1', TIENDA_ID: 'INDSTORE' },
+    { PEDIDO_ID: 'YAW-1', TIENDA_ID: 'YAW' },
+  ]
+  const ids = (u) => filtrarPedidosPorTienda(u, pedidos).map(p => p.PEDIDO_ID).join(',')
+
+  check('ADMIN ve todo aunque tenga una sola tienda', ids(ADMIN) === 'MAN-1,IND-1,YAW-1', ids(ADMIN))
+  check('vendedor de Mandarina solo ve Mandarina', ids(GRACE) === 'MAN-1', ids(GRACE))
+  check('vendedor de Indstore solo ve Indstore', ids(MAJO) === 'IND-1', ids(MAJO))
+  check('vendedor con ambas ve ambas', ids(CLEVER) === 'MAN-1,IND-1', ids(CLEVER))
+
+  // Deliberado: sin tiendas asignadas NO se restringe. Un dato faltante no debe
+  // dejar a nadie sin ver su trabajo.
+  check('vendedor SIN tiendas asignadas ve todo', ids(SIN) === 'MAN-1,IND-1,YAW-1', ids(SIN))
+
+  // El trabajo de fábrica es transversal: Christian Garzon borda para las dos
+  // tiendas aunque tenga solo MANDARINA marcada.
+  check('DISEÑO no se filtra por tienda', ids(BORDA) === 'MAN-1,IND-1,YAW-1', ids(BORDA))
+  check('CORTE no se filtra por tienda', ids(CORTE_U) === 'MAN-1,IND-1,YAW-1', ids(CORTE_U))
+
+  check('puedeVerTienda respeta al vendedor',
+    puedeVerTienda(GRACE, 'MANDARINA') && !puedeVerTienda(GRACE, 'INDSTORE'))
+  check('puedeVerTienda no restringe al admin', puedeVerTienda(ADMIN, 'INDSTORE'))
+  check('acepta tiendas como texto CSV',
+    puedeVerTienda({ rol: 'VENDEDOR', tiendas: 'MANDARINA, INDSTORE' }, 'INDSTORE'))
+  check('ignora mayusculas', puedeVerTienda({ rol: 'VENDEDOR', tiendas: ['indstore'] }, 'INDSTORE'))
+
+  const TODAS = ['MANDARINA', 'INDSTORE']
+  check('el selector de Nueva Venta se limita', tiendasDisponibles(MAJO, TODAS).join() === 'INDSTORE')
+  check('el admin ve las dos en el selector', tiendasDisponibles(ADMIN, TODAS).join() === 'MANDARINA,INDSTORE')
+  // Si la config no cuadra con lo que ofrece la pantalla, mejor todas que un
+  // selector vacío con el que no se pueda trabajar.
+  check('config incoherente no deja el selector vacio',
+    tiendasDisponibles({ rol: 'VENDEDOR', tiendas: ['YAW'] }, TODAS).length === 2)
+  check('nadie queda sin ninguna tienda para elegir',
+    [ADMIN, GRACE, MAJO, CLEVER, SIN].every(u => tiendasDisponibles(u, TODAS).length > 0))
 }
 
 console.log(`\n${ok} pasaron, ${fail} fallaron\n`)

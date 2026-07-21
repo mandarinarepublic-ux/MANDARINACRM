@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, formatFechaCorta } from '@/lib/parseFecha'
+import { filtrarPedidosPorTienda } from '@/lib/tiendasUsuario'
 import { SkeletonList } from '@/components/Skeleton'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
@@ -80,6 +81,9 @@ export default function HistorialPage() {
       }
       let lista = data.pedidos || []
       if (u.rol === 'VENDEDOR_YAW') lista = lista.filter(p => p.TIENDA_ID === 'YAW')
+      // Acceso por tienda: un vendedor solo ve las tiendas que tiene asignadas
+      // en Usuarios (ADMIN y los roles de fábrica no se filtran).
+      lista = filtrarPedidosPorTienda(u, lista)
       lista = lista.sort((a, b) => {
         const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
         const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)

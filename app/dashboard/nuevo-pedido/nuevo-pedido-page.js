@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import MapaPicker from '@/components/maps/MapaPicker'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
 import ItemProducto from '@/components/pedido/ItemProducto'
+import { tiendasDisponibles, puedeVerTienda } from '@/lib/tiendasUsuario'
 import BuscadorCliente from '@/components/pedido/BuscadorCliente'
 import SeccionPago from '@/components/pedido/SeccionPago'
 
@@ -95,7 +96,14 @@ export default function NuevoPedidoPage() {
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
-    setUser(JSON.parse(stored))
+    const u = JSON.parse(stored)
+    setUser(u)
+    // La tienda arranca en MANDARINA; si el vendedor no la tiene asignada hay que
+    // moverlo a la suya o registraría la venta en la tienda equivocada.
+    if (!puedeVerTienda(u, 'MANDARINA')) {
+      const suyas = tiendasDisponibles(u, TIENDAS)
+      if (suyas.length > 0) setTienda(suyas[0])
+    }
   }, [])
 
   useEffect(() => {
@@ -313,9 +321,11 @@ export default function NuevoPedidoPage() {
         </div>
 
         <div className="max-w-2xl mx-auto">
-          {/* Tienda selector */}
+          {/* Tienda selector — solo las tiendas asignadas al vendedor en Usuarios.
+              Antes la lista era fija y cualquiera podía registrar una venta en la
+              tienda equivocada. */}
           <div className="flex gap-2 mb-4">
-            {TIENDAS.map(t => (
+            {tiendasDisponibles(user, TIENDAS).map(t => (
               <button key={t} onClick={() => setTienda(t)}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border
                   ${tienda === t ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
