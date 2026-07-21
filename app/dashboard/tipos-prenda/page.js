@@ -18,6 +18,7 @@ export default function TiposPrendaPage() {
   const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [verInactivos, setVerInactivos] = useState(false)
+  const [orden, setOrden] = useState('alfabetico')   // 'alfabetico' | 'usos'
   const [editando, setEditando] = useState(null)   // { nombre, nuevoNombre }
   const [guardando, setGuardando] = useState('')
   const [aviso, setAviso] = useState('')
@@ -58,10 +59,15 @@ export default function TiposPrendaPage() {
 
   const filtrados = useMemo(() => {
     const q = norm(busqueda)
-    return productos
+    const lista = productos
       .filter(p => verInactivos || p.ACTIVO)
       .filter(p => !q || norm(p.NOMBRE).includes(q))
-  }, [productos, busqueda, verInactivos])
+    // La API ya los manda alfabéticos; 'usos' es para ver de un vistazo cuáles
+    // son basura que nadie vendió nunca.
+    return orden === 'usos'
+      ? [...lista].sort((a, b) => (b.USOS - a.USOS) || a.NOMBRE.localeCompare(b.NOMBRE, 'es'))
+      : lista
+  }, [productos, busqueda, verInactivos, orden])
 
   const activos = productos.filter(p => p.ACTIVO).length
   const sinUso = productos.filter(p => p.USOS === 0).length
@@ -135,10 +141,21 @@ export default function TiposPrendaPage() {
       <input className="input mb-2" placeholder="Buscar tipo de prenda…"
         value={busqueda} onChange={e => setBusqueda(e.target.value)} />
 
-      <label className="flex items-center gap-2 mb-3 cursor-pointer">
-        <input type="checkbox" checked={verInactivos} onChange={e => setVerInactivos(e.target.checked)} />
-        <span className="text-xs text-gray-400">Mostrar también los desactivados</span>
-      </label>
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={verInactivos} onChange={e => setVerInactivos(e.target.checked)} />
+          <span className="text-xs text-gray-400">Mostrar también los desactivados</span>
+        </label>
+        <div className="flex gap-1 p-0.5 bg-gray-900 rounded-lg">
+          {[{ v: 'alfabetico', l: 'A–Z' }, { v: 'usos', l: 'Más usados' }].map(o => (
+            <button key={o.v} onClick={() => setOrden(o.v)}
+              className={`px-2.5 py-1 rounded-md text-xs transition-all
+                ${orden === o.v ? 'bg-mandarina-500 text-white' : 'text-gray-400 hover:text-white'}`}>
+              {o.l}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {aviso && (
         <div className="mb-3 flex items-center justify-between gap-3 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5">

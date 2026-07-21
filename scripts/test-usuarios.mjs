@@ -302,5 +302,33 @@ console.log('\n== Despacho: que cuenta como cerrado ==')
   check('el PATCH acepta body.NOTA', /if \(body\.NOTA\)/.test(api))
 }
 
+console.log('\n== Catalogo de tipos de prenda: orden y busqueda ==')
+{
+  const cat = readFileSync(new URL('../lib/db/catalogo.js', import.meta.url), 'utf8')
+  // Sin ORDER BY, Postgres devuelve el orden fisico de la tabla: los ~60 tipos
+  // salian desordenados en el selector.
+  check('la consulta a Supabase ordena por nombre', /\.order\('nombre'\)/.test(cat))
+  check('hay un ordenador alfabetico en español',
+    /function ordenar\(/.test(cat) && /localeCompare/.test(cat) && /'es'/.test(cat))
+  check('el fallback tambien sale ordenado', /return ordenar\(FALLBACK\)/.test(cat))
+
+  // Réplica del comparador que usa el repo.
+  const ordenar = (l) => [...l].sort((a, b) =>
+    String(a.NOMBRE).localeCompare(String(b.NOMBRE), 'es', { sensitivity: 'base' }))
+  const r = ordenar([
+    { NOMBRE: 'ÑANDU' }, { NOMBRE: 'ZAPATO' }, { NOMBRE: 'ÁRBOL' },
+    { NOMBRE: 'BUZO' }, { NOMBRE: 'NORMAL' },
+  ]).map(x => x.NOMBRE)
+  check('las tildes no se van al final', r[0] === 'ÁRBOL', r.join(','))
+  check('la Ñ va despues de la N', r.indexOf('ÑANDU') > r.indexOf('NORMAL'), r.join(','))
+  check('orden alfabetico completo', r.join(',') === 'ÁRBOL,BUZO,NORMAL,ÑANDU,ZAPATO', r.join(','))
+
+  // El buscador del selector: sin tildes y priorizando los que empiezan igual.
+  const sel = readFileSync(new URL('../components/pedido/SelectorTipoPrenda.js', import.meta.url), 'utf8')
+  check('el selector ignora tildes al buscar', /replace\(\/\[ÓÒÖÔ\]\/g, 'O'\)/.test(sel))
+  check('prioriza los que EMPIEZAN por lo escrito', /startsWith\(q\)/.test(sel))
+  check('la opcion de crear va primero', /puedeCrear \? \['__crear__'/.test(sel))
+}
+
 console.log(`\n${ok} pasaron, ${fail} fallaron\n`)
 process.exit(fail === 0 ? 0 : 1)
