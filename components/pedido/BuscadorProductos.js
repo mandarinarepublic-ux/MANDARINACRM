@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { subirFoto, subirArchivo } from '@/lib/subirImagen'
+import SelectorTipoPrenda from '@/components/pedido/SelectorTipoPrenda'
 
 const TALLAS = ['4XL','3XL','2XL','XL','L','M','S','XS','12','10','9','8','7','6','5','4','3','2','1 AÑO']
 
@@ -335,29 +336,42 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
 function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false }) {
   const [catalogoProductos, setCatalogoProductos] = useState([])
   const [nombre, setNombre] = useState('')
-  const [nuevoNombre, setNuevoNombre] = useState('')
   // FIX: defaults correctos — cantidad 0, precio 0, área vacía
   const [data, setData] = useState({ color: '', talla: '', cantidad: '', precio: '', area: '', detalle: '' })
   const [fotos, setFotos] = useState({})
-  const [addingNew, setAddingNew] = useState(false)
+  const [creando, setCreando] = useState(false)
+  const [errorCatalogo, setErrorCatalogo] = useState('')
 
   useEffect(() => {
     fetch('/api/productos').then(r => r.json()).then(d => setCatalogoProductos(d.productos || []))
   }, [])
 
-  async function agregarNuevoProducto() {
-    if (!nuevoNombre.trim()) return
-    await fetch('/api/productos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: nuevoNombre.trim().toUpperCase() }),
-    })
-    const r = await fetch('/api/productos')
-    const d = await r.json()
-    setCatalogoProductos(d.productos || [])
-    setNombre(nuevoNombre.trim().toUpperCase())
-    setNuevoNombre('')
-    setAddingNew(false)
+  /** Crea el tipo de prenda y lo deja seleccionado. Devuelve true si salió bien. */
+  async function crearTipoPrenda(nuevo) {
+    setCreando(true)
+    setErrorCatalogo('')
+    try {
+      const res = await fetch('/api/productos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: nuevo }),
+      })
+      const body = await res.json().catch(() => ({}))
+      // Antes no se miraba la respuesta: si fallaba, el producto simplemente no
+      // aparecía y no había forma de saber por qué.
+      if (!res.ok) { setErrorCatalogo(body.error || `Error ${res.status}`); return false }
+
+      const r = await fetch('/api/productos')
+      const d = await r.json()
+      setCatalogoProductos(d.productos || [])
+      setNombre(body.nombre || nuevo)
+      return true
+    } catch (e) {
+      setErrorCatalogo(e.message || 'Error de conexión')
+      return false
+    } finally {
+      setCreando(false)
+    }
   }
 
   const valido = nombre && data.color && data.talla && data.area && parseInt(data.cantidad||0) >= 1 && parseFloat(data.precio||0) > 0 && data.detalle
@@ -382,21 +396,15 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false }) {
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="label">Nombre del producto *</label>
-          <select className="input flex-1 w-full" value={nombre} onChange={e => {
-            if (e.target.value === '__nuevo__') { setAddingNew(true); return }
-            setNombre(e.target.value)
-          }}>
-            <option value="">— Seleccionar —</option>
-            {catalogoProductos.map(p => <option key={p.NOMBRE}>{p.NOMBRE}</option>)}
-            <option value="__nuevo__">+ Agregar nuevo...</option>
-          </select>
-          {addingNew && (
-            <div className="flex gap-2 mt-2">
-              <input className="input flex-1" placeholder="Nombre del nuevo producto"
-                value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value.toUpperCase())} />
-              <button onClick={agregarNuevoProducto} className="btn-primary px-3 text-sm">Agregar</button>
-              <button onClick={() => setAddingNew(false)} className="btn-secondary px-3 text-sm">✕</button>
-            </div>
+          <SelectorTipoPrenda
+            valor={nombre}
+            onChange={setNombre}
+            productos={catalogoProductos}
+            onCrear={crearTipoPrenda}
+            creando={creando}
+          />
+          {errorCatalogo && (
+            <p className="text-xs text-red-400 mt-1">⚠️ {errorCatalogo}</p>
           )}
         </div>
         <div>
