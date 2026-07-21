@@ -67,6 +67,13 @@ export async function PATCH(req, { params }) {
       })
     }
 
+    // Nota libre para la bitácora, sin tocar ningún campo del pedido. La usa
+    // Despacho al cerrar un pedido SIN guía (taxi, retiro en tienda), para que
+    // quede constancia de por qué se cerró y quién lo hizo.
+    if (body.NOTA) {
+      changes.push({ campo: 'NOTA', antes: '', despues: String(body.NOTA).slice(0, 500) })
+    }
+
     for (const c of changes) {
       await logCambio(id, c.campo, c.antes, c.despues, usuarioId)
     }

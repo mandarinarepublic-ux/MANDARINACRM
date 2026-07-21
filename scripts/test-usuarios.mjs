@@ -273,5 +273,34 @@ console.log('\n== Acceso por tienda ==')
     [ADMIN, GRACE, MAJO, CLEVER, SIN].every(u => tiendasDisponibles(u, TODAS).length > 0))
 }
 
+console.log('\n== Despacho: que cuenta como cerrado ==')
+{
+  const src = readFileSync(new URL('../app/dashboard/despacho/page.js', import.meta.url), 'utf8')
+  const m = src.match(/const ESTADOS_CERRADOS = \[([^\]]*)\]/)
+  const cerrados = m ? m[1].split(',').map(s => s.trim().replace(/^'|'$/g, '')).filter(Boolean) : []
+
+  check('COMPLETADO cierra', cerrados.includes('COMPLETADO'))
+  check('ENTREGADO cierra', cerrados.includes('ENTREGADO'))
+  check('CANCELADO cierra', cerrados.includes('CANCELADO'))
+  // El fondo del problema: DESPACHO lo pone el auto-avance cuando produccion
+  // marca el ultimo item LISTO. No significa que haya salido.
+  check('DESPACHO NO cierra', !cerrados.includes('DESPACHO'))
+  check('EN_FABRICA NO cierra', !cerrados.includes('EN_FABRICA'))
+
+  // Ya no se exige que los items esten en LISTO para que el pedido aparezca:
+  // los disenadores no siempre los marcan.
+  check('la lista no exige items en LISTO',
+    !/every\(i => i\.SUBESTADO === 'LISTO'\)/.test(src))
+  check('existe el cierre sin guia', /completarSinGuia/.test(src))
+  check('el cierre sin guia deja nota en bitacora',
+    /completarSinGuia[\s\S]{0,900}NOTA:/.test(src))
+  check('el cierre sin guia avisa del saldo pendiente',
+    /completarSinGuia[\s\S]{0,600}MONTO_PENDIENTE/.test(src))
+
+  // La API debe aceptar esa nota, o el rastro se perderia en silencio.
+  const api = readFileSync(new URL('../app/api/pedidos/[id]/route.js', import.meta.url), 'utf8')
+  check('el PATCH acepta body.NOTA', /if \(body\.NOTA\)/.test(api))
+}
+
 console.log(`\n${ok} pasaron, ${fail} fallaron\n`)
 process.exit(fail === 0 ? 0 : 1)

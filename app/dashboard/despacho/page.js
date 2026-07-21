@@ -5,6 +5,25 @@ import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha } from '@/lib/parseFecha'
 
+// Un pedido está CERRADO para despacho cuando alguien lo dio por salido:
+// COMPLETADO (guía registrada o cerrado a mano), ENTREGADO o CANCELADO.
+//
+// DESPACHO NO cierra: ese estado lo pone solo el sistema cuando producción marca
+// el último ítem como LISTO, y significa "la fábrica terminó", no "ya salió".
+// Contarlo como cerrado hacía que el pedido desapareciera de la lista sin que
+// nadie lo despachara: había 225 pedidos así, ninguno con guía.
+const ESTADOS_CERRADOS = ['COMPLETADO', 'ENTREGADO', 'CANCELADO']
+const esCerrado = (p) => ESTADOS_CERRADOS.includes(p?.ESTADO_PEDIDO)
+
+const ESTADO_ETIQUETA = {
+  PENDIENTE_FABRICA: { txt: '⏳ Pend. fábrica', cls: 'bg-gray-500/20 text-gray-400' },
+  EN_FABRICA:        { txt: '🏭 En producción', cls: 'bg-blue-500/20 text-blue-400' },
+  DESPACHO:          { txt: '📦 Listo para despachar', cls: 'bg-yellow-500/20 text-yellow-400' },
+  COMPLETADO:        { txt: '✅ Despachado', cls: 'bg-green-500/20 text-green-400' },
+  ENTREGADO:         { txt: '🏠 Entregado', cls: 'bg-green-500/20 text-green-400' },
+  CANCELADO:         { txt: '✕ Cancelado', cls: 'bg-red-500/20 text-red-400' },
+}
+
 function resizeImageBase64(file) {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -66,16 +85,13 @@ export default function DespachosPage() {
         setTimeout(() => loadPedidos(intentos + 1), 1500)
         return
       }
+      // Entra TODO el pedido vivo, sin exigir que sus ítems estén en LISTO.
+      // Antes solo aparecían los EN_FABRICA con todos los ítems marcados LISTO, y
+      // como no todos los diseñadores los marcan, había pedidos ya terminados que
+      // nunca llegaban a esta pantalla. Un pedido se cierra por decisión de
+      // despacho, no por el estado de los botones de producción.
+      // Se traen TODOS: las pestañas separan pendientes de cerrados.
       const lista = (data.pedidos || [])
-        .filter(p =>
-          p.ESTADO_PEDIDO === 'COMPLETADO' ||
-          p.ESTADO_PEDIDO === 'DESPACHO' ||
-          (p.ESTADO_PEDIDO === 'EN_FABRICA' &&
-           (p.items || []).length > 0 &&
-           (p.items || [])
-             .filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
-             .every(i => i.SUBESTADO === 'LISTO'))
-        )
         .sort((a, b) => {
           const diff = (parseFecha(b.FECHA_PEDIDO)||new Date(0)) - (parseFecha(a.FECHA_PEDIDO)||new Date(0))
           if (diff !== 0) return diff
@@ -88,9 +104,8 @@ export default function DespachosPage() {
   const hayFecha = fechaDesde || fechaHasta
 
   const filtered = pedidos.filter(p => {
-    const esCompletado = p.ESTADO_PEDIDO === 'COMPLETADO' || p.ESTADO_PEDIDO === 'DESPACHO'
-    if (tab === 'PENDIENTE' && esCompletado) return false
-    if (tab === 'COMPLETADO' && !esCompletado) return false
+    if (tab === 'PENDIENTE' && esCerrado(p)) return false
+    if (tab === 'COMPLETADO' && !esCerrado(p)) return false
     if (busqueda && !coincideBusqueda(p, busqueda)) return false
     if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
     if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO); const h = new Date(fechaHasta); h.setHours(23,59,59); if (!f || f > h) return false }
@@ -103,8 +118,8 @@ export default function DespachosPage() {
   function expandirTodos() { setExpandedPedidos(new Set(paginados.map(p => p.PEDIDO_ID))) }
   function contraerTodos()  { setExpandedPedidos(new Set()) }
 
-  const pendienteCount = pedidos.filter(p => p.ESTADO_PEDIDO !== 'COMPLETADO' && p.ESTADO_PEDIDO !== 'DESPACHO').length
-  const completadoCount = pedidos.filter(p => p.ESTADO_PEDIDO === 'COMPLETADO' || p.ESTADO_PEDIDO === 'DESPACHO').length
+  const pendienteCount = pedidos.filter(p => !esCerrado(p)).length
+  const completadoCount = pedidos.filter(p => esCerrado(p)).length
 
   async function handleFotoGuia(file) {
     if (!file) return
@@ -112,6 +127,41 @@ export default function DespachosPage() {
       const base64 = await resizeImageBase64(file)
       setGuia(g => ({ ...g, fotoBase64: base64, fotoPreview: base64 }))
     } catch(e) { console.error('Error foto:', e) }
+  }
+
+  /**
+   * Cierra el pedido sin número de guía (taxi, retiro en tienda, entrega en mano).
+   * Deja constancia en la bitácora de que se cerró sin guía y de quién lo hizo,
+   * para que después se pueda distinguir de un despacho con transportista.
+   */
+  async function completarSinGuia(p) {
+    const pendiente = parseFloat(p.MONTO_PENDIENTE || 0)
+    const aviso = pendiente > 0.01
+      ? `\n\n⚠️ OJO: este pedido debe $${pendiente.toFixed(2)}. Cobra antes de entregarlo.`
+      : ''
+    if (!window.confirm(
+      `¿Marcar ${p.PEDIDO_ID} como entregado SIN guía?\n\n` +
+      `Úsalo para envíos en taxi, entregas en mano o retiros en tienda.${aviso}`
+    )) return
+
+    setSaving(true)
+    setSavingMsg('Cerrando pedido...')
+    try {
+      const res = await fetch(`/api/pedidos/${p.PEDIDO_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ESTADO_PEDIDO: 'COMPLETADO',
+          NOTA: `Entregado sin guía (taxi / retiro en tienda) por ${user?.nombre || 'despacho'}`,
+          _usuarioId: user?.id,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { alert('Error: ' + (data.error || 'No se pudo cerrar el pedido')); return }
+      await loadPedidos()
+    } catch (e) {
+      alert('Error de conexión: ' + (e?.message || e))
+    } finally { setSaving(false); setSavingMsg('') }
   }
 
   async function registrarDespacho(pedidoId) {
@@ -220,7 +270,9 @@ export default function DespachosPage() {
             </div>
             <div className="space-y-2">
               {paginados.map(p => {
-                const esCompletado = p.ESTADO_PEDIDO === 'COMPLETADO' || p.ESTADO_PEDIDO === 'DESPACHO'
+                const esCompletado = esCerrado(p)
+                const etiqueta = ESTADO_ETIQUETA[p.ESTADO_PEDIDO] ||
+                  { txt: p.ESTADO_PEDIDO, cls: 'bg-gray-500/20 text-gray-400' }
                 const montoTotal = parseFloat(p.MONTO_TOTAL || 0)
                 const montoPendiente = parseFloat(p.MONTO_PENDIENTE || 0)
                 const itemsActivos = (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
@@ -242,9 +294,10 @@ export default function DespachosPage() {
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="font-mono font-bold text-white">{p.PEDIDO_ID}</span>
                           <span className="text-sm">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
-                          {esCompletado
-                            ? <span className="badge bg-green-500/20 text-green-400 text-xs">✅ Completado</span>
-                            : <span className="badge bg-yellow-500/20 text-yellow-400 text-xs">📦 Listo</span>}
+                          {/* El estado REAL, no "listo/completado": el chico de
+                              despacho necesita distinguir lo que sigue en la
+                              fábrica de lo que ya está para salir. */}
+                          <span className={`badge text-xs ${etiqueta.cls}`}>{etiqueta.txt}</span>
                           {montoPendiente > 0.01
                             ? <span className="text-xs text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full">Debe ${montoPendiente.toFixed(2)}</span>
                             : <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">✓ Pagado</span>}
@@ -267,11 +320,22 @@ export default function DespachosPage() {
                             Ver pedido completo →
                           </Link>
                           {!esCompletado && (
-                            <button
-                              onClick={() => setSelectedPedido(p.PEDIDO_ID === selectedPedido ? null : p.PEDIDO_ID)}
-                              className="bg-mandarina-500 hover:bg-mandarina-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
-                              {selectedPedido === p.PEDIDO_ID ? '✕ Cancelar' : '🚚 Registrar guía'}
-                            </button>
+                            <div className="flex gap-2">
+                              {/* No todo sale con guía: hay envíos en taxi y
+                                  clientes que retiran en tienda. Sin esta salida,
+                                  esos pedidos se quedaban abiertos para siempre. */}
+                              <button
+                                onClick={() => completarSinGuia(p)}
+                                disabled={saving}
+                                className="bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all disabled:opacity-50">
+                                ✅ Entregado sin guía
+                              </button>
+                              <button
+                                onClick={() => setSelectedPedido(p.PEDIDO_ID === selectedPedido ? null : p.PEDIDO_ID)}
+                                className="bg-mandarina-500 hover:bg-mandarina-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
+                                {selectedPedido === p.PEDIDO_ID ? '✕ Cancelar' : '🚚 Registrar guía'}
+                              </button>
+                            </div>
                           )}
                         </div>
 
