@@ -18,7 +18,7 @@ async function cargar(rel) {
   return import(pathToFileURL(destino).href)
 }
 
-const { normalizarTelefono, pixelDeTienda, capiConfigurado } = await cargar('../lib/metaCapi.js')
+const { normalizarTelefono, pixelDeTienda, capiConfigurado, debeEnviarCapi } = await cargar('../lib/metaCapi.js')
 
 let ok = 0, fail = 0
 function check(nombre, condicion, detalle = '') {
@@ -72,13 +72,13 @@ console.log('\n== Router por tienda (mismo criterio que Make) ==')
   check('INDSTORE va al de IND', pixelDeTienda('INDSTORE') === 'PIXEL_IND')
   check('IND en minusculas tambien', pixelDeTienda('indstore') === 'PIXEL_IND')
 
-  // OJO: el router de Make se llama "NO ES MANDARINA (INDSTORE / YAW)", pero esa
-  // rama NUNCA recibia a YAW. El CRM etiquetaba la tienda con
-  // `includes('IND') ? 'INDSTORE' : 'MANDARINA'`, asi que 'YAW' llegaba a Make
-  // ya rotulado como MANDARINA. Se conserva ese comportamiento para no mover el
-  // matching sin querer: las ventas YAW siguen contando en el pixel de Mandarina.
-  check('YAW va al pixel de Mandarina, igual que en Make',
-    pixelDeTienda('YAW') === 'PIXEL_MAN', pixelDeTienda('YAW'))
+  // YAW NO pauta en Meta: no debe enviarse a ningun pixel. Esto NUNCA estuvo
+  // implementado — el CRM rotulaba YAW como MANDARINA y sus ventas ensuciaban ese
+  // pixel. Ahora se excluye explicitamente.
+  check('YAW no va a ningun pixel', pixelDeTienda('YAW') === null, String(pixelDeTienda('YAW')))
+  check('debeEnviarCapi excluye YAW', debeEnviarCapi('YAW') === false)
+  check('debeEnviarCapi acepta MANDARINA e INDSTORE',
+    debeEnviarCapi('MANDARINA') && debeEnviarCapi('INDSTORE'))
   check('vacio cae en Mandarina', pixelDeTienda('') === 'PIXEL_MAN')
 }
 

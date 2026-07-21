@@ -273,6 +273,20 @@ export default function NuevoPedidoPage() {
     if (err2) { setError(err2); setStep(2); return }
     if (err3) { setError(err3); setStep(3); return }
 
+    // El check "emitir factura" nace MARCADO, así que sin este aviso se emitían
+    // facturas al SRI que el cliente no pidió. Se confirma con los datos reales
+    // ANTES de crear el pedido, para poder volver y desmarcar si fue un error.
+    if (emitirFactura) {
+      const ok = window.confirm(
+        '🧾 Se emitirá FACTURA ELECTRÓNICA al SRI:\n\n' +
+        `Cliente: ${cliente.nombre || '(sin nombre)'}\n` +
+        `${tipoId === 'RUC' ? 'RUC' : 'Cédula'}: ${cliente.cedula}\n` +
+        `Total: $${montoTotal.toFixed(2)}\n\n` +
+        'Si el cliente NO pidió factura, dale Cancelar y desmarca "Emitir factura electrónica".'
+      )
+      if (!ok) { setStep(isYAW ? 2 : 3); return }
+    }
+
     setLoading(true); setError('')
 
     const direccionFinal = usarMapa ? direccionTexto : [cliente.ciudad, cliente.direccion].filter(Boolean).join(': ')

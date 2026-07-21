@@ -5,7 +5,7 @@ import { listPedidos, listPedidoIds, createPedido } from '@/lib/db/pedidos'
 import { upsertClienteByCedula } from '@/lib/db/clientes'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
-import { enviarPurchase, capiConfigurado } from '@/lib/metaCapi'
+import { enviarPurchase, capiConfigurado, debeEnviarCapi } from '@/lib/metaCapi'
 
 export const dynamic = 'force-dynamic'
 
@@ -196,7 +196,11 @@ export async function POST(req) {
     // activa poniendo las variables en Vercel, sin desplegar de nuevo, y se
     // revierte quitándolas.
     try {
-      if (capiConfigurado()) {
+      // YAW no pauta en Meta: sus ventas no se envían por ninguno de los dos
+      // caminos. Antes sí se enviaban, rotuladas como MANDARINA.
+      if (!debeEnviarCapi(tiendaId)) {
+        // nada que hacer
+      } else if (capiConfigurado()) {
         enviarPurchase({ pedidoId, tiendaId, cliente, montoTotal })
           .catch(err => console.error('META CAPI error:', err.message))
       } else {
