@@ -310,6 +310,29 @@ export default function DespachosPage() {
                       <span className="text-gray-600 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
                     </button>
 
+                    {/* Acciones SIEMPRE visibles: con ~150 pedidos pendientes,
+                        obligar a expandir cada uno para cerrarlo es inviable.
+                        Van fuera del <button> de arriba porque no se pueden anidar
+                        botones dentro de un botón. */}
+                    {!esCompletado && (
+                      <div className="px-4 pb-3 -mt-1 flex gap-2">
+                        <button
+                          onClick={() => completarSinGuia(p)}
+                          disabled={saving}
+                          className="flex-1 bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl transition-all disabled:opacity-50">
+                          ✅ Entregado sin guía
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedPedido(p.PEDIDO_ID === selectedPedido ? null : p.PEDIDO_ID)
+                            setExpandedPedidos(prev => new Set(prev).add(p.PEDIDO_ID))
+                          }}
+                          className="flex-1 bg-mandarina-500 hover:bg-mandarina-600 text-white text-xs font-bold px-3 py-2.5 rounded-xl transition-all">
+                          🚚 Registrar guía
+                        </button>
+                      </div>
+                    )}
+
                     {/* Contenido expandido */}
                     {isExpanded && (
                       <div className="border-t border-gray-800 p-4 space-y-3">
@@ -319,24 +342,7 @@ export default function DespachosPage() {
                             className="text-xs text-mandarina-400 hover:underline">
                             Ver pedido completo →
                           </Link>
-                          {!esCompletado && (
-                            <div className="flex gap-2">
-                              {/* No todo sale con guía: hay envíos en taxi y
-                                  clientes que retiran en tienda. Sin esta salida,
-                                  esos pedidos se quedaban abiertos para siempre. */}
-                              <button
-                                onClick={() => completarSinGuia(p)}
-                                disabled={saving}
-                                className="bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all disabled:opacity-50">
-                                ✅ Entregado sin guía
-                              </button>
-                              <button
-                                onClick={() => setSelectedPedido(p.PEDIDO_ID === selectedPedido ? null : p.PEDIDO_ID)}
-                                className="bg-mandarina-500 hover:bg-mandarina-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
-                                {selectedPedido === p.PEDIDO_ID ? '✕ Cancelar' : '🚚 Registrar guía'}
-                              </button>
-                            </div>
-                          )}
+                          {/* Las acciones viven arriba, siempre visibles. */}
                         </div>
 
                         <div className="space-y-2">
