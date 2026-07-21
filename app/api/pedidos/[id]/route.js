@@ -55,13 +55,16 @@ export async function PATCH(req, { params }) {
 
     // Marcar impreso para producción (fecha + usuario). Va por su propio dual-write
     // (usa timestamp ISO para Supabase, no el string de la hoja).
+    let impresion = null
     if (body.marcarImpreso) {
+      // markImpreso devuelve el valor REALMENTE persistido (difiere por backend),
+      // para que la bitácora no registre un valor distinto del que quedó guardado.
+      impresion = await markImpreso(id, usuarioId)
       changes.push({
         campo: 'IMPRESION_PRODUCCION',
         antes: pedido.FECHA_IMPRESION_PRODUCCION || '(nunca impreso)',
-        despues: now,
+        despues: impresion?.fecha || now,
       })
-      await markImpreso(id, usuarioId)
     }
 
     for (const c of changes) {
@@ -160,7 +163,11 @@ export async function PATCH(req, { params }) {
       }
     }
 
-    return Response.json({ ok: true })
+    return Response.json(
+      impresion
+        ? { ok: true, fechaImpresion: impresion.fecha, impresoPor: impresion.usuario }
+        : { ok: true }
+    )
   } catch (e) {
     console.error('PATCH pedido error:', e)
     return Response.json({ error: e.message }, { status: 500 })

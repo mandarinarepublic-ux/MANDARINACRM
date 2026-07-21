@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha } from '@/lib/parseFecha'
+import { parseFecha, diasHastaEntrega } from '@/lib/parseFecha'
 
 // ─── Constantes de etapa ───────────────────────────────────────────────────────
 // El flujo físico de una prenda: ✂️ CORTE → 🏭 PRODUCCIÓN → 🚚 DESPACHO
@@ -114,8 +114,7 @@ function clasificarPedido(p) {
 }
 
 function diasRestantes(p) {
-  if (!p.FECHA_ENTREGA_PROMETIDA) return null
-  return Math.ceil((new Date(p.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000)
+  return diasHastaEntrega(p.FECHA_ENTREGA_PROMETIDA)
 }
 
 // Dot de color por etapa de la prenda (para el mini-progreso del pedido)

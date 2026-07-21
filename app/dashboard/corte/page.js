@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha } from '@/lib/parseFecha'
+import { parseFecha, diasHastaEntrega } from '@/lib/parseFecha'
 
 const CORTE_CONFIG = {
   PENDIENTE:   { label: '✂️ Pendiente',  color: 'bg-gray-600' },
@@ -244,8 +244,7 @@ export default function CortePage() {
             <>
             <div className="space-y-3">
               {paginados.map(pedido => {
-                const diasR = pedido.FECHA_ENTREGA_PROMETIDA
-                  ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) : null
+                const diasR = diasHastaEntrega(pedido.FECHA_ENTREGA_PROMETIDA)
                 const urgente = diasR !== null && diasR <= 2
                 const isExpanded = expandedPedido === pedido.PEDIDO_ID
 

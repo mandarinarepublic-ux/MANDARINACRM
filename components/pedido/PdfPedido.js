@@ -1,4 +1,9 @@
 'use client'
+import { parseFechaCalendario, diasHastaFecha } from '@/lib/parseFecha'
+import { paginarItems, paginarItemsCliente, distribuirFilasCliente } from '@/lib/paginarItems'
+
+// Re-export por compatibilidad: las pantallas ya importaban paginarItems desde aquí.
+export { paginarItems, paginarItemsCliente, distribuirFilasCliente, pesoItem, CAPACIDAD_HOJA_CONF } from '@/lib/paginarItems'
 
 const LOGO_MANDARINA = '/logos/logo_mandarina.png'
 const LOGO_INDSTORE  = '/logos/logo_indstore.png'
@@ -8,14 +13,89 @@ const CUPON = {
   INDSTORE:  { codigo: 'INDLOVERS', url: 'https://indlovers.com/discount/INDLOVERS',     web: 'indlovers.com' },
 }
 
-function chunkArray(arr, size) {
-  const chunks = []
-  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
-  return chunks
-}
-
 const PAGE_W = 794
 const PAGE_H = 1123
+
+// Tope de texto por recuadro en la hoja de confección. La hoja tiene alto fijo
+// con overflow:hidden, así que un texto sin límite se cortaba a media palabra y
+// nadie se enteraba. Por encima de este tope se corta EXPLÍCITAMENTE, avisando a
+// quien confecciona que hay más texto en el sistema.
+const MAX_TEXTO_HOJA = 900
+
+function recortarTexto(t) {
+  const s = String(t || '')
+  if (s.length <= MAX_TEXTO_HOJA) return { texto: s, recortado: false }
+  return { texto: s.slice(0, MAX_TEXTO_HOJA).trimEnd() + '…', recortado: true }
+}
+
+function BloqueTexto({ valor, titulo, colorTitulo, fondo, borde }) {
+  const { texto, recortado } = recortarTexto(valor)
+  return (
+    <div style={{ backgroundColor:fondo, borderRadius:'7px', padding:'7px 9px', border:`1px solid ${borde}`, marginBottom:'6px' }}>
+      <div style={{ fontSize:'7px', color:colorTitulo, fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>{titulo}</div>
+      <div style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5, fontWeight:'600' }}>{texto}</div>
+      {recortado && (
+        <div style={{ fontSize:'8px', color:'#b91c1c', fontWeight:'800', marginTop:'3px' }}>
+          ⚠️ TEXTO RECORTADO — ver el detalle completo en el sistema
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Una prenda en la hoja del cliente. En franja de ancho completo la foto y la
+ * tipografía crecen; en media hoja se compacta para que la pareja calce pareja.
+ */
+function PrendaCliente({ item, numero, tiendaColor, anchoCompleto }) {
+  const foto = anchoCompleto ? 92 : 72
+  const instrucciones = item.DETALLE_PERSONALIZADO
+    ? recortarTexto(item.DETALLE_PERSONALIZADO)
+    : null
+
+  return (
+    <div style={{ backgroundColor:'#fafafa', borderRadius:'10px', border:'1px solid #e0e0e0', overflow:'hidden' }}>
+      <div style={{ float:'left', padding: anchoCompleto ? '11px 12px 11px 12px' : '9px 9px 9px 10px' }}>
+        {item.FOTO_PECHO_URL
+          ? <img src={item.FOTO_PECHO_URL} style={{ width:`${foto}px`, height:`${foto}px`, objectFit:'cover', borderRadius:'8px', border:'2px solid #e0e0e0', display:'block' }} alt="" />
+          : <div style={{ width:`${foto}px`, height:`${foto}px`, backgroundColor:'#eee', borderRadius:'8px' }} />
+        }
+      </div>
+      <div style={{ overflow:'hidden', padding: anchoCompleto ? '11px 14px 11px 0' : '9px 10px 9px 0' }}>
+        <div style={{ overflow:'hidden', marginBottom:'5px' }}>
+          <span style={{ float:'left', fontSize:'8px', fontWeight:'800', color:'#888', fontFamily:'monospace', lineHeight:'15px', marginRight:'6px' }}>#{numero}</span>
+          <span style={{ float:'left', fontSize: anchoCompleto ? '13px' : '11px', fontWeight:'800', color:'#1a1a1a', lineHeight:1.25, maxWidth: anchoCompleto ? '430px' : '150px' }}>{item.PRODUCTO_NOMBRE}</span>
+          <span style={{ float:'right', backgroundColor:tiendaColor+'18', borderRadius:'6px', padding:'2px 8px' }}>
+            <span style={{ fontSize: anchoCompleto ? '13px' : '12px', fontWeight:'900', color:tiendaColor }}>x{item.CANTIDAD}</span>
+          </span>
+          <div style={{ clear:'both' }} />
+        </div>
+        <div style={{ marginBottom: instrucciones ? '6px' : '0' }}>
+          {item.COLOR && (
+            <span style={{ display:'inline-block', backgroundColor:'#fff', border:'1px solid #e0e0e0', borderRadius:'6px', padding:'3px 8px', marginRight:'5px', marginBottom:'3px' }}>
+              <span style={{ fontSize:'8.5px', color:'#666' }}>Color </span>
+              <span style={{ fontSize:'10px', fontWeight:'800', color:'#1a1a1a' }}>{item.COLOR}</span>
+            </span>
+          )}
+          {item.TALLA && (
+            <span style={{ display:'inline-block', backgroundColor:'#fff', border:'1px solid #e0e0e0', borderRadius:'6px', padding:'3px 8px', marginBottom:'3px' }}>
+              <span style={{ fontSize:'8.5px', color:'#666' }}>Talla </span>
+              <span style={{ fontSize:'10px', fontWeight:'800', color:'#1a1a1a' }}>{item.TALLA}</span>
+            </span>
+          )}
+        </div>
+        {instrucciones && (
+          <div style={{ backgroundColor:'#fff8e1', borderRadius:'7px', padding:'6px 9px', border:'1px solid #ffe082' }}>
+            <div style={{ fontSize:'7px', color:'#b45309', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>📋 Instrucciones</div>
+            <div style={{ fontSize:'9.5px', color:'#1a1a1a', lineHeight:1.45, fontWeight:'600' }}>{instrucciones.texto}</div>
+            {instrucciones.recortado && <div style={{ fontSize:'8px', color:'#b91c1c', fontWeight:'800', marginTop:'2px' }}>⚠️ Texto recortado</div>}
+          </div>
+        )}
+      </div>
+      <div style={{ clear:'both' }} />
+    </div>
+  )
+}
 
 function Ficha({ label, value, color, big }) {
   return (
@@ -26,7 +106,12 @@ function Ficha({ label, value, color, big }) {
   )
 }
 
-export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
+export function PdfGraciasPagina({
+  pedido, items, filas, cliente, tiendaColor, offsetIdx = 0,
+  esPrimera = true, esUltima = true, paginaActual = 1, totalPaginas = 1,
+}) {
+  // `filas` es lo que se pinta; si solo llega `items` se distribuyen aquí.
+  filas = filas || distribuirFilasCliente(items)
   const esMandarina = pedido?.TIENDA_ID === 'MANDARINA'
   const esYaw       = pedido?.TIENDA_ID === 'YAW'
   const nombreCorto = cliente?.NOMBRE?.split(' ')[0] || 'Cliente'
@@ -35,11 +120,13 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
   const bgGradient = esMandarina
     ? 'linear-gradient(135deg, #c94800 0%, #e85d04 40%, #ff8c00 100%)'
     : 'linear-gradient(135deg, #6a0dad 0%, #c2185b 50%, #e91e8c 100%)'
-  const totalPrendas = (items||[]).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)
+  // Sobre TODAS las prendas del pedido, no solo las de esta hoja.
+  const totalPrendas = (pedido?.items || items || []).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)
 
   return (
     <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", backgroundColor:'#fff', width:`${PAGE_W}px`, height:`${PAGE_H}px`, overflow:'hidden', position:'relative', boxSizing:'border-box' }}>
 
+      {esPrimera ? (
       <div style={{ background:bgGradient, width:'100%', position:'relative', overflow:'hidden', padding:'32px 48px', boxSizing:'border-box' }}>
         <div style={{ position:'absolute', top:'-80px', right:'-80px', width:'280px', height:'280px', borderRadius:'50%', backgroundColor:'rgba(0,0,0,0.12)' }} />
         <div style={{ position:'absolute', bottom:'-60px', left:'30%', width:'200px', height:'200px', borderRadius:'50%', backgroundColor:'rgba(255,255,255,0.06)' }} />
@@ -86,10 +173,22 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
           <div style={{ clear:'both' }} />
         </div>
       </div>
+      ) : (
+        // Hojas de continuación: cabecera compacta, sin repetir saludo ni cupón.
+        <div style={{ borderBottom:`4px solid ${tiendaColor}`, padding:'14px 48px', backgroundColor:'#fafafa', overflow:'hidden', boxSizing:'border-box' }}>
+          {!esYaw && <img src={logo} style={{ float:'left', width:'34px', height:'34px', objectFit:'contain', marginRight:'12px' }} alt="logo" />}
+          <div style={{ float:'left' }}>
+            <div style={{ fontSize:'8px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'2px', fontWeight:'700', marginBottom:'2px' }}>Detalle de tu pedido — continuación</div>
+            <div style={{ fontSize:'18px', fontWeight:'900', color:'#1a1a1a', fontFamily:'monospace', lineHeight:1 }}>{pedido?.PEDIDO_ID}</div>
+          </div>
+          <div style={{ clear:'both' }} />
+        </div>
+      )}
 
       <div style={{ borderTop:'1.5px dashed #ccc' }} />
 
-      <div style={{ padding:'18px 48px 16px', boxSizing:'border-box' }}>
+      <div style={{ padding: esPrimera ? '18px 48px 16px' : '14px 48px 16px', boxSizing:'border-box' }}>
+        {esPrimera && (
         <div style={{ backgroundColor:'#fff', borderRadius:'14px', padding:'14px 18px', marginBottom:'14px', border:'2px solid #e0e0e0' }}>
           <div style={{ overflow:'hidden', marginBottom:'8px' }}>
             <span style={{ float:'left', fontSize:'10px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'2px', lineHeight:'24px', fontWeight:'700' }}>Datos de envío</span>
@@ -119,37 +218,38 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
             </div>
           )}
         </div>
+        )}
 
-        <div style={{ fontSize:'10px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'1.5px', marginBottom:'8px', fontWeight:'700' }}>Contenido · {totalPrendas} prenda(s)</div>
+        <div style={{ fontSize:'10px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'1.5px', marginBottom:'8px', fontWeight:'700' }}>
+          {esPrimera ? `Contenido · ${totalPrendas} prenda(s)` : 'Contenido (continuación)'}
+        </div>
 
-        {chunkArray(items||[], 2).map((fila, fi) => (
-          <div key={fi} style={{ overflow:'hidden', marginBottom:'8px' }}>
-            {fila.map((item, ci) => (
-              <div key={ci} style={{ float:'left', width:'50%', paddingRight:ci===0?'7px':'0', boxSizing:'border-box' }}>
-                <div style={{ backgroundColor:'#fafafa', borderRadius:'10px', border:'1px solid #e0e0e0', overflow:'hidden' }}>
-                  <div style={{ float:'left', padding:'8px 8px 8px 10px' }}>
-                    {item.FOTO_PECHO_URL
-                      ? <img src={item.FOTO_PECHO_URL} style={{ width:'78px', height:'78px', objectFit:'cover', borderRadius:'8px', border:'2px solid #e0e0e0', display:'block' }} />
-                      : <div style={{ width:'78px', height:'78px', backgroundColor:'#eee', borderRadius:'8px' }} />
-                    }
-                  </div>
-                  <div style={{ overflow:'hidden', padding:'8px 10px 8px 0' }}>
-                    <div style={{ fontSize:'10px', fontWeight:'800', color:'#1a1a1a', marginBottom:'5px', lineHeight:1.3 }}>{item.PRODUCTO_NOMBRE}</div>
-                    {item.COLOR && <div style={{ fontSize:'9px', color:'#1a1a1a', marginBottom:'2px' }}>Color: <strong>{item.COLOR}</strong></div>}
-                    {item.TALLA && <div style={{ fontSize:'9px', color:'#1a1a1a', marginBottom:'5px' }}>Talla: <strong>{item.TALLA}</strong></div>}
-                    <div style={{ backgroundColor:tiendaColor+'18', borderRadius:'6px', padding:'2px 7px', display:'inline-block' }}>
-                      <span style={{ fontSize:'12px', fontWeight:'900', color:tiendaColor }}>x{item.CANTIDAD}</span>
-                    </div>
-                  </div>
-                  <div style={{ clear:'both' }} />
+        {/* Filas de 1 o 2 prendas (ver distribuirFilasCliente): sola = franja de
+            ancho completo, en pareja = media hoja cada una.
+            A propósito NO se muestran estado, área ni casillas de control: eso es
+            información interna de la fábrica, no del cliente. */}
+        {(filas || []).map((fila, fIdx) => {
+          const anchoCompleto = fila.length === 1
+          const idxBase = offsetIdx + filas.slice(0, fIdx).reduce((s, f) => s + f.length, 0)
+          return (
+            <div key={fIdx} style={{ overflow:'hidden', marginBottom:'8px' }}>
+              {fila.map((item, ci) => (
+                <div key={ci} style={{
+                  float:'left',
+                  width: anchoCompleto ? '100%' : '50%',
+                  paddingRight: (!anchoCompleto && ci === 0) ? '7px' : '0',
+                  boxSizing:'border-box',
+                }}>
+                  <PrendaCliente item={item} numero={idxBase + ci + 1}
+                    tiendaColor={tiendaColor} anchoCompleto={anchoCompleto} />
                 </div>
-              </div>
-            ))}
-            <div style={{ clear:'both' }} />
-          </div>
-        ))}
+              ))}
+              <div style={{ clear:'both' }} />
+            </div>
+          )
+        })}
 
-        {(() => {
+        {esUltima && (() => {
           const total = parseFloat(pedido?.MONTO_TOTAL||0)
           const abonado = parseFloat(pedido?.MONTO_ABONADO||0)
           const saldo = total - abonado
@@ -177,7 +277,10 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
       </div>
 
       <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'9px 48px', backgroundColor:'#f5f5f5', borderTop:'1px solid #e0e0e0', overflow:'hidden', boxSizing:'border-box' }}>
-        <span style={{ float:'left', fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>{pedido?.PEDIDO_ID}</span>
+        <span style={{ float:'left', fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>
+          {pedido?.PEDIDO_ID}
+          {totalPaginas > 1 && <span style={{ marginLeft:'8px', color:tiendaColor, fontWeight:'800' }}>p.{paginaActual}/{totalPaginas}</span>}
+        </span>
         <span style={{ float:'right', fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>{esMandarina?'MANDARINA REPUBLIC':esYaw?'YAW':'INDSTORE'}</span>
         <div style={{ clear:'both' }} />
       </div>
@@ -186,13 +289,39 @@ export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
   )
 }
 
+/**
+ * Hoja(s) del cliente. Se pagina igual que la de confección: con muchas prendas
+ * (ahora que cada una lleva su detalle e instrucciones) una sola hoja recortaba
+ * el contenido sin avisar.
+ *
+ * Para generar el PDF NO se usa este componente sino PdfGraciasPagina, un div
+ * atómico por hoja — si no, html2canvas captura todas apiladas y las aplasta en
+ * una sola A4. Esto es para el preview en pantalla.
+ */
+export function PdfGracias({ pedido, items, cliente, tiendaColor }) {
+  const paginas = paginarItemsCliente(items)
+  return (
+    <>
+      {paginas.map((pag, i) => (
+        <PdfGraciasPagina key={i} pedido={pedido} items={pag.items} filas={pag.filas} cliente={cliente}
+          tiendaColor={tiendaColor} offsetIdx={pag.offset}
+          esPrimera={i === 0} esUltima={i === paginas.length - 1}
+          paginaActual={i + 1} totalPaginas={paginas.length} />
+      ))}
+    </>
+  )
+}
+
 export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, totalPaginas, offsetIdx }) {
   const esMandarina = pedido?.TIENDA_ID === 'MANDARINA'
   const esYaw       = pedido?.TIENDA_ID === 'YAW'
   const logo = esMandarina ? LOGO_MANDARINA : LOGO_INDSTORE
-  const now = new Date()
-  const entrega = pedido?.FECHA_ENTREGA_PROMETIDA ? new Date(pedido.FECHA_ENTREGA_PROMETIDA) : null
-  const diasRestantes = entrega ? Math.ceil((entrega - now) / 86400000) : null
+  // La entrega es una FECHA, no un instante: Supabase la guarda a medianoche UTC
+  // y leerla como instante la corría un día hacia atrás en la hoja impresa.
+  const entrega = parseFechaCalendario(pedido?.FECHA_ENTREGA_PROMETIDA)
+  // Días de calendario completos, no diferencia de instantes (que dependía de la
+  // hora a la que se imprimiera la hoja).
+  const diasRestantes = diasHastaFecha(entrega)
   const urgente = diasRestantes !== null && diasRestantes <= 2
   const totalPrendas = (pedido?.items||[]).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)
   const areas = [...new Set((pedido?.items||[]).map(i=>i.AREA).filter(Boolean))].join(', ') || '—'
@@ -310,16 +439,12 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                   </div>
 
                   {item.DETALLE_PERSONALIZADO && (
-                    <div style={{ backgroundColor:'#fff8e1', borderRadius:'7px', padding:'7px 9px', border:'1px solid #ffe082', marginBottom:'6px' }}>
-                      <div style={{ fontSize:'7px', color:'#b45309', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>📋 Instrucciones</div>
-                      <div style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5, fontWeight:'600' }}>{item.DETALLE_PERSONALIZADO}</div>
-                    </div>
+                    <BloqueTexto valor={item.DETALLE_PERSONALIZADO} titulo="📋 Instrucciones"
+                      colorTitulo="#b45309" fondo="#fff8e1" borde="#ffe082" />
                   )}
                   {item.NOTAS_AREA && (
-                    <div style={{ backgroundColor:'#eff6ff', borderRadius:'7px', padding:'7px 9px', border:'1px solid #bfdbfe', marginBottom:'6px' }}>
-                      <div style={{ fontSize:'7px', color:'#1d4ed8', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>📝 Nota de área</div>
-                      <div style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5, fontWeight:'600' }}>{item.NOTAS_AREA}</div>
-                    </div>
+                    <BloqueTexto valor={item.NOTAS_AREA} titulo="📝 Nota de área"
+                      colorTitulo="#1d4ed8" fondo="#eff6ff" borde="#bfdbfe" />
                   )}
                   {item.ARCHIVO_DISENO_URL && (
                     <div style={{ backgroundColor:'#f0fdf4', borderRadius:'7px', padding:'7px 9px', border:'1px solid #bbf7d0' }}>
@@ -368,13 +493,13 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
 }
 
 export function PdfConfeccion({ pedido, items, tiendaColor }) {
-  const chunks = chunkArray(items||[], 3)
-  const total = Math.max(chunks.length, 1)
+  const paginas = paginarItems(items)
+  const total = paginas.length
   return (
     <>
-      {(chunks.length === 0 ? [[]] : chunks).map((pageItems, pIdx) => (
-        <PdfConfeccionPagina key={pIdx} pedido={pedido} items={pageItems} tiendaColor={tiendaColor}
-          paginaActual={pIdx+1} totalPaginas={total} offsetIdx={pIdx*3} />
+      {paginas.map((pag, pIdx) => (
+        <PdfConfeccionPagina key={pIdx} pedido={pedido} items={pag.items} tiendaColor={tiendaColor}
+          paginaActual={pIdx+1} totalPaginas={total} offsetIdx={pag.offset} />
       ))}
     </>
   )

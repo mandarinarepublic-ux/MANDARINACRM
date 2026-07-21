@@ -4,8 +4,8 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { ESTADO_LABELS, ESTADO_LABELS_LARGO } from '@/lib/labels'
-import { parseFecha } from '@/lib/parseFecha'
-import { PdfGracias, PdfConfeccion, PdfConfeccionPagina } from '@/components/pedido/PdfPedido'
+import { parseFecha, formatFechaHumana } from '@/lib/parseFecha'
+import { PdfGracias, PdfGraciasPagina, PdfConfeccion, PdfConfeccionPagina, paginarItems, paginarItemsCliente } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import ConversacionPanel from '@/components/pedido/ConversacionPanel'
 
@@ -59,8 +59,7 @@ export default function PedidoDetailPage() {
     } finally { setLoading(false) }
   }
 
-  const ITEMS_POR_PAG = 3
-  const H2C = { scale:2, useCORS:true, allowTaint:true, backgroundColor:'#ffffff', width:794, windowWidth:794, scrollX:0, scrollY:0, logging:false }
+  const H2C ={ scale:2, useCORS:true, allowTaint:true, backgroundColor:'#ffffff', width:794, windowWidth:794, scrollX:0, scrollY:0, logging:false }
 
   async function generatePDF() {
     setGeneratingPdf(true)
@@ -70,9 +69,11 @@ export default function PedidoDetailPage() {
       const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' })
       let primera = true
 
+      let omitidas = 0
       async function capturar(id) {
         const el = document.getElementById(id)
-        if (!el) return
+        // Antes salía en silencio: el PDF perdía hojas y nadie se enteraba.
+        if (!el) { omitidas++; return }
         await new Promise(r => setTimeout(r, 40))
         const canvas = await html2canvas(el, H2C)
         const img = canvas.toDataURL('image/jpeg', 0.92)
@@ -82,10 +83,13 @@ export default function PedidoDetailPage() {
         canvas.width = 1; canvas.height = 1
       }
 
-      await capturar('pdf-gracias')
-      const nPags = Math.max(1, Math.ceil((items||[]).length / ITEMS_POR_PAG))
+      const nPagsCliente = paginarItemsCliente(items).length
+      for (let i = 0; i < nPagsCliente; i++) await capturar(`pdf-gracias-${i}`)
+      const nPags = paginarItems(items).length
       for (let i = 0; i < nPags; i++) await capturar(`pdf-conf-${i}`)
 
+      if (primera) { alert('No se pudo generar ninguna hoja del PDF.'); return }
+      if (omitidas > 0) alert(`Atención: ${omitidas} hoja(s) no se pudieron generar.`)
       pdf.save(`${pedido.PEDIDO_ID}.pdf`)
     } catch(e) { alert('Error PDF: ' + e.message) }
     finally { setGeneratingPdf(false) }
@@ -531,9 +535,9 @@ export default function PedidoDetailPage() {
             <div className="text-base text-gray-400 mt-1">
               Fecha comprometida:
               <span className="text-white ml-2">
-                {pedido.FECHA_ENTREGA_PROMETIDA
-                  ? new Date(pedido.FECHA_ENTREGA_PROMETIDA).toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'})
-                  : '-'}
+                {parseFecha(pedido.FECHA_ENTREGA_PROMETIDA)
+                  ?.toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'})
+                  || '-'}
               </span>
             </div>
           </div>
@@ -584,6 +588,15 @@ export default function PedidoDetailPage() {
                                 if(c.startsWith('SUBESTADO')) return `🔧 ${c.replace('SUBESTADO ','')}: ${log.antes} → ${log.despues}`
                                 if(c.startsWith('EDICION')) return `✏️ ${c.replace('EDICION ','')} editado`
                                 if(c.startsWith('NOTA')) return `📝 Nota: ${log.despues}`
+                                if(c==='IMPRESION_PRODUCCION') {
+                                  // El valor guardado es la fecha cruda del backend (ISO en Supabase).
+                                  // El campo del pedido se SOBRESCRIBE en cada impresión, así que este
+                                  // es el único rastro de las anteriores: hay que poder leerlo.
+                                  const esReimpresion = log.antes && log.antes !== '(nunca impreso)'
+                                  return esReimpresion
+                                    ? `🖨️ REIMPRESO (anterior: ${formatFechaHumana(log.antes) || log.antes})`
+                                    : `🖨️ Impreso para producción`
+                                }
                                 return `${c}: ${log.despues}`
                               })()}
                             </div>
@@ -619,21 +632,20 @@ export default function PedidoDetailPage() {
       )}
 
       <div style={{position:'fixed',top:'-9999px',left:'-9999px',width:'794px',backgroundColor:'white',fontFamily:"'Helvetica Neue',Arial,sans-serif"}}>
-        <div id="pdf-gracias" style={{width:'794px'}}>
-          <PdfGracias pedido={pedido} items={items} cliente={cliente} tiendaColor={tiendaColor} />
-        </div>
-        {(() => {
-          const chunks = []
-          const it = items || []
-          for (let i = 0; i < it.length; i += ITEMS_POR_PAG) chunks.push(it.slice(i, i + ITEMS_POR_PAG))
-          if (chunks.length === 0) chunks.push([])
-          return chunks.map((pageItems, pIdx) => (
-            <div key={pIdx} id={`pdf-conf-${pIdx}`} style={{width:'794px'}}>
-              <PdfConfeccionPagina pedido={pedido} items={pageItems} tiendaColor={tiendaColor}
-                paginaActual={pIdx+1} totalPaginas={chunks.length} offsetIdx={pIdx*ITEMS_POR_PAG} />
-            </div>
-          ))
-        })()}
+        {paginarItemsCliente(items).map((pag, gIdx, todas) => (
+          <div key={gIdx} id={`pdf-gracias-${gIdx}`} style={{width:'794px'}}>
+            <PdfGraciasPagina pedido={pedido} items={pag.items} filas={pag.filas} cliente={cliente}
+              tiendaColor={tiendaColor} offsetIdx={pag.offset}
+              esPrimera={gIdx === 0} esUltima={gIdx === todas.length - 1}
+              paginaActual={gIdx + 1} totalPaginas={todas.length} />
+          </div>
+        ))}
+        {paginarItems(items).map((pag, pIdx, todas) => (
+          <div key={pIdx} id={`pdf-conf-${pIdx}`} style={{width:'794px'}}>
+            <PdfConfeccionPagina pedido={pedido} items={pag.items} tiendaColor={tiendaColor}
+              paginaActual={pIdx+1} totalPaginas={todas.length} offsetIdx={pag.offset} />
+          </div>
+        ))}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3">

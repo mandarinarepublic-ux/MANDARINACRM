@@ -3,8 +3,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha } from '@/lib/parseFecha'
-import { PdfConfeccion } from '@/components/pedido/PdfPedido'
+import { parseFecha, diasHastaEntrega } from '@/lib/parseFecha'
+import { PdfConfeccion, PdfConfeccionPagina, paginarItems } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 
 const SUBESTADO_CONFIG = {
@@ -401,8 +401,10 @@ export default function ProduccionPage() {
     })
 
   const totalPendientes = filtered.reduce((s, p) => s + p.itemsFiltrados.length, 0)
-  const urgentes = filtered.filter(p => p.FECHA_ENTREGA_PROMETIDA &&
-    Math.ceil((new Date(p.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) <= 2).length
+  const urgentes = filtered.filter(p => {
+    const d = diasHastaEntrega(p.FECHA_ENTREGA_PROMETIDA)
+    return d !== null && d <= 2
+  }).length
 
   const areaLabel = user?.rol === 'ADMIN' ? '' :
     (user?.areas?.length > 0 && user.areas[0] !== 'TODAS') ? ` · ${user.areas.join(', ')}` : ` · ${user?.rol}`
@@ -423,12 +425,31 @@ export default function ProduccionPage() {
     try {
       const { jsPDF } = await import('jspdf')
       const html2canvas = (await import('html2canvas')).default
-      const el = document.getElementById(`pdf-prod-${pedido.PEDIDO_ID}`)
-      if (!el) { alert('Error: elemento PDF no encontrado'); return }
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' })
+      // Una hoja por página, con addPage entre ellas. Antes se capturaba el
+      // contenedor ENTERO (N hojas de 1123px apiladas) y se metía en UNA sola A4
+      // con addImage(...,210,297): un pedido de 4 prendas salía aplastado al 50%
+      // e ilegible. Solo se veía bien con 1 sola hoja, por eso pasó desapercibido.
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297)
-      canvas.width = 1; canvas.height = 1
+      const paginas = paginarItems(pedido.items || [])
+      let capturadas = 0
+
+      for (let i = 0; i < paginas.length; i++) {
+        const el = document.getElementById(`pdf-prod-${pedido.PEDIDO_ID}-${i}`)
+        if (!el) continue
+        const canvas = await html2canvas(el, {
+          scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff',
+          width: 794, windowWidth: 794, scrollX: 0, scrollY: 0, logging: false,
+        })
+        if (capturadas > 0) pdf.addPage()
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297)
+        canvas.width = 1; canvas.height = 1
+        capturadas++
+      }
+
+      if (capturadas === 0) { alert('Error: no se pudo renderizar la orden de confección'); return }
+      if (capturadas < paginas.length) {
+        alert(`Atención: solo se generaron ${capturadas} de ${paginas.length} hojas.`)
+      }
       pdf.save(`${pedido.PEDIDO_ID}-confeccion.pdf`)
     } catch(err) {
       alert('Error generando PDF: ' + err.message)
@@ -540,8 +561,7 @@ export default function ProduccionPage() {
             </div>
             <div className="space-y-3">
               {paginados.map(pedido => {
-                const diasR = pedido.FECHA_ENTREGA_PROMETIDA
-                  ? Math.ceil((new Date(pedido.FECHA_ENTREGA_PROMETIDA) - new Date()) / 86400000) : null
+                const diasR = diasHastaEntrega(pedido.FECHA_ENTREGA_PROMETIDA)
                 const urgente = diasR !== null && diasR <= 2
                 const isExpanded = expandedPedidos.has(pedido.PEDIDO_ID)
                 const generando = generandoPdf === pedido.PEDIDO_ID
@@ -648,15 +668,27 @@ export default function ProduccionPage() {
       <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '794px', backgroundColor: 'white', zIndex: -1 }}>
         {(pdfPreviewPedido || (generandoPdf && pedidos.find(p => p.PEDIDO_ID === generandoPdf))) && (() => {
           const pedido = pdfPreviewPedido || pedidos.find(p => p.PEDIDO_ID === generandoPdf)
-          return pedido ? (
-            <div key={pedido.PEDIDO_ID} id={`pdf-prod-${pedido.PEDIDO_ID}`}>
-              <PdfConfeccion
-                pedido={pedido}
-                items={pedido.items || []}
-                tiendaColor={TIENDA_COLORS[pedido.TIENDA_ID] || '#FF6B00'}
-              />
+          if (!pedido) return null
+          // Un div atómico por hoja para que html2canvas capture cada A4 por
+          // separado (mismo patrón que /dashboard/impresion).
+          const paginas = paginarItems(pedido.items || [])
+          const tiendaColor = TIENDA_COLORS[pedido.TIENDA_ID] || '#FF6B00'
+          return (
+            <div key={pedido.PEDIDO_ID}>
+              {paginas.map((pag, i) => (
+                <div key={i} id={`pdf-prod-${pedido.PEDIDO_ID}-${i}`} style={{ width: '794px' }}>
+                  <PdfConfeccionPagina
+                    pedido={pedido}
+                    items={pag.items}
+                    tiendaColor={tiendaColor}
+                    paginaActual={i + 1}
+                    totalPaginas={paginas.length}
+                    offsetIdx={pag.offset}
+                  />
+                </div>
+              ))}
             </div>
-          ) : null
+          )
         })()}
       </div>
     </div>
