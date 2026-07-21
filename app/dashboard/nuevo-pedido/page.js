@@ -241,23 +241,24 @@ export default function NuevoPedidoPage() {
   }
 
   async function dispararFactura(pedidoId, clienteData, montoTotal) {
+    // Se llama a NUESTRO endpoint, no a Make directo: el servidor decide si emite
+    // en Dátil o reenvía a Make (según DATIL_DIRECTO), y así la key de Dátil nunca
+    // sale al navegador.
     const cedula = String(clienteData.cedula || '')
-    const sinImp = parseFloat((montoTotal / 1.15).toFixed(2))
-    const impuesto = parseFloat((montoTotal - sinImp).toFixed(2))
     try {
-      await fetch('https://hook.us2.make.com/mjvj01tevojz6ayp7rrtt7wc6oa7v11n', {
+      await fetch('/api/factura/emitir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          pedido_id:    pedidoId,
-          numero:       (clienteData.celular || '').replace(/\D/g, ''),
-          CI:           cedula,
-          tipo_id:      clienteData.tipoCodigo || (cedula.length === 13 ? '04' : '05'),
-          cliente:      clienteData.nombre,
-          email:        clienteData.email || 'info@mandarinaec.com',
-          total:        montoTotal.toFixed(2),
-          PrecioSinImp: sinImp.toFixed(2),
-          ValorImp:     impuesto.toFixed(2),
+          pedidoId,
+          montoTotal,
+          tipoId: clienteData.tipoCodigo || (cedula.length === 13 ? '04' : '05'),
+          cliente: {
+            nombre:  clienteData.nombre,
+            cedula,
+            celular: clienteData.celular,
+            email:   clienteData.email,
+          },
         }),
       })
     } catch(e) {
