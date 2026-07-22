@@ -3,7 +3,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { parseFecha } from '@/lib/parseFecha'
-import { PdfConfeccionPagina, paginarItems } from '@/components/pedido/PdfPedido'
+import { PdfConfeccion, PdfConfeccionPagina, paginarItems } from '@/components/pedido/PdfPedido'
+import PdfScaler from '@/components/pedido/PdfScaler'
 import { generarPdfDesdeIds } from '@/lib/generarPdf'
 
 // Color por tienda para la orden de confección (mismo criterio que Producción).
@@ -141,11 +142,12 @@ export default function CalendarioPage() {
   const [estados, setEstados] = useState(() => new Set(['red', 'amb', 'azu', 'grn']))
   const [subareas, setSubareas] = useState(() => new Set(AREAS_BASE))
   const [selDia, setSelDia] = useState(null)
-  const [pdfPedido, setPdfPedido] = useState(null)   // pedido montado off-screen para el PDF
+  const [previewPedido, setPreviewPedido] = useState(null)  // pedido cuya hoja se previsualiza
+  const [pdfPedido, setPdfPedido] = useState(null)   // pedido montado off-screen para descargar
   const [generandoPdf, setGenerandoPdf] = useState(null)
 
-  // Genera la orden de producción (confección) de un pedido, sin salir del calendario.
-  async function verPdfConfeccion(p) {
+  // Descarga la orden de producción (confección) del pedido en preview.
+  async function descargarPdfConfeccion(p) {
     if (generandoPdf) return
     setGenerandoPdf(p.PEDIDO_ID)
     setPdfPedido(p)
@@ -508,11 +510,11 @@ export default function CalendarioPage() {
                       </div>
                     </Link>
                     <span className={`badge text-[10px] ${ESTADO_META[k].chip} ${ESTADO_META[k].text} hidden sm:inline`}>{ESTADO_META[k].label}</span>
-                    {/* PDF de la orden de producción, sin salir del calendario. */}
-                    <button onClick={() => verPdfConfeccion(p)} disabled={!!generandoPdf}
-                      title="Orden de producción (PDF)"
-                      className="flex-shrink-0 text-xs font-bold px-2.5 py-2 rounded-lg bg-gray-800 border border-gray-700 text-mandarina-400 hover:bg-gray-700 disabled:opacity-50">
-                      {generandoPdf === p.PEDIDO_ID ? '⏳' : '🖨️ PDF'}
+                    {/* Preview de la hoja de producción, sin salir del calendario. */}
+                    <button onClick={() => setPreviewPedido(p)}
+                      title="Ver hoja de producción"
+                      className="flex-shrink-0 text-xs font-bold px-2.5 py-2 rounded-lg bg-gray-800 border border-gray-700 text-mandarina-400 hover:bg-gray-700">
+                      🖨️ Ver
                     </button>
                     <Link href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="text-gray-600 text-lg flex-shrink-0 hover:text-white">›</Link>
                   </div>
@@ -523,7 +525,41 @@ export default function CalendarioPage() {
         </div>
       )}
 
-      {/* Zona oculta: se monta solo el pedido cuyo PDF se está generando. */}
+      {/* Preview de la hoja de producción en pantalla (mismo patrón que Producción).
+          Muestra la orden escalada para que se vea en cualquier tamaño; el botón
+          descarga genera el PDF real desde la zona oculta. */}
+      {previewPedido && (
+        <div className="fixed inset-0 bg-black/90 z-50 overflow-auto p-4"
+          onClick={e => e.target === e.currentTarget && setPreviewPedido(null)}>
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold">
+                {TIENDA_META[previewPedido.TIENDA_ID]?.emoji} {previewPedido.PEDIDO_ID}
+                <span className="text-gray-500 text-sm font-normal ml-2">Orden de producción</span>
+              </h3>
+              <div className="flex gap-2">
+                <button onClick={() => descargarPdfConfeccion(previewPedido)}
+                  disabled={generandoPdf === previewPedido.PEDIDO_ID}
+                  className="btn-primary text-sm px-4 py-2 disabled:opacity-50">
+                  {generandoPdf === previewPedido.PEDIDO_ID ? '⏳...' : '⬇️ Descargar PDF'}
+                </button>
+                <button onClick={() => setPreviewPedido(null)} className="btn-secondary text-sm px-4 py-2">✕</button>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl overflow-hidden">
+              <PdfScaler>
+                <PdfConfeccion
+                  pedido={previewPedido}
+                  items={previewPedido.items || []}
+                  tiendaColor={TIENDA_COLORS[previewPedido.TIENDA_ID] || '#FF6B00'}
+                />
+              </PdfScaler>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Zona oculta: se monta solo al descargar, para capturar cada hoja a 794px. */}
       {pdfPedido && (
         <div style={{ position:'fixed', top:'-9999px', left:'-9999px', width:'794px', backgroundColor:'white', fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
           {paginarItems(pdfPedido.items).map((pag, i, todas) => (
