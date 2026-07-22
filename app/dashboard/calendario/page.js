@@ -6,6 +6,7 @@ import { parseFecha } from '@/lib/parseFecha'
 import { PdfConfeccion, PdfConfeccionPagina, paginarItems } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import { generarPdfDesdeIds } from '@/lib/generarPdf'
+import { filtrarPedidosPorTienda, puedeVerTienda } from '@/lib/tiendasUsuario'
 
 // Color por tienda para la orden de confección (mismo criterio que Producción).
 const TIENDA_COLORS = { MANDARINA: '#FF6B00', INDSTORE: '#E91E8C', YAW: '#6C3FC5' }
@@ -180,7 +181,11 @@ export default function CalendarioPage() {
         setTimeout(() => loadPedidos(intentos + 1), 1500)
         return
       }
-      setPedidos(data.pedidos || [])
+      // Acceso por tienda: un VENDEDOR solo ve sus tiendas asignadas (un usuario
+      // de YAW ve solo YAW). ADMIN y los roles de fábrica ven todo — el filtro
+      // no los toca (ver lib/tiendasUsuario).
+      const u = JSON.parse(localStorage.getItem('mp_user') || '{}')
+      setPedidos(filtrarPedidosPorTienda(u, data.pedidos || []))
     } finally { setLoading(false) }
   }, [])
 
@@ -370,9 +375,11 @@ export default function CalendarioPage() {
               className={`bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
                 ${filtroTienda !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
               <option value="TODAS">🏬 Todas las tiendas</option>
-              <option value="MANDARINA">🍊 Mandarina</option>
-              <option value="INDSTORE">🏪 Indstore</option>
-              <option value="YAW">🟣 YAW</option>
+              {/* Solo las tiendas que el usuario puede ver: a un vendedor de YAW
+                  no se le ofrece Mandarina (le daría vacío). */}
+              {[['MANDARINA','🍊 Mandarina'],['INDSTORE','🏪 Indstore'],['YAW','🟣 YAW']]
+                .filter(([t]) => puedeVerTienda(user, t))
+                .map(([t, label]) => <option key={t} value={t}>{label}</option>)}
             </select>
 
             <MultiSelect icon="🎯" resumen={resumenEstados} sel={estados} onChange={setEstados}
