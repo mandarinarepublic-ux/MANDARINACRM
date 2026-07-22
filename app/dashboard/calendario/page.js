@@ -3,6 +3,11 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { parseFecha } from '@/lib/parseFecha'
+import { PdfConfeccionPagina, paginarItems } from '@/components/pedido/PdfPedido'
+import { generarPdfDesdeIds } from '@/lib/generarPdf'
+
+// Color por tienda para la orden de confección (mismo criterio que Producción).
+const TIENDA_COLORS = { MANDARINA: '#FF6B00', INDSTORE: '#E91E8C', YAW: '#6C3FC5' }
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
@@ -136,6 +141,26 @@ export default function CalendarioPage() {
   const [estados, setEstados] = useState(() => new Set(['red', 'amb', 'azu', 'grn']))
   const [subareas, setSubareas] = useState(() => new Set(AREAS_BASE))
   const [selDia, setSelDia] = useState(null)
+  const [pdfPedido, setPdfPedido] = useState(null)   // pedido montado off-screen para el PDF
+  const [generandoPdf, setGenerandoPdf] = useState(null)
+
+  // Genera la orden de producción (confección) de un pedido, sin salir del calendario.
+  async function verPdfConfeccion(p) {
+    if (generandoPdf) return
+    setGenerandoPdf(p.PEDIDO_ID)
+    setPdfPedido(p)
+    // Esperar a que React pinte la zona oculta antes de capturarla.
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 150))))
+    try {
+      const ids = paginarItems(p.items).map((_, i) => `cal-pdf-${p.PEDIDO_ID}-${i}`)
+      await generarPdfDesdeIds(ids, `${p.PEDIDO_ID}-confeccion.pdf`)
+    } catch (e) {
+      alert('No se pudo generar el PDF: ' + (e?.message || e))
+    } finally {
+      setGenerandoPdf(null)
+      setPdfPedido(null)
+    }
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -440,50 +465,81 @@ export default function CalendarioPage() {
                 </div>
               </div>
 
-              {/* Panel del día seleccionado */}
-              {selDia && (
-                <div className="card mt-4 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-                    <div>
-                      <div className="text-sm font-bold text-white capitalize">{fmtLargo(selDia)}</div>
-                      <div className="text-xs text-gray-500">{pedidosDia.length ? `${pedidosDia.length} pedido(s) para entregar` : 'Sin entregas'}</div>
-                    </div>
-                    <button onClick={() => setSelDia(null)} className="text-gray-500 hover:text-white text-lg">✕</button>
-                  </div>
-                  <div className="p-2">
-                    {pedidosDia.length === 0 ? (
-                      <div className="p-8 text-center text-gray-600 text-sm">📭 No hay pedidos con entrega este día.</div>
-                    ) : pedidosDia.map(p => {
-                      const k = estadoColor(p, hoy)
-                      const prendas = prendasDe(p)
-                      const pend = parseFloat(p.MONTO_PENDIENTE || 0)
-                      return (
-                        <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl m-1 hover:brightness-125 transition-all ${ESTADO_META[k].chip}`}
-                          style={{ borderLeft: `3px solid ${ESTADO_META[k].hex}` }}>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold text-white">
-                              {TIENDA_META[p.TIENDA_ID]?.emoji} {p.PEDIDO_ID} <span className="text-mandarina-400 font-black">×{prendas}</span>
-                            </div>
-                            <div className="text-xs text-gray-400 mt-0.5">{prendas} prenda{prendas !== 1 ? 's' : ''}</div>
-                          </div>
-                          <div className="text-right">
-                            <span className={`badge ${ESTADO_META[k].chip} ${ESTADO_META[k].text}`}>{ESTADO_META[k].label}</span>
-                            <div className="text-xs text-gray-500 mt-1 tabular-nums">
-                              ${parseFloat(p.MONTO_TOTAL || 0).toFixed(2)}{pend > 0.01 ? ` · debe $${pend.toFixed(0)}` : ''}
-                            </div>
-                          </div>
-                          <span className="text-gray-600 text-lg">›</span>
-                        </Link>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
       </div>
+
+      {/* Modal del día — ventana emergente con TODOS los pedidos (aunque sean 30),
+          con scroll propio. Antes era un panel debajo de la grilla: para un día de
+          la primera semana había que scrollear todo el mes para verlo. */}
+      {selDia && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setSelDia(null)}>
+          <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+              <div>
+                <div className="text-sm font-bold text-white capitalize">{fmtLargo(selDia)}</div>
+                <div className="text-xs text-gray-500">
+                  {pedidosDia.length ? `${pedidosDia.length} pedido(s) para entregar` : 'Sin entregas'}
+                </div>
+              </div>
+              <button onClick={() => setSelDia(null)} className="text-gray-500 hover:text-white text-2xl leading-none px-1">✕</button>
+            </div>
+            <div className="p-2 overflow-y-auto">
+              {pedidosDia.length === 0 ? (
+                <div className="p-8 text-center text-gray-600 text-sm">📭 No hay pedidos con entrega este día.</div>
+              ) : pedidosDia.map(p => {
+                const k = estadoColor(p, hoy)
+                const prendas = prendasDe(p)
+                const pend = parseFloat(p.MONTO_PENDIENTE || 0)
+                return (
+                  <div key={p.PEDIDO_ID}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl m-1 ${ESTADO_META[k].chip}`}
+                    style={{ borderLeft: `3px solid ${ESTADO_META[k].hex}` }}>
+                    <Link href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="flex-1 min-w-0 hover:brightness-125 transition-all">
+                      <div className="text-sm font-bold text-white">
+                        {TIENDA_META[p.TIENDA_ID]?.emoji} {p.PEDIDO_ID} <span className="text-mandarina-400 font-black">×{prendas}</span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {prendas} prenda{prendas !== 1 ? 's' : ''} · ${parseFloat(p.MONTO_TOTAL || 0).toFixed(2)}
+                        {pend > 0.01 ? ` · debe $${pend.toFixed(0)}` : ''}
+                      </div>
+                    </Link>
+                    <span className={`badge text-[10px] ${ESTADO_META[k].chip} ${ESTADO_META[k].text} hidden sm:inline`}>{ESTADO_META[k].label}</span>
+                    {/* PDF de la orden de producción, sin salir del calendario. */}
+                    <button onClick={() => verPdfConfeccion(p)} disabled={!!generandoPdf}
+                      title="Orden de producción (PDF)"
+                      className="flex-shrink-0 text-xs font-bold px-2.5 py-2 rounded-lg bg-gray-800 border border-gray-700 text-mandarina-400 hover:bg-gray-700 disabled:opacity-50">
+                      {generandoPdf === p.PEDIDO_ID ? '⏳' : '🖨️ PDF'}
+                    </button>
+                    <Link href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="text-gray-600 text-lg flex-shrink-0 hover:text-white">›</Link>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Zona oculta: se monta solo el pedido cuyo PDF se está generando. */}
+      {pdfPedido && (
+        <div style={{ position:'fixed', top:'-9999px', left:'-9999px', width:'794px', backgroundColor:'white', fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
+          {paginarItems(pdfPedido.items).map((pag, i, todas) => (
+            <div key={i} id={`cal-pdf-${pdfPedido.PEDIDO_ID}-${i}`} style={{ width:'794px' }}>
+              <PdfConfeccionPagina
+                pedido={pdfPedido}
+                items={pag.items}
+                tiendaColor={TIENDA_COLORS[pdfPedido.TIENDA_ID] || '#FF6B00'}
+                paginaActual={i + 1}
+                totalPaginas={todas.length}
+                offsetIdx={pag.offset}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
