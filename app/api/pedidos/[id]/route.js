@@ -7,6 +7,20 @@ import { createGuia } from '@/lib/db/guias'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
 
+// Detalle de UN pedido (join acotado a ese id vía getPedidoById). Las pantallas
+// de detalle y edición antes bajaban la lista COMPLETA con join de 5 tablas solo
+// para mostrar uno; esto trae únicamente ese pedido → mucho más rápido.
+export async function GET(req, { params }) {
+  try {
+    const pedido = await getPedidoById(params.id)
+    if (!pedido) return Response.json({ error: 'Pedido no encontrado' }, { status: 404 })
+    return Response.json({ pedido })
+  } catch (e) {
+    console.error('GET pedido/[id] error:', e)
+    return Response.json({ error: e.message }, { status: 500 })
+  }
+}
+
 export async function PATCH(req, { params }) {
   try {
     const { id } = params

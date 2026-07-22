@@ -110,9 +110,9 @@ export default function EditarPedidoPage() {
 
   async function loadPedido() {
     try {
-      const res = await fetch(`/api/pedidos?rol=ADMIN`)
+      const res = await fetch(`/api/pedidos/${params.id}`)
       const data = await res.json()
-      const p = data.pedidos?.find(p => p.PEDIDO_ID === params.id)
+      const p = data.pedido
       if (!p) return
       setPedido(p)
       setItems(p.items || [])

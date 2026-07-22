@@ -43,10 +43,9 @@ export default function PedidoDetailPage() {
 
   async function loadPedido() {
     try {
-      const res = await fetch(`/api/pedidos?rol=ADMIN`)
+      const res = await fetch(`/api/pedidos/${params.id}`)
       const data = await res.json()
-      const lista = Array.isArray(data.pedidos) ? data.pedidos : []
-      const p = lista.find(x => x.PEDIDO_ID === params.id)
+      const p = data.pedido
       if (!p) return
       setPedido({ ...p, pagos: Array.isArray(p.pagos) ? p.pagos : [], items: Array.isArray(p.items) ? p.items : [] })
       setItems(Array.isArray(p.items) ? p.items : [])
