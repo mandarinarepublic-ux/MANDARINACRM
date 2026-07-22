@@ -6,6 +6,7 @@ import { upsertClienteByCedula } from '@/lib/db/clientes'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
 import { enviarPurchase, capiConfigurado, debeEnviarCapi } from '@/lib/metaCapi'
+import { registrarEvento } from '@/lib/eventos'
 
 export const dynamic = 'force-dynamic'
 
@@ -238,6 +239,8 @@ export async function POST(req) {
     return Response.json({ pedidoId, montoTotal, diasCalculado })
   } catch (e) {
     console.error('POST pedido error:', e)
+    // Un fallo al crear el pedido casi siempre es de la escritura a Supabase/Sheets.
+    registrarEvento({ fuente: 'supabase', nivel: 'error', mensaje: `Crear pedido: ${e.message}` })
     return Response.json({ error: 'Error al crear pedido: ' + e.message }, { status: 500 })
   }
 }
