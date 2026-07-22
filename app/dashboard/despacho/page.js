@@ -91,11 +91,13 @@ export default function DespachosPage() {
       // nunca llegaban a esta pantalla. Un pedido se cierra por decisión de
       // despacho, no por el estado de los botones de producción.
       // Se traen TODOS: las pestañas separan pendientes de cerrados.
+      // Orden: del más ANTIGUO al más nuevo (FIFO) — se despacha primero lo que
+      // lleva más tiempo esperando.
       const lista = (data.pedidos || [])
         .sort((a, b) => {
-          const diff = (parseFecha(b.FECHA_PEDIDO)||new Date(0)) - (parseFecha(a.FECHA_PEDIDO)||new Date(0))
+          const diff = (parseFecha(a.FECHA_PEDIDO)||new Date(0)) - (parseFecha(b.FECHA_PEDIDO)||new Date(0))
           if (diff !== 0) return diff
-          return (b.PEDIDO_ID || '').localeCompare(a.PEDIDO_ID || '')
+          return (a.PEDIDO_ID || '').localeCompare(b.PEDIDO_ID || '')
         })
       setPedidos(lista)
     } finally { setLoading(false) }
