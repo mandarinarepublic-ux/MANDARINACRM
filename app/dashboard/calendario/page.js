@@ -514,7 +514,7 @@ export default function CalendarioPage() {
                     <button onClick={() => setPreviewPedido(p)}
                       title="Ver hoja de producción"
                       className="flex-shrink-0 text-xs font-bold px-2.5 py-2 rounded-lg bg-gray-800 border border-gray-700 text-mandarina-400 hover:bg-gray-700">
-                      🖨️ Ver
+                      👁️ Ver
                     </button>
                     <Link href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="text-gray-600 text-lg flex-shrink-0 hover:text-white">›</Link>
                   </div>
