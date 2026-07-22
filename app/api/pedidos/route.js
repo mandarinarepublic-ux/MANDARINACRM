@@ -7,6 +7,7 @@ import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
 import { enviarPurchase, capiConfigurado, debeEnviarCapi } from '@/lib/metaCapi'
 import { registrarEvento } from '@/lib/eventos'
+import { notificarVenta } from '@/lib/telegram'
 
 export const dynamic = 'force-dynamic'
 
@@ -190,6 +191,17 @@ export async function POST(req) {
         notas: pago.notas || '',
       })
     }
+
+    // ── Aviso de venta por Telegram ── fire & forget (lo que hacía Make).
+    // Le avisa al chat de ventas que un vendedor cerró una venta.
+    notificarVenta({
+      pedidoId,
+      tiendaId,
+      vendedor: vendedorNombre || vendedorId,
+      cliente: cliente?.nombre,
+      monto: montoTotal,
+      prendas: items.reduce((s, i) => s + parseInt(i.cantidad || 1), 0),
+    }).catch(() => {})
 
     // ── META CAPI ── fire & forget, no bloquea la respuesta.
     // Con META_CAPI_TOKEN configurado se envía DIRECTO a Meta (lib/metaCapi.js);
