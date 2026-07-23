@@ -104,6 +104,7 @@ export default function NuevoPedidoPage() {
   const [notasVendedor, setNotasVendedor] = useState('')
   const pagoRef = useRef(null)
   const errorRef = useRef(null)
+  const scrollRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [step, setStep] = useState(1)
@@ -287,6 +288,14 @@ export default function NuevoPedidoPage() {
     }
     setError('')
     setStep(s)
+    // El contenedor tiene su propio scroll y conserva la posición al cambiar de
+    // paso. Volviendo del paso 4 (alto, por el preview del documento) al de
+    // productos, se aterrizaba al final de la lista con el buscador fuera de
+    // pantalla: parecía que ya no se podían agregar prendas.
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 0)
   }
 
   async function dispararFactura(pedidoId, clienteData, montoTotal) {
@@ -444,7 +453,7 @@ export default function NuevoPedidoPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-28">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-28">
         <div className="max-w-2xl mx-auto px-4 pt-4">
           {error && (
             <div ref={errorRef} className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4 scroll-mt-20">
