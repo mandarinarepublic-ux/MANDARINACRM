@@ -140,6 +140,27 @@ export default function NuevoPedidoPage() {
     if (tienda === 'SUCURSAL') loadSucursal()
   }, [tienda])
 
+  // Cada cambio de paso empieza arriba. Sin esto, al volver del paso 4 (que es
+  // alto por el preview del documento) al de Productos se aterrizaba al FINAL de
+  // la lista, con el buscador fuera de pantalla: parecía que ya no se podían
+  // agregar más prendas.
+  // En móvil scrollea el contenedor (h-screen) y en escritorio la ventana
+  // (md:h-auto), así que se reinician los dos. Va en un efecto y dentro de un
+  // rAF porque hay que esperar a que React pinte el paso nuevo: hacerlo en el
+  // mismo clic no servía, el navegador reajustaba el scroll al acortarse la
+  // página.
+  useEffect(() => {
+    const alInicio = () => {
+      scrollRef.current?.scrollTo({ top: 0 })
+      window.scrollTo(0, 0)
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
+    }
+    alInicio()
+    const id = requestAnimationFrame(alInicio)
+    return () => cancelAnimationFrame(id)
+  }, [step])
+
   async function loadSucursal() {
     setLoadingSucursal(true)
     try {
@@ -288,14 +309,6 @@ export default function NuevoPedidoPage() {
     }
     setError('')
     setStep(s)
-    // El contenedor tiene su propio scroll y conserva la posición al cambiar de
-    // paso. Volviendo del paso 4 (alto, por el preview del documento) al de
-    // productos, se aterrizaba al final de la lista con el buscador fuera de
-    // pantalla: parecía que ya no se podían agregar prendas.
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }, 0)
   }
 
   async function dispararFactura(pedidoId, clienteData, montoTotal) {
