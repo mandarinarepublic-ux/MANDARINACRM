@@ -7,6 +7,7 @@ import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, formatFechaCorta } from '@/lib/parseFecha'
 import { filtrarPedidosPorTienda } from '@/lib/tiendasUsuario'
 import { SkeletonList } from '@/components/Skeleton'
+import { imagenAncho } from '@/lib/imagenes'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
 const PAGE_SIZE = 30
@@ -332,7 +333,7 @@ export default function HistorialPage() {
                           ) : itemsActivos.map(item => (
                             <div key={item.ITEM_ID} className="flex items-center gap-3 bg-gray-800/40 rounded-xl px-3 py-2">
                               {item.FOTO_PECHO_URL
-                                ? <img src={item.FOTO_PECHO_URL} className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
+                                ? <img src={imagenAncho(item.FOTO_PECHO_URL, 120)} loading="lazy" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
                                 : <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0"><span className="text-gray-600 text-sm">👕</span></div>}
                               <div className="flex-1 min-w-0">
                                 <div className="text-xs text-white font-medium truncate">{item.PRODUCTO_NOMBRE}</div>

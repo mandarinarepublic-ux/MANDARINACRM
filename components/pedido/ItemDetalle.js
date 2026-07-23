@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { SUBESTADO_LABELS, SUBESTADO_COLORS, SUBESTADO_BG } from '@/lib/labels'
+import { imagenAncho } from '@/lib/imagenes'
 
 const SUBESTADOS_ORDEN = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO']
 const AREAS_BASE = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
@@ -170,14 +171,14 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
             <>
               <div className="w-full h-52 sm:w-36 sm:h-36 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
                 onClick={() => setFotoFullscreen(item[fotoActiva||fotos[0].key])}>
-                <img src={item[fotoActiva||fotos[0].key]} className="w-full h-full object-contain" alt="foto" />
+                <img src={imagenAncho(item[fotoActiva||fotos[0].key], 600)} className="w-full h-full object-contain" alt="foto" />
               </div>
               {fotos.length > 1 && (
                 <div className="flex gap-2 flex-wrap">
                   {fotos.map(f=>(
                     <button key={f.key} onClick={()=>setFotoActiva(f.key)}
                       className={`flex flex-col items-center p-1 rounded-lg border transition-all ${(fotoActiva||fotos[0].key)===f.key?'border-mandarina-500':'border-gray-700'}`}>
-                      <img src={item[f.key]} className="w-11 h-11 sm:w-9 sm:h-9 rounded object-cover" alt={f.label}/>
+                      <img src={imagenAncho(item[f.key], 120)} className="w-11 h-11 sm:w-9 sm:h-9 rounded object-cover" alt={f.label}/>
                       <span className="text-[10px] text-gray-500">{f.label}</span>
                     </button>
                   ))}

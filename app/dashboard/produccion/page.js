@@ -6,6 +6,7 @@ import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, diasHastaEntrega } from '@/lib/parseFecha'
 import { PdfConfeccion, PdfConfeccionPagina, paginarItems } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
+import { imagenAncho } from '@/lib/imagenes'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -167,7 +168,7 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
             <>
               <div className="w-full h-56 sm:w-40 sm:h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
                 onClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
-                <img src={item[fotoActiva || fotos[0].key]} className="w-full h-full object-contain" alt="foto" />
+                <img src={imagenAncho(item[fotoActiva || fotos[0].key], 600)} className="w-full h-full object-contain" alt="foto" />
               </div>
               {fotos.length > 1 && (
                 <div className="flex gap-2 flex-wrap">

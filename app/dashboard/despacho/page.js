@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha } from '@/lib/parseFecha'
+import { imagenAncho } from '@/lib/imagenes'
 
 // Un pedido está CERRADO para despacho cuando alguien lo dio por salido:
 // COMPLETADO (guía registrada o cerrado a mano), ENTREGADO o CANCELADO.
@@ -351,7 +352,7 @@ export default function DespachosPage() {
                           {itemsActivos.map(item => (
                             <div key={item.ITEM_ID} className="flex items-center gap-3 bg-gray-800/40 rounded-xl px-3 py-2">
                               {item.FOTO_PECHO_URL
-                                ? <img src={item.FOTO_PECHO_URL} className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
+                                ? <img src={imagenAncho(item.FOTO_PECHO_URL, 150)} loading="lazy" className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
                                 : <div className="w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0"><span className="text-gray-600 text-lg">👕</span></div>}
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm text-white font-medium truncate">{item.PRODUCTO_NOMBRE}</div>

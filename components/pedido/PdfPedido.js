@@ -1,6 +1,7 @@
 'use client'
 import { parseFechaCalendario, diasHastaFecha } from '@/lib/parseFecha'
 import { paginarItems, paginarItemsCliente, distribuirFilasCliente } from '@/lib/paginarItems'
+import { imagenAncho } from '@/lib/imagenes'
 
 // Re-export por compatibilidad: las pantallas ya importaban paginarItems desde aquí.
 export { paginarItems, paginarItemsCliente, distribuirFilasCliente, pesoItem, CAPACIDAD_HOJA_CONF } from '@/lib/paginarItems'
@@ -57,7 +58,7 @@ function PrendaCliente({ item, numero, tiendaColor, anchoCompleto }) {
     <div style={{ backgroundColor:'#fafafa', borderRadius:'10px', border:'1px solid #e0e0e0', overflow:'hidden' }}>
       <div style={{ float:'left', padding: anchoCompleto ? '11px 12px 11px 12px' : '9px 9px 9px 10px' }}>
         {item.FOTO_PECHO_URL
-          ? <img src={item.FOTO_PECHO_URL} style={{ width:`${foto}px`, height:`${foto}px`, objectFit:'cover', borderRadius:'8px', border:'2px solid #e0e0e0', display:'block' }} alt="" />
+          ? <img src={imagenAncho(item.FOTO_PECHO_URL, 400)} style={{ width:`${foto}px`, height:`${foto}px`, objectFit:'cover', borderRadius:'8px', border:'2px solid #e0e0e0', display:'block' }} alt="" />
           : <div style={{ width:`${foto}px`, height:`${foto}px`, backgroundColor:'#eee', borderRadius:'8px' }} />
         }
       </div>
@@ -404,7 +405,7 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                         <div key={ri} style={{ overflow:'hidden', marginBottom:ri < fotoRows.length-1 ? '5px' : '0' }}>
                           {row.map((f, fi) => (
                             <div key={fi} style={{ float:'left', textAlign:'center', marginRight:fi < row.length-1 ? '5px' : '0' }}>
-                              <img src={f.url} style={{ width:`${fotoSizePx}px`, height:`${fotoSizePx}px`, objectFit:'cover', borderRadius:'8px', border:'2px solid #ddd', backgroundColor:'#f5f5f5', display:'block' }} />
+                              <img src={imagenAncho(f.url, 600)} style={{ width:`${fotoSizePx}px`, height:`${fotoSizePx}px`, objectFit:'cover', borderRadius:'8px', border:'2px solid #ddd', backgroundColor:'#f5f5f5', display:'block' }} />
                               <div style={{ fontSize:'8px', color:'#1a1a1a', marginTop:'3px', textTransform:'uppercase', letterSpacing:'0.5px', fontWeight:'700' }}>{f.label}</div>
                             </div>
                           ))}

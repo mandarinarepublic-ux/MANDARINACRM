@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { subirFoto, subirArchivo } from '@/lib/subirImagen'
 import SelectorTipoPrenda from '@/components/pedido/SelectorTipoPrenda'
+import { imagenAncho } from '@/lib/imagenes'
 
 const TALLAS = ['4XL','3XL','2XL','XL','L','M','S','XS','12','10','9','8','7','6','5','4','3','2','1 AÑO']
 
@@ -70,7 +71,7 @@ export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = f
             <button key={p.id} onClick={() => setSelected(p)}
               className="w-full flex items-center gap-3 p-3 hover:bg-gray-800 transition-colors text-left">
               {p.image
-                ? <img src={p.image} alt={p.title} className="w-10 h-10 rounded-lg object-cover bg-gray-800" />
+                ? <img src={imagenAncho(p.image, 120)} alt={p.title} loading="lazy" className="w-10 h-10 rounded-lg object-cover bg-gray-800" />
                 : <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-gray-600 text-xs">IMG</div>}
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-white font-medium truncate">{p.title}</div>
@@ -218,7 +219,7 @@ function FotoUploader({ fotos, onChange }) {
                   <span className="text-[10px] text-gray-500">Subiendo...</span>
                 </div>
               ) : fotos[key]
-                ? <img src={fotos[key]} className="w-full h-full object-cover" />
+                ? <img src={imagenAncho(fotos[key], 240)} className="w-full h-full object-cover" />
                 : <span className="text-xs text-gray-500 text-center px-2">{label}</span>}
             </label>
             {fotos[key] && !uploading[key] && (
@@ -256,7 +257,7 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
   return (
     <div className="card p-4 space-y-3 mt-2">
       <div className="flex items-center gap-3">
-        {producto.image && <img src={producto.image} className="w-12 h-12 rounded-xl object-cover" />}
+        {producto.image && <img src={imagenAncho(producto.image, 120)} className="w-12 h-12 rounded-xl object-cover" />}
         <div className="flex-1">
           <div className="font-medium text-white text-sm">{producto.title}</div>
           <div className="text-xs text-gray-500">Shopify: ${parseFloat(variant?.price||0).toFixed(2)}</div>

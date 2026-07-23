@@ -6,6 +6,7 @@ import BuscadorProductos from '@/components/pedido/BuscadorProductos'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { subirFoto } from '@/lib/subirImagen'
 import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/identificacion'
+import { imagenAncho } from '@/lib/imagenes'
 
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
@@ -60,7 +61,7 @@ function ItemEditor({ item, onSave }) {
                 <input type="file" accept="image/*" className="hidden" onChange={e=>handleFoto(key,e.target.files[0])} />
                 {uploading[key]
                   ? <div className="flex flex-col items-center gap-1"><div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" /><span className="text-[10px] text-gray-500">Subiendo...</span></div>
-                  : fotos[key]?<img src={fotos[key]} className="w-full h-full object-cover" />:<span className="text-xs text-gray-500 text-center px-1">{label}</span>}
+                  : fotos[key]?<img src={imagenAncho(fotos[key], 240)} className="w-full h-full object-cover" />:<span className="text-xs text-gray-500 text-center px-1">{label}</span>}
               </label>
               {fotos[key]&&!uploading[key]&&<button onClick={()=>setFotos(f=>({...f,[key]:''}))} className="text-xs text-red-400 mt-0.5 w-full text-center">✕ quitar</button>}
             </div>

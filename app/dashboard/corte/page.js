@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, diasHastaEntrega } from '@/lib/parseFecha'
+import { imagenAncho } from '@/lib/imagenes'
 
 const CORTE_CONFIG = {
   PENDIENTE:   { label: '✂️ Pendiente',  color: 'bg-gray-600' },
@@ -76,7 +77,7 @@ function CorteCard({ item, userId, onCorteChange }) {
             <>
               <div className="w-28 h-28 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 cursor-pointer mb-2"
                 onClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
-                <img src={item[fotoActiva || fotos[0].key]} loading="lazy" className="w-full h-full object-cover" alt="foto" />
+                <img src={imagenAncho(item[fotoActiva || fotos[0].key], 600)} loading="lazy" className="w-full h-full object-cover" alt="foto" />
               </div>
               {fotos.length > 1 && (
                 <div className="flex gap-1 justify-center flex-wrap">

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { imagenAncho } from '@/lib/imagenes'
 
 // Redimensiona y comprime la foto en el navegador ANTES de subirla.
 // Evita el 413 de Vercel (límite 4.5MB de body) con fotos de celular grandes.
@@ -356,7 +357,7 @@ export default function CatalogoPage() {
                       ${selected?.id === p.id ? 'border-mandarina-500' : ''}`}>
                     <div className="aspect-square bg-gray-800 relative">
                       {p.image
-                        ? <img src={p.image} alt={p.title} loading="lazy" className="w-full h-full object-cover" />
+                        ? <img src={imagenAncho(p.image, 300)} alt={p.title} loading="lazy" className="w-full h-full object-cover" />
                         : <div className="w-full h-full flex items-center justify-center text-gray-600 text-3xl">👕</div>}
                       <div className="absolute top-2 right-2">
                         <span className="text-xs px-1.5 py-0.5 rounded-full text-white"
@@ -392,7 +393,7 @@ export default function CatalogoPage() {
                 </div>
                 {selected.image && (
                   <div className="aspect-video bg-gray-800">
-                    <img src={selected.image} alt={selected.title} className="w-full h-full object-cover" />
+                    <img src={imagenAncho(selected.image, 800)} alt={selected.title} className="w-full h-full object-cover" />
                   </div>
                 )}
                 <div className="p-4">

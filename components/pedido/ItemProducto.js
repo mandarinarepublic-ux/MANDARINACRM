@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { subirFoto, subirArchivo } from '@/lib/subirImagen'
+import { imagenAncho } from '@/lib/imagenes'
 
 const TALLAS = ['4XL','3XL','2XL','XL','L','M','S','XS','12','10','9','8','7','6','5','4','3','2','1 AÑO']
 const AREAS = [
@@ -44,7 +45,7 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
     <div className={`card overflow-hidden ${(!cantidadValida || !precioValido) ? 'border-yellow-500/50' : ''}`}>
       <div className="flex items-center gap-3 p-4">
         {item.imagen
-          ? <img src={item.imagen} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+          ? <img src={imagenAncho(item.imagen, 120)} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
           : <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-lg flex-shrink-0">
               {item.esPersonalizado ? '✏️' : '👕'}
             </div>}
@@ -134,7 +135,7 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
                           <span className="text-[10px] text-gray-500">Subiendo...</span>
                         </div>
                       ) : item[key]
-                        ? <img src={item[key]} className="w-full h-full object-cover" />
+                        ? <img src={imagenAncho(item[key], 240)} className="w-full h-full object-cover" />
                         : <span className="text-xs text-gray-500 text-center px-2">{label}</span>}
                     </label>
                     {item[key] && !uploading[key] && (
