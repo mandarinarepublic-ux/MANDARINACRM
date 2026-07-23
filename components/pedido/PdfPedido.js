@@ -215,7 +215,10 @@ export function PdfGraciasPagina({
           {(pedido?.DIRECCION_TEXTO || pedido?.DIRECCION_PEDIDO) && (
             <div style={{ borderRadius:'10px', padding:'11px 14px', borderLeft:`4px solid ${tiendaColor}` }}>
               <div style={{ fontSize:'8px', color:tiendaColor, textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px', fontWeight:'700' }}>Dirección de entrega</div>
-              <div style={{ fontSize:'13px', color:'#1a1a1a', fontWeight:'600', lineHeight:1.4 }}>{(pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO).replace(/\n/g,' · ')}</div>
+              {/* pre-line: la dirección se escribe con un formato de varias líneas
+                  (CIUDAD / calle principal / secundaria / referencia). Antes se
+                  aplastaba a un renglón con ' · ' y era ilegible para el repartidor. */}
+              <div style={{ fontSize:'13px', color:'#1a1a1a', fontWeight:'600', lineHeight:1.4, whiteSpace:'pre-line' }}>{pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO}</div>
             </div>
           )}
         </div>

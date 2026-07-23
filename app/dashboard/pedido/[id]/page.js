@@ -321,7 +321,9 @@ export default function PedidoDetailPage() {
                 {(pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO) && (
                   <div className="flex justify-between gap-4">
                     <span className="text-gray-500 shrink-0">Dirección</span>
-                    <span className="text-white text-right text-sm">{pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO}</span>
+                    {/* whitespace-pre-line: respeta el formato de varias líneas
+                        con el que se escribe la dirección. */}
+                    <span className="text-white text-right text-sm whitespace-pre-line">{pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO}</span>
                   </div>
                 )}
                 {pedido.LATITUD && <a href={`https://maps.google.com/?q=${pedido.LATITUD},${pedido.LONGITUD}`} target="_blank" className="text-mandarina-400 text-xs hover:underline">📍 Ver en Google Maps</a>}

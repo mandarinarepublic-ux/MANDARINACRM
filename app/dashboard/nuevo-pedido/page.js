@@ -51,6 +51,36 @@ function getMinFecha() {
   return getMinFechaConDias(3)
 }
 
+// Formato de dirección que la empresa pide llenar SIEMPRE. El cuadro arranca con
+// estas etiquetas y el vendedor escribe al lado de cada una. La línea CIUDAD la
+// completa el sistema con el campo "Ciudad de entrega" para no escribirla dos veces.
+const PLANTILLA_DIRECCION = 'CIUDAD: \nCalle principal: \nCalle secundaria: \nLugar de referencia: '
+
+/** ¿El texto sigue siendo la plantilla vacía (nadie escribió nada)? */
+function plantillaVacia(texto) {
+  return String(texto || '')
+    .split('\n')
+    .every(linea => !linea.includes(':') || !linea.split(':').slice(1).join(':').trim())
+}
+
+/** Valor escrito al lado de una etiqueta, p.ej. campoDireccion(txt, 'Calle principal'). */
+function campoDireccion(texto, etiqueta) {
+  const linea = String(texto || '').split('\n').find(l => l.trim().toLowerCase().startsWith(etiqueta.toLowerCase()))
+  if (!linea) return ''
+  return linea.split(':').slice(1).join(':').trim()
+}
+
+/** Rellena la línea CIUDAD con la ciudad del formulario si quedó vacía. */
+function conCiudad(texto, ciudad) {
+  const t = String(texto || '')
+  if (!ciudad?.trim() || !/^\s*CIUDAD\s*:/im.test(t)) return t
+  return t.split('\n').map(linea =>
+    /^\s*CIUDAD\s*:/i.test(linea) && !linea.split(':').slice(1).join(':').trim()
+      ? `CIUDAD: ${ciudad.trim()}`
+      : linea
+  ).join('\n')
+}
+
 function itemsValidos(items) {
   return items.every(i =>
     parseInt(i.cantidad || 0) >= 1 &&
@@ -86,7 +116,7 @@ export default function NuevoPedidoPage() {
   const [tienda, setTienda] = useState('MANDARINA')
   const [clienteId, setClienteId] = useState(null)
   const [clienteKey, setClienteKey] = useState(0)
-  const [cliente, setCliente] = useState({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' })
+  const [cliente, setCliente] = useState({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: PLANTILLA_DIRECCION })
   const [tipoId, setTipoId] = useState('CEDULA')
   const [cedulaError, setCedulaError] = useState('')
   const [celularError, setCelularError] = useState('')
@@ -219,6 +249,10 @@ export default function NuevoPedidoPage() {
     const ciudad = (cliente.ciudad || '').trim()
     const dir = (cliente.direccion || '').trim()
     if (!ciudad && !dir) return ''
+    // Formato nuevo (con la etiqueta CIUDAD): se guarda tal cual, en varias
+    // líneas, y solo se completa la ciudad. Antes se anteponía "Quito: " a la
+    // primera línea y quedaba "Quito: CIUDAD: Quito".
+    if (/^\s*CIUDAD\s*:/im.test(dir)) return conCiudad(dir, ciudad)
     if (!ciudad) return dir
     if (!dir) return ciudad
     if (dir.toLowerCase().startsWith(ciudad.toLowerCase())) return dir
@@ -259,7 +293,14 @@ export default function NuevoPedidoPage() {
     if (errCedula) return errCedula
     if (errCelular) return errCelular
     if (!cliente.ciudad.trim()) return 'La ciudad de entrega es obligatoria'
-    if (!cliente.direccion.trim() && !usarMapa) return 'La dirección completa es obligatoria'
+    if (!usarMapa) {
+      // Con la plantilla el campo NUNCA está vacío (trae las etiquetas), así que
+      // se comprueba que hayan escrito algo y, en concreto, la calle principal.
+      if (!cliente.direccion.trim() || plantillaVacia(cliente.direccion)) return 'La dirección completa es obligatoria'
+      if (/^\s*CIUDAD\s*:/im.test(cliente.direccion) && !campoDireccion(cliente.direccion, 'Calle principal')) {
+        return 'Falta la calle principal en la dirección'
+      }
+    }
     if (emitirFactura && !cliente.email.trim()) return '⚠️ Para emitir factura necesitas el correo del cliente'
     return null
   }
@@ -361,8 +402,10 @@ export default function NuevoPedidoPage() {
 
     setLoading(true); setError('')
 
-    const direccionFinal = usarMapa ? direccionTexto : [cliente.ciudad, cliente.direccion].filter(Boolean).join(': ')
-    const clienteDireccion = usarMapa ? direccionTexto : (cliente.direccion || '')
+    // Una sola fuente para la dirección: la misma que se muestra en el preview y
+    // en el PDF. Antes aquí se rearmaba con join(': ') y quedaba distinta.
+    const direccionFinal = buildDireccion()
+    const clienteDireccion = usarMapa ? direccionTexto : conCiudad(cliente.direccion || '', cliente.ciudad)
 
     // Para YAW no actualizamos el cliente (es un cliente compartido de tienda)
     if (clienteId && !isYAW) {
@@ -496,7 +539,7 @@ export default function NuevoPedidoPage() {
                     const f = clienteExistente
                     setClienteId(f.CLIENTE_ID)
                     const ced = String(f.CEDULA||'')
-                    setCliente({ nombre: f.NOMBRE||'', cedula: ced, celular: String(f.CELULAR||''), email: f.EMAIL||'', ciudad: f.CIUDAD||'', direccion: f.DIRECCION||'' })
+                    setCliente({ nombre: f.NOMBRE||'', cedula: ced, celular: String(f.CELULAR||''), email: f.EMAIL||'', ciudad: f.CIUDAD||'', direccion: f.DIRECCION || PLANTILLA_DIRECCION })
                     const t = inferirTipo(ced); setTipoId(t); setEmitirFactura(tipoIdMeta(t).factura)
                     setClienteKey(k => k+1)
                     setClienteExistente(null)
@@ -512,7 +555,7 @@ export default function NuevoPedidoPage() {
               <BuscadorCliente onSelect={c => {
                 setClienteId(c.CLIENTE_ID || c.id || null)
                 const ced = String(c.CEDULA||c.cedula||'')
-                setCliente({ nombre: c.NOMBRE||c.nombre||'', cedula: ced, celular: String(c.CELULAR||c.celular||''), email: c.EMAIL||c.email||'', ciudad: c.CIUDAD||c.ciudad||'', direccion: c.DIRECCION||c.direccion||'' })
+                setCliente({ nombre: c.NOMBRE||c.nombre||'', cedula: ced, celular: String(c.CELULAR||c.celular||''), email: c.EMAIL||c.email||'', ciudad: c.CIUDAD||c.ciudad||'', direccion: c.DIRECCION||c.direccion|| PLANTILLA_DIRECCION })
                 const t = inferirTipo(ced); setTipoId(t); setEmitirFactura(tipoIdMeta(t).factura)
                 setClienteKey(k => k + 1)
                 setUsarMapa(false)
@@ -524,7 +567,7 @@ export default function NuevoPedidoPage() {
                     <span className="text-green-400 text-sm">✅</span>
                     <span className="text-green-400 text-xs font-medium">Cliente existente cargado</span>
                   </div>
-                  <button onClick={() => { setClienteId(null); setClienteKey(k => k + 1); setCliente({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: '' }); setTipoId('CEDULA'); setEmitirFactura(true) }}
+                  <button onClick={() => { setClienteId(null); setClienteKey(k => k + 1); setCliente({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: PLANTILLA_DIRECCION }); setTipoId('CEDULA'); setEmitirFactura(true) }}
                     className="text-xs text-gray-500 hover:text-red-400">
                     ✕ Limpiar
                   </button>
@@ -622,15 +665,19 @@ export default function NuevoPedidoPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Dirección completa *</p>
-                      <textarea ref={refDireccion} autoComplete="off" name="x-direccion" rows={3}
-                        className={`input resize-none ${!cliente.direccion.trim() ? 'border-yellow-500/40' : ''}`}
-                        placeholder={`Ej:\nAv. 10 de Agosto y Orellana\nEdificio Torre Norte, piso 3\nReferencia: junto a Burger King`}
+                      {/* Llega con las etiquetas del formato de la empresa ya
+                          escritas; el vendedor completa al lado de cada una. */}
+                      <textarea ref={refDireccion} autoComplete="off" name="x-direccion" rows={4}
+                        className={`input resize-none leading-relaxed ${plantillaVacia(cliente.direccion) ? 'border-yellow-500/40' : ''}`}
+                        placeholder={PLANTILLA_DIRECCION}
                         value={cliente.direccion}
                         onChange={e => setCliente(p => ({...p, direccion: e.target.value}))} />
+                      <p className="text-xs text-gray-600 mt-1">Completa cada línea; la ciudad se llena sola con la de arriba.</p>
                     </div>
                     {buildDireccion() && (
                       <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
-                        📋 PDF: <span className="text-white">{buildDireccion()}</span>
+                        📋 PDF:
+                        <span className="text-white block whitespace-pre-line mt-0.5">{buildDireccion()}</span>
                       </div>
                     )}
                   </div>

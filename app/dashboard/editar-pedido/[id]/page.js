@@ -152,7 +152,11 @@ export default function EditarPedidoPage() {
     if (errId) { setCedulaErrorEdit(errId); setError(`Identificación: ${errId}`); return }
     setSaving(true); setError(''); setSuccess('')
     try {
-      const dirCompleta = ciudadEdit ? `${ciudadEdit}: ${direccionEdit}` : direccionEdit
+      // Si la dirección ya viene en el formato de varias líneas (CIUDAD: ...) se
+      // respeta tal cual; anteponer la ciudad la dejaba como "Quito: CIUDAD: Quito".
+      const dirCompleta = /^\s*CIUDAD\s*:/im.test(direccionEdit || '')
+        ? direccionEdit
+        : (ciudadEdit ? `${ciudadEdit}: ${direccionEdit}` : direccionEdit)
       await fetch(`/api/pedidos/${params.id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ DIRECCION_TEXTO:dirCompleta, _usuarioId:user?.id }),
@@ -257,13 +261,13 @@ export default function EditarPedidoPage() {
                   onChange={e => { setCedulaEdit(e.target.value); setCedulaErrorEdit(validarIdentificacion(tipoIdEdit, e.target.value) || '') }} />
                 {cedulaErrorEdit && <p className="text-red-400 text-xs">{cedulaErrorEdit}</p>}
                 <input className="input text-sm" placeholder="Ciudad (ej: Quito)" value={ciudadEdit} onChange={e=>setCiudadEdit(e.target.value)} />
-                <textarea className="input resize-none text-sm" rows={2} value={direccionEdit} onChange={e=>setDireccionEdit(e.target.value)} placeholder="Av. 6 de Diciembre y Mercurio..." />
+                <textarea className="input resize-none text-sm leading-relaxed" rows={4} value={direccionEdit} onChange={e=>setDireccionEdit(e.target.value)} placeholder={'CIUDAD: \nCalle principal: \nCalle secundaria: \nLugar de referencia: '} />
                 <input className="input text-sm" placeholder="Email" value={emailEdit} onChange={e=>setEmailEdit(e.target.value)} />
                 <input className="input text-sm" placeholder="Celular" value={celularEdit} onChange={e=>setCelularEdit(e.target.value)} />
                 <button onClick={saveDireccion} disabled={saving} className="btn-primary text-sm px-4 py-2">{saving?'⏳ Guardando...':'💾 Guardar'}</button>
               </div>
             ) : (
-              <div className="bg-gray-800/50 rounded-xl px-4 py-3 text-sm text-gray-300">
+              <div className="bg-gray-800/50 rounded-xl px-4 py-3 text-sm text-gray-300 whitespace-pre-line">
                 {direccionEdit || <span className="text-gray-600 italic">Sin dirección registrada</span>}
               </div>
             )}
