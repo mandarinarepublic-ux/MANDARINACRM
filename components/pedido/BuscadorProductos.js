@@ -241,7 +241,10 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
   const [cantidad, setCantidad] = useState(0)
   const [color, setColor] = useState('')
   const [detalle, setDetalle] = useState('')
-  const [fotos, setFotos] = useState({})
+  // La foto del producto de Shopify se precarga en el slot de PECHO. Ya se
+  // guardaba así al agregar el ítem (ver el onAdd de arriba), pero el recuadro
+  // salía vacío y parecía que no había foto. Se puede reemplazar subiendo otra.
+  const [fotos, setFotos] = useState(producto.image ? { fotoPecho: producto.image } : {})
   const [precioEdit, setPrecioEdit] = useState(parseFloat(producto.variants[0]?.price || 0))
 
   function handleVariantChange(variantId) {
