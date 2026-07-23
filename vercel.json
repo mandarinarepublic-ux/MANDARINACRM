@@ -3,6 +3,7 @@
   "buildCommand": "next build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
+  "regions": ["gru1"],
   "crons": [
     { "path": "/api/shopify/sync", "schedule": "0 11 * * *" }
   ]
