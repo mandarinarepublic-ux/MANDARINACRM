@@ -679,6 +679,16 @@ export default function PedidoDetailPage() {
             </button>
           )}
         </div>
+        {/* Única puerta al editor: los productos de un pedido confirmado solo los
+            cambia un ADMIN (el vendedor aprobó el pedido antes de crearlo). */}
+        {user?.rol==='ADMIN' && (
+          <div className="flex gap-2 mb-2">
+            <Link href={`/dashboard/editar-pedido/${pedido.PEDIDO_ID}`}
+              className="w-full py-2 rounded-xl text-sm font-medium border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 text-center transition-all">
+              ✏️ Editar productos del pedido
+            </Link>
+          </div>
+        )}
         {/* Fila 2: factura (solo si aplica) */}
         {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR') && pedido.EMITIR_FACTURA === 'TRUE' && (
           <div className="flex gap-2">
