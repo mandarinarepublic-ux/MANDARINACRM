@@ -73,7 +73,13 @@ export default function HistorialPage() {
   async function loadPedidos(u, intentos = 0) {
     setLoading(true)
     try {
-      const res = await fetch(`/api/pedidos?rol=ADMIN&_t=` + Date.now(), { cache: 'no-store' })
+      // Un VENDEDOR solo ve sus propias ventas (filtro server-side scope=mios,
+      // igual que Mis Pedidos y que las cotizaciones). ADMIN y los roles de
+      // fábrica/despacho necesitan verlo todo para trabajar.
+      const query = u.rol === 'VENDEDOR'
+        ? `vendedor=${encodeURIComponent(u.nombre || u.id)}&vendedorId=${encodeURIComponent(u.id)}&rol=VENDEDOR&scope=mios`
+        : 'rol=ADMIN'
+      const res = await fetch(`/api/pedidos?${query}&_t=` + Date.now(), { cache: 'no-store' })
       const data = await res.json()
       if (!data.pedidos?.length && intentos < 3) {
         setTimeout(() => loadPedidos(u, intentos + 1), 1500)

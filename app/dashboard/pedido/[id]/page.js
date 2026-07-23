@@ -20,6 +20,7 @@ export default function PedidoDetailPage() {
   const [items, setItems] = useState([])
   const [cliente, setCliente] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [noEncontrado, setNoEncontrado] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [showPdfPreview, setShowPdfPreview] = useState(false)
   const [logs, setLogs] = useState([])
@@ -37,16 +38,20 @@ export default function PedidoDetailPage() {
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
-    setUser(JSON.parse(stored))
-    loadPedido()
+    const u = JSON.parse(stored)
+    setUser(u)
+    loadPedido(u)
   }, [])
 
-  async function loadPedido() {
+  async function loadPedido(u = user) {
     try {
-      const res = await fetch(`/api/pedidos/${params.id}`)
+      // La cabecera de sesión permite al servidor filtrar por propiedad: un
+      // VENDEDOR solo puede abrir sus propios pedidos (si no, responde 403).
+      const res = await fetch(`/api/pedidos/${params.id}`, { headers: { 'x-mp-usuario-id': u?.id || '' } })
       const data = await res.json()
       const p = data.pedido
-      if (!p) return
+      if (!p) { setNoEncontrado(true); return }
+      setNoEncontrado(false)
       setPedido({ ...p, pagos: Array.isArray(p.pagos) ? p.pagos : [], items: Array.isArray(p.items) ? p.items : [] })
       setItems(Array.isArray(p.items) ? p.items : [])
       const cr = await fetch(`/api/clientes?id=${encodeURIComponent(p.CLIENTE_ID || '')}`)
@@ -161,6 +166,17 @@ export default function PedidoDetailPage() {
     })
     loadPedido()
   }
+
+  if (!loading && noEncontrado) return (
+    <div className="max-w-md mx-auto px-4 py-16 text-center">
+      <div className="text-4xl mb-3">🔒</div>
+      <div className="text-white font-medium">Este pedido no está disponible</div>
+      <div className="text-sm text-gray-500 mt-1">
+        No existe o pertenece a otro vendedor. Si necesitas verlo, pídeselo a un ADMIN.
+      </div>
+      <button onClick={() => router.back()} className="btn-secondary mt-5 text-sm px-6 py-2">← Volver</button>
+    </div>
+  )
 
   if (loading || !pedido) return (
     <div className="flex items-center justify-center h-64">

@@ -11,6 +11,12 @@ const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M',
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
 const AREAS = ['ESTAMPADO','SUBLIMACION','BORDADO','ESTAMPADO + SUBLIMACION','ESTAMPADO + BORDADO','SUBLIMACION + BORDADO','ESTAMPADO + SUBLIMACION + BORDADO','PRODUCTO SIN DISEÑO','ENTREGA EN TIENDA']
 
+// Las rutas que tocan productos exigen ADMIN y lo verifican contra la base con
+// esta cabecera (lib/auth.js). Sin ella el servidor responde 401.
+function headersAdmin(user) {
+  return { 'Content-Type':'application/json', 'x-mp-usuario-id': user?.id || '' }
+}
+
 function ItemEditor({ item, onSave }) {
   const [data, setData] = useState({ PRODUCTO_NOMBRE:item.PRODUCTO_NOMBRE||'', COLOR:item.COLOR||'', TALLA:item.TALLA||'', CANTIDAD:item.CANTIDAD||1, PRECIO_UNIT:item.PRECIO_UNIT||'0', AREA:item.AREA||'ESTAMPADO', DETALLE_PERSONALIZADO:item.DETALLE_PERSONALIZADO||'' })
   const [fotos, setFotos] = useState({ FOTO_PECHO_URL:item.FOTO_PECHO_URL||'', FOTO_ESPALDA_URL:item.FOTO_ESPALDA_URL||'', FOTO_MANGA_D_URL:item.FOTO_MANGA_D_URL||'', FOTO_MANGA_I_URL:item.FOTO_MANGA_I_URL||'' })
@@ -104,7 +110,13 @@ export default function EditarPedidoPage() {
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
-    setUser(JSON.parse(stored))
+    const u = JSON.parse(stored)
+    // Editar productos de un pedido ya confirmado es SOLO de ADMIN. El vendedor
+    // revisa y aprueba antes de crearlo (paso 4 de Nueva Venta); después ve el
+    // detalle en modo lectura. El servidor vuelve a comprobarlo (requireAdmin),
+    // esto solo evita mostrar una pantalla que no va a poder guardar.
+    if (u.rol !== 'ADMIN') { router.replace(`/dashboard/pedido/${params.id}`); return }
+    setUser(u)
     loadPedido()
   }, [])
 
@@ -158,14 +170,17 @@ export default function EditarPedidoPage() {
   }
 
   async function deleteItem(itemId) {
-    await fetch(`/api/pedidos/item/${itemId}`, { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({_usuarioId:user?.id}) })
+    setError('')
+    const res = await fetch(`/api/pedidos/item/${itemId}`, { method:'DELETE', headers:headersAdmin(user), body:JSON.stringify({_usuarioId:user?.id}) })
+    if (!res.ok) { setError((await res.json().catch(()=>({}))).error || 'No se pudo eliminar'); return }
     setConfirmDelete(null); loadPedido()
   }
 
   async function addItem(item) {
     setSaving(true); setError('')
     try {
-      await fetch(`/api/pedidos/${params.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({nuevoItem:item,_usuarioId:user?.id}) })
+      const res = await fetch(`/api/pedidos/${params.id}`, { method:'PATCH', headers:headersAdmin(user), body:JSON.stringify({nuevoItem:item,_usuarioId:user?.id}) })
+      if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'No se pudo agregar el producto')
       setShowNuevoProducto(false); setSuccess('Producto agregado'); loadPedido()
     } catch(e) { setError(e.message) }
     finally { setSaving(false) }
@@ -277,7 +292,9 @@ export default function EditarPedidoPage() {
                     </button>
                     {editingItem===item.ITEM_ID && (
                       <ItemEditor item={item} onSave={async(updated)=>{
-                        await fetch(`/api/pedidos/item/${item.ITEM_ID}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...updated,_usuarioId:user?.id})})
+                        setError('')
+                        const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`,{method:'PATCH',headers:headersAdmin(user),body:JSON.stringify({...updated,_usuarioId:user?.id})})
+                        if (!res.ok) { setError((await res.json().catch(()=>({}))).error || 'No se pudo guardar'); return }
                         setEditingItem(null); setSuccess('Producto actualizado'); loadPedido()
                       }} />
                     )}

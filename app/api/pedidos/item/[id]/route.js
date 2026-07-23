@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+import { requireAdmin } from '@/lib/auth'
 import { logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { parseSubestados, serializeSubestados } from '@/lib/subestados'
@@ -81,6 +82,15 @@ export async function PATCH(req, { params }) {
 
     // ── CASO 3: edición general del ítem (editar-pedido) ──────────────────────
     // Solo campos de producto (nombre/color/talla/área/cantidad/precio/subtotal/fotos).
+    //
+    // SOLO ADMIN. El vendedor aprueba el pedido antes de crearlo (paso 4 de Nueva
+    // Venta) y a partir de ahí el contenido está congelado: cambiar talla, cantidad
+    // o precio con la prenda ya en producción cuesta material o descuadra la caja.
+    // Los casos 1/1b/2 de arriba (subestados y notas de área) NO pasan por aquí:
+    // esos los mueve producción y siguen abiertos.
+    const auth = await requireAdmin(req)
+    if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status })
+
     const campos = {}
     if (body.PRODUCTO_NOMBRE !== undefined)       campos.PRODUCTO_NOMBRE = body.PRODUCTO_NOMBRE
     if (body.COLOR !== undefined)                 campos.COLOR = body.COLOR
@@ -139,6 +149,10 @@ export async function PATCH(req, { params }) {
 
 export async function DELETE(req, { params }) {
   try {
+    // Eliminar una prenda de un pedido en fábrica: solo ADMIN (ver CASO 3).
+    const auth = await requireAdmin(req)
+    if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status })
+
     const { id } = params
     const body = await req.json()
     const usuarioId = body._usuarioId || 'SISTEMA'

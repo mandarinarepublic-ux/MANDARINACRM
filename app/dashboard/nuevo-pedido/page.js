@@ -6,6 +6,8 @@ import BuscadorProductos from '@/components/pedido/BuscadorProductos'
 import ItemProducto from '@/components/pedido/ItemProducto'
 import BuscadorCliente from '@/components/pedido/BuscadorCliente'
 import SeccionPago from '@/components/pedido/SeccionPago'
+import { PdfGracias } from '@/components/pedido/PdfPedido'
+import PdfScaler from '@/components/pedido/PdfScaler'
 import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/identificacion'
 import { puedeVerTienda, tiendasDisponibles } from '@/lib/tiendasUsuario'
 
@@ -54,6 +56,28 @@ function itemsValidos(items) {
     parseInt(i.cantidad || 0) >= 1 &&
     parseFloat(i.precioUnit || 0) >= 0
   )
+}
+
+/**
+ * Traduce los ítems del formulario (minúsculas) al shape de la hoja DETALLE
+ * (MAYÚSCULAS) que esperan los componentes de PDF. Es solo para el preview de
+ * aprobación del paso 4: el pedido todavía no existe, así que no hay fila que
+ * leer y los datos se pintan directo del formulario. Las fotos aún son data:
+ * URIs — el <img> del PDF las muestra igual.
+ */
+function itemsParaPreview(items) {
+  return items.map(i => ({
+    PRODUCTO_NOMBRE: i.productoNombre || i.nombre || '',
+    COLOR: i.color || '',
+    TALLA: i.talla || '',
+    CANTIDAD: i.cantidad || 1,
+    DETALLE_PERSONALIZADO: i.detalle || '',
+    FOTO_PECHO_URL:   i.fotoPecho || i.imagenShopify || i.foto || '',
+    FOTO_ESPALDA_URL: i.fotoEspalda || '',
+    FOTO_MANGA_D_URL: i.fotoMangaD || '',
+    FOTO_MANGA_I_URL: i.fotoMangaI || '',
+    SUBTOTAL: (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)).toFixed(2),
+  }))
 }
 
 export default function NuevoPedidoPage() {
@@ -127,17 +151,24 @@ export default function NuevoPedidoPage() {
 
   function agregarDesdeSucursal(prod) {
     setSucursalIdVendido(prod.ID)
+    // Los nombres de campo deben ser los MISMOS que usa BuscadorProductos
+    // (productoNombre / detalle / imagen / fotoPecho): son los que leen
+    // ItemProducto y el POST de /api/pedidos. Con `nombre` y `descripcion`
+    // las prendas de sucursal se guardaban sin nombre y llegaban en blanco
+    // a la orden de fábrica.
     setItems(p => [...p, {
       tipo: 'SUCURSAL',
       sucursalId: prod.ID,
-      nombre: prod.NOMBRE,
+      productoNombre: prod.NOMBRE,
       talla: prod.TALLA,
       color: prod.COLOR,
-      foto: prod.FOTO_URL,
+      imagen: prod.FOTO_URL,
+      imagenShopify: prod.FOTO_URL || null,
+      fotoPecho: prod.FOTO_URL || null,
       cantidad: 1,
       precioUnit: prod.PRECIO || '',
       area: '',
-      descripcion: `${prod.NOMBRE} - Talla ${prod.TALLA}${prod.COLOR ? ' - ' + prod.COLOR : ''}`,
+      detalle: `${prod.NOMBRE} - Talla ${prod.TALLA}${prod.COLOR ? ' - ' + prod.COLOR : ''}`,
     }])
     setTienda('MANDARINA') // volver a Shopify después de agregar
   }
@@ -157,6 +188,7 @@ export default function NuevoPedidoPage() {
   }, [items])
 
   const montoTotal = items.reduce((s, i) => s + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
+  const montoAbonado = pagos.reduce((s, p) => s + parseFloat(p.monto || 0), 0)
   const tiendaColor = TIENDA_COLORS[tienda] || '#6C3FC5'
   const isYAW = user?.rol === 'VENDEDOR_YAW'
 
@@ -169,6 +201,23 @@ export default function NuevoPedidoPage() {
     if (!dir) return ciudad
     if (dir.toLowerCase().startsWith(ciudad.toLowerCase())) return dir
     return `${ciudad}: ${dir}`
+  }
+
+  // Pedido "borrador" para el preview del paso 4. Misma forma que una fila real
+  // de PEDIDOS, pero sin PEDIDO_ID: ese número se genera recién al confirmar.
+  const clientePreview = {
+    NOMBRE:  cliente.nombre || '',
+    CELULAR: cliente.celular || '',
+    CEDULA:  cliente.cedula || '',
+  }
+  const pedidoPreview = {
+    PEDIDO_ID: 'POR ASIGNAR',
+    TIENDA_ID: tienda === 'SUCURSAL' ? 'MANDARINA' : tienda,
+    DIRECCION_TEXTO: buildDireccion(),
+    MONTO_TOTAL: montoTotal.toFixed(2),
+    MONTO_ABONADO: montoAbonado.toFixed(2),
+    ESTADO_PAGO: montoAbonado >= montoTotal - 0.01 ? 'PAGADO' : 'ABONO',
+    items: itemsParaPreview(items),
   }
 
   // Cambiar tipo de identificación: revalida y ajusta la factura.
@@ -367,7 +416,7 @@ export default function NuevoPedidoPage() {
 
   if (!user) return null
 
-  const steps = ['Cliente', 'Productos', 'Entrega y Pago', 'Confirmar']
+  const steps = ['Cliente', 'Productos', 'Entrega y Pago', 'Revisar']
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
@@ -688,7 +737,27 @@ export default function NuevoPedidoPage() {
           {/* STEP 4 */}
           {step === 4 && (
             <div className="space-y-4">
-              <h2 className="font-semibold text-white">Confirmar pedido</h2>
+              <h2 className="font-semibold text-white">Revisa con el cliente</h2>
+
+              {/* Preview del documento que verá el cliente. Es el punto de no
+                  retorno: al dar DE ACUERDO el pedido se crea y se va a fábrica,
+                  y a partir de ahí solo un ADMIN puede modificar los productos. */}
+              <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-xs px-4 py-3 rounded-xl">
+                ⚠️ Revisa tallas, colores, cantidades y precios. Al dar <strong>DE ACUERDO</strong> el
+                pedido entra a fábrica y ya no lo podrás editar: los cambios los tendrá que hacer un ADMIN.
+              </div>
+
+              <div className="card p-3 overflow-hidden">
+                <PdfScaler>
+                  <PdfGracias
+                    pedido={pedidoPreview}
+                    items={pedidoPreview.items}
+                    cliente={clientePreview}
+                    tiendaColor={tiendaColor}
+                  />
+                </PdfScaler>
+              </div>
+
               <div className="card p-5 space-y-2.5 text-sm">
                 {[
                   ['Tienda', tienda],
@@ -706,7 +775,7 @@ export default function NuevoPedidoPage() {
                 <div className="flex justify-between"><span className="text-gray-500">Productos</span><span className="text-white">{items.length} ítems</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Total</span><span className="text-white font-bold text-xl">${montoTotal.toFixed(2)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Pagos</span>
-                  <span className="text-green-400">${pagos.reduce((s,p) => s + parseFloat(p.monto||0), 0).toFixed(2)}</span>
+                  <span className="text-green-400">${montoAbonado.toFixed(2)}</span>
                 </div>
                 <hr className="border-gray-800" />
                 <div className="flex justify-between"><span className="text-gray-500">Entrega</span>
@@ -724,10 +793,13 @@ export default function NuevoPedidoPage() {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-3">
-        {/* YAW no puede volver al step 1 (cliente fijo) */}
-        {step > 1 && !(isYAW && step === 2) && (
+        {/* En el paso 4 "Atrás" se convierte en EDITAR: devuelve al paso de
+            productos, que es lo que el cliente pide corregir el 99% de las veces. */}
+        {step === 4 ? (
+          <button onClick={() => goToStep(2)} disabled={loading} className="btn-secondary flex-1">✏️ EDITAR</button>
+        ) : step > 1 && !(isYAW && step === 2) ? (
           <button onClick={() => goToStep(step - 1)} className="btn-secondary flex-1">← Atrás</button>
-        )}
+        ) : null}
         {step < 4 ? (
           <button onClick={() => goToStep(step + 1)} disabled={!canGoToStep(step + 1)}
             className="btn-primary flex-1"
@@ -741,7 +813,7 @@ export default function NuevoPedidoPage() {
             style={{ backgroundColor: tiendaColor }}>
             {loading
               ? <span className="flex items-center justify-center gap-2"><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Guardando...</span>
-              : '✅ Crear pedido'}
+              : '✅ DE ACUERDO'}
           </button>
         )}
       </div>

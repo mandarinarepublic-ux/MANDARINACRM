@@ -1,4 +1,6 @@
 export const dynamic = 'force-dynamic'
+import { requireAdmin, HEADER_USUARIO } from '@/lib/auth'
+import { getUsuarioById } from '@/lib/db/usuarios'
 import { fechaAhora } from '@/lib/sheets'
 import { logCambio, subestadoInicial } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
@@ -14,6 +16,20 @@ export async function GET(req, { params }) {
   try {
     const pedido = await getPedidoById(params.id)
     if (!pedido) return Response.json({ error: 'Pedido no encontrado' }, { status: 404 })
+
+    // Un VENDEDOR solo abre sus propios pedidos. Se resuelve su rol contra la
+    // base a partir de la cabecera de sesión, no del rol que diga el navegador.
+    // Sin cabecera no se restringe: el resto de pantallas (producción, despacho,
+    // tablero) consultan por otras vías y no la mandan.
+    const sesionId = req.headers.get(HEADER_USUARIO)
+    if (sesionId) {
+      const usuario = await getUsuarioById(sesionId).catch(() => null)
+      if (usuario?.ROL === 'VENDEDOR') {
+        const suyo = pedido.VENDEDOR_ID === usuario.USUARIO_ID || pedido.VENDEDOR_ID === usuario.NOMBRE
+        if (!suyo) return Response.json({ error: 'Este pedido es de otro vendedor' }, { status: 403 })
+      }
+    }
+
     return Response.json({ pedido })
   } catch (e) {
     console.error('GET pedido/[id] error:', e)
@@ -126,7 +142,12 @@ export async function PATCH(req, { params }) {
     }
 
     // ── Nuevo ítem (dual-write; createItem incluye ARCHIVO_DISENO, deuda #2) ───
+    // SOLO ADMIN: sumar prendas a un pedido ya confirmado cambia el total y la
+    // carga de fábrica. El vendedor arma el pedido completo antes de aprobarlo.
     if (body.nuevoItem) {
+      const auth = await requireAdmin(req)
+      if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status })
+
       const item = body.nuevoItem
       const cloudFolder = `mandarina-pro/pedidos/${id}`
 

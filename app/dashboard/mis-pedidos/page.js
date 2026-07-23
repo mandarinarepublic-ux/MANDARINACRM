@@ -113,8 +113,11 @@ export default function MisPedidosPage() {
             </div>
           ) : (
             <div className="space-y-2">
+              {/* Al detalle (solo lectura), NO al editor: una vez que el vendedor
+                  dio DE ACUERDO el pedido está en fábrica y los productos solo los
+                  cambia un ADMIN. */}
               {filtered.map(p => (
-                <Link key={p.PEDIDO_ID} href={`/dashboard/editar-pedido/${p.PEDIDO_ID}`}
+                <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`}
                   className="card p-4 flex items-center gap-4 hover:border-gray-700 transition-all block">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
