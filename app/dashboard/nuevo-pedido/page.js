@@ -58,9 +58,16 @@ const PLANTILLA_DIRECCION = 'CIUDAD: \nCalle principal: \nCalle secundaria: \nLu
 
 /** ¿El texto sigue siendo la plantilla vacía (nadie escribió nada)? */
 function plantillaVacia(texto) {
-  return String(texto || '')
-    .split('\n')
-    .every(linea => !linea.includes(':') || !linea.split(':').slice(1).join(':').trim())
+  // "Vacía" solo si NINGUNA línea tiene contenido real. Una línea con etiqueta
+  // ("Calle principal: valor") cuenta si tiene valor; una línea de TEXTO LIBRE
+  // (sin ":") cuenta si tiene algo escrito. Así se acepta la dirección escrita
+  // libremente, no solo con la plantilla.
+  return String(texto || '').split('\n').every(linea => {
+    const l = linea.trim()
+    if (!l) return true
+    if (l.includes(':')) return !l.split(':').slice(1).join(':').trim()
+    return false
+  })
 }
 
 /** Valor escrito al lado de una etiqueta, p.ej. campoDireccion(txt, 'Calle principal'). */
@@ -137,6 +144,9 @@ export default function NuevoPedidoPage() {
   const scrollRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Limpiar el banner de error apenas el vendedor edita los datos del cliente:
+  // evita que un error ya corregido (p.ej. "nombre obligatorio") quede pegado.
+  useEffect(() => { setError('') }, [cliente])
   const [step, setStep] = useState(1)
 
   // Sucursal
@@ -293,13 +303,10 @@ export default function NuevoPedidoPage() {
     if (errCedula) return errCedula
     if (errCelular) return errCelular
     if (!cliente.ciudad.trim()) return 'La ciudad de entrega es obligatoria'
-    if (!usarMapa) {
-      // Con la plantilla el campo NUNCA está vacío (trae las etiquetas), así que
-      // se comprueba que hayan escrito algo y, en concreto, la calle principal.
-      if (!cliente.direccion.trim() || plantillaVacia(cliente.direccion)) return 'La dirección completa es obligatoria'
-      if (/^\s*CIUDAD\s*:/im.test(cliente.direccion) && !campoDireccion(cliente.direccion, 'Calle principal')) {
-        return 'Falta la calle principal en la dirección'
-      }
+    // La dirección acepta TEXTO LIBRE; la plantilla es solo una recomendación de
+    // formato. Solo se exige que haya contenido real (no las etiquetas vacías).
+    if (!usarMapa && (!cliente.direccion.trim() || plantillaVacia(cliente.direccion))) {
+      return 'La dirección completa es obligatoria'
     }
     if (emitirFactura && !cliente.email.trim()) return '⚠️ Para emitir factura necesitas el correo del cliente'
     return null
