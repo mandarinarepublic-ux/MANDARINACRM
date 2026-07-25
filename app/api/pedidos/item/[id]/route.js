@@ -12,6 +12,7 @@ import {
   getItemById,
 } from '@/lib/db/detalle'
 import { setEstado, todosItemsListos, getPedidoById } from '@/lib/db/pedidos'
+import { recalcTotalesSeguro } from '@/lib/db/totales'
 
 export async function PATCH(req, { params }) {
   try {
@@ -140,7 +141,15 @@ export async function PATCH(req, { params }) {
     if (body.AREA !== undefined && body.AREA !== item.AREA) cambios.push(`Área: ${item.AREA}→${body.AREA}`)
     if (cambios.length > 0) await logCambio(item.PEDIDO_ID, `EDICION ${item.PRODUCTO_NOMBRE}`, '', cambios.join(' | '), usuarioId).catch(() => {})
 
-    return Response.json({ ok: true })
+    // Cambió el dinero de una prenda ⇒ cuadrar la fila del PEDIDO. Sin esto el
+    // ítem quedaba con el precio nuevo y el pedido con el total viejo (historial,
+    // tablero, ventas del mes y PDF mostraban el importe anterior).
+    let totales = null
+    if (campos.SUBTOTAL !== undefined) {
+      totales = await recalcTotalesSeguro(item.PEDIDO_ID, { logCambio, usuarioId })
+    }
+
+    return Response.json({ ok: true, totales })
   } catch (e) {
     console.error('PATCH item error:', e)
     return Response.json({ error: e.message }, { status: 500 })
@@ -164,7 +173,11 @@ export async function DELETE(req, { params }) {
     // Soft-delete dual-write: Sheets SUBESTADO='ELIMINADO', Supabase eliminado=true.
     await softDeleteItem(id, usuarioId)
     await logCambio(item.PEDIDO_ID, 'ITEM_ELIMINADO', item.PRODUCTO_NOMBRE, 'ELIMINADO', usuarioId).catch(() => {})
-    return Response.json({ ok: true })
+
+    // Quitar una prenda baja el total del pedido.
+    const totales = await recalcTotalesSeguro(item.PEDIDO_ID, { logCambio, usuarioId })
+
+    return Response.json({ ok: true, totales })
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })
   }

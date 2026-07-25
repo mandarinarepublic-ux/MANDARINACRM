@@ -8,6 +8,7 @@ import { updatePedido, markImpreso, getPedidoById } from '@/lib/db/pedidos'
 import { createGuia } from '@/lib/db/guias'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
+import { recalcTotalesSeguro } from '@/lib/db/totales'
 
 // Detalle de UN pedido (join acotado a ese id vía getPedidoById). Las pantallas
 // de detalle y edición antes bajaban la lista COMPLETA con join de 5 tablas solo
@@ -186,9 +187,12 @@ export async function PATCH(req, { params }) {
       })
 
       await logCambio(id, 'ITEM_AGREGADO', '', item.productoNombre, usuarioId)
+
+      // Sumar una prenda sube el total del pedido: cuadrar la fila de PEDIDOS.
+      await recalcTotalesSeguro(id, { logCambio, usuarioId })
     }
 
-    // ── Nuevo pago (dual-write; sin recálculo: los montos vienen del body arriba) ──
+    // ── Nuevo pago (dual-write) ───────────────────────────────────────────────
     if (body.nuevoPago) {
       const pago = body.nuevoPago
       const montoNuevo = parseFloat(pago.monto || 0)
@@ -202,6 +206,11 @@ export async function PATCH(req, { params }) {
           estado: 'PAGADO', // este flujo siempre marca PAGADO, igual que antes
         })
         await logCambio(id, 'PAGO_AGREGADO', '', `$${montoNuevo.toFixed(2)} ${pago.tipo}`, usuarioId)
+
+        // Los montos llegaron en el body calculados por la pantalla (arriba). Se
+        // recalculan contra la base para que el abono no quede cuadrado sobre un
+        // total desactualizado ni dependa de lo que mande el navegador.
+        await recalcTotalesSeguro(id, { logCambio, usuarioId })
       }
     }
 
