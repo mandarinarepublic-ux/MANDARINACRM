@@ -10,6 +10,7 @@ import { PdfGracias } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/identificacion'
 import { puedeVerTienda, tiendasDisponibles } from '@/lib/tiendasUsuario'
+import { parseFechaCalendario, diasHastaEntrega, hoyEcuador } from '@/lib/parseFecha'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
 
@@ -37,12 +38,16 @@ function validarCelular(v) {
 }
 
 function getMinFechaConDias(dias = 3) {
-  const d = new Date()
+  // Se cuenta desde HOY EN ECUADOR. Antes se partía de la hora local y el día se
+  // sacaba con toISOString(), que es UTC: vendiendo después de las 19:00 la fecha
+  // mínima de entrega saltaba un día de más.
+  const [y, m, d0] = hoyEcuador().split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 1, d0))
   let count = 0
   while (count < dias) {
-    d.setDate(d.getDate() + 1)
-    const day = d.getDay()
-    if (day !== 0 && day !== 6) count++
+    d.setUTCDate(d.getUTCDate() + 1)
+    const day = d.getUTCDay()
+    if (day !== 0 && day !== 6) count++   // sin sábados ni domingos
   }
   return d.toISOString().split('T')[0]
 }
@@ -430,9 +435,10 @@ export default function NuevoPedidoPage() {
       })
     }
 
-    const hoy = new Date()
-    const entrega = new Date(fechaEntrega)
-    const diasPrometido = Math.ceil((entrega - hoy) / 86400000)
+    // fechaEntrega es un día del calendario ("2026-07-30"), no un instante:
+    // `new Date(...)` lo tomaba como medianoche UTC = 19:00 del día anterior en
+    // Ecuador, así que el cálculo daba un día menos si se vendía de noche.
+    const diasPrometido = diasHastaEntrega(fechaEntrega)
 
     try {
       const res = await fetch('/api/pedidos', {
@@ -855,7 +861,7 @@ export default function NuevoPedidoPage() {
                 </div>
                 <hr className="border-gray-800" />
                 <div className="flex justify-between"><span className="text-gray-500">Entrega</span>
-                  <span className="text-white">{new Date(fechaEntrega).toLocaleDateString('es-EC', {day:'numeric',month:'long',year:'numeric'})}</span>
+                  <span className="text-white">{parseFechaCalendario(fechaEntrega)?.toLocaleDateString('es-EC', {day:'numeric',month:'long',year:'numeric'}) || fechaEntrega}</span>
                 </div>
               </div>
               <div>

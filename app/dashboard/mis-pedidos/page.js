@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha } from '@/lib/parseFecha'
+import { parseFecha, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 
 const ESTADO_LABELS = { EN_FABRICA:'En Producción', DESPACHO:'Para despacho', ENTREGADO:'Entregado' }
 const ESTADO_COLORS = { EN_FABRICA:'text-blue-400 bg-blue-500/10', DESPACHO:'text-purple-400 bg-purple-500/10', ENTREGADO:'text-green-400 bg-green-500/10' }
@@ -50,12 +50,13 @@ export default function MisPedidosPage() {
     if (busqueda && !coincideBusqueda(p, busqueda)) return false
     if (fechaDesde) {
       const f = parseFecha(p.FECHA_PEDIDO)
-      if (!f || f < new Date(fechaDesde)) return false
+      const desde = inicioDiaEcuador(fechaDesde)
+      if (!f || (desde && f < desde)) return false
     }
     if (fechaHasta) {
       const f = parseFecha(p.FECHA_PEDIDO)
-      const h = new Date(fechaHasta); h.setHours(23,59,59)
-      if (!f || f > h) return false
+      const hasta = finDiaEcuador(fechaHasta)
+      if (!f || (hasta && f > hasta)) return false
     }
     return true
   })
@@ -124,7 +125,7 @@ export default function MisPedidosPage() {
                       <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
                       <span className="text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                     </div>
-                    <div className="text-xs text-gray-500">{p.items?.length || 0} prenda(s) · {p.FECHA_PEDIDO?.split(' ')[0] || ''}</div>
+                    <div className="text-xs text-gray-500">{p.items?.length || 0} prenda(s) · {formatFechaDia(p.FECHA_PEDIDO)}</div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
                     <span className={`badge text-xs ${ESTADO_COLORS[p.ESTADO_PEDIDO]}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}</span>

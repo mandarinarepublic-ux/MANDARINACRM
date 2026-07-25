@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha, formatFechaCorta } from '@/lib/parseFecha'
+import { parseFecha, formatFechaCorta, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { filtrarPedidosPorTienda } from '@/lib/tiendasUsuario'
 import { SkeletonList } from '@/components/Skeleton'
 import { imagenAncho } from '@/lib/imagenes'
@@ -109,8 +109,8 @@ export default function HistorialPage() {
     if (!isYAW && filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
     if (filtroPago !== 'TODOS' && p.ESTADO_PAGO !== filtroPago) return false
     if (busquedaDebounced && !coincideBusqueda(p, busquedaDebounced)) return false
-    if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
-    if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO); const h = new Date(fechaHasta); h.setHours(23,59,59); if (!f || f > h) return false }
+    if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO), d = inicioDiaEcuador(fechaDesde); if (!f || (d && f < d)) return false }
+    if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO), h = finDiaEcuador(fechaHasta); if (!f || (h && f > h)) return false }
     return true
   })
 
@@ -127,8 +127,8 @@ export default function HistorialPage() {
       const hay = `${c.numero||''} ${c.cliente_nombre||''} ${c.cliente_cedula||''} ${c.cliente_tel||''}`.toLowerCase()
       if (!hay.includes(busquedaDebounced.toLowerCase())) return false
     }
-    if (fechaDesde) { const f = new Date(c.fecha); if (isNaN(f) || f < new Date(fechaDesde)) return false }
-    if (fechaHasta) { const f = new Date(c.fecha); const h = new Date(fechaHasta); h.setHours(23,59,59); if (isNaN(f) || f > h) return false }
+    if (fechaDesde) { const f = parseFecha(c.fecha), d = inicioDiaEcuador(fechaDesde); if (!f || (d && f < d)) return false }
+    if (fechaHasta) { const f = parseFecha(c.fecha), h = finDiaEcuador(fechaHasta); if (!f || (h && f > h)) return false }
     return true
   })
 

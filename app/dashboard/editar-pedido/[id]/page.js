@@ -7,6 +7,7 @@ import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { subirFoto } from '@/lib/subirImagen'
 import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/identificacion'
 import { imagenAncho } from '@/lib/imagenes'
+import { formatFechaDia } from '@/lib/parseFecha'
 
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
@@ -319,7 +320,7 @@ export default function EditarPedidoPage() {
             </div>
             {pagos.length>0&&<div className="space-y-1.5 mb-3">{pagos.map((p,i)=>(
               <div key={i} className="flex justify-between text-xs bg-gray-800/50 rounded-lg px-3 py-2">
-                <span className="text-gray-400">{p.TIPO_PAGO} · {p.FECHA_PAGO?.split(' ')[0]}</span>
+                <span className="text-gray-400">{p.TIPO_PAGO} · {formatFechaDia(p.FECHA_PAGO)}</span>
                 <span className="text-white font-medium">${parseFloat(p.MONTO||0).toFixed(2)}</span>
               </div>
             ))}</div>}

@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { PdfGraciasPagina, PdfConfeccionPagina, paginarItems, paginarItemsCliente } from '@/components/pedido/PdfPedido'
-import { parseFecha, formatFechaHumana } from '@/lib/parseFecha'
+import { parseFecha, formatFechaHumana, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 
 const MAX_LOTE_IMPRESION = 30
 
@@ -109,18 +109,17 @@ export default function ImpresionPage() {
     if (filtroImpresion === F_PENDIENTES && yaImpreso) return false
     if (filtroImpresion === F_IMPRESOS && !yaImpreso) return false
 
+    // Los extremos del rango son días de ECUADOR: 00:00:00 y 23:59:59.999 allá.
+    // Tomarlos como medianoche UTC corría el rango 5 horas (se colaban pedidos
+    // de la tarde del día anterior).
     if (fechaDesde) {
       const fp = parseFecha(p.FECHA_PEDIDO)
-      // parseFecha construye "YYYY-MM-DD" en hora LOCAL, así que ambos extremos
-      // se comparan en la misma zona (antes 'desde' se parseaba como UTC y el
-      // rango se corría un día).
-      const desde = parseFecha(fechaDesde)
+      const desde = inicioDiaEcuador(fechaDesde)
       if (fp && desde && fp < desde) return false
     }
     if (fechaHasta) {
       const fp = parseFecha(p.FECHA_PEDIDO)
-      const hasta = parseFecha(fechaHasta)
-      if (hasta) hasta.setHours(23, 59, 59, 999)
+      const hasta = finDiaEcuador(fechaHasta)
       if (fp && hasta && fp > hasta) return false
     }
     if (busqueda) {

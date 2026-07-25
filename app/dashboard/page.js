@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
+import { parseFecha, fechaISOEcuador, hoyEcuador, formatFechaDia } from '@/lib/parseFecha'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -28,7 +29,6 @@ export default function DashboardPage() {
   }
 
   function buildStats(pedidosTodos, u) {
-    const now = new Date()
     // VENDEDOR_YAW solo ve pedidos de tienda YAW
     const pedidos = (u.rol === 'VENDEDOR')
       ? pedidosTodos.filter(p => p.VENDEDOR_ID === u.id || p.VENDEDOR_ID === u.nombre)
@@ -36,26 +36,16 @@ export default function DashboardPage() {
       ? pedidosTodos.filter(p => p.TIENDA_ID === 'YAW')
       : pedidosTodos
 
-    const hoy = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-    const mesActual = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
+    const hoy = hoyEcuador()
+    const mesActual = hoy.slice(0, 7)
 
-    function parseFecha(str) {
-      if (!str) return null
-      // Formato ISO: 2026-06-26 o 2026-06-26T...
-      if (str.match(/^\d{4}-/)) {
-        const d = str.slice(0,10) // YYYY-MM-DD sin conversión UTC
-        return { iso: d, mes: d.slice(0,7) }
-      }
-      // Formato: 26Jun2026 12:34:56
-      const months = {Ene:'01',Feb:'02',Mar:'03',Abr:'04',May:'05',Jun:'06',Jul:'07',Ago:'08',Sep:'09',Oct:'10',Nov:'11',Dic:'12'}
-      const m = str.match(/^(\d{2})([A-Za-z]{3})(\d{4})/)
-      if (!m) return null
-      const d = `${m[3]}-${months[m[2]]}-${m[1]}`
-      return { iso: d, mes: d.slice(0,7) }
-    }
+    // FECHA_PEDIDO es un instante. Recortar su ISO (que Supabase manda en UTC)
+    // metía los pedidos de la tarde-noche en el día siguiente: las ventas de hoy
+    // arrastraban las de ayer después de las 19:00. Se agrupa por día de Ecuador.
+    const diaDe = (p) => fechaISOEcuador(p.FECHA_PEDIDO)
 
-    const pedidosHoy = pedidos.filter(p => { const f = parseFecha(p.FECHA_PEDIDO); return f && f.iso === hoy })
-    const pedidosMes = pedidos.filter(p => { const f = parseFecha(p.FECHA_PEDIDO); return f && f.mes === mesActual })
+    const pedidosHoy = pedidos.filter(p => diaDe(p) === hoy)
+    const pedidosMes = pedidos.filter(p => diaDe(p).slice(0, 7) === mesActual)
 
     const ventasMes = pedidosMes.reduce((s, p) => s + parseFloat(p.MONTO_TOTAL || 0), 0)
     const ventasHoy = pedidosHoy.reduce((s, p) => s + parseFloat(p.MONTO_TOTAL || 0), 0)
@@ -96,8 +86,14 @@ export default function DashboardPage() {
     const porArea = {}
     allItems.forEach(i => { const a = i.AREA || 'SIN ÁREA'; if (!porArea[a]) porArea[a] = 0; porArea[a]++ })
 
+    // Por instante, no por día: ordenar por el día dejaba el empate de todos los
+    // pedidos de una misma fecha al azar del orden de llegada.
     const misRecientes = [...pedidos]
-      .sort((a, b) => { const fa = parseFecha(a.FECHA_PEDIDO)?.iso||''; const fb = parseFecha(b.FECHA_PEDIDO)?.iso||''; return fb.localeCompare(fa) })
+      .sort((a, b) => {
+        const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
+        const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
+        return fb - fa
+      })
       .slice(0, 5)
 
     // Para despacho: listos y en despacho
@@ -272,7 +268,7 @@ function DashboardVendedor({ data, user }) {
                 <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-all block">
                   <div>
                     <div className="font-mono text-sm text-white">{p.PEDIDO_ID}</div>
-                    <div className="text-xs text-gray-500">{p.FECHA_PEDIDO?.split(' ')[0]||''}</div>
+                    <div className="text-xs text-gray-500">{formatFechaDia(p.FECHA_PEDIDO)}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTADO_COLORS[p.ESTADO_PEDIDO]||'text-gray-400 bg-gray-800'}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO]||p.ESTADO_PEDIDO}</span>
@@ -374,7 +370,7 @@ function DashboardYAW({ data, user }) {
                 <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-all block">
                   <div>
                     <div className="font-mono text-sm text-white">{p.PEDIDO_ID}</div>
-                    <div className="text-xs text-gray-500">{p.FECHA_PEDIDO?.split(' ')[0]||''}</div>
+                    <div className="text-xs text-gray-500">{formatFechaDia(p.FECHA_PEDIDO)}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTADO_COLORS[p.ESTADO_PEDIDO]||'text-gray-400 bg-gray-800'}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO]||p.ESTADO_PEDIDO}</span>

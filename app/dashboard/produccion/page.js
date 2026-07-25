@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha, diasHastaEntrega } from '@/lib/parseFecha'
+import { parseFecha, diasHastaEntrega, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { PdfConfeccion, PdfConfeccionPagina, paginarItems } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import { imagenAncho } from '@/lib/imagenes'
@@ -398,11 +398,15 @@ export default function ProduccionPage() {
         const matchProducto = p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(q))
         if (!matchPedidoOCliente && !matchProducto) return false
       }
-      if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
+      if (fechaDesde) {
+        const f = parseFecha(p.FECHA_PEDIDO)
+        const d = inicioDiaEcuador(fechaDesde)
+        if (!f || (d && f < d)) return false
+      }
       if (fechaHasta) {
         const f = parseFecha(p.FECHA_PEDIDO)
-        const h = new Date(fechaHasta); h.setHours(23,59,59)
-        if (!f || f > h) return false
+        const h = finDiaEcuador(fechaHasta)
+        if (!f || (h && f > h)) return false
       }
       return true
     })
@@ -590,7 +594,7 @@ export default function ProduccionPage() {
                           <span className="text-xs text-gray-600">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                         </div>
                         <div className="text-xs text-gray-500">
-                          {pedido.itemsFiltrados.length} ítem(s){diasR !== null && ` · ${diasR}d restantes`} · {pedido.FECHA_PEDIDO?.split(' ')[0] || ''}
+                          {pedido.itemsFiltrados.length} ítem(s){diasR !== null && ` · ${diasR}d restantes`} · {formatFechaDia(pedido.FECHA_PEDIDO)}
                         </div>
                       </div>
 

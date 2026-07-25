@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha, diasHastaEntrega } from '@/lib/parseFecha'
+import { parseFecha, diasHastaEntrega, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { filtrarPedidosPorTienda } from '@/lib/tiendasUsuario'
 
 // ─── Constantes de etapa ───────────────────────────────────────────────────────
@@ -339,8 +339,8 @@ export default function TableroPage() {
         if (filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
         if (busqueda && !coincideBusqueda(p, busqueda)) return false
         // Fecha de creación (FECHA_PEDIDO) — soporta formato ISO y "16Jun2026"
-        if (creacionDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(creacionDesde)) return false }
-        if (creacionHasta) { const f = parseFecha(p.FECHA_PEDIDO); const h = new Date(creacionHasta); h.setHours(23, 59, 59); if (!f || f > h) return false }
+        if (creacionDesde) { const f = parseFecha(p.FECHA_PEDIDO), d = inicioDiaEcuador(creacionDesde); if (!f || (d && f < d)) return false }
+        if (creacionHasta) { const f = parseFecha(p.FECHA_PEDIDO), h = finDiaEcuador(creacionHasta); if (!f || (h && f > h)) return false }
         // Fecha comprometida de entrega (FECHA_ENTREGA_PROMETIDA, formato YYYY-MM-DD)
         const entrega = (p.FECHA_ENTREGA_PROMETIDA || '').slice(0, 10)
         if (entregaDesde) { if (!entrega || entrega < entregaDesde) return false }

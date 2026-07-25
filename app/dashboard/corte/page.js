@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha, diasHastaEntrega } from '@/lib/parseFecha'
+import { parseFecha, diasHastaEntrega, formatFechaDia } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
 
 const CORTE_CONFIG = {
@@ -280,7 +280,7 @@ export default function CortePage() {
                         <div className="text-xs text-gray-500">
                           {pedido.itemsFiltrados.length} prenda(s)
                           {diasR !== null && ` · ${diasR}d restantes`}
-                          {' · '}{pedido.FECHA_PEDIDO?.split(' ')[0]}
+                          {' · '}{formatFechaDia(pedido.FECHA_PEDIDO)}
                         </div>
                       </div>
                       <span className="text-gray-600 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>

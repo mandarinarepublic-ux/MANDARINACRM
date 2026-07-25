@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha } from '@/lib/parseFecha'
+import { parseFecha, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
 
 // Un pedido está CERRADO para despacho cuando alguien lo dio por salido:
@@ -110,8 +110,8 @@ export default function DespachosPage() {
     if (tab === 'PENDIENTE' && esCerrado(p)) return false
     if (tab === 'COMPLETADO' && !esCerrado(p)) return false
     if (busqueda && !coincideBusqueda(p, busqueda)) return false
-    if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO); if (!f || f < new Date(fechaDesde)) return false }
-    if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO); const h = new Date(fechaHasta); h.setHours(23,59,59); if (!f || f > h) return false }
+    if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO), d = inicioDiaEcuador(fechaDesde); if (!f || (d && f < d)) return false }
+    if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO), h = finDiaEcuador(fechaHasta); if (!f || (h && f > h)) return false }
     return true
   })
 
@@ -306,7 +306,7 @@ export default function DespachosPage() {
                             : <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">✓ Pagado</span>}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {p.FECHA_PEDIDO?.split(' ')[0]} · {itemsActivos.length} prenda(s) · ${montoTotal.toFixed(2)}
+                          {formatFechaDia(p.FECHA_PEDIDO)} · {itemsActivos.length} prenda(s) · ${montoTotal.toFixed(2)}
                           {p.GUIA_NUMERO && <span className="text-green-400 ml-2">· Guía #{p.GUIA_NUMERO}</span>}
                         </div>
                       </div>
