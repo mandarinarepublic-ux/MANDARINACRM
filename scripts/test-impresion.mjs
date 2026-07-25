@@ -63,7 +63,9 @@ console.log('\n== formatFechaHumana ==')
   const ayer = new Date(ahora); ayer.setDate(ayer.getDate() - 1)
   check('ayer', formatFechaHumana(ayer).startsWith('Ayer '), formatFechaHumana(ayer))
 
-  const viejo = new Date(2020, 2, 15, 9, 5)
+  // Instante explícito: se formatea en hora de ECUADOR, así que la prueba no
+  // debe depender de la zona horaria del equipo que la corre (ver test-fechas).
+  const viejo = '2020-03-15T14:05:00+00:00'   // 09:05 en Ecuador
   check('otro año incluye el año', formatFechaHumana(viejo) === '15 Mar 2020 09:05', formatFechaHumana(viejo))
 
   // Lo que veía el usuario antes: el ISO crudo. Ahora nunca debe salir.
