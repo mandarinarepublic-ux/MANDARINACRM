@@ -29,7 +29,11 @@ export default function LoginPage() {
         return
       }
       localStorage.setItem('mp_user', JSON.stringify(data.user))
-      router.push('/dashboard')
+      // Si el middleware nos mandó aquí desde una pantalla concreta, se vuelve
+      // a ella (?volver=/dashboard/historial) en vez de aterrizar siempre en el
+      // inicio. Se lee de la URL y se exige que sea una ruta interna.
+      const volver = new URLSearchParams(window.location.search).get('volver')
+      router.push(volver && volver.startsWith('/dashboard') ? volver : '/dashboard')
     } catch (err) {
       if (err.name === 'AbortError') {
         setError('Tiempo de espera agotado. Intenta de nuevo.')
