@@ -30,8 +30,13 @@ export default function ErroresPage() {
   const [error, setError] = useState('')
   const [fFuente, setFFuente] = useState('')
   const [fNivel, setFNivel] = useState('error')
-  const [reenviando, setReenviando] = useState(null)
+  const [reenviando, setReenviando] = useState(null)   // 'TODOS' = tanda completa
   const [aviso, setAviso] = useState('')
+  // Cola de reintentos: se puede aplastar varios botones sin esperar a que
+  // termine el anterior. Se procesan de a UNO para no disparar varias llamadas a
+  // Meta a la vez, y cada fila muestra su turno (⏳ 1, ⏳ 2…).
+  const [cola, setCola] = useState([])       // [{pedidoId, eventoId}]
+  const [activo, setActivo] = useState(null) // pedidoId que se está enviando
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -65,28 +70,53 @@ export default function ErroresPage() {
   // Recargar al cambiar filtros
   useEffect(() => { if (user) cargar() }, [fFuente, fNivel])
 
+  // Tope de la cola: suficiente para ir aplastando varios seguidos, y bajito
+  // para no encolar decenas de llamadas a Meta desde el navegador. Para tandas
+  // grandes está el botón "Reintentar Meta", que las manda de una al servidor.
+  const MAX_COLA = 5
+
+  /** Pone un pedido en la fila de reintentos (no espera a que termine el anterior). */
+  function encolarReintento(ev) {
+    if (activo === ev.pedido_id) return
+    if (cola.some(c => c.pedidoId === ev.pedido_id)) return
+    if (cola.length + (activo ? 1 : 0) >= MAX_COLA) {
+      setError(`Máximo ${MAX_COLA} en la fila. Espera a que bajen o usa "Reintentar Meta".`)
+      return
+    }
+    setError('')
+    setCola(c => [...c, { pedidoId: ev.pedido_id, eventoId: ev.id }])
+  }
+
+  // Procesa la fila de a uno. Cuando termina el activo, arranca el siguiente.
+  useEffect(() => {
+    if (activo || cola.length === 0) return
+    const siguiente = cola[0]
+    setActivo(siguiente.pedidoId)
+    setCola(c => c.slice(1))
+    reenviarCapi(siguiente).finally(() => setActivo(null))
+  }, [cola, activo])
+
   // Reenvía a Meta el Purchase de un pedido que falló. El servidor vuelve a
   // consultar el pedido y el cliente y usa la fecha REAL de la venta.
-  async function reenviarCapi(ev) {
-    setReenviando(ev.pedido_id); setError(''); setAviso('')
+  async function reenviarCapi({ pedidoId, eventoId }) {
     try {
       const res = await fetch('/api/admin/capi-reenviar', {
-        method: 'POST', headers: headers(), body: JSON.stringify({ pedidoIds: [ev.pedido_id] }),
+        method: 'POST', headers: headers(), body: JSON.stringify({ pedidoIds: [pedidoId] }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
       const r = d.resultados?.[0] || {}
       if (r.ok) {
-        setAviso(`✅ ${ev.pedido_id}: Meta lo recibió`)
+        setAviso(`✅ ${pedidoId}: Meta lo recibió`)
         // Sin esto el reintento no se notaba: el OK nuevo queda fuera del filtro
         // "Solo errores" y la fila roja seguía igual, como si no hubiera pasado nada.
-        await marcarResuelto(ev.id, true)
+        await marcarResuelto(eventoId, true)
       } else {
-        setError(`❌ ${ev.pedido_id}: ${r.error || 'no se pudo enviar'}`)
+        setError(`❌ ${pedidoId}: ${r.error || 'no se pudo enviar'}`)
       }
     } catch (e) {
       setError(e.message || 'Error de conexión')
-    } finally { setReenviando(null) }
+    }
   }
 
   /** Reintenta de una todos los errores de Meta que se ven en pantalla. */
@@ -144,7 +174,7 @@ export default function ErroresPage() {
         </div>
         <div className="flex gap-2">
           {eventos.some(e => e.fuente === 'meta' && e.nivel === 'error' && !e.resuelto && e.pedido_id) && (
-            <button onClick={reenviarTodos} disabled={!!reenviando}
+            <button onClick={reenviarTodos} disabled={!!reenviando || !!activo || cola.length > 0}
               className="text-xs px-3 py-2 rounded-xl border border-blue-600 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50">
               {reenviando === 'TODOS' ? '⏳ enviando...' : '🔄 Reintentar Meta'}
             </button>
@@ -246,12 +276,17 @@ export default function ErroresPage() {
                     )}
                     {/* Reintentar el envío a Meta. Repetirlo es inofensivo: el
                         event_id es el PEDIDO_ID y Meta deduplica. */}
-                    {ev.fuente === 'meta' && ev.nivel === 'error' && ev.pedido_id && (
-                      <button onClick={() => reenviarCapi(ev)} disabled={!!reenviando}
-                        className="text-xs px-2 py-1 rounded-lg border border-blue-600 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50">
-                        {reenviando === ev.pedido_id ? '⏳...' : '🔄 reintentar'}
-                      </button>
-                    )}
+                    {ev.fuente === 'meta' && ev.nivel === 'error' && ev.pedido_id && (() => {
+                      const enviando = activo === ev.pedido_id
+                      const turno = cola.findIndex(c => c.pedidoId === ev.pedido_id)   // -1 = no está en fila
+                      const enFila = turno >= 0
+                      return (
+                        <button onClick={() => encolarReintento(ev)} disabled={enviando || enFila || reenviando === 'TODOS'}
+                          className="text-xs px-2 py-1 rounded-lg border border-blue-600 text-blue-400 hover:bg-blue-500/10 disabled:opacity-60">
+                          {enviando ? '⏳ enviando' : enFila ? `⏳ ${turno + 1}` : '🔄 reintentar'}
+                        </button>
+                      )
+                    })()}
                   </div>
                 </div>
               </div>
