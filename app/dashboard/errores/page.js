@@ -67,18 +67,47 @@ export default function ErroresPage() {
 
   // Reenvía a Meta el Purchase de un pedido que falló. El servidor vuelve a
   // consultar el pedido y el cliente y usa la fecha REAL de la venta.
-  async function reenviarCapi(pedidoId) {
-    setReenviando(pedidoId); setError(''); setAviso('')
+  async function reenviarCapi(ev) {
+    setReenviando(ev.pedido_id); setError(''); setAviso('')
     try {
       const res = await fetch('/api/admin/capi-reenviar', {
-        method: 'POST', headers: headers(), body: JSON.stringify({ pedidoIds: [pedidoId] }),
+        method: 'POST', headers: headers(), body: JSON.stringify({ pedidoIds: [ev.pedido_id] }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
       const r = d.resultados?.[0] || {}
-      if (r.ok) setAviso(`✅ ${pedidoId}: Meta lo recibió`)
-      else setError(`❌ ${pedidoId}: ${r.error || 'no se pudo enviar'}`)
-      cargar()
+      if (r.ok) {
+        setAviso(`✅ ${ev.pedido_id}: Meta lo recibió`)
+        // Sin esto el reintento no se notaba: el OK nuevo queda fuera del filtro
+        // "Solo errores" y la fila roja seguía igual, como si no hubiera pasado nada.
+        await marcarResuelto(ev.id, true)
+      } else {
+        setError(`❌ ${ev.pedido_id}: ${r.error || 'no se pudo enviar'}`)
+      }
+    } catch (e) {
+      setError(e.message || 'Error de conexión')
+    } finally { setReenviando(null) }
+  }
+
+  /** Reintenta de una todos los errores de Meta que se ven en pantalla. */
+  async function reenviarTodos() {
+    const pendientes = eventos.filter(e => e.fuente === 'meta' && e.nivel === 'error' && !e.resuelto && e.pedido_id)
+    if (pendientes.length === 0) return
+    // Un pedido puede tener varios errores; se envía una sola vez por pedido.
+    const ids = [...new Set(pendientes.map(e => e.pedido_id))]
+    setReenviando('TODOS'); setError(''); setAviso('')
+    try {
+      const res = await fetch('/api/admin/capi-reenviar', {
+        method: 'POST', headers: headers(), body: JSON.stringify({ pedidoIds: ids.slice(0, 50) }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
+
+      const okIds = new Set((d.resultados || []).filter(r => r.ok).map(r => r.pedidoId))
+      for (const e of pendientes) if (okIds.has(e.pedido_id)) await marcarResuelto(e.id, true)
+
+      setAviso(`✅ ${d.enviados || 0} enviado(s) a Meta${d.fallidos ? ` · ❌ ${d.fallidos} siguen fallando` : ''}`)
+      if (ids.length > 50) setError(`Solo se reintentaron los primeros 50 de ${ids.length}. Vuelve a darle para el resto.`)
     } catch (e) {
       setError(e.message || 'Error de conexión')
     } finally { setReenviando(null) }
@@ -114,6 +143,12 @@ export default function ErroresPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {eventos.some(e => e.fuente === 'meta' && e.nivel === 'error' && !e.resuelto && e.pedido_id) && (
+            <button onClick={reenviarTodos} disabled={!!reenviando}
+              className="text-xs px-3 py-2 rounded-xl border border-blue-600 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50">
+              {reenviando === 'TODOS' ? '⏳ enviando...' : '🔄 Reintentar Meta'}
+            </button>
+          )}
           <button onClick={() => cargar()} disabled={loading} className="btn-secondary text-xs px-3 py-2">↻ Actualizar</button>
           <button onClick={() => router.back()} className="text-gray-500 hover:text-white text-sm px-2">← Volver</button>
         </div>
@@ -212,7 +247,7 @@ export default function ErroresPage() {
                     {/* Reintentar el envío a Meta. Repetirlo es inofensivo: el
                         event_id es el PEDIDO_ID y Meta deduplica. */}
                     {ev.fuente === 'meta' && ev.nivel === 'error' && ev.pedido_id && (
-                      <button onClick={() => reenviarCapi(ev.pedido_id)} disabled={reenviando === ev.pedido_id}
+                      <button onClick={() => reenviarCapi(ev)} disabled={!!reenviando}
                         className="text-xs px-2 py-1 rounded-lg border border-blue-600 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50">
                         {reenviando === ev.pedido_id ? '⏳...' : '🔄 reintentar'}
                       </button>
