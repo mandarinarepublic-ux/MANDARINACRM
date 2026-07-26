@@ -30,8 +30,6 @@ export default function ErroresPage() {
   const [error, setError] = useState('')
   const [fFuente, setFFuente] = useState('')
   const [fNivel, setFNivel] = useState('error')
-  const [reenviando, setReenviando] = useState(null)
-  const [aviso, setAviso] = useState('')
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -64,25 +62,6 @@ export default function ErroresPage() {
 
   // Recargar al cambiar filtros
   useEffect(() => { if (user) cargar() }, [fFuente, fNivel])
-
-  // Reenvía a Meta el Purchase de un pedido que falló. El servidor vuelve a
-  // consultar el pedido y el cliente y usa la fecha REAL de la venta.
-  async function reenviarCapi(pedidoId) {
-    setReenviando(pedidoId); setError(''); setAviso('')
-    try {
-      const res = await fetch('/api/admin/capi-reenviar', {
-        method: 'POST', headers: headers(), body: JSON.stringify({ pedidoIds: [pedidoId] }),
-      })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
-      const r = d.resultados?.[0] || {}
-      if (r.ok) setAviso(`✅ ${pedidoId}: Meta lo recibió`)
-      else setError(`❌ ${pedidoId}: ${r.error || 'no se pudo enviar'}`)
-      cargar()
-    } catch (e) {
-      setError(e.message || 'Error de conexión')
-    } finally { setReenviando(null) }
-  }
 
   async function marcarResuelto(id, resuelto) {
     // Optimista: lo tacho ya y confirmo contra el servidor.
@@ -162,12 +141,6 @@ export default function ErroresPage() {
         </select>
       </div>
 
-      {aviso && (
-        <div className="mb-3 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5">
-          <span className="text-sm text-green-400">{aviso}</span>
-        </div>
-      )}
-
       {error && (
         <div className="mb-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2.5">
           <span className="text-sm text-red-400">⚠️ {error}</span>
@@ -202,22 +175,12 @@ export default function ErroresPage() {
                     </div>
                     <div className={`text-sm ${ev.resuelto ? 'text-gray-500 line-through' : 'text-gray-200'}`}>{ev.mensaje}</div>
                   </div>
-                  <div className="flex-shrink-0 flex flex-col gap-1">
-                    {ev.nivel === 'error' && (
-                      <button onClick={() => marcarResuelto(ev.id, !ev.resuelto)}
-                        className={`text-xs px-2 py-1 rounded-lg border ${ev.resuelto ? 'border-gray-700 text-gray-500' : 'border-green-600 text-green-400 hover:bg-green-500/10'}`}>
-                        {ev.resuelto ? '↩︎ reabrir' : '✓ resuelto'}
-                      </button>
-                    )}
-                    {/* Reintentar el envío a Meta. Repetirlo es inofensivo: el
-                        event_id es el PEDIDO_ID y Meta deduplica. */}
-                    {ev.fuente === 'meta' && ev.nivel === 'error' && ev.pedido_id && (
-                      <button onClick={() => reenviarCapi(ev.pedido_id)} disabled={reenviando === ev.pedido_id}
-                        className="text-xs px-2 py-1 rounded-lg border border-blue-600 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50">
-                        {reenviando === ev.pedido_id ? '⏳...' : '🔄 reintentar'}
-                      </button>
-                    )}
-                  </div>
+                  {ev.nivel === 'error' && (
+                    <button onClick={() => marcarResuelto(ev.id, !ev.resuelto)}
+                      className={`flex-shrink-0 text-xs px-2 py-1 rounded-lg border ${ev.resuelto ? 'border-gray-700 text-gray-500' : 'border-green-600 text-green-400 hover:bg-green-500/10'}`}>
+                      {ev.resuelto ? '↩︎ reabrir' : '✓ resuelto'}
+                    </button>
+                  )}
                 </div>
               </div>
             )

@@ -116,13 +116,7 @@ export default function DashboardLayout({ children }) {
     setUser(JSON.parse(stored))
   }, [])
 
-  // Cerrar sesión de verdad: además de olvidar al usuario en el navegador, hay
-  // que pedirle al servidor que borre la cookie firmada — que es la credencial.
-  async function logout() {
-    localStorage.removeItem('mp_user')
-    try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
-    router.push('/')
-  }
+  function logout() { localStorage.removeItem('mp_user'); router.push('/') }
 
   const { notifs, addNotif, removeNotif } = useNotifs()
   const handleNuevoPedido = useCallback((pedido) => addNotif(pedido), [addNotif])

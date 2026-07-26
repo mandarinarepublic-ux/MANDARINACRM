@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic'
-import { requireAdmin, sesionActual } from '@/lib/auth'
+import { requireAdmin, HEADER_USUARIO } from '@/lib/auth'
 import { getUsuarioById } from '@/lib/db/usuarios'
 import { fechaAhora } from '@/lib/sheets'
 import { logCambio, subestadoInicial } from '@/lib/pedidos'
@@ -18,12 +18,11 @@ export async function GET(req, { params }) {
     const pedido = await getPedidoById(params.id)
     if (!pedido) return Response.json({ error: 'Pedido no encontrado' }, { status: 404 })
 
-    // Un VENDEDOR solo abre sus propios pedidos. El id sale de la COOKIE FIRMADA,
-    // no de una cabecera: antes bastaba con no mandarla para saltarse el control.
-    // Sin sesión solo se llega hasta aquí con el token de máquina (los agentes de
-    // WhatsApp), que no es un vendedor y no se restringe.
-    const sesion = await sesionActual()
-    const sesionId = sesion?.id
+    // Un VENDEDOR solo abre sus propios pedidos. Se resuelve su rol contra la
+    // base a partir de la cabecera de sesión, no del rol que diga el navegador.
+    // Sin cabecera no se restringe: el resto de pantallas (producción, despacho,
+    // tablero) consultan por otras vías y no la mandan.
+    const sesionId = req.headers.get(HEADER_USUARIO)
     if (sesionId) {
       const usuario = await getUsuarioById(sesionId).catch(() => null)
       if (usuario?.ROL === 'VENDEDOR') {
