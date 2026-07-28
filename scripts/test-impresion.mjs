@@ -24,6 +24,7 @@ const { parseFecha, formatFechaHumana, diasHastaFecha, parseFechaCalendario, dia
   await cargar('../lib/parseFecha.js')
 const { paginarItems, pesoItem, itemDesborda, paginarItemsCliente, pesoItemCliente,
         distribuirFilasCliente, pesoFilaCliente } = await cargar('../lib/paginarItems.js')
+const { fotoPrincipal } = await cargar('../lib/imagenes.js')
 
 let ok = 0, fail = 0
 function check(nombre, condicion, detalle = '') {
@@ -272,6 +273,37 @@ console.log('\n== paginarItemsCliente (hoja del cliente) ==')
   check('nunca pierde ni reordena prendas', perdidos === 0, `${perdidos} casos`)
   check('offsets consecutivos (numeración #N corrida)', offsetsMal === 0, `${offsetsMal} casos`)
   check('sin hojas vacías de más', vacias === 0, `${vacias} casos`)
+}
+
+console.log('\n== fotoPrincipal (foto de la hoja del cliente) ==')
+{
+  const PECHO   = 'https://res.cloudinary.com/x/pecho.jpg'
+  const ESPALDA = 'https://res.cloudinary.com/x/espalda.jpg'
+  const M_D     = 'https://res.cloudinary.com/x/manga_d.jpg'
+  const M_I     = 'https://res.cloudinary.com/x/manga_i.jpg'
+
+  check('con pecho, manda el pecho',
+    fotoPrincipal({ FOTO_PECHO_URL: PECHO, FOTO_ESPALDA_URL: ESPALDA }) === PECHO)
+
+  // El bug de MAN-JAC-5445: estampado de espalda -> Pecho vacío -> recuadro gris
+  // en la hoja que recibe el cliente, aunque la foto estaba cargada.
+  check('sin pecho, cae a la espalda',
+    fotoPrincipal({ FOTO_PECHO_URL: null, FOTO_ESPALDA_URL: ESPALDA }) === ESPALDA)
+  check('el pedido real MAN-JAC-5445 ya no queda sin foto',
+    [{ FOTO_PECHO_URL: null, FOTO_ESPALDA_URL: ESPALDA, FOTO_MANGA_D_URL: null, FOTO_MANGA_I_URL: null }]
+      .every(it => fotoPrincipal(it)))
+
+  check('solo manga derecha', fotoPrincipal({ FOTO_MANGA_D_URL: M_D }) === M_D)
+  check('solo manga izquierda', fotoPrincipal({ FOTO_MANGA_I_URL: M_I }) === M_I)
+  check('la derecha va antes que la izquierda',
+    fotoPrincipal({ FOTO_MANGA_D_URL: M_D, FOTO_MANGA_I_URL: M_I }) === M_D)
+
+  // Sin foto sigue habiendo recuadro gris: hay que devolver algo falsy, no 'null'.
+  check('sin ninguna foto devuelve vacío', fotoPrincipal({}) === '')
+  check('cadenas vacías no cuentan como foto',
+    fotoPrincipal({ FOTO_PECHO_URL: '', FOTO_ESPALDA_URL: '' }) === '')
+  check('item nulo no revienta', fotoPrincipal(null) === '')
+  check('undefined no revienta', fotoPrincipal(undefined) === '')
 }
 
 console.log(`\n${ok} pasaron, ${fail} fallaron\n`)

@@ -1,7 +1,7 @@
 'use client'
 import { parseFechaCalendario, diasHastaFecha } from '@/lib/parseFecha'
 import { paginarItems, paginarItemsCliente, distribuirFilasCliente } from '@/lib/paginarItems'
-import { imagenAncho } from '@/lib/imagenes'
+import { imagenAncho, fotoPrincipal } from '@/lib/imagenes'
 
 // Re-export por compatibilidad: las pantallas ya importaban paginarItems desde aquí.
 export { paginarItems, paginarItemsCliente, distribuirFilasCliente, pesoItem, CAPACIDAD_HOJA_CONF } from '@/lib/paginarItems'
@@ -50,6 +50,7 @@ function BloqueTexto({ valor, titulo, colorTitulo, fondo, borde }) {
  */
 function PrendaCliente({ item, numero, tiendaColor, anchoCompleto }) {
   const foto = anchoCompleto ? 92 : 72
+  const fotoUrl = fotoPrincipal(item)
   const instrucciones = item.DETALLE_PERSONALIZADO
     ? recortarTexto(item.DETALLE_PERSONALIZADO)
     : null
@@ -57,8 +58,8 @@ function PrendaCliente({ item, numero, tiendaColor, anchoCompleto }) {
   return (
     <div style={{ backgroundColor:'#fafafa', borderRadius:'10px', border:'1px solid #e0e0e0', overflow:'hidden' }}>
       <div style={{ float:'left', padding: anchoCompleto ? '11px 12px 11px 12px' : '9px 9px 9px 10px' }}>
-        {item.FOTO_PECHO_URL
-          ? <img src={imagenAncho(item.FOTO_PECHO_URL, 400)} style={{ width:`${foto}px`, height:`${foto}px`, objectFit:'cover', borderRadius:'8px', border:'2px solid #e0e0e0', display:'block' }} alt="" />
+        {fotoUrl
+          ? <img src={imagenAncho(fotoUrl, 400)} style={{ width:`${foto}px`, height:`${foto}px`, objectFit:'cover', borderRadius:'8px', border:'2px solid #e0e0e0', display:'block' }} alt="" />
           : <div style={{ width:`${foto}px`, height:`${foto}px`, backgroundColor:'#eee', borderRadius:'8px' }} />
         }
       </div>
