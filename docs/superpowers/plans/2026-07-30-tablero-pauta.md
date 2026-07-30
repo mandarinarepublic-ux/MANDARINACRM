@@ -287,20 +287,47 @@ $$;
 
 Aplicarla en Supabase (proyecto `piingkecjgoisnxccvaa`).
 
-- [ ] **Paso 3: Verificar que la función devuelve lo medido en el diseño**
+- [ ] **Paso 3: Verificar que la función no infla los conteos**
+
+⚠️ **No compares contra números fijos.** El inbox es producción viva y recibe
+chats todo el día: las cifras de §3.3 del diseño (876/511/270 en IND) son una
+foto del 30-jul y ya crecieron para cuando leas esto. Comparar contra ellas te
+haría perseguir un fantasma.
+
+La verificación correcta es **contra la misma consulta cruda, corrida en el
+mismo momento**:
 
 ```sql
-select sum(llegaron) llegaron, sum(respondieron) resp,
-       sum(conversaron) conv, sum(pedidos) ped, sum(pagados) pag
-from crm.pauta_embudo('2026-07-13','2026-07-30','INDSTORE');
+with fn as (
+  select sum(llegaron) l, sum(respondieron) r, sum(conversaron) c, sum(pedidos) p
+  from crm.pauta_embudo('2026-07-13', current_date, 'INDSTORE')
+),
+cruda as (
+  select count(distinct t9) l,
+         count(distinct t9) filter (where msgs >= 2) r,
+         count(distinct t9) filter (where msgs >= 3) c
+  from (
+    select right(regexp_replace(m.telefono,'\D','','g'),9) as t9,
+           count(*) filter (where m.direccion='ENTRANTE') as msgs
+    from inbox.mensajes m
+    where m.cuenta = 'IND'
+    group by 1
+    having min(m.fecha) >= timestamptz '2026-07-13 00:00:00-05'
+       and bool_or(coalesce(m.referral->>'source_id','') <> '')
+  ) x
+)
+select fn.l as fn_llegaron, cruda.l as cruda_llegaron,
+       fn.r as fn_resp,     cruda.r as cruda_resp,
+       fn.c as fn_conv,     cruda.c as cruda_conv
+from fn, cruda;
 ```
 
-Esperado, según §3.3 del diseño: `llegaron 876 · resp 511 · conv 270 · ped 9 · pag 8`.
+**Las tres parejas tienen que coincidir exactamente.** Si `fn_llegaron` sale
+mayor que `cruda_llegaron`, el `distinct` está mal aplicado y se está contando
+una vez por pedido: ese es el bug que haría que el tablero mienta **a favor**.
 
-Y para MANDARINA: `llegaron 291 · resp 198 · conv 119 · ped 3 · pag 3`.
-
-**Si "llegaron" sale mayor a 876, el `distinct` está mal** y se está contando una
-vez por pedido.
+Como referencia de magnitud (no de igualdad): el 30-jul IND estaba alrededor de
+880 y MANDARINA de 295. Si te da 4.000, algo se rompió.
 
 - [ ] **Paso 4: Sembrar `crm.pauta_cuentas`**
 
@@ -319,11 +346,20 @@ on conflict (ad_account_id) do update
 Bucket `pauta-artes` en Supabase Storage, **público de lectura** (son creatividades
 de anuncios, no datos de clientes), igual que `inbox-media`.
 
-- [ ] **Paso 6: Registrar la migración y commit**
+- [ ] **Paso 6: Commit**
+
+**No registres la migración a mano.** Comprobado el 30-jul: el registro real de
+este proyecto es `supabase_migrations.schema_migrations` (109 migraciones con
+nombres prefijados: `crm_`, `inbox_`, `mata_`) y lo mantiene Supabase sola —
+`apply_migration` la inserta ahí automáticamente con el nombre que le pases.
+**`public.schema_migrations` NO existe**; crearla sería un duplicado inútil en
+producción.
+
+Verifica que quedó registrada:
 
 ```sql
-insert into public.schema_migrations (name) values ('crm_2026_07_30_pauta')
-on conflict do nothing;
+select version, name from supabase_migrations.schema_migrations
+order by version desc limit 3;
 ```
 
 ```bash
@@ -1255,8 +1291,14 @@ import('./lib/pauta/tablero.js').then(async (m) => {
 })"
 ```
 
-Esperado: `llegaron 876 · respondieron 511 · conversaron 270 · pedidos 9 · pagados 8`
-(§3.3 del diseño). Si no coincide, **parar y revisar** antes de seguir.
+Esperado: que el embudo baje en cada escalón (llegaron > respondieron >
+conversaron > pedidos ≥ pagados) y que `campanas.length` sea mayor que cero.
+
+⚠️ **No compares contra números fijos**: el inbox recibe chats todo el día y las
+cifras del diseño son una foto del 30-jul. Para verificar exactitud, contrasta
+`t.embudo.llegaron` contra `crm.pauta_embudo` corrida en ese mismo momento —
+tienen que dar idéntico, porque `armarTablero` solo suma lo que la función
+devuelve.
 
 - [ ] **Paso 5: Commit**
 
@@ -1517,8 +1559,14 @@ este layout. Recuerda que esconder el enlace **no es la seguridad**: esa vive en
 npm run dev
 ```
 
-Entrar como ADMIN a `/dashboard/pauta`. Esperado: el embudo de INDSTORE muestra
-`876 / 511 / 270 / 9 / 8` y el escalón "Pedido" marcado con ⚠.
+Entrar como ADMIN a `/dashboard/pauta`. Esperado: el embudo de INDSTORE baja en
+cada escalón (alrededor de 880 llegaron, ~515 respondieron, ~270 conversaron, 9
+pedidos, 8 pagados el 30-jul) y el escalón "Pedido" queda marcado con ⚠, porque
+es donde más gente se cae.
+
+Las cifras exactas cambian cada día: el inbox recibe chats en vivo. Lo que tiene
+que cumplirse siempre es el orden decreciente y que la marca ⚠ caiga en el peor
+escalón, no un número puntual.
 
 Entrar como VENDEDOR: no debe verse el enlace, y entrar a mano a la URL debe
 rebotar a `/dashboard`.
