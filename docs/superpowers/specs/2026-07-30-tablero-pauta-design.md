@@ -143,15 +143,19 @@ Nota: las campañas nunca se borran, solo se pausan. Por eso `pauta_dia` guarda
 
 | Archivo | Responsabilidad |
 |---|---|
-| `lib/metaAds.js` | Lee la Marketing API. Hermano de `lib/metaCapi.js`, que solo escribe. Server-only. |
-| `lib/pauta.js` | Atribución y armado del embudo. Funciones puras + consultas. Server-only. |
+| `lib/pauta/constantes.js` | Umbrales, fecha piso, ventana, mapeo cuenta↔tienda. |
+| `lib/pauta/atribucion.js` | Lógica pura y testeable. No sabe de HTTP ni de base. |
+| `lib/pauta/meta.js` | Lee la Marketing API. Hermano de `lib/metaCapi.js`, que solo escribe. |
+| `lib/pauta/consultas.js` | Lee Supabase: `crm.pauta_dia` y las funciones del embudo. |
+| `lib/pauta/tablero.js` | Une gasto + embudo y arma la respuesta de la API. |
 | `app/api/cron/pauta/route.js` | Cron diario: baja gasto, archiva artes nuevos. |
 | `app/api/pauta/route.js` | Sirve el tablero. Protegido con `requireAdmin`. |
-| `app/dashboard/pauta/page.js` | La pantalla. |
+| `app/dashboard/pauta/page.js` | La pantalla: cabecera y embudo. |
+| `app/dashboard/pauta/Tabla.jsx` | Tabla desplegable y ficha del arte. |
 | `scripts/test-pauta.mjs` | Pruebas de la atribución. |
 
-Cada archivo tiene un propósito y se puede entender solo. `lib/pauta.js` no sabe
-de HTTP; `lib/metaAds.js` no sabe de atribución.
+Cada archivo tiene un propósito y se puede entender solo. `atribucion.js` no sabe
+de HTTP ni de base y por eso se prueba entero; `meta.js` no sabe de atribución.
 
 ---
 
@@ -340,16 +344,21 @@ Instagram ("mab.studioo"). Se muestra, pero nada se organiza alrededor de él.
 
 ## 9. Seguridad
 
-- La API usa `requireAdmin` de `lib/auth.js`, que valida el rol contra la base y
-  no confía en el navegador.
-- La página valida **del lado servidor**. Esconder el botón del menú no es
-  seguridad.
+- **La frontera de seguridad es la API**, no la pantalla. `/api/pauta` usa
+  `requireAdmin` de `lib/auth.js`, que valida el rol **contra la base** y no
+  confía en el navegador.
+- La página es un componente de cliente (como `app/dashboard/usuarios/page.js`) y
+  esconde la interfaz a quien no es ADMIN, pero eso es comodidad, no seguridad:
+  sin la API la pantalla no tiene ningún dato que mostrar.
 - Gobierna el permiso `'reportes'` que el ADMIN ya tiene en `lib/auth.js`. No se
   inventa un permiso nuevo.
-- `META_ADS_TOKEN` (Usuario del Sistema, `ads_read`) es **solo server-side**,
-  leído con el helper de `lib/env.js` para esquivar el BOM que PowerShell le mete
-  a las variables de Vercel.
-- El cron se protege con secreto propio.
+- `META_ADS_TOKEN` (Usuario del Sistema, `ads_read`) es **solo server-side**. Se
+  limpia el BOM que PowerShell mete a las variables de Vercel con el mismo
+  `.replace(/[^\x21-\x7E]/g, '')` que ya usa `middleware.js` para
+  `CRM_API_TOKEN`. **No existe `lib/env.js` en este repo** — ese helper vive en
+  los repos de los inbox.
+- El cron reutiliza el `CRON_SECRET` que ya existe (mismo patrón que
+  `/api/shopify/sync`) y se agrega a `RUTAS_PUBLICAS` del middleware.
 
 ## 10. Errores
 
@@ -404,6 +413,9 @@ silencio:
 | Variable | Para qué |
 |---|---|
 | `META_ADS_TOKEN` | Usuario del Sistema con `ads_read` |
-| `CRON_SECRET_PAUTA` | Proteger el cron |
 
-Cargar en Vercel **sin BOM** (ver `lib/env.js`).
+`CRON_SECRET` ya existe (lo usa `/api/shopify/sync`) y se reutiliza.
+
+Cargar en Vercel **sin BOM**: si se sube desde PowerShell queda un `﻿`
+invisible al inicio. Se limpia al leerla, igual que `middleware.js` con
+`CRM_API_TOKEN`.
