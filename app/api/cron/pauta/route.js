@@ -1,0 +1,103 @@
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
+import { getSupabase } from '@/lib/supabase'
+import { registrarEvento } from '@/lib/eventos'
+import { traerGastoDiario, traerDetalleAnuncios } from '@/lib/pauta/meta'
+import { hoyEcuador } from '@/lib/parseFecha'
+
+// Baja el gasto de Meta a crm.pauta_dia.
+//
+// Refresca los últimos DIAS_REFRESCO días, no solo ayer: Meta sigue ajustando
+// las cifras recientes durante ~3 días. Bajar solo el último día dejaría los
+// anteriores congelados con datos provisionales.
+const DIAS_REFRESCO = 3
+
+// Mismo patrón que /api/shopify/sync: el cron de Vercel manda
+// Authorization: Bearer $CRON_SECRET. Sin CRON_SECRET se permite (dev).
+function autorizado(req) {
+  const secreto = String(process.env.CRON_SECRET || '').replace(/[^\x21-\x7E]/g, '')
+  if (!secreto) return true
+  const cabecera = req.headers.get('authorization') || ''
+  const url = new URL(req.url)
+  return cabecera === `Bearer ${secreto}` || url.searchParams.get('secret') === secreto
+}
+
+function haceDias(n) {
+  const d = new Date(`${hoyEcuador()}T00:00:00-05:00`)
+  d.setDate(d.getDate() - n)
+  return d.toISOString().slice(0, 10)
+}
+
+async function correr() {
+  const sb = getSupabase()
+  const { data: cuentas, error } = await sb
+    .from('pauta_cuentas').select('*').eq('activa', true)
+  if (error) throw new Error(`No se pudo leer pauta_cuentas: ${error.message}`)
+  if (!cuentas?.length) throw new Error('crm.pauta_cuentas está vacía: corre primero la Tarea 1')
+
+  const desde = haceDias(DIAS_REFRESCO)
+  const hasta = hoyEcuador()
+  const resumen = { desde, hasta, cuentas: [], filas: 0, errores: [] }
+
+  for (const c of cuentas) {
+    try {
+      const filas = await traerGastoDiario({ adAccountId: c.ad_account_id, desde, hasta })
+      const adIds = [...new Set(filas.map((f) => f.adId))]
+      const detalle = await traerDetalleAnuncios(c.ad_account_id, adIds)
+
+      const registros = filas.map((f) => ({
+        fecha: f.fecha,
+        ad_id: f.adId,
+        ad_account_id: c.ad_account_id,
+        tienda_id: c.tienda_id,
+        campaign_id: f.campaignId,
+        campaign_nombre: f.campaignNombre,
+        adset_id: f.adsetId,
+        adset_nombre: f.adsetNombre,
+        ad_nombre: f.adNombre,
+        estado: detalle.get(f.adId)?.estado || '',
+        gasto: f.gasto,
+        impresiones: f.impresiones,
+        clics: f.clics,
+        conversaciones_meta: f.conversaciones,
+        valor_meta: f.valorMeta,
+        roas_meta: f.roasMeta,
+        creative_id: detalle.get(f.adId)?.creativeId || '',
+        actualizado_at: new Date().toISOString(),
+      }))
+
+      if (registros.length) {
+        // upsert por (fecha, ad_id): volver a correr el cron el mismo día
+        // corrige las cifras en vez de duplicarlas.
+        const { error: e2 } = await sb
+          .from('pauta_dia').upsert(registros, { onConflict: 'fecha,ad_id' })
+        if (e2) throw new Error(e2.message)
+      }
+
+      resumen.cuentas.push({ cuenta: c.nombre, tienda: c.tienda_id, filas: registros.length })
+      resumen.filas += registros.length
+    } catch (e) {
+      // Una cuenta que falla no debe dejar sin actualizar a las demás.
+      resumen.errores.push({ cuenta: c.nombre, error: e.message })
+      await registrarEvento({
+        fuente: 'meta',
+        nivel: 'error',
+        mensaje: `Cron de pauta: falló la cuenta ${c.nombre}`,
+        detalle: { adAccountId: c.ad_account_id, error: e.message },
+      })
+    }
+  }
+
+  return resumen
+}
+
+export async function GET(req) {
+  if (!autorizado(req)) return Response.json({ error: 'no autorizado' }, { status: 401 })
+  try {
+    return Response.json(await correr())
+  } catch (e) {
+    await registrarEvento({ fuente: 'meta', nivel: 'error', mensaje: `Cron de pauta: ${e.message}` })
+    return Response.json({ ok: false, error: e.message }, { status: 500 })
+  }
+}

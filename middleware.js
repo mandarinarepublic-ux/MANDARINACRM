@@ -21,6 +21,7 @@ const RUTAS_PUBLICAS = [
   '/api/auth/logout',      // borrar la cookie no necesita permiso
   '/api/factura-callback', // lo llama Dátil/Make desde fuera, no un usuario
   '/api/shopify/sync',     // el cron de Vercel; valida su propio CRON_SECRET
+  '/api/cron/pauta',       // el cron de Vercel; valida su propio CRON_SECRET
 ]
 
 function esPublica(pathname) {
