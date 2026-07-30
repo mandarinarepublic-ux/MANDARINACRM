@@ -102,9 +102,21 @@ as $$
     select *
     from personas
     where ad_id is not null
+      -- OJO con la trampa de zona horaria: un `date` casteado directo a
+      -- `timestamptz` (`p_desde::timestamptz`) se resuelve con el timezone
+      -- de la SESIÓN, no con el de Ecuador. Este proyecto corre en UTC, así
+      -- que ese cast da medianoche UTC = 19:00 del día anterior en Ecuador
+      -- (-05) y el corte cae 5 horas antes de tiempo, perdiendo gente de la
+      -- última tarde/noche del rango. Por eso se arma el timestamp a mano
+      -- con el offset `-05` explícito, igual que ya hace `ped` en
+      -- `pauta_cubetas`. Aplica tanto al piso como al techo del rango.
+      --
       -- Fecha piso: antes del 13-jul-2026 no se capturaba referral.
-      and primer_msg >= greatest(p_desde::timestamptz, timestamptz '2026-07-13 00:00:00-05')
-      and primer_msg <  (p_hasta + 1)::timestamptz
+      and primer_msg >= greatest(
+            (p_desde::text || 'T00:00:00-05')::timestamptz,
+            timestamptz '2026-07-13 00:00:00-05'
+          )
+      and primer_msg <  ((p_hasta + 1)::text || 'T00:00:00-05')::timestamptz
       and tienda_id = p_tienda
   ),
   ped as (
@@ -146,8 +158,15 @@ language sql stable as $$
   nuevos as (
     select * from personas
     where tienda_id = p_tienda
-      and primer_msg >= greatest(p_desde::timestamptz, timestamptz '2026-07-13 00:00:00-05')
-      and primer_msg <  (p_hasta + 1)::timestamptz
+      -- Mismo cuidado de zona horaria que en pauta_embudo: armar el
+      -- timestamp a mano con `-05` explícito, nunca castear el `date`
+      -- directo a `timestamptz` (eso usa el timezone de la sesión, que acá
+      -- es UTC, y corta 5 horas antes de la medianoche real de Ecuador).
+      and primer_msg >= greatest(
+            (p_desde::text || 'T00:00:00-05')::timestamptz,
+            timestamptz '2026-07-13 00:00:00-05'
+          )
+      and primer_msg <  ((p_hasta + 1)::text || 'T00:00:00-05')::timestamptz
   ),
   con_chat as (select distinct t9 from personas where tienda_id = p_tienda),
   ped as (
