@@ -63,117 +63,68 @@ conversaciones a IND desde el 13-jul y **no aparece** en la cuenta `150080613045
 mejor anuncio del negocio saldría con gasto $0 y ROAS infinito.
 
 **Archivos:**
-- Crear: `scripts/pauta-descubrir-cuentas.mjs`
 - Crear: `docs/superpowers/specs/2026-07-30-mapeo-cuentas-pauta.md` (el resultado)
 
 **Interfaces:**
 - Produce: el contenido de la semilla de `crm.pauta_cuentas` que consume la Tarea 2.
 
+**Cómo, decidido el 30-jul:** con las herramientas MCP de Meta y de Supabase que
+ya están conectadas a la sesión, **no** con un script local. En este repo no
+existe `META_ADS_TOKEN` (ni ningún token de Meta), así que un script no podría
+correr. Se descartó crear `scripts/pauta-descubrir-cuentas.mjs` por eso: sería
+una herramienta imposible de ejecutar.
+
+Carga las herramientas con:
+
+```
+ToolSearch("select:mcp__claude_ai_META__ads_get_ad_accounts,mcp__claude_ai_META__ads_get_ad_entities,mcp__claude_ai_Supabase__execute_sql")
+```
+
 - [ ] **Paso 1: Sacar del inbox la lista de anuncios que hay que ubicar**
 
-Correr contra Supabase (SQL directo, sin código nuevo):
+Proyecto Supabase `piingkecjgoisnxccvaa`:
 
 ```sql
-select distinct m.referral->>'source_id' as ad_id,
+select m.referral->>'source_id' as ad_id,
        m.cuenta,
-       count(*) as chats
+       count(*) as chats,
+       max(m.referral->>'headline') as titular
 from inbox.mensajes m
-where m.referral->>'source_id' is not null
-  and m.referral->>'source_id' <> ''
+where coalesce(m.referral->>'source_id','') <> ''
   and m.fecha >= '2026-07-13'
 group by 1,2 order by 3 desc;
 ```
 
-Guardar el resultado; son ~34 anuncios.
+Son ~34 anuncios. El más importante es `120249663261930600` con 368 chats.
 
-- [ ] **Paso 2: Escribir el script que busca cada anuncio en cada cuenta**
+- [ ] **Paso 2: Listar las cuentas publicitarias**
 
-```js
-// scripts/pauta-descubrir-cuentas.mjs
-// Herramienta de UNA sola vez: dice en qué cuenta publicitaria vive cada anuncio
-// que aparece en el referral del inbox.
-//
-// Correr:  node scripts/pauta-descubrir-cuentas.mjs
-// Necesita META_ADS_TOKEN en el entorno.
-//
-// Existe porque el anuncio que más chats trae a IND (120249663261930600) no
-// aparece en la cuenta de IndStore, así que no podemos asumir "una tienda = una
-// cuenta". Ver docs/superpowers/specs/2026-07-30-tablero-pauta-design.md §3.7
+`ads_get_ad_accounts`. Hay 16. Quédate solo con las que tienen
+`account_status: ACTIVE` **y** `is_queryable: true` — dos están DISABLED y la
+API las rechaza. Anota cuáles quedan fuera: si un anuncio vive en una cuenta
+desactivada, su gasto es inalcanzable y hay que decirlo, no omitirlo.
 
-const GRAPH = 'https://graph.facebook.com/v21.0'
-const TOKEN = String(process.env.META_ADS_TOKEN || '').replace(/[^\x21-\x7E]/g, '')
+- [ ] **Paso 3: Buscar cada anuncio en cada cuenta**
 
-// Anuncios vistos en el referral del inbox (salida del Paso 1).
-const BUSCADOS = [
-  { adId: '120249663261930600', cuenta: 'IND', chats: 368 },
-  // … pegar el resto acá
-]
+Para cada cuenta consultable, `ads_get_ad_entities` con:
 
-async function graph(path, params = {}) {
-  const url = new URL(`${GRAPH}/${path}`)
-  url.searchParams.set('access_token', TOKEN)
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
-  const r = await fetch(url)
-  const j = await r.json()
-  if (j.error) throw new Error(`${path}: ${j.error.message}`)
-  return j
-}
-
-async function main() {
-  if (!TOKEN) throw new Error('Falta META_ADS_TOKEN')
-
-  const { data: cuentas } = await graph('me/adaccounts', {
-    fields: 'account_id,name,account_status,currency',
-    limit: 100,
-  })
-  console.log(`${cuentas.length} cuentas publicitarias\n`)
-
-  // ad_id -> cuenta donde vive
-  const ubicacion = new Map()
-
-  for (const c of cuentas) {
-    if (c.account_status !== 1) {
-      console.log(`· ${c.name} (${c.account_id}) DESACTIVADA, se salta`)
-      continue
-    }
-    let despues = null
-    let vistos = 0
-    do {
-      const params = { fields: 'id,name', limit: 500 }
-      if (despues) params.after = despues
-      const res = await graph(`act_${c.account_id}/ads`, params)
-      for (const ad of res.data || []) {
-        vistos++
-        if (BUSCADOS.some((b) => b.adId === ad.id)) {
-          ubicacion.set(ad.id, { cuenta: c.name, adAccountId: c.account_id, adNombre: ad.name })
-        }
-      }
-      despues = res.paging?.cursors?.after && res.paging?.next ? res.paging.cursors.after : null
-    } while (despues)
-    console.log(`· ${c.name} (${c.account_id}): ${vistos} anuncios`)
-  }
-
-  console.log('\n── Resultado ──')
-  for (const b of BUSCADOS) {
-    const u = ubicacion.get(b.adId)
-    console.log(
-      u
-        ? `✓ ${b.adId} [${b.cuenta}, ${b.chats} chats] → ${u.cuenta} (${u.adAccountId}) · ${u.adNombre}`
-        : `✗ ${b.adId} [${b.cuenta}, ${b.chats} chats] → NO ENCONTRADO en ninguna cuenta`
-    )
-  }
-}
-
-main().catch((e) => { console.error(e.message); process.exit(1) })
+```
+level: "ad"
+fields: ["id","name","amount_spent","impressions","campaign_id"]
+time_range: {"since":"2026-07-13","until":"<hoy>"}
+sort: "impressions_descending"
+limit: 200
 ```
 
-- [ ] **Paso 3: Correrlo**
+Cruza los `id` devueltos contra la lista del Paso 1.
 
-```bash
-node scripts/pauta-descubrir-cuentas.mjs
-```
+**Dos trampas ya comprobadas:**
 
-Esperado: cada `ad_id` con su cuenta, o `NO ENCONTRADO`.
+1. El filtro `filtering` con operador `IN` sobre `ad.id` **devuelve vacío**
+   aunque el anuncio exista. No lo uses: trae la lista y cruza en tu cabeza.
+2. Los Insights solo devuelven anuncios **con entrega en la ventana**. Si un
+   anuncio no aparece, repite con `date_preset: "maximum"` antes de darlo por
+   perdido.
 
 - [ ] **Paso 4: Escribir el resultado**
 
@@ -196,8 +147,8 @@ diseñado para mostrar ese caso, no para taparlo.
 - [ ] **Paso 5: Commit**
 
 ```bash
-git add scripts/pauta-descubrir-cuentas.mjs docs/superpowers/specs/2026-07-30-mapeo-cuentas-pauta.md
-git commit -m "chore(pauta): mapeo de cuentas publicitarias a tiendas"
+git add docs/superpowers/specs/2026-07-30-mapeo-cuentas-pauta.md
+git commit -m "docs(pauta): mapeo de cuentas publicitarias a tiendas"
 ```
 
 ---
