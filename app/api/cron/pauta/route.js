@@ -4,7 +4,7 @@ export const maxDuration = 60
 import { getSupabase } from '@/lib/supabase'
 import { registrarEvento } from '@/lib/eventos'
 import { traerGastoDiario, traerDetalleAnuncios } from '@/lib/pauta/meta'
-import { hoyEcuador } from '@/lib/parseFecha'
+import { hoyEcuador, isoMasDias } from '@/lib/parseFecha'
 
 // Baja el gasto de Meta a crm.pauta_dia.
 //
@@ -23,12 +23,6 @@ function autorizado(req) {
   return cabecera === `Bearer ${secreto}` || url.searchParams.get('secret') === secreto
 }
 
-function haceDias(n) {
-  const d = new Date(`${hoyEcuador()}T00:00:00-05:00`)
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
-
 async function correr() {
   const sb = getSupabase()
   const { data: cuentas, error } = await sb
@@ -36,8 +30,10 @@ async function correr() {
   if (error) throw new Error(`No se pudo leer pauta_cuentas: ${error.message}`)
   if (!cuentas?.length) throw new Error('crm.pauta_cuentas está vacía: corre primero la Tarea 1')
 
-  const desde = haceDias(DIAS_REFRESCO)
+  // Aritmética de fechas pura en UTC (isoMasDias), nunca Date local + slice: ya nos
+  // costó caro mezclar hora local con offset explícito (ver lib/parseFecha.js).
   const hasta = hoyEcuador()
+  const desde = isoMasDias(hasta, -DIAS_REFRESCO)
   const resumen = { desde, hasta, cuentas: [], filas: 0, errores: [] }
 
   for (const c of cuentas) {
