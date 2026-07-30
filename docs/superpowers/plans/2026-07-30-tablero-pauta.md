@@ -657,6 +657,21 @@ export async function traerGastoDiario({ adAccountId, desde, hasta }) {
   url.searchParams.set('time_increment', '1')
   url.searchParams.set('time_range', JSON.stringify({ since: desde, until: hasta }))
   url.searchParams.set('limit', '500')
+  // ⚠ SIN ESTO EL TABLERO MIENTE. Meta excluye de los Insights los anuncios
+  // archivados y eliminados salvo que los pidas por nombre. Comprobado el
+  // 30-jul: el anuncio con MÁS chats de IND ("DUO PERFECTO",
+  // 120249663261930600, $82,33 y 72.666 impresiones) está ARCHIVED y no salía
+  // en ninguna consulta. Sin el filtro, su gasto desaparece y su ROAS sale
+  // infinito — exactamente el error que este tablero existe para evitar.
+  url.searchParams.set('filtering', JSON.stringify([{
+    field: 'ad.effective_status',
+    operator: 'IN',
+    value: [
+      'ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED',
+      'CAMPAIGN_PAUSED', 'ADSET_PAUSED',
+      'DISAPPROVED', 'PENDING_REVIEW', 'WITH_ISSUES',
+    ],
+  }]))
   url.searchParams.set('fields', [
     'date_start', 'ad_id', 'ad_name', 'adset_id', 'adset_name',
     'campaign_id', 'campaign_name', 'spend', 'impressions', 'clicks',
@@ -740,6 +755,24 @@ import('./lib/pauta/meta.js').then(async (m) => {
 ```
 
 Esperado: filas con `fecha`, `adId` y `gasto`. Una fila por anuncio por día.
+
+**Prueba obligatoria del filtro de archivados:**
+
+```bash
+node -e "
+import('./lib/pauta/meta.js').then(async (m) => {
+  const filas = await m.traerGastoDiario({
+    adAccountId: '1500806130455765', desde: '2026-07-13', hasta: '2026-07-30',
+  })
+  const duo = filas.filter((f) => f.adId === '120249663261930600')
+  console.log('DUO PERFECTO (ARCHIVED):', duo.length, 'dias, gasto',
+    duo.reduce((s, f) => s + f.gasto, 0).toFixed(2))
+})"
+```
+
+Esperado: **más de 0 días y gasto mayor que cero**. Si sale 0, el filtro de
+`effective_status` no está funcionando y el tablero perdería el anuncio con más
+chats de IND. No sigas hasta que esto dé positivo.
 
 - [ ] **Paso 3: Commit**
 
