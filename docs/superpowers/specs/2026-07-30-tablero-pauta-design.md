@@ -49,13 +49,16 @@ pauta anterior a esa fecha es ruido, no historia.
 
 ### 3.3 El embudo real (chats nacidos desde el 13-jul, con anuncio)
 
-| | Llegaron | Respondieron | Conversaron (5+ msgs) | Compraron |
-|---|---|---|---|---|
-| IND | 876 | 511 (58 %) | 125 (14 %) | 9 |
-| MANDI | 290 | 198 (68 %) | 64 (22 %) | 3 |
+Ventana de 30 días, umbrales de §8.
+
+| | Llegaron | Respondieron | Conversaron (3+ msgs) | Pedido | Pagado |
+|---|---|---|---|---|---|
+| IND | 876 | 511 (58 %) | 270 (31 %) | 9 (3,3 %) | 8 |
+| MANDI | 291 | 198 (68 %) | 119 (41 %) | 3 (2,5 %) | 3 |
 
 El escalón que sangra es el cierre: de los que conversaron en serio, compra el
-7 % en IND y el 5 % en MANDI.
+3,3 % en IND y el 2,5 % en MANDI. En cambio lo que ya está cerrado, se cobra:
+8 de 9 y 3 de 3.
 
 ### 3.4 El lead de pauta convierte 6x peor que el orgánico
 
@@ -63,7 +66,7 @@ El escalón que sangra es el cierre: de los que conversaron en serio, compra el
 |---|---|---|---|
 | IND de pauta | 876 | 9 | 1,0 % |
 | IND sin pauta | 171 | 10 | 5,8 % |
-| MANDI de pauta | 290 | 3 | 1,0 % |
+| MANDI de pauta | 291 | 3 | 1,0 % |
 | MANDI sin pauta | 66 | 4 | 6,1 % |
 
 El patrón se repite idéntico en las dos cuentas. Es un hallazgo real, no un
@@ -233,7 +236,7 @@ estábamos mirando".
 
 | Cubeta | Definición | Julio |
 |---|---|---|
-| De pauta | Chat con `source_id` identificado | 1.166 personas |
+| De pauta | Chat con `source_id` identificado | 1.167 personas |
 | Sin pauta | Chat sin anuncio: orgánico, recurrente, directo | 237 personas |
 | Sin chat | Pedido sin conversación en el inbox | ~178 pedidos |
 
@@ -259,7 +262,7 @@ INDSTORE · 13–30 jul                          [INDSTORE] [MANDARINA]
 
   Gasto $775      Venta total $9.869      MER 12,7x
   ────────────────────────────────────────────────────────
-  De pauta 1.166 · Sin pauta 237 · Sin chat 98 pedidos
+  De pauta 1.167 · Sin pauta 237 · Sin chat 98 pedidos
 ```
 
 ### Embudo
@@ -272,12 +275,12 @@ Impresiones      156.029
 Clics              3.811   2,4 %
 Llegaron al chat     876   23 %
 Respondieron         511   58 %
-Conversaron          125   24 %
-Pedido                 9    7 %   ⚠ aquí sangra
-Pagado           (por medir)
+Conversaron          270   31 %
+Pedido                 9    3 %   ⚠ aquí sangra
+Pagado                 8   89 %
 ```
 
-Cifras reales de IND (§3.3), salvo "Pagado", que todavía no se midió.
+Cifras reales de IND (§3.3).
 
 **Definición exacta de cada escalón** — todos automáticos, ninguno depende de
 marcado manual:
@@ -287,12 +290,12 @@ marcado manual:
 | Impresiones / Clics | De `crm.pauta_dia` (Meta) |
 | Llegaron al chat | Personas distintas con `referral.source_id` de ese anuncio |
 | Respondieron | ≥ 2 mensajes ENTRANTES de esa persona |
-| Conversaron | ≥ 5 mensajes ENTRANTES de esa persona |
+| Conversaron | ≥ 3 mensajes ENTRANTES de esa persona |
 | Pedido | Pedido en `crm.pedidos` dentro de la ventana (R2) |
 | Pagado | `estado_pago` del pedido |
 
-Los umbrales (2 y 5) son un punto de partida razonable, no una verdad. Quedan en
-una constante nombrada de `lib/pauta.js` para poder moverlos.
+Los umbrales (2 y 3) quedan en una constante nombrada de `lib/pauta.js` para
+poder moverlos sin tocar la lógica.
 
 ### Tabla — campaña → conjunto → arte
 
