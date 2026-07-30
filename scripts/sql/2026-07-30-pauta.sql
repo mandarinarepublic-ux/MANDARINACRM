@@ -5,13 +5,14 @@
 -- Todo aditivo: nada de lo de acá toca una tabla que ya existiera antes de esta
 -- migración. Se puede correr muchas veces sin romper nada (if not exists / or replace).
 
--- Registro compartido de migraciones (crm/inbox/rrhh/mata/voz/social). No existía
--- todavía en este proyecto Supabase, así que se crea acá de forma defensiva antes
--- de registrar la propia (Paso 6).
-create table if not exists public.schema_migrations (
-  name       text primary key,
-  applied_at timestamptz not null default now()
-);
+-- OJO, lección ya pagada: NO existe (ni hace falta crear) una tabla
+-- public.schema_migrations en este proyecto. El registro de migraciones lo
+-- lleva Supabase solo, en supabase_migrations.schema_migrations, y
+-- apply_migration lo escribe ahí automáticamente con el `name` que se le
+-- pasa a la migración — no hay nada que insertar a mano. (Se llegó a crear
+-- por error una public.schema_migrations en esta misma tarea, creyendo que
+-- era la tabla compartida del proyecto; se verificó que tenía una sola fila
+-- y se borró.)
 
 -- Qué cuenta publicitaria paga para qué tienda. Es tabla y no código fijo
 -- porque hay 16 cuentas con nombres repetidos y esto cambia.
@@ -181,6 +182,5 @@ values (
 )
 on conflict (id) do nothing;
 
--- Registro de esta migración en la tabla compartida.
-insert into public.schema_migrations (name) values ('crm_2026_07_30_pauta')
-on conflict do nothing;
+-- Sin insert de registro acá: ver la nota de arriba sobre
+-- supabase_migrations.schema_migrations.
