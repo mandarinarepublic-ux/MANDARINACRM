@@ -967,6 +967,32 @@ curl "http://localhost:3000/api/cron/pauta"
 
 Esperado: JSON con `filas > 0` y `errores: []`.
 
+⚠️ **Comprueba específicamente que llegaron los anuncios archivados.** Detectado el
+30-jul: al pedir el desglose diario (`time_increment=1`) de un anuncio `ARCHIVED`,
+Meta puede responder "Not available" **por día** aunque el **total del rango sí
+venga**. Verifícalo:
+
+```sql
+select ad_id, ad_nombre, estado, round(sum(gasto)::numeric,2) gasto
+from crm.pauta_dia
+where ad_id in ('120249663261930600','120249663292400600','120249665639710600')
+group by 1,2,3;
+```
+
+Esos tres son ARCHIVED y entre el 13 y el 30 de julio gastaron $82,33, $34,63 y
+$61,11 respectivamente (medido con el total del rango). **Si salen en cero o no
+aparecen, el desglose diario no sirve para archivados.**
+
+**Plan B si eso pasa:** en vez de una llamada con `time_increment=1`, hacer **una
+llamada por día** con `time_range` de un solo día y sin `time_increment`. Cada
+respuesta ya es el dato de ese día. Cuesta N llamadas por cuenta en vez de una,
+pero es la única forma de no perder justo los anuncios que más conversaciones
+traen.
+
+**Lo que NO se debe hacer:** repartir el total del rango entre los días, ni
+guardarlo todo en un día cualquiera. Eso es inventar datos y rompería cualquier
+filtro de fechas más estrecho.
+
 Verificar en Supabase:
 
 ```sql
