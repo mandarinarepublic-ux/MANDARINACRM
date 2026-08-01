@@ -263,6 +263,15 @@ export default function ErroresPage() {
                       {ev.pedido_id && (
                         <a href={`/dashboard/pedido/${ev.pedido_id}`} className="text-[10px] font-mono text-mandarina-400 hover:underline">{ev.pedido_id}</a>
                       )}
+                      {/* Los errores que manda el inbox (señales de pauta: Lead e
+                          InitiateCheckout) no cuelgan de un pedido sino de una
+                          conversación. Sin el teléfono no hay por dónde empezar
+                          a investigarlos. */}
+                      {!ev.pedido_id && ev.detalle?.origen === 'inbox' && ev.detalle?.telefono && (
+                        <span className="text-[10px] font-mono text-gray-500" title="conversación afectada">
+                          💬 {ev.detalle.telefono}
+                        </span>
+                      )}
                       <span className="text-[10px] text-gray-600">{formatFechaHumana(ev.fecha)}</span>
                     </div>
                     <div className={`text-sm ${ev.resuelto ? 'text-gray-500 line-through' : 'text-gray-200'}`}>{ev.mensaje}</div>
