@@ -266,7 +266,7 @@ export function PdfGraciasPagina({
               <div style={{ overflow:'hidden' }}>
                 {isPagado
                   ? <div style={{ fontSize:'13px', fontWeight:'800', color:'#15803d', lineHeight:'28px' }}>PAGO COMPLETO</div>
-                  : <><div style={{ fontSize:'12px', fontWeight:'800', color:'#b91c1c' }}>ABONO DEL {pct}% — SALDO PENDIENTE</div><div style={{ fontSize:'11px', color:'#b91c1c', marginTop:'2px', fontWeight:'700' }}>Cobrar ${saldo.toFixed(2)} al motorizado</div></>
+                  : <><div style={{ fontSize:'12px', fontWeight:'800', color:'#b91c1c' }}>ABONO DEL {pct}% — SALDO PENDIENTE</div><div style={{ fontSize:'11px', color:'#b91c1c', marginTop:'2px', fontWeight:'700' }}>Pendiente de pago ${saldo.toFixed(2)}</div></>
                 }
               </div>
               {!isPagado && total > 0 && (
