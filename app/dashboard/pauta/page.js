@@ -154,19 +154,35 @@ export default function PautaPage() {
             </div>
           )}
 
-          {/* De dónde salió cada venta pagada del período */}
+          {/* OJO: `pauta` y `sinPauta` cuentan PERSONAS que escribieron por
+              primera vez; `sinChat` cuenta PEDIDOS. Son unidades distintas y no
+              suman entre sí — la función crm.pauta_cubetas las devuelve juntas
+              por comodidad, no porque sean partes de un mismo total.
+              Pintarlas como tres pedazos de una torta (que es como estaban al
+              principio, bajo el título "¿de dónde vinieron las ventas?") hace
+              creer que el 10% de las ventas viene de pauta cuando ese número
+              habla de contactos. Van separadas a propósito. */}
           {c && (
-            <div className="card p-3 mb-4">
-              <div className="text-xs font-semibold text-white mb-2">¿De dónde vinieron las ventas?</div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <Cubeta label="De pauta" valor={c.pauta} color="text-green-400" />
-                <Cubeta label="Chat sin pauta" valor={c.sinPauta} color="text-blue-400" />
-                <Cubeta label="Sin chat" valor={c.sinChat} color="text-gray-500" />
+            <div className="grid sm:grid-cols-2 gap-2 mb-4">
+              <div className="card p-3">
+                <div className="text-xs font-semibold text-white mb-2">Contactos nuevos</div>
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <Cubeta label="Llegaron por un anuncio" valor={c.pauta} color="text-green-400" />
+                  <Cubeta label="Llegaron por otro lado" valor={c.sinPauta} color="text-blue-400" />
+                </div>
               </div>
-              <p className="text-[10px] text-gray-600 mt-2">
-                “Sin chat” son pedidos cuyo celular nunca escribió por WhatsApp:
-                no hay forma de saber de dónde vinieron.
-              </p>
+              <div className="card p-3 border border-amber-500/20">
+                <div className="text-xs font-semibold text-white mb-2">Ventas que no se pueden atribuir</div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-amber-400">{numero(c.sinChat)}</div>
+                  <div className="text-[10px] text-gray-500">pedidos sin chat</div>
+                </div>
+                <p className="text-[10px] text-gray-600 mt-2 leading-tight">
+                  Su celular nunca escribió por WhatsApp a esta tienda, así que no
+                  se sabe de dónde vinieron. Suele ser que el vendedor registró un
+                  número distinto al del chat.
+                </p>
+              </div>
             </div>
           )}
 
