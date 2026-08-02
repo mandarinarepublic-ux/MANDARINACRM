@@ -24,6 +24,20 @@ const TIENDAS = [
 ]
 const FECHA_PISO = '2026-07-13'
 
+// Los dos números que atiende cada inbox. Se comportan muy distinto, así que
+// verlos por separado es media pelea: al 2-ago REPUBLIC llevaba 33 chats de
+// pauta y el 9804 llevaba 321. Espejo de lib/pauta/constantes.js.
+const CANALES = {
+  INDSTORE: [
+    { phoneId: '1153686904504422', etiqueta: '3326 · +593 99 995 3326' },
+    { phoneId: '2241248862581450', etiqueta: '9804 · +593 98 415 9804' },
+  ],
+  MANDARINA: [
+    { phoneId: '1024077200794372', etiqueta: 'MANDI · +593 98 374 5757' },
+    { phoneId: '118582961194601',  etiqueta: 'REPUBLIC · +593 97 910 4167' },
+  ],
+}
+
 
 /** Hoy en Ecuador, en YYYY-MM-DD. El navegador puede estar en otra zona. */
 function hoyEc() {
@@ -34,6 +48,7 @@ export default function PautaPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [tienda, setTienda] = useState('INDSTORE')
+  const [canal, setCanal] = useState('')   // '' = los dos números
   const [desde, setDesde] = useState(FECHA_PISO)
   const [hasta, setHasta] = useState(hoyEc())
   const [data, setData] = useState(null)
@@ -58,6 +73,7 @@ export default function PautaPage() {
     setLoading(true); setError('')
     try {
       const qs = new URLSearchParams({ tienda, desde, hasta })
+      if (canal) qs.set('canal', canal)
       const res = await fetch(`/api/pauta?${qs}`, { headers: headers(u), cache: 'no-store' })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
@@ -90,8 +106,18 @@ export default function PautaPage() {
         <div>
           <label className="block text-[10px] text-gray-500 mb-1">Tienda</label>
           <select className="input py-2 text-sm w-auto" value={tienda}
-                  onChange={(ev) => setTienda(ev.target.value)}>
+                  onChange={(ev) => { setTienda(ev.target.value); setCanal('') }}>
             {TIENDAS.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-gray-500 mb-1">Número</label>
+          <select className="input py-2 text-sm w-auto" value={canal}
+                  onChange={(ev) => setCanal(ev.target.value)}>
+            <option value="">Los dos</option>
+            {(CANALES[tienda] || []).map((c) => (
+              <option key={c.phoneId} value={c.phoneId}>{c.etiqueta}</option>
+            ))}
           </select>
         </div>
         <div>
@@ -123,6 +149,20 @@ export default function PautaPage() {
           <span className="text-sm text-amber-400">
             Antes del {FECHA_PISO} no se guardaba de qué anuncio venía cada chat,
             así que el rango arranca ahí.
+          </span>
+        </div>
+      )}
+
+      {/* Con un número elegido, el gasto NO se puede partir: Meta lo reporta por
+          anuncio y no sabe a qué número escribió cada persona. Callarlo haría
+          leer un ROAS por canal que no significa nada. */}
+      {data?.gastoEsDeTodaLaTienda && (
+        <div className="mb-3 bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-2.5">
+          <span className="text-sm text-blue-300">
+            Los chats y las ventas son solo de este número, pero <b>el gasto es de
+            toda la tienda</b>: Meta no sabe a cuál de tus números escribió cada
+            persona. Sirve para comparar los dos números entre sí, no para leer el
+            ROAS de uno solo.
           </span>
         </div>
       )}

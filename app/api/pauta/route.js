@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { requireAdmin } from '@/lib/auth'
 import { armarTablero } from '@/lib/pauta/tablero'
-import { TIENDAS, FECHA_PISO } from '@/lib/pauta/constantes'
+import { TIENDAS, FECHA_PISO, canalValido } from '@/lib/pauta/constantes'
 import { hoyEcuador } from '@/lib/parseFecha'
 
 // El tablero de pauta. SOLO ADMIN: acá se ve el gasto y el margen del negocio.
@@ -26,8 +26,15 @@ export async function GET(req) {
     return Response.json({ error: `Tienda desconocida: ${tienda}` }, { status: 400 })
   }
 
+  // Filtro por número (opcional). Vacío = los dos números de la tienda.
+  // También lista blanca: el phone_id entra en una consulta a la base.
+  const phoneId = searchParams.get('canal') || null
+  if (!canalValido(tienda, phoneId)) {
+    return Response.json({ error: `Ese número no es de ${tienda}` }, { status: 400 })
+  }
+
   try {
-    return Response.json(await armarTablero({ tienda, desde, hasta }))
+    return Response.json(await armarTablero({ tienda, desde, hasta, phoneId }))
   } catch (e) {
     console.error('/api/pauta:', e.message)
     return Response.json({ error: e.message }, { status: 500 })
