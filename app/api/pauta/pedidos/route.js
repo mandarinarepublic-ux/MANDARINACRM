@@ -6,7 +6,7 @@ import { pedidosDeAnuncio, pedidosPorOrigen } from '@/lib/pauta/consultas'
 import { TIENDAS, FECHA_PISO } from '@/lib/pauta/constantes'
 import { hoyEcuador } from '@/lib/parseFecha'
 
-const ORIGENES = ['digital_a_fisico', 'por_chat', 'cliente_de_paso', 'chat_sin_pauta', 'sin_rastro']
+const ORIGENES = ['digital_a_fisico', 'por_chat', 'cliente_de_paso', 'mensaje_directo', 'sin_rastro']
 
 /**
  * El detalle detrás de un número del tablero. Dos formas de pedirlo:

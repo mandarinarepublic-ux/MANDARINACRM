@@ -99,7 +99,7 @@ export default function PautaPage() {
       <div className="mb-4">
         <h1 className="text-xl font-bold text-white">📣 Pauta</h1>
         <p className="text-xs text-gray-500 mt-0.5">
-          Qué trajo cada anuncio: del gasto al pedido pagado.
+          Qué trajo cada anuncio: del gasto al pedido.
         </p>
       </div>
 
@@ -179,7 +179,7 @@ export default function PautaPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
             <Tarjeta titulo="Gasto en Meta" valor={dinero(t.gasto)} />
             <Tarjeta titulo="Venta atribuida" valor={dinero(t.ventaAtribuida)}
-                     nota="pagada, de gente que llegó por un anuncio" />
+                     nota="de gente que llegó por un anuncio (cobrada o no)" />
             <Tarjeta titulo="ROAS del CRM" valor={veces(t.roasCrm)} destacado
                      nota="venta atribuida ÷ gasto" />
             <Tarjeta titulo="MER" valor={veces(t.mer)}
@@ -207,7 +207,7 @@ export default function PautaPage() {
                   ['digital_a_fisico', 'Digital a físico', 'text-green-400', '📲🏬', 'vio el anuncio, escribió y compró en la tienda'],
                   ['por_chat', 'Por chat', 'text-mandarina-400', '💬', 'vino de un anuncio y cerró por WhatsApp'],
                   ['cliente_de_paso', 'Cliente de paso', 'text-amber-400', '🚶', 'mostrador sin chat — va como physical_store'],
-                  ['chat_sin_pauta', 'Chat sin pauta', 'text-blue-400', '🗨️', 'escribió, pero no desde un anuncio'],
+                  ['mensaje_directo', 'Mensaje directo', 'text-blue-400', '🗨️', 'escribió por su cuenta, sin venir de un anuncio'],
                   ['sin_rastro', 'Sin rastro', 'text-gray-500', '❓', 'nunca escribió y no es de mostrador'],
                 ].map(([id, titulo, color, emoji, nota]) => (
                   <Origen key={id} titulo={titulo} o={data.origenes[id]} color={color}
@@ -228,7 +228,7 @@ export default function PautaPage() {
                 Las tres primeras se le reportan a Meta: “Digital a físico” y “Por
                 chat” con el anuncio exacto, “Cliente de paso” con los datos
                 hasheados para que Meta cruce contra quién vio la pauta.{' '}
-                <b className="text-gray-500">“Chat sin pauta” sí se puede rastrear</b> —
+                <b className="text-gray-500">“Mensaje directo” también salió del inbox</b> —
                 esos clientes tienen conversación, solo que no empezó en un anuncio.
                 Toca cualquiera para ver los pedidos.
               </p>
