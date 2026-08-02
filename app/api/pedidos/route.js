@@ -7,6 +7,7 @@ import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
 import { enviarPurchase, capiConfigurado, debeEnviarCapi } from '@/lib/metaCapi'
 import { registrarEvento } from '@/lib/eventos'
+import { resolverOrigen, columnasDeOrigen } from '@/lib/origenPedido'
 import { notificarVenta } from '@/lib/telegram'
 
 export const dynamic = 'force-dynamic'
@@ -87,6 +88,22 @@ export async function POST(req) {
 
     const estadoPago = montoAbonado >= montoTotal ? 'PAGADO' : montoAbonado > 0 ? 'ABONO' : 'PENDIENTE'
 
+    // De dónde vino esta venta, resuelto AHORA y guardado con el pedido.
+    //
+    // Se hace acá y no en un cron a propósito: el cron llegaría tarde y con un
+    // dato que ya cambió. El cruce por teléfono da una respuesta que se mueve
+    // —si el cliente vuelve a escribir desde otro anuncio, el cruce le asigna el
+    // nuevo— así que la única forma de que un reporte de julio siga diciendo lo
+    // mismo en octubre es congelarlo en el momento de la venta.
+    //
+    // No bloquea nada crítico: si falla, `origen` queda null y el pedido se
+    // graba igual. Una venta no se puede perder por no saber de dónde vino.
+    const origen = await resolverOrigen({
+      celular: cliente.celular,
+      tiendaId,
+      vendedorId: vendedorNombre || vendedorId,
+    })
+
     // Fila del pedido (dual-write). Mismo orden de columnas que el append previo.
     await createPedido({
       pedidoId,
@@ -110,6 +127,7 @@ export async function POST(req) {
       direccionPedido: direccionTexto || cliente.direccion || '',
       latitud: latitud || null,
       longitud: longitud || null,
+      ...columnasDeOrigen(origen),
     })
 
     await logCambio(pedidoId, 'CREACION', '', 'EN_FABRICA', vendedorId)
