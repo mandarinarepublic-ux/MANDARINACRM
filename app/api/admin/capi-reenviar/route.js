@@ -60,6 +60,9 @@ export async function POST(req) {
         cliente,
         montoTotal: pedido.MONTO_TOTAL,
         eventTime,
+        // Al reenviar hay que respetar el origen original de la venta, o una de
+        // mostrador se reintentaría como si fuera de chat.
+        vendedorId: pedido.VENDEDOR_ID,
       })
       resultados.push({ pedidoId: id, tienda: pedido.TIENDA_ID, ...r })
     } catch (e) {

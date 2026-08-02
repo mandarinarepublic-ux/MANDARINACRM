@@ -214,8 +214,17 @@ export async function POST(req) {
       if (!debeEnviarCapi(tiendaId)) {
         // nada que hacer
       } else if (capiConfigurado()) {
-        enviarPurchase({ pedidoId, tiendaId, cliente, montoTotal })
-          .catch(err => console.error('META CAPI error:', err.message))
+        // vendedorId decide el action_source cuando el cliente NO vino de un
+        // anuncio: si vende en el mostrador va como physical_store para que Meta
+        // cruce al cliente de paso. Ver lib/canalVenta.js.
+        // Se manda EXACTAMENTE lo mismo que se guardó en VENDEDOR_ID unas líneas
+        // arriba (`vendedorNombre || vendedorId`). Si acá fuera el id crudo y en
+        // la base el nombre, el reenvío desde /dashboard/errores —que lee la
+        // columna— clasificaría el origen distinto que el envío original.
+        enviarPurchase({
+          pedidoId, tiendaId, cliente, montoTotal,
+          vendedorId: vendedorNombre || vendedorId,
+        }).catch(err => console.error('META CAPI error:', err.message))
       } else {
         const celularRaw = String(cliente.celular || '')
         const celularNorm = celularRaw.startsWith('0')
