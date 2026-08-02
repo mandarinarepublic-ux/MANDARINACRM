@@ -78,7 +78,12 @@ function Anuncio({ a, ctx }) {
   const [verPedidos, setVerPedidos] = useState(false)
   // Un anuncio con gasto y sin una sola venta es la señal más accionable del
   // tablero: es plata quemada, y se marca para que salte a la vista.
-  const quemando = a.gasto != null && a.gasto > 0 && a.pagados === 0
+  //
+  // VENTA = que exista el pedido, cobrado o no (regla del negocio, 2-ago-2026).
+  // Antes esto miraba `pagados` y marcaba en rojo anuncios que SÍ habían vendido
+  // pero cuyo pedido estaba en ABONO: en el período había 46 pedidos así por
+  // $3.263, o sea que la señal más importante del tablero mentía.
+  const quemando = a.gasto != null && a.gasto > 0 && a.pedidos === 0
 
   return (
     <div className={`rounded-lg border p-2.5 ${quemando ? 'border-red-500/30 bg-red-500/5' : 'border-gray-800 bg-gray-900/40'}`}>
@@ -95,7 +100,10 @@ function Anuncio({ a, ctx }) {
           </div>
           <div className="text-[10px] text-gray-500 mt-0.5">
             {numero(a.llegaron)} escribieron · {numero(a.conversaron)} conversaron ·{' '}
-            {numero(a.pagados)} pagaron
+            <b className="text-gray-400">{numero(a.pedidos)} compraron</b>
+            {a.pagados < a.pedidos && (
+              <span className="text-gray-600"> ({numero(a.pagados)} ya cobrados)</span>
+            )}
             {a.costoPorConversacion != null && ` · ${dinero(a.costoPorConversacion)} por chat`}
           </div>
         </div>

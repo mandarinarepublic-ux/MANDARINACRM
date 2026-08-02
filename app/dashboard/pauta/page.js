@@ -281,9 +281,12 @@ export default function PautaPage() {
               <Flecha />
               <Paso label="Conversaron" valor={e.conversaron} />
               <Flecha />
-              <Paso label="Pedidos" valor={e.pedidos} />
+              {/* El final del embudo es el PEDIDO, cobrado o no: una venta en
+                  ABONO ya se ganó, solo falta cobrarla. "Cobrados" queda al lado
+                  como dato de caja, no como definición de venta. */}
+              <Paso label="Compraron" valor={e.pedidos} destacado />
               <Flecha />
-              <Paso label="Pagados" valor={e.pagados} destacado />
+              <Paso label="ya cobrados" valor={e.pagados} />
             </div>
           </div>
 

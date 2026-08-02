@@ -62,8 +62,12 @@ export default function Pedidos({ tienda, desde, hasta, anuncio, origen, headers
               <td className="py-1 pr-2 whitespace-nowrap">{p.vendedor}</td>
               <td className="py-1 pr-2 text-right whitespace-nowrap">
                 {dinero(p.monto)}
+                {/* El estado es informativo, NO cambia si cuenta como venta:
+                    un ABONO ya se vendió, solo falta terminar de cobrarlo. */}
                 {p.estadoPago !== 'PAGADO' && (
-                  <span className="ml-1 text-amber-500">({p.estadoPago})</span>
+                  <span className="ml-1 text-amber-500" title="venta hecha, cobro pendiente">
+                    ({p.estadoPago})
+                  </span>
                 )}
               </td>
               {anuncio && (
