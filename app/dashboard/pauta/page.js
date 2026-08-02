@@ -17,6 +17,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Tabla from './Tabla'
 import { dinero, numero, veces } from './formato'
+import Pedidos from './Pedidos'
 
 const TIENDAS = [
   { id: 'INDSTORE', nombre: 'IND STORE' },
@@ -49,6 +50,7 @@ export default function PautaPage() {
   const [user, setUser] = useState(null)
   const [tienda, setTienda] = useState('INDSTORE')
   const [canal, setCanal] = useState('')   // '' = los dos números
+  const [verOrigen, setVerOrigen] = useState(null)  // categoría abierta
   const [desde, setDesde] = useState(FECHA_PISO)
   const [hasta, setHasta] = useState(hoyEc())
   const [data, setData] = useState(null)
@@ -200,24 +202,35 @@ export default function PautaPage() {
           {data.origenes && (
             <div className="card p-3 mb-4">
               <div className="text-xs font-semibold text-white mb-2">¿De dónde salió cada venta?</div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                <Origen titulo="Digital a físico" o={data.origenes.digital_a_fisico}
-                        color="text-green-400" emoji="📲🏬"
-                        nota="vio el anuncio, escribió y compró en la tienda" />
-                <Origen titulo="Por chat" o={data.origenes.por_chat}
-                        color="text-mandarina-400" emoji="💬"
-                        nota="vino de un anuncio y cerró por WhatsApp" />
-                <Origen titulo="Cliente de paso" o={data.origenes.cliente_de_paso}
-                        color="text-amber-400" emoji="🚶"
-                        nota="mostrador, sin chat — se reporta como physical_store" />
-                <Origen titulo="Sin origen" o={data.origenes.sin_origen}
-                        color="text-gray-500" emoji="❓"
-                        nota="no hay forma de saberlo" />
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
+                {[
+                  ['digital_a_fisico', 'Digital a físico', 'text-green-400', '📲🏬', 'vio el anuncio, escribió y compró en la tienda'],
+                  ['por_chat', 'Por chat', 'text-mandarina-400', '💬', 'vino de un anuncio y cerró por WhatsApp'],
+                  ['cliente_de_paso', 'Cliente de paso', 'text-amber-400', '🚶', 'mostrador sin chat — va como physical_store'],
+                  ['chat_sin_pauta', 'Chat sin pauta', 'text-blue-400', '🗨️', 'escribió, pero no desde un anuncio'],
+                  ['sin_rastro', 'Sin rastro', 'text-gray-500', '❓', 'nunca escribió y no es de mostrador'],
+                ].map(([id, titulo, color, emoji, nota]) => (
+                  <Origen key={id} titulo={titulo} o={data.origenes[id]} color={color}
+                          emoji={emoji} nota={nota}
+                          abierto={verOrigen === id}
+                          onClick={() => setVerOrigen(verOrigen === id ? null : id)} />
+                ))}
               </div>
+
+              {/* El detalle: cuáles son esos pedidos. Sin esto el tablero da un
+                  número y no hay forma de ir a ver de dónde salió. */}
+              {verOrigen && (
+                <Pedidos tienda={tienda} desde={desde} hasta={hasta}
+                         origen={verOrigen} headers={headers()} />
+              )}
+
               <p className="text-[10px] text-gray-600 mt-2 leading-tight">
-                Las tres primeras se le reportan a Meta. “Digital a físico” y “Por
-                chat” llevan el anuncio exacto; “Cliente de paso” va con los datos
-                hasheados para que Meta cruce contra quién vio la pauta.
+                Las tres primeras se le reportan a Meta: “Digital a físico” y “Por
+                chat” con el anuncio exacto, “Cliente de paso” con los datos
+                hasheados para que Meta cruce contra quién vio la pauta.{' '}
+                <b className="text-gray-500">“Chat sin pauta” sí se puede rastrear</b> —
+                esos clientes tienen conversación, solo que no empezó en un anuncio.
+                Toca cualquiera para ver los pedidos.
               </p>
             </div>
           )}
@@ -274,7 +287,8 @@ export default function PautaPage() {
             </div>
           </div>
 
-          <Tabla campanas={data.campanas} />
+          <Tabla campanas={data.campanas}
+                 ctx={{ tienda, desde, hasta, headers: headers() }} />
 
           {data.ultimoDato && (
             <p className="text-[10px] text-gray-600 mt-3">
@@ -299,16 +313,19 @@ function Tarjeta({ titulo, valor, nota, destacado }) {
 }
 
 /** Una caja de origen. `o` en null = no hubo ninguna venta de ese tipo. */
-function Origen({ titulo, o, color, emoji, nota }) {
+function Origen({ titulo, o, color, emoji, nota, abierto, onClick }) {
   return (
-    <div className="rounded-lg bg-gray-800/40 p-2.5">
+    <button onClick={onClick}
+            className={`text-left rounded-lg p-2.5 transition-colors ${
+              abierto ? 'bg-gray-700/60 ring-1 ring-gray-600' : 'bg-gray-800/40 hover:bg-gray-800/70'
+            }`}>
       <div className="text-[10px] text-gray-500">{emoji} {titulo}</div>
       <div className={`text-lg font-bold ${o ? color : 'text-gray-700'}`}>
         {o ? numero(o.ventas) : '0'}
       </div>
       <div className="text-[10px] text-gray-500">{o ? dinero(o.usd) : '—'}</div>
       <div className="text-[9px] text-gray-600 mt-1 leading-tight">{nota}</div>
-    </div>
+    </button>
   )
 }
 

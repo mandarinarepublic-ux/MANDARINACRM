@@ -9,8 +9,9 @@
 // para mirar la imagen y el texto que produjeron esas ventas, no solo su ID.
 import { useState } from 'react'
 import { dinero, numero, veces } from './formato'
+import Pedidos from './Pedidos'
 
-export default function Tabla({ campanas }) {
+export default function Tabla({ campanas, ctx }) {
   if (!campanas?.length) {
     return (
       <div className="card p-8 text-center text-gray-600">
@@ -21,12 +22,12 @@ export default function Tabla({ campanas }) {
   }
   return (
     <div className="space-y-2">
-      {campanas.map((c) => <Campana key={c.campaignId} c={c} />)}
+      {campanas.map((c) => <Campana key={c.campaignId} c={c} ctx={ctx} />)}
     </div>
   )
 }
 
-function Campana({ c }) {
+function Campana({ c, ctx }) {
   const [abierta, setAbierta] = useState(false)
   return (
     <div className="card overflow-hidden">
@@ -42,14 +43,14 @@ function Campana({ c }) {
 
       {abierta && (
         <div className="border-t border-gray-800 divide-y divide-gray-800/60">
-          {c.conjuntos.map((cj) => <Conjunto key={cj.adsetId} cj={cj} />)}
+          {c.conjuntos.map((cj) => <Conjunto key={cj.adsetId} cj={cj} ctx={ctx} />)}
         </div>
       )}
     </div>
   )
 }
 
-function Conjunto({ cj }) {
+function Conjunto({ cj, ctx }) {
   const [abierto, setAbierto] = useState(false)
   return (
     <div>
@@ -65,15 +66,16 @@ function Conjunto({ cj }) {
 
       {abierto && (
         <div className="pl-8 pb-2 space-y-1.5">
-          {cj.artes.map((a) => <Anuncio key={a.adId} a={a} />)}
+          {cj.artes.map((a) => <Anuncio key={a.adId} a={a} ctx={ctx} />)}
         </div>
       )}
     </div>
   )
 }
 
-function Anuncio({ a }) {
+function Anuncio({ a, ctx }) {
   const [verArte, setVerArte] = useState(false)
+  const [verPedidos, setVerPedidos] = useState(false)
   // Un anuncio con gasto y sin una sola venta es la señal más accionable del
   // tablero: es plata quemada, y se marca para que salte a la vista.
   const quemando = a.gasto != null && a.gasto > 0 && a.pagados === 0
@@ -104,6 +106,18 @@ function Anuncio({ a }) {
           </div>
         </div>
       </div>
+
+      {/* El rastreo completo: de este anuncio a los pedidos que produjo. Solo
+          aparece si hubo alguno — un botón que siempre abre vacío es ruido. */}
+      {a.pedidos > 0 && (
+        <>
+          <button onClick={() => setVerPedidos(!verPedidos)}
+                  className="mt-1.5 mr-3 text-[10px] text-green-400 hover:underline">
+            {verPedidos ? 'ocultar los pedidos' : `ver los ${a.pedidos} pedido(s)`}
+          </button>
+          {verPedidos && <Pedidos {...ctx} anuncio={a.adId} />}
+        </>
+      )}
 
       {(a.arteUrl || a.arteTexto || a.arteTitular) && (
         <>
