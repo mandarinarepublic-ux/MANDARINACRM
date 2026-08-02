@@ -194,6 +194,34 @@ export default function PautaPage() {
             </div>
           )}
 
+          {/* De dónde salió cada venta, con la MISMA regla con la que se le
+              reporta a Meta (lib/canalVenta.js). Si esto y el CAPI dijeran cosas
+              distintas, el tablero estaría mintiendo sobre lo que se envía. */}
+          {data.origenes && (
+            <div className="card p-3 mb-4">
+              <div className="text-xs font-semibold text-white mb-2">¿De dónde salió cada venta?</div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                <Origen titulo="Digital a físico" o={data.origenes.digital_a_fisico}
+                        color="text-green-400" emoji="📲🏬"
+                        nota="vio el anuncio, escribió y compró en la tienda" />
+                <Origen titulo="Por chat" o={data.origenes.por_chat}
+                        color="text-mandarina-400" emoji="💬"
+                        nota="vino de un anuncio y cerró por WhatsApp" />
+                <Origen titulo="Cliente de paso" o={data.origenes.cliente_de_paso}
+                        color="text-amber-400" emoji="🚶"
+                        nota="mostrador, sin chat — se reporta como physical_store" />
+                <Origen titulo="Sin origen" o={data.origenes.sin_origen}
+                        color="text-gray-500" emoji="❓"
+                        nota="no hay forma de saberlo" />
+              </div>
+              <p className="text-[10px] text-gray-600 mt-2 leading-tight">
+                Las tres primeras se le reportan a Meta. “Digital a físico” y “Por
+                chat” llevan el anuncio exacto; “Cliente de paso” va con los datos
+                hasheados para que Meta cruce contra quién vio la pauta.
+              </p>
+            </div>
+          )}
+
           {/* OJO: `pauta` y `sinPauta` cuentan PERSONAS que escribieron por
               primera vez; `sinChat` cuenta PEDIDOS. Son unidades distintas y no
               suman entre sí — la función crm.pauta_cubetas las devuelve juntas
@@ -266,6 +294,20 @@ function Tarjeta({ titulo, valor, nota, destacado }) {
       <div className="text-[10px] text-gray-500">{titulo}</div>
       <div className={`text-lg font-bold ${destacado ? 'text-mandarina-400' : 'text-white'}`}>{valor}</div>
       {nota && <div className="text-[10px] text-gray-600 mt-0.5 leading-tight">{nota}</div>}
+    </div>
+  )
+}
+
+/** Una caja de origen. `o` en null = no hubo ninguna venta de ese tipo. */
+function Origen({ titulo, o, color, emoji, nota }) {
+  return (
+    <div className="rounded-lg bg-gray-800/40 p-2.5">
+      <div className="text-[10px] text-gray-500">{emoji} {titulo}</div>
+      <div className={`text-lg font-bold ${o ? color : 'text-gray-700'}`}>
+        {o ? numero(o.ventas) : '0'}
+      </div>
+      <div className="text-[10px] text-gray-500">{o ? dinero(o.usd) : '—'}</div>
+      <div className="text-[9px] text-gray-600 mt-1 leading-tight">{nota}</div>
     </div>
   )
 }
