@@ -8,6 +8,7 @@ import { parseFecha, formatFechaHumana } from '@/lib/parseFecha'
 import { PdfGracias, PdfGraciasPagina, PdfConfeccion, PdfConfeccionPagina, paginarItems, paginarItemsCliente } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import ConversacionPanel from '@/components/pedido/ConversacionPanel'
+import Origen from './Origen'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -568,6 +569,12 @@ export default function PedidoDetailPage() {
                 <span className="text-gray-500">›</span>
               </button>
             </div>
+          )}
+
+          {/* De dónde vino la venta. Dato de apoyo: va después de la
+              conversación, que es lo que se abre a diario. */}
+          {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
+            <Origen pedidoId={pedido.PEDIDO_ID} />
           )}
 
           <div className="card overflow-hidden">
