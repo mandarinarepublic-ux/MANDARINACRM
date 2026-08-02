@@ -78,11 +78,17 @@ async function runSync() {
 }
 
 // Autorización: el cron de Vercel envía Authorization: Bearer $CRON_SECRET.
-// Si CRON_SECRET no está configurado, se permite (útil en dev). El botón manual
-// del dashboard usa POST y puede pasar ?secret= o el header si quieres protegerlo.
+//
+// Sin CRON_SECRET esto devolvía true, o sea que la ruta quedaba abierta a
+// internet (mismo agujero que se encontró en /api/cron/pauta el 2-ago). Acá el
+// daño es distinto pero real: cualquiera podía disparar una sincronización
+// completa del catálogo y quemar cuota de la API de Shopify.
+//
+// Ahora falla cerrado en producción; en local se sigue permitiendo, que es para
+// lo que servía la excepción.
 function authorized(req) {
   const secret = process.env.CRON_SECRET
-  if (!secret) return true
+  if (!secret) return process.env.VERCEL_ENV !== 'production'
   const auth = req.headers.get('authorization') || ''
   const url = new URL(req.url)
   return auth === `Bearer ${secret}` || url.searchParams.get('secret') === secret

@@ -13,11 +13,20 @@ import { hoyEcuador, isoMasDias } from '@/lib/parseFecha'
 // anteriores congelados con datos provisionales.
 const DIAS_REFRESCO = 3
 
-// Mismo patrón que /api/shopify/sync: el cron de Vercel manda
-// Authorization: Bearer $CRON_SECRET. Sin CRON_SECRET se permite (dev).
+// El cron de Vercel manda Authorization: Bearer $CRON_SECRET.
+//
+// Sin CRON_SECRET esto DEVOLVÍA TRUE, o sea que la ruta quedaba abierta a
+// internet. Se verificó el 2-ago: un GET sin credenciales desde fuera respondió
+// 200. Como la respuesta trae el gasto por cuenta publicitaria, eso es dejar los
+// números del negocio a la vista de cualquiera que adivine la URL — y este repo
+// es público. Además cada llamada quema cuota de la API de Meta.
+//
+// Ahora falla cerrado en producción: si no hay secreto configurado, no entra
+// nadie. En local (sin VERCEL_ENV) se sigue permitiendo, que es para lo que
+// servía la excepción.
 function autorizado(req) {
   const secreto = String(process.env.CRON_SECRET || '').replace(/[^\x21-\x7E]/g, '')
-  if (!secreto) return true
+  if (!secreto) return process.env.VERCEL_ENV !== 'production'
   const cabecera = req.headers.get('authorization') || ''
   const url = new URL(req.url)
   return cabecera === `Bearer ${secreto}` || url.searchParams.get('secret') === secreto
