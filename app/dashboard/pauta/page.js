@@ -73,6 +73,10 @@ export default function PautaPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // Con qué filtros se cargó lo que se está viendo. Comparar contra los filtros
+  // actuales es la única forma honesta de saber si la pantalla está mostrando lo
+  // que el usuario cree haber pedido.
+  const [aplicado, setAplicado] = useState(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -97,6 +101,9 @@ export default function PautaPage() {
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
       setData(d)
+      // Se guarda DESPUÉS de que la carga salió bien: si falló, los filtros
+      // siguen "sin aplicar" y el botón lo sigue avisando, que es lo correcto.
+      setAplicado({ tienda, canal, desde, hasta })
     } catch (e) {
       setError(e.message || 'Error de conexión')
       setData(null)
@@ -110,6 +117,12 @@ export default function PautaPage() {
   const t = data?.totales
   const e = data?.embudo
   const c = data?.cubetas
+
+  // ¿Los filtros de arriba ya no son los que produjeron lo que se ve abajo?
+  const sucio = Boolean(aplicado) && (
+    aplicado.tienda !== tienda || aplicado.canal !== canal ||
+    aplicado.desde !== desde || aplicado.hasta !== hasta
+  )
 
   return (
     <>
@@ -150,9 +163,20 @@ export default function PautaPage() {
           <input type="date" className="input py-2 text-sm w-auto" value={hasta}
                  onChange={(ev) => setHasta(ev.target.value)} />
         </div>
+        {/* Con filtros sin aplicar: se sacude, cambia de color y cambia de texto.
+            Tres señales y no una sola, porque la sacudida dura dos segundos y
+            quien mire después necesita seguir viendo que falta darle. */}
         <button onClick={() => cargar()} disabled={loading}
-                className="px-4 py-2 rounded-xl bg-mandarina-500 text-white text-sm font-semibold disabled:opacity-60">
-          {loading ? '⏳' : 'Ver'}
+                // La clave lleva los filtros: al cambiar cualquiera, React
+                // rehace el botón y la animación vuelve a correr. Con una clave
+                // fija (sucio/limpio) solo se sacudiría en el primer cambio y
+                // los siguientes pasarían sin aviso.
+                key={`${tienda}|${canal}|${desde}|${hasta}`}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-60 transition-colors
+                            ${sucio
+                              ? 'temblar bg-amber-500 text-black ring-2 ring-amber-300'
+                              : 'bg-mandarina-500 text-white'}`}>
+          {loading ? '⏳' : sucio ? '↻ Actualizar' : 'Ver'}
         </button>
         {/* Imprime el informe con los filtros que estén puestos. Solo si ya hay
             datos: un PDF vacío no le sirve a nadie. */}

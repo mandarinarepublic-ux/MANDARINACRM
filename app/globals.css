@@ -93,3 +93,25 @@ html.letra-grande .text-base{ font-size: 1.1rem  !important; }
 html.letra-grande .text-lg  { font-size: 1.25rem !important; }
 html.letra-grande .text-xl  { font-size: 1.4rem  !important; }
 html.letra-grande .text-2xl { font-size: 1.6rem  !important; }
+
+/* Aviso de "hay filtros sin aplicar".
+ *
+ * Cambiar un filtro y que la pantalla siga mostrando los números anteriores es
+ * de las cosas que hacen desconfiar de un tablero: uno cree estar viendo lo que
+ * pidió. El botón se sacude para recordar que falta darle.
+ *
+ * Dos sacudidas y para: una animación infinita en un botón cansa y termina
+ * ignorándose, que es justo lo contrario de lo que se busca.
+ */
+@keyframes temblar {
+  0%, 100% { transform: translateX(0); }
+  15%, 45%, 75% { transform: translateX(-3px); }
+  30%, 60%, 90% { transform: translateX(3px); }
+}
+.temblar { animation: temblar 0.5s ease-in-out 2; }
+
+/* Quien pidió menos movimiento en su sistema no debería recibir esto. El aviso
+   igual se ve: el color y el texto del botón cambian aparte de la sacudida. */
+@media (prefers-reduced-motion: reduce) {
+  .temblar { animation: none; }
+}
