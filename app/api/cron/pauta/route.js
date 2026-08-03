@@ -69,6 +69,14 @@ async function correr() {
         valor_meta: f.valorMeta,
         roas_meta: f.roasMeta,
         creative_id: detalle.get(f.adId)?.creativeId || '',
+        // El ARTE. Sin esto las columnas quedaban NULL y el tablero mostraba un
+        // ad_id que no le dice nada a nadie; el punto era poder VER qué imagen
+        // produjo la venta. `|| null` y no `|| ''`: una cadena vacía se leería
+        // como "hay arte y está en blanco".
+        arte_url:     detalle.get(f.adId)?.arteUrl || null,
+        arte_tipo:    detalle.get(f.adId)?.arteTipo || null,
+        arte_texto:   detalle.get(f.adId)?.arteTexto || null,
+        arte_titular: detalle.get(f.adId)?.arteTitular || null,
         actualizado_at: new Date().toISOString(),
       }))
 
