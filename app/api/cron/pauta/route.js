@@ -194,7 +194,26 @@ async function correr({ arteViejo = false } = {}) {
   // Se archiva de a poco (ver POR_CORRIDA): el cron tiene 60 s y cada imagen son
   // dos viajes. El atraso inicial de ~57 anuncios se termina en unos días y los
   // nuevos se archivan el mismo día.
+  //
+  // APAGADO desde el 2-ago-2026 (decisión del usuario).
+  //
+  // El archivado automático entra en un bucle que no se logró aislar en siete
+  // intentos: guarda la imagen en Cloudinary, la marca, y en la corrida
+  // siguiente el anuncio vuelve a aparecer pendiente. No pierde datos ni rompe
+  // nada —el public_id es determinístico, así que reemplaza en vez de
+  // duplicar— pero re-sube las mismas imágenes todos los días contra la cuota.
+  //
+  // Mientras tanto el guardado se hace desde /dashboard/pauta/artes, que baja
+  // la imagen en el servidor y la deja a salvo de una. Esa pantalla NO depende
+  // de este código.
+  //
+  // Para volver a encenderlo: PAUTA_ARCHIVAR_AUTO=1 en Vercel. Se deja detrás
+  // de una variable y no borrado, para poder probar el arreglo sin desplegar.
   try {
+    if (process.env.PAUTA_ARCHIVAR_AUTO !== '1') {
+      resumen.arte = { apagado: 'archivado automático en pausa — ver /dashboard/pauta/artes' }
+      return resumen
+    }
     resumen.arte = await archivarArtePendiente()
     // Los pendientes van en la respuesta a propósito: un tope silencioso se lee
     // como "ya está todo" cuando no lo está.

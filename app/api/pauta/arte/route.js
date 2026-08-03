@@ -17,6 +17,30 @@ import { registrarEvento } from '@/lib/eventos'
 
 const CARPETA = 'mandarina-pro/pauta'
 
+/**
+ * ¿Esta URL es de verdad una imagen de Meta?
+ *
+ * `desdeMeta` hace que el SERVIDOR salga a buscar una URL que viene de la base.
+ * Hoy esa columna solo la escriben el cron (con lo que devuelve la API de Meta)
+ * y esta misma ruta, así que nadie de afuera la elige. Pero el día que otro
+ * camino escriba ahí —o que alguien con acceso a la base la cambie— el servidor
+ * estaría pidiendo cualquier dirección que le pongan, incluida una interna.
+ *
+ * Una lista blanca de dominios corta eso de raíz y no cuesta nada.
+ */
+function esUrlDeMeta(url) {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'https:') return false
+    const host = u.hostname.toLowerCase().replace(/\.$/, '')
+    return host === 'fbcdn.net' || host.endsWith('.fbcdn.net')
+        || host === 'cdninstagram.com' || host.endsWith('.cdninstagram.com')
+        || host.endsWith('.facebook.com')
+  } catch {
+    return false
+  }
+}
+
 export async function GET(req) {
   const auth = await requireAdmin(req)
   if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status })
@@ -97,7 +121,14 @@ export async function POST(req) {
       if (!urlMeta) {
         return Response.json({ error: 'Este anuncio no tiene ninguna imagen que bajar' }, { status: 400 })
       }
-      const r = await fetch(urlMeta)
+      if (!esUrlDeMeta(urlMeta)) {
+        return Response.json({
+          error: 'La imagen guardada no apunta a un dominio de Meta. Súbela a mano.',
+        }, { status: 400 })
+      }
+      // redirect manual: si Meta redirige, no seguimos a ciegas a un destino que
+      // ya no pasó por la lista blanca. En ese caso se sube a mano y listo.
+      const r = await fetch(urlMeta, { redirect: 'manual' })
       if (!r.ok) {
         // Si Meta ya la caducó, se dice claro: esa imagen hay que subirla a mano
         // o se perdió.
