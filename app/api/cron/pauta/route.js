@@ -4,6 +4,7 @@ export const maxDuration = 60
 import { getSupabase } from '@/lib/supabase'
 import { registrarEvento } from '@/lib/eventos'
 import { traerGastoDiario, traerDetalleAnuncios } from '@/lib/pauta/meta'
+import { archivarArtePendiente } from '@/lib/pauta/arte'
 import { hoyEcuador, isoMasDias } from '@/lib/parseFecha'
 
 // Baja el gasto de Meta a crm.pauta_dia.
@@ -51,6 +52,20 @@ async function correr() {
       const adIds = [...new Set(filas.map((f) => f.adId))]
       const detalle = await traerDetalleAnuncios(c.ad_account_id, adIds)
 
+      // El arte que YA está en Cloudinary no se pisa.
+      //
+      // El cron refresca los últimos 3 días, así que sin esto cada corrida
+      // sobreescribiría `arte_url` con la URL de Meta y desharía el archivado de
+      // la vuelta anterior — un ciclo infinito de archivar y perder, que además
+      // no daría ningún error. Lo archivado gana siempre: es lo que no caduca.
+      const yaArchivada = new Map()
+      {
+        const { data: previas } = await sb
+          .from('pauta_dia').select('ad_id, arte_url')
+          .in('ad_id', adIds).ilike('arte_url', '%res.cloudinary.com%')
+        for (const p of previas || []) yaArchivada.set(p.ad_id, p.arte_url)
+      }
+
       const registros = filas.map((f) => ({
         fecha: f.fecha,
         ad_id: f.adId,
@@ -73,7 +88,7 @@ async function correr() {
         // ad_id que no le dice nada a nadie; el punto era poder VER qué imagen
         // produjo la venta. `|| null` y no `|| ''`: una cadena vacía se leería
         // como "hay arte y está en blanco".
-        arte_url:     detalle.get(f.adId)?.arteUrl || null,
+        arte_url:     yaArchivada.get(f.adId) || detalle.get(f.adId)?.arteUrl || null,
         arte_tipo:    detalle.get(f.adId)?.arteTipo || null,
         arte_texto:   detalle.get(f.adId)?.arteTexto || null,
         arte_titular: detalle.get(f.adId)?.arteTitular || null,
@@ -100,6 +115,28 @@ async function correr() {
         detalle: { adAccountId: c.ad_account_id, error: e.message },
       })
     }
+  }
+
+  // Guardar el arte en Cloudinary. Va DESPUÉS de escribir el gasto y en su
+  // propio try: las URL de Meta caducan, pero el gasto es lo importante del
+  // cron y no puede quedarse sin actualizar porque falle una subida.
+  //
+  // Se archiva de a poco (ver POR_CORRIDA): el cron tiene 60 s y cada imagen son
+  // dos viajes. El atraso inicial de ~57 anuncios se termina en unos días y los
+  // nuevos se archivan el mismo día.
+  try {
+    resumen.arte = await archivarArtePendiente()
+    // Los pendientes van en la respuesta a propósito: un tope silencioso se lee
+    // como "ya está todo" cuando no lo está.
+    if (resumen.arte.errores.length) {
+      await registrarEvento({
+        fuente: 'meta', nivel: 'aviso',
+        mensaje: `Arte de pauta: ${resumen.arte.errores.length} no se pudieron archivar`,
+        detalle: { errores: resumen.arte.errores.slice(0, 10) },
+      })
+    }
+  } catch (e) {
+    resumen.arte = { error: e.message }
   }
 
   return resumen
