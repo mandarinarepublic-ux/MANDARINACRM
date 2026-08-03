@@ -49,7 +49,13 @@ function Embudo({ x, metrica }) {
  * justamente la pregunta que se está haciendo.
  */
 function ordenar(items, metrica) {
-  return [...(items || [])].sort((a, b) => (b[metrica] || 0) - (a[metrica] || 0))
+  return [...(items || [])].sort((a, b) =>
+    (b[metrica] || 0) - (a[metrica] || 0) ||
+    // Desempate por chats, que es el que hacía el servidor y este orden pisaba.
+    // Sin él, los anuncios sin gasto conocido (todos empatados en 0) quedaban en
+    // un orden arbitrario que cambiaba entre recargas.
+    (b.llegaron || 0) - (a.llegaron || 0)
+  )
 }
 
 export default function Tabla({ campanas, ctx, metrica = 'gasto' }) {
