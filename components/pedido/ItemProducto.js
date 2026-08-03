@@ -11,7 +11,7 @@ const AREAS = [
   'PRODUCTO SIN DISEÑO',
 ]
 
-export default function ItemProducto({ item, index, onChange, onRemove }) {
+export default function ItemProducto({ item, index, onChange, onRemove, onDuplicate }) {
   const [expanded, setExpanded] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [uploading, setUploading] = useState({})
@@ -22,6 +22,10 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
   const subtotal = (Math.max(precio, 0) * Math.max(cantidad, 0)).toFixed(2)
   const cantidadValida = cantidad >= 1
   const precioValido = precio >= 0
+  // Avisa (no bloquea) cuando no hay talla. Existe por el botón DUPLICAR: la
+  // copia nace sin talla justamente para que se cambie, y sin este aviso es
+  // fácil mandar dos prendas iguales sin darse cuenta.
+  const faltaTalla = !String(item.talla || '').trim()
 
   // Sube a Cloudinary y guarda solo la URL. Las fotos (pecho/espalda/mangas) se
   // reescalan a buena calidad antes de subir para no exceder el límite de tamaño
@@ -42,7 +46,7 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
   }
 
   return (
-    <div className={`card overflow-hidden ${(!cantidadValida || !precioValido) ? 'border-yellow-500/50' : ''}`}>
+    <div className={`card overflow-hidden ${(!cantidadValida || !precioValido || faltaTalla) ? 'border-yellow-500/50' : ''}`}>
       <div className="flex items-center gap-3 p-4">
         {item.imagen
           ? <img src={imagenAncho(item.imagen, 120)} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
@@ -52,10 +56,32 @@ export default function ItemProducto({ item, index, onChange, onRemove }) {
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-white truncate">{item.productoNombre}</div>
           <div className="text-xs text-gray-500">{item.talla} · {item.area}</div>
-          {cantidadValida && precioValido && <div className="text-xs text-mandarina-400 font-medium">${subtotal}</div>}
-          {(!cantidadValida || !precioValido) && <div className="text-xs text-yellow-400">⚠️ Completa cantidad y precio</div>}
+          {cantidadValida && precioValido && !faltaTalla && <div className="text-xs text-mandarina-400 font-medium">${subtotal}</div>}
+          {/* La talla NO bloquea el envío (hay prendas que legítimamente no
+              llevan), pero una copia recién duplicada nace sin ella y es lo
+              único que hay que cambiar: avisarlo evita mandar dos prendas
+              iguales sin darse cuenta. */}
+          {(!cantidadValida || !precioValido || faltaTalla) && (
+            <div className="text-xs text-yellow-400">
+              ⚠️ Completa {[
+                !cantidadValida && 'cantidad',
+                !precioValido && 'precio',
+                faltaTalla && 'talla',
+              ].filter(Boolean).join(', ')}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* DUPLICAR: mismo producto, mismo arte, otra talla.
+              Un pedido de varias prendas iguales en tallas distintas obligaba a
+              recapturar todo —color, área, fotos, diseño— una vez por talla. */}
+          {onDuplicate && (
+            <button onClick={onDuplicate} title="Duplicar sin talla ni precio"
+                    className="text-[11px] font-semibold text-mandarina-400 border border-mandarina-500/40
+                               px-2.5 py-2 rounded-xl hover:bg-mandarina-500/10 transition-all whitespace-nowrap">
+              ⧉ DUPLICAR
+            </button>
+          )}
           <button onClick={() => setExpanded(e => !e)} className="text-gray-500 hover:text-white p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-sm">
             {expanded ? '▲' : '▼'}
           </button>

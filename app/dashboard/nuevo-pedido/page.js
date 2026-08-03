@@ -240,6 +240,36 @@ export default function NuevoPedidoPage() {
     setTienda('MANDARINA') // volver a Shopify después de agregar
   }
 
+  /**
+   * Copia un producto ya agregado, en blanco solo la talla y el precio.
+   *
+   * Un pedido de varias prendas iguales en tallas distintas obligaba a
+   * recapturar todo por cada talla: color, área, fotos, archivo de diseño y el
+   * detalle. Acá se conserva todo eso y queda por llenar lo único que cambia.
+   *
+   * La copia va JUSTO DEBAJO del original y no al final: con ocho prendas en la
+   * lista, mandarla al final obliga a bajar a buscarla y se pierde de vista de
+   * cuál se copió.
+   *
+   * `cantidad` se pone en 1 a propósito: si el original decía 3, la copia
+   * heredaría 3 y es facilísimo mandarlas sin mirar.
+   *
+   * El `detalle` SE CONSERVA: es la descripción del diseño que el vendedor
+   * escribe a mano, o sea justo lo más caro de recapturar y la razón de que
+   * exista este botón. Lo único que se le quita es el "- Talla X" del final,
+   * que en las prendas de sucursal se arma solo y quedaría mintiendo.
+   */
+  function duplicarItem(idx) {
+    setItems(p => {
+      const copia = {
+        ...p[idx],
+        talla: '', precioUnit: '', cantidad: 1,
+        detalle: String(p[idx].detalle || '').replace(/\s*[-–]\s*talla\s+\S+\s*$/i, ''),
+      }
+      return [...p.slice(0, idx + 1), copia, ...p.slice(idx + 1)]
+    })
+  }
+
   useEffect(() => {
     if (items.length === 0) return
     const areas = [...new Set(items.map(i => (i.area || '').replace(/\s*\+\s*/g, ',').split(',').map(x => x.trim())).flat())].sort()
@@ -789,7 +819,8 @@ export default function NuevoPedidoPage() {
                   {items.map((item, idx) => (
                     <ItemProducto key={idx} item={item} index={idx}
                       onChange={updated => setItems(p => p.map((it, i) => i === idx ? updated : it))}
-                      onRemove={() => setItems(p => p.filter((_, i) => i !== idx))} />
+                      onRemove={() => setItems(p => p.filter((_, i) => i !== idx))}
+                      onDuplicate={() => duplicarItem(idx)} />
                   ))}
                   <div className="card p-4 flex justify-between items-center">
                     <span className="text-gray-400 text-sm">{items.reduce((s,i) => s + parseInt(i.cantidad||1), 0)} prendas</span>
