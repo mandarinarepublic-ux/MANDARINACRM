@@ -121,9 +121,22 @@ export async function POST(req) {
       if (!urlMeta) {
         return Response.json({ error: 'Este anuncio no tiene ninguna imagen que bajar' }, { status: 400 })
       }
+      // Ya está en Cloudinary y solo le falta la marca: no hay nada que bajar.
+      // Pasa cuando el archivador subió la imagen y perdió el marcado. Bajarla
+      // de Cloudinary para volver a subirla al mismo sitio sería absurdo.
+      if (urlMeta.includes('res.cloudinary.com')) {
+        const { data: tocadas, error } = await sb
+          .from('pauta_dia')
+          .update({ arte_archivada_at: new Date().toISOString() })
+          .eq('ad_id', adId).select('ad_id')
+        if (error) throw error
+        return Response.json({ ok: true, adId, url: urlMeta, filas: tocadas?.length || 0,
+                               nota: 'ya estaba guardada; solo faltaba la marca' })
+      }
+
       if (!esUrlDeMeta(urlMeta)) {
         return Response.json({
-          error: 'La imagen guardada no apunta a un dominio de Meta. Súbela a mano.',
+          error: 'La imagen guardada no apunta a un dominio de Meta ni a Cloudinary. Súbela a mano.',
         }, { status: 400 })
       }
       // redirect manual: si Meta redirige, no seguimos a ciegas a un destino que
