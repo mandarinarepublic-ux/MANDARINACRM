@@ -251,8 +251,10 @@ export default function NuevoPedidoPage() {
    * lista, mandarla al final obliga a bajar a buscarla y se pierde de vista de
    * cuál se copió.
    *
-   * `cantidad` se pone en 1 a propósito: si el original decía 3, la copia
-   * heredaría 3 y es facilísimo mandarlas sin mirar.
+   * `cantidad` queda en 0, no en 1: así la copia NO se puede enviar hasta que
+   * alguien la escriba. Heredar la cantidad del original (o asumir 1) deja una
+   * prenda lista para mandarse sin que nadie la haya mirado, y ese es el error
+   * caro — se fabrica de más.
    *
    * El `detalle` SE CONSERVA: es la descripción del diseño que el vendedor
    * escribe a mano, o sea justo lo más caro de recapturar y la razón de que
@@ -263,7 +265,7 @@ export default function NuevoPedidoPage() {
     setItems(p => {
       const copia = {
         ...p[idx],
-        talla: '', precioUnit: '', cantidad: 1,
+        talla: '', precioUnit: '', cantidad: 0,
         detalle: String(p[idx].detalle || '').replace(/\s*[-–]\s*talla\s+\S+\s*$/i, ''),
       }
       return [...p.slice(0, idx + 1), copia, ...p.slice(idx + 1)]
