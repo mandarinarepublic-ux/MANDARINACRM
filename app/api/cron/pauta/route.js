@@ -72,16 +72,24 @@ async function correr({ arteViejo = false } = {}) {
 
       // El arte que YA está en Cloudinary no se pisa.
       //
-      // El cron refresca los últimos 3 días, así que sin esto cada corrida
-      // sobreescribiría `arte_url` con la URL de Meta y desharía el archivado de
-      // la vuelta anterior — un ciclo infinito de archivar y perder, que además
-      // no daría ningún error. Lo archivado gana siempre: es lo que no caduca.
+      // OJO CON EL UPSERT: PostgREST usa `merge-duplicates`, que reescribe TODAS
+      // las columnas de la fila — las que no van en el payload vuelven a su
+      // valor por defecto, o sea NULL. No es un update parcial.
+      //
+      // Por eso hay que reponer acá tanto `arte_url` como `arte_archivada_at`:
+      // sin lo segundo, cada corrida borraba la marca de archivado de las filas
+      // dentro de la ventana de 3 días, el archivador las veía pendientes otra
+      // vez y volvía a subirlas — para siempre, sin un solo error. Se notó
+      // porque los anuncios FUERA de la ventana sí quedaban archivados y los de
+      // adentro rebotaban.
       const yaArchivada = new Map()
       {
         const { data: previas } = await sb
-          .from('pauta_dia').select('ad_id, arte_url')
-          .in('ad_id', adIds).ilike('arte_url', '%res.cloudinary.com%')
-        for (const p of previas || []) yaArchivada.set(p.ad_id, p.arte_url)
+          .from('pauta_dia').select('ad_id, arte_url, arte_archivada_at')
+          .in('ad_id', adIds).not('arte_archivada_at', 'is', null)
+        for (const p of previas || []) {
+          yaArchivada.set(p.ad_id, { url: p.arte_url, at: p.arte_archivada_at })
+        }
       }
 
       const registros = filas.map((f) => ({
@@ -106,7 +114,9 @@ async function correr({ arteViejo = false } = {}) {
         // ad_id que no le dice nada a nadie; el punto era poder VER qué imagen
         // produjo la venta. `|| null` y no `|| ''`: una cadena vacía se leería
         // como "hay arte y está en blanco".
-        arte_url:     yaArchivada.get(f.adId) || detalle.get(f.adId)?.arteUrl || null,
+        arte_url:     yaArchivada.get(f.adId)?.url || detalle.get(f.adId)?.arteUrl || null,
+        // Reponer la marca, o el upsert la borra y el arte se re-sube en bucle.
+        arte_archivada_at: yaArchivada.get(f.adId)?.at || null,
         arte_tipo:    detalle.get(f.adId)?.arteTipo || null,
         arte_texto:   detalle.get(f.adId)?.arteTexto || null,
         arte_titular: detalle.get(f.adId)?.arteTitular || null,
