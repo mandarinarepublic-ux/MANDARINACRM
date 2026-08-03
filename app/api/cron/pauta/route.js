@@ -133,11 +133,37 @@ async function correr({ arteViejo = false } = {}) {
           const det = arteViejo
             ? await traerDetalleAnuncios(c.ad_account_id, faltantes)
             : detalle
+          // Si el anuncio YA tiene su arte a salvo, la fila nueva hereda ESA
+          // imagen y su marca — no la de Meta.
+          //
+          // Acá estaba el bucle que costó el día entero. Cada corrida crea una
+          // fila nueva para el día de hoy (sin arte, porque las columnas de arte
+          // salieron del upsert). Este bloque la rellenaba con la URL de Meta y
+          // SIN marca de archivado, así que el anuncio volvía a contar como
+          // pendiente: el archivador lo re-subía, marcaba, y al día siguiente
+          // otra fila nueva lo devolvía a pendiente. Para siempre.
+          //
+          // La pista fue que los anuncios FUERA de la ventana de 3 días quedaban
+          // archivados y los de adentro rebotaban: solo los de adentro generan
+          // filas nuevas.
+          const yaASalvo = new Map()
+          {
+            const { data: prev } = await sb
+              .from('pauta_dia').select('ad_id, arte_url, arte_archivada_at')
+              .in('ad_id', faltantes).not('arte_archivada_at', 'is', null)
+            for (const p of prev || []) {
+              yaASalvo.set(p.ad_id, { url: p.arte_url, at: p.arte_archivada_at })
+            }
+          }
+
           let tocados = 0
           for (const [adId, d] of det) {
-            if (!d.arteUrl && !d.arteTexto && !d.arteTitular) continue
+            const salvo = yaASalvo.get(adId)
+            if (!salvo && !d.arteUrl && !d.arteTexto && !d.arteTitular) continue
             const { error: e3 } = await sb.from('pauta_dia').update({
-              arte_url: d.arteUrl || null, arte_tipo: d.arteTipo || null,
+              arte_url:  salvo?.url || d.arteUrl || null,
+              arte_archivada_at: salvo?.at || null,
+              arte_tipo: d.arteTipo || null,
               arte_texto: d.arteTexto || null, arte_titular: d.arteTitular || null,
             }).eq('ad_id', adId).is('arte_url', null)
             if (!e3) tocados++
