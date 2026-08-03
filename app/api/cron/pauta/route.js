@@ -70,28 +70,6 @@ async function correr({ arteViejo = false } = {}) {
       const adIds = [...new Set(filas.map((f) => f.adId))]
       const detalle = await traerDetalleAnuncios(c.ad_account_id, adIds)
 
-      // El arte que YA está en Cloudinary no se pisa.
-      //
-      // OJO CON EL UPSERT: PostgREST usa `merge-duplicates`, que reescribe TODAS
-      // las columnas de la fila — las que no van en el payload vuelven a su
-      // valor por defecto, o sea NULL. No es un update parcial.
-      //
-      // Por eso hay que reponer acá tanto `arte_url` como `arte_archivada_at`:
-      // sin lo segundo, cada corrida borraba la marca de archivado de las filas
-      // dentro de la ventana de 3 días, el archivador las veía pendientes otra
-      // vez y volvía a subirlas — para siempre, sin un solo error. Se notó
-      // porque los anuncios FUERA de la ventana sí quedaban archivados y los de
-      // adentro rebotaban.
-      const yaArchivada = new Map()
-      {
-        const { data: previas } = await sb
-          .from('pauta_dia').select('ad_id, arte_url, arte_archivada_at')
-          .in('ad_id', adIds).not('arte_archivada_at', 'is', null)
-        for (const p of previas || []) {
-          yaArchivada.set(p.ad_id, { url: p.arte_url, at: p.arte_archivada_at })
-        }
-      }
-
       const registros = filas.map((f) => ({
         fecha: f.fecha,
         ad_id: f.adId,
@@ -110,16 +88,7 @@ async function correr({ arteViejo = false } = {}) {
         valor_meta: f.valorMeta,
         roas_meta: f.roasMeta,
         creative_id: detalle.get(f.adId)?.creativeId || '',
-        // El ARTE. Sin esto las columnas quedaban NULL y el tablero mostraba un
-        // ad_id que no le dice nada a nadie; el punto era poder VER qué imagen
-        // produjo la venta. `|| null` y no `|| ''`: una cadena vacía se leería
-        // como "hay arte y está en blanco".
-        arte_url:     yaArchivada.get(f.adId)?.url || detalle.get(f.adId)?.arteUrl || null,
-        // Reponer la marca, o el upsert la borra y el arte se re-sube en bucle.
-        arte_archivada_at: yaArchivada.get(f.adId)?.at || null,
-        arte_tipo:    detalle.get(f.adId)?.arteTipo || null,
-        arte_texto:   detalle.get(f.adId)?.arteTexto || null,
-        arte_titular: detalle.get(f.adId)?.arteTitular || null,
+        // LAS COLUMNAS DE ARTE NO VAN ACÁ. Ver la nota de abajo.
         actualizado_at: new Date().toISOString(),
       }))
 
@@ -134,12 +103,36 @@ async function correr({ arteViejo = false } = {}) {
       resumen.cuentas.push({ cuenta: c.nombre, tienda: c.tienda_id, filas: registros.length })
       resumen.filas += registros.length
 
-      // Recuperar el arte de los anuncios VIEJOS (fuera de la ventana de 3 días).
-      // Solo con ?arteViejo=1 y solo mientras queden: es una operación de una vez.
-      if (arteViejo) {
-        const viejos = await adsSinArte(sb, c.ad_account_id)
-        if (viejos.length) {
-          const det = await traerDetalleAnuncios(c.ad_account_id, viejos)
+      // EL ARTE SE ESCRIBE ACÁ, NUNCA EN EL UPSERT.
+      //
+      // Esta fue la lección más cara del día. El upsert de PostgREST usa
+      // `merge-duplicates`, que reescribe TODAS las columnas de la fila: las que
+      // no van en el payload vuelven a su valor por defecto, o sea NULL. No es
+      // un update parcial, como yo asumía.
+      //
+      // Con las columnas de arte en el payload, cada corrida le borraba a las
+      // filas de los últimos 3 días la URL de Cloudinary y la marca de
+      // archivado. El archivador las veía pendientes, las volvía a subir, y la
+      // corrida siguiente lo deshacía. Para siempre, sin un solo error, porque
+      // cada paso por separado funcionaba. Costó cinco diagnósticos equivocados,
+      // todos buscando en la SELECCIÓN cuando el problema estaba en la ESCRITURA.
+      //
+      // La pista fue que los anuncios FUERA de la ventana de 3 días sí quedaban
+      // archivados y los de adentro rebotaban: solo lo explica algo que
+      // reescribe justo esa ventana.
+      //
+      // Ahora las columnas de arte NO están en el upsert y solo se tocan acá,
+      // con `.is('arte_url', null)`: se llenan una vez y nadie las vuelve a
+      // pisar. El bucle deja de ser posible por construcción, no por cuidado.
+      {
+        const sinArte = await adsSinArte(sb, c.ad_account_id)
+        // `arteViejo` amplía la búsqueda a los anuncios fuera de la ventana; sin
+        // el flag solo se piden los del lote que ya se trajo, que es gratis.
+        const faltantes = arteViejo ? sinArte : sinArte.filter((id) => adIds.includes(id))
+        if (faltantes.length) {
+          const det = arteViejo
+            ? await traerDetalleAnuncios(c.ad_account_id, faltantes)
+            : detalle
           let tocados = 0
           for (const [adId, d] of det) {
             if (!d.arteUrl && !d.arteTexto && !d.arteTitular) continue
@@ -149,11 +142,11 @@ async function correr({ arteViejo = false } = {}) {
             }).eq('ad_id', adId).is('arte_url', null)
             if (!e3) tocados++
           }
-          resumen.arteViejo = (resumen.arteViejo || 0) + tocados
+          resumen.arteNuevo = (resumen.arteNuevo || 0) + tocados
           // Los que Meta ya no devuelve (borrados de verdad) se informan: si no,
           // parecería que quedaron pendientes cuando no hay nada que traer.
           resumen.arteViejoSinRespuesta =
-            (resumen.arteViejoSinRespuesta || 0) + (viejos.length - det.size)
+            (resumen.arteViejoSinRespuesta || 0) + (faltantes.length - det.size)
         }
       }
     } catch (e) {
