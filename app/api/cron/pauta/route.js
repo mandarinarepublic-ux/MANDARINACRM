@@ -195,23 +195,19 @@ async function correr({ arteViejo = false } = {}) {
   // dos viajes. El atraso inicial de ~57 anuncios se termina en unos días y los
   // nuevos se archivan el mismo día.
   //
-  // APAGADO desde el 2-ago-2026 (decisión del usuario).
+  // Estuvo en pausa unas horas el 2-ago mientras se buscaba el bucle: el
+  // archivador guardaba la imagen, la marcaba, y en la corrida siguiente el
+  // anuncio volvía a aparecer pendiente.
   //
-  // El archivado automático entra en un bucle que no se logró aislar en siete
-  // intentos: guarda la imagen en Cloudinary, la marca, y en la corrida
-  // siguiente el anuncio vuelve a aparecer pendiente. No pierde datos ni rompe
-  // nada —el public_id es determinístico, así que reemplaza en vez de
-  // duplicar— pero re-sube las mismas imágenes todos los días contra la cuota.
+  // LA CAUSA era el bloque de arriba, no este. Cada corrida crea una fila nueva
+  // para el día de hoy sin arte, y ese bloque la rellenaba con la URL de Meta y
+  // SIN la marca de archivado, así que el anuncio volvía a contar como
+  // pendiente. Ahora hereda la imagen y la marca del arte ya guardado.
   //
-  // Mientras tanto el guardado se hace desde /dashboard/pauta/artes, que baja
-  // la imagen en el servidor y la deja a salvo de una. Esa pantalla NO depende
-  // de este código.
-  //
-  // Para volver a encenderlo: PAUTA_ARCHIVAR_AUTO=1 en Vercel. Se deja detrás
-  // de una variable y no borrado, para poder probar el arreglo sin desplegar.
+  // Se deja el interruptor por si hiciera falta frenarlo: PAUTA_ARCHIVAR_AUTO=0.
   try {
-    if (process.env.PAUTA_ARCHIVAR_AUTO !== '1') {
-      resumen.arte = { apagado: 'archivado automático en pausa — ver /dashboard/pauta/artes' }
+    if (process.env.PAUTA_ARCHIVAR_AUTO === '0') {
+      resumen.arte = { apagado: 'archivado automático frenado a mano (PAUTA_ARCHIVAR_AUTO=0)' }
       return resumen
     }
     resumen.arte = await archivarArtePendiente()
