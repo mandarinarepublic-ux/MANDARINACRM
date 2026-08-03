@@ -11,7 +11,48 @@ import { useState } from 'react'
 import { dinero, numero, veces } from './formato'
 import Pedidos from './Pedidos'
 
-export default function Tabla({ campanas, ctx }) {
+// Cómo se llama y cómo se pinta cada indicador cuando es el elegido.
+const NOMBRE = {
+  gasto: 'gasto', impresiones: 'impresiones', clics: 'clics',
+  llegaron: 'escribieron', respondieron: 'respondieron',
+  conversaron: 'conversaron', pedidos: 'compraron', pagados: 'cobrados',
+}
+
+/** El embudo completo de un nivel (campaña, conjunto o anuncio). */
+function Embudo({ x, metrica }) {
+  const pasos = [
+    ['impresiones', 'impres.'], ['clics', 'clics'], ['llegaron', 'escrib.'],
+    ['respondieron', 'respond.'], ['conversaron', 'convers.'],
+    ['pedidos', 'compraron'], ['pagados', 'cobrados'],
+  ]
+  return (
+    <div className="flex flex-wrap gap-1 mt-2">
+      {pasos.map(([id, etq]) => (
+        <div key={id}
+             className={`px-2 py-1 rounded text-center min-w-[58px]
+                         ${metrica === id ? 'bg-mandarina-500/20 ring-1 ring-mandarina-500/50' : 'bg-gray-800/50'}`}>
+          <div className={`text-[11px] font-semibold ${metrica === id ? 'text-mandarina-400' : 'text-gray-200'}`}>
+            {numero(x[id] || 0)}
+          </div>
+          <div className="text-[8px] text-gray-500 leading-none">{etq}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Ordena por el indicador elegido, de mayor a menor.
+ *
+ * Sin esto, tocar "impresiones" en el embudo dejaría la tabla ordenada por
+ * gasto y habría que buscar a ojo dónde están las impresiones — que es
+ * justamente la pregunta que se está haciendo.
+ */
+function ordenar(items, metrica) {
+  return [...(items || [])].sort((a, b) => (b[metrica] || 0) - (a[metrica] || 0))
+}
+
+export default function Tabla({ campanas, ctx, metrica = 'gasto' }) {
   if (!campanas?.length) {
     return (
       <div className="card p-8 text-center text-gray-600">
@@ -20,14 +61,33 @@ export default function Tabla({ campanas, ctx }) {
       </div>
     )
   }
+  // El total del indicador elegido, para poder decir "esta campaña se lleva el
+  // 43%". Un número suelto no responde "¿de dónde sale?"; un porcentaje sí.
+  const total = campanas.reduce((s, c) => s + (c[metrica] || 0), 0)
+
   return (
     <div className="space-y-2">
-      {campanas.map((c) => <Campana key={c.campaignId} c={c} ctx={ctx} />)}
+      {ordenar(campanas, metrica).map((c) => (
+        <Campana key={c.campaignId} c={c} ctx={ctx} metrica={metrica} total={total} />
+      ))}
     </div>
   )
 }
 
-function Campana({ c, ctx }) {
+/** El indicador elegido, con su peso sobre el total. */
+function Destacado({ x, metrica, total }) {
+  if (metrica === 'gasto') return null
+  const v = x[metrica] || 0
+  const pct = total > 0 ? Math.round((v / total) * 100) : 0
+  return (
+    <div className="text-right flex-shrink-0 min-w-[64px]">
+      <div className="text-sm font-bold text-mandarina-400">{numero(v)}</div>
+      <div className="text-[9px] text-gray-500">{pct}% · {NOMBRE[metrica]}</div>
+    </div>
+  )
+}
+
+function Campana({ c, ctx, metrica, total }) {
   const [abierta, setAbierta] = useState(false)
   return (
     <div className="card overflow-hidden">
@@ -38,19 +98,30 @@ function Campana({ c, ctx }) {
           <div className="text-sm font-semibold text-white truncate">{c.nombre}</div>
           <div className="text-[10px] text-gray-500">{c.conjuntos.length} conjunto(s)</div>
         </div>
+        <Destacado x={c} metrica={metrica} total={total} />
         <Cifras x={c} />
       </button>
 
       {abierta && (
-        <div className="border-t border-gray-800 divide-y divide-gray-800/60">
-          {c.conjuntos.map((cj) => <Conjunto key={cj.adsetId} cj={cj} ctx={ctx} />)}
+        <div className="border-t border-gray-800">
+          {/* El embudo COMPLETO de la campaña. Es lo que contesta "¿cómo se
+              compone esto?" sin tener que sumar los conjuntos a mano. */}
+          <div className="px-3 pt-2 pb-1">
+            <div className="text-[10px] text-gray-500">Embudo de la campaña</div>
+            <Embudo x={c} metrica={metrica} />
+          </div>
+          <div className="border-t border-gray-800 divide-y divide-gray-800/60">
+            {ordenar(c.conjuntos, metrica).map((cj) => (
+              <Conjunto key={cj.adsetId} cj={cj} ctx={ctx} metrica={metrica} total={total} />
+            ))}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function Conjunto({ cj, ctx }) {
+function Conjunto({ cj, ctx, metrica, total }) {
   const [abierto, setAbierto] = useState(false)
   return (
     <div>
@@ -61,19 +132,24 @@ function Conjunto({ cj, ctx }) {
           <div className="text-xs text-gray-300 truncate">{cj.nombre}</div>
           <div className="text-[10px] text-gray-600">{cj.artes.length} anuncio(s)</div>
         </div>
+        <Destacado x={cj} metrica={metrica} total={total} />
         <Cifras x={cj} chico />
       </button>
 
       {abierto && (
         <div className="pl-8 pb-2 space-y-1.5">
-          {cj.artes.map((a) => <Anuncio key={a.adId} a={a} ctx={ctx} />)}
+          <div className="pr-3">
+            <div className="text-[10px] text-gray-600">Embudo del conjunto</div>
+            <Embudo x={cj} metrica={metrica} />
+          </div>
+          {ordenar(cj.artes, metrica).map((a) => <Anuncio key={a.adId} a={a} ctx={ctx} metrica={metrica} total={total} />)}
         </div>
       )}
     </div>
   )
 }
 
-function Anuncio({ a, ctx }) {
+function Anuncio({ a, ctx, metrica, total }) {
   const [verArte, setVerArte] = useState(false)
   const [verPedidos, setVerPedidos] = useState(false)
   // Un anuncio con gasto y sin una sola venta es la señal más accionable del
@@ -107,6 +183,7 @@ function Anuncio({ a, ctx }) {
             {a.costoPorConversacion != null && ` · ${dinero(a.costoPorConversacion)} por chat`}
           </div>
         </div>
+        <Destacado x={a} metrica={metrica} total={total} />
         <div className="text-right flex-shrink-0">
           <div className="text-xs text-white font-semibold">{dinero(a.gasto)}</div>
           <div className="text-[10px] text-gray-500">
@@ -114,6 +191,11 @@ function Anuncio({ a, ctx }) {
           </div>
         </div>
       </div>
+
+      {/* El embudo del anuncio: acá es donde se ve de verdad dónde se cae la
+          gente. Un creativo con muchas impresiones y pocos chats es un problema
+          de mensaje; con muchos chats y pocas ventas, de precio o de producto. */}
+      <Embudo x={a} metrica={metrica} />
 
       {/* El rastreo completo: de este anuncio a los pedidos que produjo. Solo
           aparece si hubo alguno — un botón que siempre abre vacío es ruido. */}

@@ -13,7 +13,7 @@
 //   2. Antes del 13-jul el webhook no guardaba `referral`, así que no hay
 //      historia de pauta. Si el rango pedido se recorta, se avisa en vez de
 //      mostrar ceros que parecen datos.
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import Tabla from './Tabla'
 import { dinero, numero, veces } from './formato'
@@ -24,6 +24,19 @@ const TIENDAS = [
   { id: 'MANDARINA', nombre: 'Mandarina Republic' },
 ]
 const FECHA_PISO = '2026-07-13'
+
+// Los pasos del embudo, en orden. El `id` es la misma clave que usan el resumen
+// de arriba y cada fila de la tabla de abajo, así que tocar un paso y reordenar
+// por ese campo es directo — no hay traducción de nombres en el medio.
+const PASOS = [
+  { id: 'impresiones',  label: 'Impresiones' },
+  { id: 'clics',        label: 'Clics' },
+  { id: 'llegaron',     label: 'Escribieron' },
+  { id: 'respondieron', label: 'Respondieron' },
+  { id: 'conversaron',  label: 'Conversaron' },
+  { id: 'pedidos',      label: 'Compraron' },
+  { id: 'pagados',      label: 'ya cobrados' },
+]
 
 // Los dos números que atiende cada inbox. Se comportan muy distinto, así que
 // verlos por separado es media pelea: al 2-ago REPUBLIC llevaba 33 chats de
@@ -51,6 +64,9 @@ export default function PautaPage() {
   const [tienda, setTienda] = useState('INDSTORE')
   const [canal, setCanal] = useState('')   // '' = los dos números
   const [verOrigen, setVerOrigen] = useState(null)  // categoría abierta
+  // Por que indicador se ordena y se resalta la tabla de abajo. 'gasto' es el
+  // de siempre; tocar un paso del embudo cambia la pregunta que responde.
+  const [metrica, setMetrica] = useState('gasto')
   const [desde, setDesde] = useState(FECHA_PISO)
   const [hasta, setHasta] = useState(hoyEc())
   const [data, setData] = useState(null)
@@ -272,30 +288,37 @@ export default function PautaPage() {
             </div>
           )}
 
-          {/* Embudo */}
+          {/* Embudo — cada paso es un botón: al tocarlo, la tabla de abajo se
+              reordena por ese indicador y muestra de dónde sale cada número.
+              "¿de dónde salen estas 359.130 impresiones?" era imposible de
+              responder mirando un total. */}
           <div className="card p-3 mb-4">
-            <div className="text-xs font-semibold text-white mb-2">El embudo</div>
+            <div className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
+              El embudo
+              <span className="text-[10px] font-normal text-gray-600">
+                toca un paso para ver de dónde sale
+              </span>
+              {metrica !== 'gasto' && (
+                <button onClick={() => setMetrica('gasto')}
+                        className="text-[10px] text-mandarina-400 hover:underline">
+                  volver al gasto
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5 items-center text-center">
-              <Paso label="Impresiones" valor={e.impresiones} />
-              <Flecha />
-              <Paso label="Clics" valor={e.clics} />
-              <Flecha />
-              <Paso label="Escribieron" valor={e.llegaron} />
-              <Flecha />
-              <Paso label="Respondieron" valor={e.respondieron} />
-              <Flecha />
-              <Paso label="Conversaron" valor={e.conversaron} />
-              <Flecha />
-              {/* El final del embudo es el PEDIDO, cobrado o no: una venta en
-                  ABONO ya se ganó, solo falta cobrarla. "Cobrados" queda al lado
-                  como dato de caja, no como definición de venta. */}
-              <Paso label="Compraron" valor={e.pedidos} destacado />
-              <Flecha />
-              <Paso label="ya cobrados" valor={e.pagados} />
+              {PASOS.map((p, i) => (
+                <Fragment key={p.id}>
+                  {i > 0 && <Flecha />}
+                  <Paso label={p.label} valor={e[p.id]}
+                        destacado={p.id === 'pedidos'}
+                        activo={metrica === p.id}
+                        onClick={() => setMetrica(metrica === p.id ? 'gasto' : p.id)} />
+                </Fragment>
+              ))}
             </div>
           </div>
 
-          <Tabla campanas={data.campanas}
+          <Tabla campanas={data.campanas} metrica={metrica}
                  ctx={{ tienda, desde, hasta, headers: headers() }} />
 
           {data.ultimoDato && (
@@ -346,12 +369,18 @@ function Cubeta({ label, valor, color }) {
   )
 }
 
-function Paso({ label, valor, destacado }) {
+function Paso({ label, valor, destacado, activo, onClick }) {
   return (
-    <div className={`flex-1 min-w-[70px] rounded-lg px-2 py-1.5 ${destacado ? 'bg-mandarina-500/10' : 'bg-gray-800/50'}`}>
-      <div className={`text-sm font-bold ${destacado ? 'text-mandarina-400' : 'text-white'}`}>{numero(valor)}</div>
+    <button onClick={onClick}
+            className={`flex-1 min-w-[70px] rounded-lg px-2 py-1.5 transition-all
+                        ${activo ? 'ring-2 ring-mandarina-500 bg-mandarina-500/20'
+                                 : destacado ? 'bg-mandarina-500/10 hover:bg-mandarina-500/20'
+                                             : 'bg-gray-800/50 hover:bg-gray-800'}`}>
+      <div className={`text-sm font-bold ${destacado || activo ? 'text-mandarina-400' : 'text-white'}`}>
+        {numero(valor)}
+      </div>
       <div className="text-[9px] text-gray-500 leading-tight">{label}</div>
-    </div>
+    </button>
   )
 }
 
