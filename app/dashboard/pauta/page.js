@@ -18,6 +18,7 @@ import { useRouter } from 'next/navigation'
 import Tabla from './Tabla'
 import { dinero, numero, veces } from './formato'
 import Pedidos from './Pedidos'
+import Informe from './Informe'
 
 const TIENDAS = [
   { id: 'INDSTORE', nombre: 'IND STORE' },
@@ -111,7 +112,8 @@ export default function PautaPage() {
   const c = data?.cubetas
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+    <>
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto print:hidden">
       <div className="mb-4">
         <h1 className="text-xl font-bold text-white">📣 Pauta</h1>
         <p className="text-xs text-gray-500 mt-0.5">
@@ -152,6 +154,14 @@ export default function PautaPage() {
                 className="px-4 py-2 rounded-xl bg-mandarina-500 text-white text-sm font-semibold disabled:opacity-60">
           {loading ? '⏳' : 'Ver'}
         </button>
+        {/* Imprime el informe con los filtros que estén puestos. Solo si ya hay
+            datos: un PDF vacío no le sirve a nadie. */}
+        {data && (
+          <button onClick={() => window.print()}
+                  className="px-3 py-2 rounded-xl border border-gray-700 text-sm text-gray-400 hover:text-white">
+            📄 Exportar PDF
+          </button>
+        )}
         {/* La salida manual cuando el guardado del arte falla. */}
         <a href="/dashboard/pauta/artes"
            className="px-3 py-2 rounded-xl border border-gray-700 text-sm text-gray-400 hover:text-white">
@@ -330,6 +340,13 @@ export default function PautaPage() {
         </>
       )}
     </div>
+
+    {/* Oculto en pantalla, es lo unico que se ve al imprimir: el informe con
+        TODO desplegado. Lo que se ve arriba esta plegado en acordeones y no
+        serviria de informe. */}
+    <Informe data={data} tienda={TIENDAS.find((x) => x.id === tienda)?.nombre || tienda}
+             canalNombre={CANALES[tienda]?.find((x) => x.phoneId === canal)?.etiqueta || null} />
+    </>
   )
 }
 
