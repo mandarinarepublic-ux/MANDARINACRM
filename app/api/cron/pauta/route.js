@@ -33,7 +33,25 @@ function autorizado(req) {
   return cabecera === `Bearer ${secreto}` || url.searchParams.get('secret') === secreto
 }
 
-async function correr() {
+/**
+ * Los anuncios que ya están en pauta_dia y todavía no tienen arte.
+ *
+ * El cron normal solo mira los últimos 3 días, así que los anuncios viejos se
+ * quedaron con arte_url en NULL para siempre: su gasto está, pero no hay imagen
+ * que mostrar en el tablero ni en la ficha del pedido. Esto los recupera de una,
+ * y después el archivador los sube a Cloudinary como a cualquier otro.
+ *
+ * Se pide con ?arteViejo=1. Es de una sola vez: cuando no queden anuncios sin
+ * arte, devuelve la lista vacía y no hace ninguna llamada a Meta.
+ */
+async function adsSinArte(sb, adAccountId) {
+  const { data } = await sb
+    .from('pauta_dia').select('ad_id')
+    .eq('ad_account_id', adAccountId).is('arte_url', null)
+  return [...new Set((data || []).map((f) => f.ad_id))]
+}
+
+async function correr({ arteViejo = false } = {}) {
   const sb = getSupabase()
   const { data: cuentas, error } = await sb
     .from('pauta_cuentas').select('*').eq('activa', true)
@@ -105,6 +123,29 @@ async function correr() {
 
       resumen.cuentas.push({ cuenta: c.nombre, tienda: c.tienda_id, filas: registros.length })
       resumen.filas += registros.length
+
+      // Recuperar el arte de los anuncios VIEJOS (fuera de la ventana de 3 días).
+      // Solo con ?arteViejo=1 y solo mientras queden: es una operación de una vez.
+      if (arteViejo) {
+        const viejos = await adsSinArte(sb, c.ad_account_id)
+        if (viejos.length) {
+          const det = await traerDetalleAnuncios(c.ad_account_id, viejos)
+          let tocados = 0
+          for (const [adId, d] of det) {
+            if (!d.arteUrl && !d.arteTexto && !d.arteTitular) continue
+            const { error: e3 } = await sb.from('pauta_dia').update({
+              arte_url: d.arteUrl || null, arte_tipo: d.arteTipo || null,
+              arte_texto: d.arteTexto || null, arte_titular: d.arteTitular || null,
+            }).eq('ad_id', adId).is('arte_url', null)
+            if (!e3) tocados++
+          }
+          resumen.arteViejo = (resumen.arteViejo || 0) + tocados
+          // Los que Meta ya no devuelve (borrados de verdad) se informan: si no,
+          // parecería que quedaron pendientes cuando no hay nada que traer.
+          resumen.arteViejoSinRespuesta =
+            (resumen.arteViejoSinRespuesta || 0) + (viejos.length - det.size)
+        }
+      }
     } catch (e) {
       // Una cuenta que falla no debe dejar sin actualizar a las demás.
       resumen.errores.push({ cuenta: c.nombre, error: e.message })
@@ -145,7 +186,8 @@ async function correr() {
 export async function GET(req) {
   if (!autorizado(req)) return Response.json({ error: 'no autorizado' }, { status: 401 })
   try {
-    return Response.json(await correr())
+    const arteViejo = new URL(req.url).searchParams.get('arteViejo') === '1'
+    return Response.json(await correr({ arteViejo }))
   } catch (e) {
     await registrarEvento({ fuente: 'meta', nivel: 'error', mensaje: `Cron de pauta: ${e.message}` })
     return Response.json({ ok: false, error: e.message }, { status: 500 })
