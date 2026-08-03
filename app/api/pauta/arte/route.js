@@ -74,24 +74,47 @@ export async function POST(req) {
   if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status })
 
   try {
-    const { adId, imagen } = await req.json()
-    if (!adId || !imagen) {
-      return Response.json({ error: 'Faltan adId e imagen' }, { status: 400 })
-    }
-    if (!String(imagen).startsWith('data:')) {
-      return Response.json({ error: 'La imagen tiene que venir en base64' }, { status: 400 })
+    const { adId, imagen, desdeMeta } = await req.json()
+    if (!adId) return Response.json({ error: 'Falta adId' }, { status: 400 })
+    if (!imagen && !desdeMeta) {
+      return Response.json({ error: 'Falta la imagen (o desdeMeta)' }, { status: 400 })
     }
 
     const sb = getSupabase()
     const { data: existe } = await sb
-      .from('pauta_dia').select('ad_id').eq('ad_id', adId).limit(1)
+      .from('pauta_dia').select('ad_id, arte_url').eq('ad_id', adId).limit(1)
     if (!existe?.length) {
       return Response.json({ error: `El anuncio ${adId} no está en pauta_dia` }, { status: 404 })
     }
 
+    // `desdeMeta`: la imagen HOY SE VE, solo que vive en el CDN de Meta. No hay
+    // razón para que alguien la baje y la vuelva a subir a mano — el servidor
+    // puede hacerlo. Esto existe porque el archivado del cron entra en un bucle
+    // que no se logró aislar; acá el guardado se hace de una vez y se acabó.
+    let base64 = imagen
+    if (desdeMeta) {
+      const urlMeta = existe[0].arte_url
+      if (!urlMeta) {
+        return Response.json({ error: 'Este anuncio no tiene ninguna imagen que bajar' }, { status: 400 })
+      }
+      const r = await fetch(urlMeta)
+      if (!r.ok) {
+        // Si Meta ya la caducó, se dice claro: esa imagen hay que subirla a mano
+        // o se perdió.
+        return Response.json({
+          error: `Meta ya no entrega esa imagen (HTTP ${r.status}). Súbela a mano.`,
+        }, { status: 502 })
+      }
+      const buf = Buffer.from(await r.arrayBuffer())
+      const tipo = r.headers.get('content-type') || 'image/jpeg'
+      base64 = `data:${tipo};base64,${buf.toString('base64')}`
+    } else if (!String(imagen).startsWith('data:')) {
+      return Response.json({ error: 'La imagen tiene que venir en base64' }, { status: 400 })
+    }
+
     // Mismo public_id que usa el archivador automático: si mañana el automático
     // funciona para este anuncio, reemplaza esta imagen en vez de duplicarla.
-    const { url } = await uploadToCloudinary(imagen, `ad-${adId}`, CARPETA)
+    const { url } = await uploadToCloudinary(base64, `ad-${adId}`, CARPETA)
     if (!url) throw new Error('Cloudinary no devolvió URL')
 
     const { data: tocadas, error } = await sb
@@ -104,8 +127,8 @@ export async function POST(req) {
 
     await registrarEvento({
       fuente: 'meta', nivel: 'ok',
-      mensaje: `Arte de pauta subido a mano (${adId})`,
-      detalle: { adId, filas: tocadas.length },
+      mensaje: `Arte de pauta guardado ${desdeMeta ? '(bajado de Meta)' : '(subido a mano)'}: ${adId}`,
+      detalle: { adId, filas: tocadas.length, desdeMeta: Boolean(desdeMeta) },
     })
 
     return Response.json({ ok: true, adId, url, filas: tocadas.length })

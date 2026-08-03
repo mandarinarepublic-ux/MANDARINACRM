@@ -82,6 +82,39 @@ export default function ArtesPage() {
     } finally { setSubiendo(null) }
   }
 
+  /**
+   * Guardar de Meta: el servidor baja la imagen y la sube a Cloudinary.
+   *
+   * No hay razón para que una persona baje y vuelva a subir una imagen que HOY
+   * SE VE. Existe porque el archivado del cron entra en un bucle que no se logró
+   * aislar; esto lo hace de una y se acabó.
+   *
+   * De a uno y en serie: son pocas y así, si alguna falla, se sabe cuál.
+   */
+  async function guardarDeMeta(lista) {
+    setSubiendo('TODAS'); setError(''); setAviso('')
+    let ok = 0
+    const fallos = []
+    for (const a of lista) {
+      try {
+        const res = await fetch('/api/pauta/arte', {
+          method: 'POST', headers: headers(), body: JSON.stringify({ adId: a.adId, desdeMeta: true }),
+        })
+        const d = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
+        ok++
+      } catch (e) {
+        fallos.push(`${a.nombre || a.adId}: ${e.message}`)
+      }
+    }
+    setSubiendo(null)
+    if (ok) setAviso(`✅ ${ok} arte(s) guardado(s) en Cloudinary`)
+    // Los fallos se enumeran: "algunas fallaron" sin decir cuáles obliga a
+    // adivinar, y estas justamente son las que hay que subir a mano.
+    if (fallos.length) setError(`No se pudieron bajar ${fallos.length}: ${fallos.join(' · ')}`)
+    await cargar()
+  }
+
   if (!user) return null
 
   const visibles = anuncios
@@ -115,6 +148,16 @@ export default function ArtesPage() {
                 className="px-3 py-2 rounded-xl border border-gray-700 text-sm text-gray-300 disabled:opacity-60">
           {loading ? '⏳' : 'Actualizar'}
         </button>
+
+        {/* Lo importante de la pantalla: guardar de una todas las que todavía
+            dependen de Meta. Se pueden bajar porque hoy se ven. */}
+        {resumen?.enMeta > 0 && (
+          <button onClick={() => guardarDeMeta(anuncios.filter((a) => a.estado === 'en_meta'))}
+                  disabled={subiendo === 'TODAS'}
+                  className="px-3 py-2 rounded-xl bg-amber-500/90 text-black text-sm font-semibold disabled:opacity-60">
+            {subiendo === 'TODAS' ? '⏳ guardando…' : `💾 Guardar las ${resumen.enMeta} de Meta`}
+          </button>
+        )}
       </div>
 
       {aviso && <Banda tipo="ok" texto={aviso} />}
@@ -148,15 +191,24 @@ export default function ArtesPage() {
                   <div className={`text-[10px] mt-1 ${e.clase}`}>{e.etiqueta}</div>
                 </div>
 
-                <label className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-lg border cursor-pointer
-                                   ${subiendo === a.adId
-                                     ? 'border-gray-700 text-gray-600'
-                                     : 'border-mandarina-500 text-mandarina-400 hover:bg-mandarina-500/10'}`}>
-                  {subiendo === a.adId ? '⏳ subiendo' : a.arteUrl ? 'Reemplazar' : 'Subir arte'}
-                  <input type="file" accept="image/*" className="hidden"
-                         disabled={subiendo === a.adId}
-                         onChange={(ev) => subir(a.adId, ev.target.files?.[0])} />
-                </label>
+                <div className="flex-shrink-0 flex flex-col gap-1 items-end">
+                  {/* Si todavía se ve en Meta, no hay por qué subirla a mano. */}
+                  {a.estado === 'en_meta' && (
+                    <button onClick={() => guardarDeMeta([a])} disabled={Boolean(subiendo)}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/90 text-black font-semibold disabled:opacity-60">
+                      💾 Guardar
+                    </button>
+                  )}
+                  <label className={`text-xs px-3 py-1.5 rounded-lg border cursor-pointer
+                                     ${subiendo === a.adId
+                                       ? 'border-gray-700 text-gray-600'
+                                       : 'border-mandarina-500 text-mandarina-400 hover:bg-mandarina-500/10'}`}>
+                    {subiendo === a.adId ? '⏳ subiendo' : a.arteUrl ? 'Reemplazar' : 'Subir arte'}
+                    <input type="file" accept="image/*" className="hidden"
+                           disabled={Boolean(subiendo)}
+                           onChange={(ev) => subir(a.adId, ev.target.files?.[0])} />
+                  </label>
+                </div>
               </div>
             )
           })}
