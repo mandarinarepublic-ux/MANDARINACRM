@@ -136,6 +136,11 @@ export default function PautaPage() {
                 className="px-4 py-2 rounded-xl bg-mandarina-500 text-white text-sm font-semibold disabled:opacity-60">
           {loading ? '⏳' : 'Ver'}
         </button>
+        {/* La salida manual cuando el guardado del arte falla. */}
+        <a href="/dashboard/pauta/artes"
+           className="px-3 py-2 rounded-xl border border-gray-700 text-sm text-gray-400 hover:text-white">
+          🖼️ Artes
+        </a>
       </div>
 
       {error && (

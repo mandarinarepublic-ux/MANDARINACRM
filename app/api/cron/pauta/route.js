@@ -172,10 +172,15 @@ async function correr({ arteViejo = false } = {}) {
     resumen.arte = await archivarArtePendiente()
     // Los pendientes van en la respuesta a propósito: un tope silencioso se lee
     // como "ya está todo" cuando no lo está.
+    // Nivel 'error', no 'aviso': un arte que no se guarda es una imagen que se
+    // va a perder cuando Meta caduque la URL, y hay una pantalla donde
+    // arreglarlo (/dashboard/pauta/artes). Un aviso no se mira; un error sí, y
+    // además dispara la alerta de Telegram.
     if (resumen.arte.errores.length) {
       await registrarEvento({
-        fuente: 'meta', nivel: 'aviso',
-        mensaje: `Arte de pauta: ${resumen.arte.errores.length} no se pudieron archivar`,
+        fuente: 'meta', nivel: 'error',
+        mensaje: `Arte de pauta: ${resumen.arte.errores.length} anuncio(s) no se pudieron guardar. ` +
+                 `Se pueden subir a mano en /dashboard/pauta/artes`,
         detalle: { errores: resumen.arte.errores.slice(0, 10) },
       })
     }
