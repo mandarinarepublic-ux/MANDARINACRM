@@ -11,6 +11,16 @@ async function cargarSesion() {
   return mod
 }
 
+test('sin COOKIE_DOMINIO la cookie es exactamente igual que antes del cambio', async () => {
+  // Prueba que falla si el orden de atributos es diferente. El RFC 6265 no da
+  // significado al orden, pero esta propiedad sostiene que el despliegue sin
+  // COOKIE_DOMINIO no cambia nada.
+  delete process.env.COOKIE_DOMINIO
+  const { cookieSesion } = await cargarSesion()
+  const c = cookieSesion('tok')
+  assert.strictEqual(c, 'mp_sesion=tok; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax')
+})
+
 test('sin COOKIE_DOMINIO la cookie sale host-only, como hoy', async () => {
   delete process.env.COOKIE_DOMINIO
   const { cookieSesion } = await cargarSesion()
