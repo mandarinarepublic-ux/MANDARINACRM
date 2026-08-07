@@ -25,6 +25,11 @@ const NAV_ALL = [
   { href:'/dashboard/pauta',        label:'Pauta',        icon:'📣', roles:['ADMIN'] },
   { href:'/dashboard/errores',      label:'Errores',      icon:'🩺', roles:['ADMIN'] },
   { href:'/dashboard/usuarios',     label:'Usuarios',     icon:'👥', roles:['ADMIN'] },
+  // Los inbox son OTRAS aplicaciones: se abren en pestaña nueva y no se pintan
+  // como "activas" nunca. Quién las ve NO depende del rol sino de `accesos`,
+  // que se marca por persona en la pantalla de Usuarios.
+  { href:'https://inbox.apps.mandarinaec.com',     label:'Inbox Mandarina', icon:'🍊', externo:true, acceso:'INBOX_MANDARINA' },
+  { href:'https://ind-inbox.apps.mandarinaec.com', label:'Inbox Indstore',  icon:'🏪', externo:true, acceso:'INBOX_INDSTORE' },
 ]
 
 const ROL_PRIORITY = {
@@ -39,8 +44,12 @@ const ROL_PRIORITY = {
   ADMIN:       ['tablero','nuevo-pedido','historial','produccion','despacho','usuarios'],
 }
 
-function getNavItems(rol) {
-  const all = NAV_ALL.filter(n => n.roles.includes(rol))
+function getNavItems(user) {
+  const rol = user?.rol
+  const accesos = Array.isArray(user?.accesos) ? user.accesos : []
+  // Un ítem con `acceso` se muestra solo si la persona lo tiene marcado; el
+  // resto sigue filtrándose por rol, igual que siempre.
+  const all = NAV_ALL.filter(n => (n.acceso ? accesos.includes(n.acceso) : n.roles.includes(rol)))
   const priority = ROL_PRIORITY[rol] || []
   if (!priority.length) return all
   const inicio = all.find(n => n.href === '/dashboard')
@@ -70,6 +79,23 @@ function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
   }
 
   const active = isActive(item.href)
+
+  // Enlace a otra aplicación: <a> con target y rel, nunca <Link> (que intentaría
+  // navegar dentro del CRM). `noopener` evita que la pestaña nueva pueda tocar
+  // esta ventana.
+  if (item.externo) {
+    return (
+      <a href={item.href} target="_blank" rel="noopener noreferrer"
+         onClick={() => setMenuOpen(false)}
+         className={variant === 'menu'
+           ? 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-all'
+           : 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-all'}>
+        <span>{item.icon}</span>
+        <span className="text-sm">{item.label}</span>
+        <span className="ml-auto text-xs text-gray-600">↗</span>
+      </a>
+    )
+  }
 
   if (variant === 'sidebar') {
     return (
@@ -135,7 +161,7 @@ export default function DashboardLayout({ children }) {
     </div>
   )
 
-  const navItems = getNavItems(user.rol)
+  const navItems = getNavItems(user)
 
   return (
     <div className="min-h-screen bg-gray-950">
