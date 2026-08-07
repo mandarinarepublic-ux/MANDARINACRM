@@ -51,7 +51,7 @@ export async function POST(req) {
     const codigo = String(body.codigo || '').trim().toUpperCase()
     const email = String(body.email || '').trim()
     const username = String(body.username || '').trim().toUpperCase()
-    const { password, rol, areas, tiendas } = body
+    const { password, rol, areas, tiendas, accesos } = body
 
     if (!nombre) return Response.json({ error: 'El nombre es obligatorio' }, { status: 400 })
     if (!codigo) return Response.json({ error: 'El código es obligatorio' }, { status: 400 })
@@ -72,7 +72,7 @@ export async function POST(req) {
       }, { status: 409 })
     }
 
-    const { id } = await createUsuario({ nombre, codigo, email, username, password, rol, areas, tiendas })
+    const { id } = await createUsuario({ nombre, codigo, email, username, password, rol, areas, tiendas, accesos })
     return Response.json({ id })
   } catch (e) {
     const dup = errorDeDuplicado(e)
@@ -89,7 +89,7 @@ export async function PATCH(req) {
     const no = bloqueo(auth); if (no) return no
 
     const body = await req.json()
-    const { id, rol, areas, tiendas, password } = body
+    const { id, rol, areas, tiendas, accesos, password } = body
     if (!id) return Response.json({ error: 'id requerido' }, { status: 400 })
 
     const actual = await getUsuarioById(id)
@@ -152,7 +152,7 @@ export async function PATCH(req) {
     }
 
     const { passwordCambiada } = await updateUsuario(id, {
-      rol, areas, tiendas, activo, email, username, password,
+      rol, areas, tiendas, accesos, activo, email, username, password,
     })
 
     return Response.json({ ok: true, passwordCambiada })
