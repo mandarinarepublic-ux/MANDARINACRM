@@ -87,3 +87,38 @@ test('host tramposo apps.mandarinaec.com.evil.com NO lleva Domain', async () => 
   const c = cookieSesion('tok', 'apps.mandarinaec.com.evil.com')
   assert.ok(!c.includes('Domain='), `no debía traer Domain: ${c}`)
 })
+
+test('varios hosts en x-forwarded-host: se toma el PRIMERO (evil.com, crm.apps...)', async () => {
+  process.env.COOKIE_DOMINIO = '.apps.mandarinaec.com'
+  const { cookieSesion } = await cargarSesion()
+  const c = cookieSesion('tok', 'evil.com, crm.apps.mandarinaec.com')
+  assert.ok(!c.includes('Domain='), `no debía traer Domain (primero es atacante): ${c}`)
+})
+
+test('varios hosts en x-forwarded-host: se toma el PRIMERO (crm.apps..., evil.com)', async () => {
+  process.env.COOKIE_DOMINIO = '.apps.mandarinaec.com'
+  const { cookieSesion } = await cargarSesion()
+  const c = cookieSesion('tok', 'crm.apps.mandarinaec.com, evil.com')
+  assert.ok(c.includes('Domain=.apps.mandarinaec.com'), `debía traer Domain (primero es nuestro): ${c}`)
+})
+
+test('host con espacios alrededor: se trimean', async () => {
+  process.env.COOKIE_DOMINIO = '.apps.mandarinaec.com'
+  const { cookieSesion } = await cargarSesion()
+  const c = cookieSesion('tok', ' crm.apps.mandarinaec.com ')
+  assert.ok(c.includes('Domain=.apps.mandarinaec.com'))
+})
+
+test('host con punto final (FQDN): se acepta', async () => {
+  process.env.COOKIE_DOMINIO = '.apps.mandarinaec.com'
+  const { cookieSesion } = await cargarSesion()
+  const c = cookieSesion('tok', 'crm.apps.mandarinaec.com.')
+  assert.ok(c.includes('Domain=.apps.mandarinaec.com'))
+})
+
+test('host tramposo evilapps.mandarinaec.com NO lleva Domain', async () => {
+  process.env.COOKIE_DOMINIO = '.apps.mandarinaec.com'
+  const { cookieSesion } = await cargarSesion()
+  const c = cookieSesion('tok', 'evilapps.mandarinaec.com')
+  assert.ok(!c.includes('Domain='), `no debía traer Domain: ${c}`)
+})
