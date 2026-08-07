@@ -29,8 +29,12 @@ export async function POST(req) {
     // base, que se relee en cada acción sensible (requireAdmin).
     const token = await firmarSesion({ id: user.id, rol: user.rol }, secreto)
 
+    // El host lo decide quién responde, no COOKIE_DOMINIO: el CRM vive en dos
+    // hosts (el nuevo crm.apps.mandarinaec.com y el viejo mandarina-pro-sales.vercel.app)
+    // y solo el primero puede llevar el Domain compartido. Ver dominioCookie().
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || ''
     const res = Response.json({ user })
-    res.headers.append('Set-Cookie', cookieSesion(token))
+    res.headers.append('Set-Cookie', cookieSesion(token, host))
     return res
   } catch (e) {
     console.error('Login error:', e)
