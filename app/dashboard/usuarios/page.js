@@ -5,7 +5,7 @@ import { ROLES, ROL_LABEL, AREAS, usaAreas, avisoSinAreas } from '@/lib/roles'
 
 const FORM_VACIO = {
   nombre: '', codigo: '', username: '', email: '', password: '',
-  rol: 'VENDEDOR', areas: [], tiendas: ['MANDARINA', 'INDSTORE'],
+  rol: 'VENDEDOR', areas: [], tiendas: ['MANDARINA', 'INDSTORE'], accesos: [],
 }
 
 export default function UsuariosPage() {
@@ -110,6 +110,7 @@ export default function UsuariosPage() {
       rol: u.ROL || 'VENDEDOR',
       areas: u.AREAS ? u.AREAS.split(',').map(a => a.trim()).filter(Boolean) : [],
       tiendas: u.TIENDAS ? u.TIENDAS.split(',').map(t => t.trim()).filter(Boolean) : [],
+      accesos: Array.isArray(u.ACCESOS) ? u.ACCESOS : [],
       activo: u.ACTIVO === 'TRUE',
     })
   }
@@ -146,6 +147,7 @@ export default function UsuariosPage() {
           rol: editForm.rol,
           areas: editForm.areas,
           tiendas: editForm.tiendas,
+          accesos: editForm.accesos,
           activo: editForm.activo,
           password: editForm.password,   // vacío = no se toca
         }),
@@ -200,6 +202,24 @@ export default function UsuariosPage() {
           <input type="checkbox" className="hidden" checked={valor.includes(t)}
             onChange={e => onChange(e.target.checked ? [...valor, t] : valor.filter(x => x !== t))} />
           <span className="text-sm">{t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}</span>
+        </label>
+      ))}
+    </div>
+  )
+
+  // Acceso a los inbox de WhatsApp. Es un permiso aparte del rol: hay gente que
+  // vende y no atiende chats, y al revés.
+  const AccesosPicker = ({ valor, onChange }) => (
+    <div className="flex gap-2">
+      {[
+        ['INBOX_MANDARINA', '🍊 Inbox Mandarina'],
+        ['INBOX_INDSTORE',  '🏪 Inbox Indstore'],
+      ].map(([clave, etiqueta]) => (
+        <label key={clave} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all
+          ${valor.includes(clave) ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 text-gray-500'}`}>
+          <input type="checkbox" className="hidden" checked={valor.includes(clave)}
+            onChange={e => onChange(e.target.checked ? [...valor, clave] : valor.filter(x => x !== clave))} />
+          <span className="text-sm">{etiqueta}</span>
         </label>
       ))}
     </div>
@@ -284,6 +304,11 @@ export default function UsuariosPage() {
                 fábrica y ADMIN no se restringen por tienda.
               </p>
               <TiendasPicker valor={form.tiendas} onChange={tiendas => setForm(f => ({...f, tiendas}))} />
+            </div>
+
+            <div>
+              <label className="label">Acceso a los inbox de WhatsApp</label>
+              <AccesosPicker valor={form.accesos} onChange={accesos => setForm(f => ({...f, accesos}))} />
             </div>
 
             {createError && (
@@ -421,6 +446,12 @@ export default function UsuariosPage() {
               </p>
                     <TiendasPicker valor={editForm.tiendas}
                       onChange={tiendas => setEditForm(f => ({ ...f, tiendas }))} />
+                  </div>
+
+                  <div>
+                    <label className="label">Acceso a los inbox de WhatsApp</label>
+                    <AccesosPicker valor={editForm.accesos || []}
+                      onChange={accesos => setEditForm(f => ({ ...f, accesos }))} />
                   </div>
 
                   <label className="flex items-center gap-2 cursor-pointer">
