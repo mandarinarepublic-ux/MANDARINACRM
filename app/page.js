@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { volverSeguro } from '@/lib/volver'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -32,8 +33,11 @@ export default function LoginPage() {
       // Si el middleware nos mandó aquí desde una pantalla concreta, se vuelve
       // a ella (?volver=/dashboard/historial) en vez de aterrizar siempre en el
       // inicio. Se lee de la URL y se exige que sea una ruta interna.
-      const volver = new URLSearchParams(window.location.search).get('volver')
-      router.push(volver && volver.startsWith('/dashboard') ? volver : '/dashboard')
+      // El destino ya no es solo interno: el inbox es OTRA aplicación y también
+      // manda gente acá. `volverSeguro` decide qué se acepta (lib/volver.js).
+      const destino = volverSeguro(new URLSearchParams(window.location.search).get('volver'))
+      if (destino.startsWith('/')) router.push(destino)
+      else window.location.href = destino   // otra app: navegación completa, no router
     } catch (err) {
       if (err.name === 'AbortError') {
         setError('Tiempo de espera agotado. Intenta de nuevo.')
