@@ -215,7 +215,8 @@ export default function DashboardLayout({ children }) {
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        {/* min-h-0 es CRUCIAL en flex-col: permite que flex-1 comprima el nav en lugar de estirarlo */}
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1">
           {navItems.map(item => (
             <Suspense key={item.href} fallback={
               <div className="flex items-center gap-4 px-4 py-3.5 text-gray-500 text-sm">{item.icon} {item.label}</div>
@@ -256,7 +257,8 @@ export default function DashboardLayout({ children }) {
             <div className="text-gray-500 text-xs truncate">{user.nombre}</div>
           </div>
         </Link>
-        <nav className="flex-1 space-y-1">
+        {/* min-h-0 es CRUCIAL en flex-col: permite que flex-1 comprima el nav en lugar de estirarlo */}
+        <nav className="flex-1 min-h-0 overflow-y-auto space-y-1">
           {navItems.map(item => (
             <Suspense key={item.href} fallback={
               <div className="flex items-center gap-3 px-3 py-2.5 text-gray-500 text-sm">{item.icon} {item.label}</div>
