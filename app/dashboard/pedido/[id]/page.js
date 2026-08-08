@@ -748,10 +748,14 @@ export default function PedidoDetailPage() {
               </div>
             )}
             <div className="flex gap-2 mb-2">
+              {/* Verde de WhatsApp, no el color de la tienda: es el ÚNICO botón de
+                  esta pantalla que manda algo HACIA AFUERA, al celular de un cliente.
+                  Con el color de la tienda se lee como una acción más del CRM; en
+                  verde se ve de un vistazo que sale del sistema. */}
               <button onClick={enviarHojaAlInbox} disabled={enviandoHoja}
                 aria-busy={enviandoHoja}
                 className="w-full py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 disabled:cursor-wait"
-                style={{ backgroundColor: tiendaColor }}>
+                style={{ backgroundColor: '#25D366' }}>
                 {enviandoHoja ? '⏳ Preparando la hoja...' : '📤 Enviar al cliente'}
               </button>
             </div>
