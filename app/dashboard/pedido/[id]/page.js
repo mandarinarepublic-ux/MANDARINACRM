@@ -130,6 +130,11 @@ export default function PedidoDetailPage() {
   // diseño: si un día cambia la hoja, cambian los dos juntos.
   async function enviarHojaAlInbox() {
     if (enviandoHoja) return       // doble click = dos fotos al chat
+    // Preguntar antes, a pedido de Rodrigo: esto le manda una foto a un cliente
+    // REAL por WhatsApp y no hay forma de deshacerlo. El botón está justo debajo
+    // de la hoja, o sea al alcance de un clic distraído mientras se revisa el
+    // pedido. Un "¿seguro?" cuesta un segundo; un envío equivocado no se borra.
+    if (!window.confirm('¿Estás seguro que quieres enviar la foto del pedido al cliente?')) return
     setEnviandoHoja(true)
     setHojaEstado(null)
     try {
