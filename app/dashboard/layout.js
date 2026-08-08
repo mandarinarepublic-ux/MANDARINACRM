@@ -118,8 +118,13 @@ function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
   return null
 }
 
-export default function DashboardLayout({ children }) {
+function DashboardChrome({ children }) {
   const router = useRouter()
+  // Con ?embed=1 esta pantalla vive dentro del panel del inbox: sin menú lateral,
+  // sin cabecera y sin los márgenes que dejan sitio para ellos. Es un cambio de
+  // presentación, NO de permisos: la sesión y el rol siguen decidiéndose igual.
+  const searchParams = useSearchParams()
+  const esEmbed = searchParams?.get('embed') === '1'
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [letraGrande, setLetraGrande] = useState(false)
@@ -160,6 +165,12 @@ export default function DashboardLayout({ children }) {
       <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
     </div>
   )
+
+  if (esEmbed) {
+    // Ojo: se conserva el fondo para que el iframe no se vea blanco sobre el
+    // panel oscuro del inbox mientras carga.
+    return <main className="min-h-screen bg-gray-950">{children}</main>
+  }
 
   const navItems = getNavItems(user)
 
@@ -286,5 +297,19 @@ export default function DashboardLayout({ children }) {
       {/* Toasts de confirmación (✅ Guardado en cambios de producción) */}
       <ToastHost />
     </div>
+  )
+}
+
+// useSearchParams() exige un <Suspense> encima o el build falla. Mismo patrón
+// que ActiveLink, más arriba en este archivo.
+export default function DashboardLayout({ children }) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <DashboardChrome>{children}</DashboardChrome>
+    </Suspense>
   )
 }
