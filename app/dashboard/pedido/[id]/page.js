@@ -16,6 +16,10 @@ export default function PedidoDetailPage() {
   const searchParams = useSearchParams()
   const isNew = searchParams.get('nuevo') === '1'
   const fromHistorial = searchParams.get('from') === 'historial'
+  // Con embed=1 esta pantalla vive dentro del panel del inbox. Se llega acá justo
+  // después de crear el pedido desde el formulario, que conserva el parámetro al
+  // navegar. Es un cambio de presentación, NO de permisos.
+  const esEmbed = searchParams.get('embed') === '1'
   const [user, setUser] = useState(null)
   const [pedido, setPedido] = useState(null)
   const [items, setItems] = useState([])
@@ -244,10 +248,17 @@ export default function PedidoDetailPage() {
   }
   const banner = BANNERS[pedido.ESTADO_PEDIDO] || BANNERS.EN_FABRICA
 
+  // Mismo criterio que en nuevo-pedido: suelto en el CRM el contenido va con
+  // tope de 672px centrado, porque en una pantalla ancha si no queda larguísimo.
+  // Dentro del panel del inbox el ancho ya lo acota el panel, así que el tope
+  // solo agregaría vacío a los lados. El aire lateral no se pierde: el `px-4` de
+  // los contenedores se conserva.
+  const anchoContenido = esEmbed ? 'w-full' : 'max-w-2xl mx-auto'
+
   return (
     <div className="flex flex-col h-screen md:h-auto">
       <div className="sticky top-0 z-20 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
-        <div className="max-w-2xl mx-auto">
+        <div className={anchoContenido}>
           <div className="flex items-center gap-3 mb-3">
             <button onClick={() => router.back()} className="text-gray-500 hover:text-white p-1 text-lg">←</button>
             <div className="flex-1">
@@ -281,7 +292,7 @@ export default function PedidoDetailPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto pb-32 md:pb-24">
-        <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+        <div className={`${anchoContenido} px-4 py-4 space-y-4`}>
 
           {isNew && (
             <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4">
@@ -672,7 +683,11 @@ export default function PedidoDetailPage() {
         ))}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3">
+      {/* `md:left-60` corre la barra 240px para dejarle sitio al menú lateral. En
+          embed ese menú no existe (lo quita el layout), así que ese hueco quedaba
+          muerto y los botones no llegaban al borde izquierdo. Mismo arreglo que
+          en nuevo-pedido. */}
+      <div className={`fixed bottom-0 left-0 right-0 ${esEmbed ? '' : 'md:left-60'} bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3`}>
         {/* Fila 1: acciones principales */}
         <div className="flex gap-2 mb-2">
           {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
