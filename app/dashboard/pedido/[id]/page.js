@@ -9,6 +9,8 @@ import { PdfGracias, PdfGraciasPagina, PdfConfeccion, PdfConfeccionPagina, pagin
 import PdfScaler from '@/components/pedido/PdfScaler'
 import ConversacionPanel from '@/components/pedido/ConversacionPanel'
 import Origen from './Origen'
+import { capturarHojasComoJpg, pesoKbDataUrl, dejarPintar } from '@/lib/generarPdf'
+import { enviarHojaPedido } from '@/lib/aviso-padre'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -39,6 +41,9 @@ export default function PedidoDetailPage() {
   const [abonoFoto, setAbonoFoto] = useState(null)
   const [abonoFotoPreview, setAbonoFotoPreview] = useState(null)
   const [guardandoAbono, setGuardandoAbono] = useState(false)
+  // Envío de la hoja al chat. Solo existe en modo embed (ver enviarHojaAlInbox).
+  const [enviandoHoja, setEnviandoHoja] = useState(false)
+  const [hojaEstado, setHojaEstado] = useState(null)   // { tipo: 'ok'|'error', texto }
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -114,6 +119,42 @@ export default function PedidoDetailPage() {
       `💰 Total: $${parseFloat(pedido.MONTO_TOTAL||0).toFixed(2)}\n\nGracias por tu compra 🍊`
     )
     window.open(`https://wa.me/${num}?text=${msg}`, '_blank')
+  }
+
+  // Manda la hoja del cliente al inbox como foto, para que la reenvíe por
+  // WhatsApp. SOLO tiene sentido en modo embed: fuera del iframe no hay a quién
+  // pasársela, y por eso el botón ni se pinta (ver la barra de abajo).
+  //
+  // Se capturan los MISMOS nodos que ya usa el PDF (`pdf-gracias-N`, la zona
+  // oculta del final de esta pantalla), así que la foto y el PDF salen del mismo
+  // diseño: si un día cambia la hoja, cambian los dos juntos.
+  async function enviarHojaAlInbox() {
+    if (enviandoHoja) return       // doble click = dos fotos al chat
+    setEnviandoHoja(true)
+    setHojaEstado(null)
+    try {
+      const ids = paginarItemsCliente(items).map((_, i) => `pdf-gracias-${i}`)
+      if (ids.length === 0) throw new Error('este pedido no tiene hoja que enviar')
+      // Que el botón alcance a mostrar que está trabajando ANTES de que
+      // html2canvas bloquee el hilo (puede tardar un par de segundos).
+      await dejarPintar()
+      const imagen = await capturarHojasComoJpg(ids)
+      const r = enviarHojaPedido({ pedidoId: pedido.PEDIDO_ID, imagen })
+      if (!r.ok) throw new Error(r.motivo)
+      setHojaEstado({
+        tipo: 'ok',
+        texto: `✅ Hoja enviada al chat (${ids.length} hoja(s) · ${pesoKbDataUrl(imagen)} KB)`,
+      })
+    } catch (e) {
+      // Nunca en silencio: si el vendedor cree que mandó la hoja y no salió, el
+      // cliente se queda esperando algo que nadie va a volver a mandar.
+      setHojaEstado({
+        tipo: 'error',
+        texto: `⚠️ NO se envió la hoja — el cliente no la recibió. ${e?.message || 'error desconocido'}`,
+      })
+    } finally {
+      setEnviandoHoja(false)
+    }
   }
 
   const [enviandoFactura, setEnviandoFactura] = useState(false)
@@ -688,6 +729,29 @@ export default function PedidoDetailPage() {
           muerto y los botones no llegaban al borde izquierdo. Mismo arreglo que
           en nuevo-pedido. */}
       <div className={`fixed bottom-0 left-0 right-0 ${esEmbed ? '' : 'md:left-60'} bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3`}>
+        {/* Mandarle la hoja al cliente por el chat. Solo dentro del inbox: suelto
+            en el CRM no hay a quién pasársela y sería un botón que no hace nada. */}
+        {esEmbed && (
+          <>
+            {hojaEstado && (
+              <div className={`mb-2 rounded-xl px-3 py-2 text-xs border ${
+                hojaEstado.tipo === 'ok'
+                  ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                  : 'bg-red-500/10 border-red-500/30 text-red-400'
+              }`}>
+                {hojaEstado.texto}
+              </div>
+            )}
+            <div className="flex gap-2 mb-2">
+              <button onClick={enviarHojaAlInbox} disabled={enviandoHoja}
+                aria-busy={enviandoHoja}
+                className="w-full py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 disabled:cursor-wait"
+                style={{ backgroundColor: tiendaColor }}>
+                {enviandoHoja ? '⏳ Preparando la hoja...' : '📤 Enviar al cliente'}
+              </button>
+            </div>
+          </>
+        )}
         {/* Fila 1: acciones principales */}
         <div className="flex gap-2 mb-2">
           {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
