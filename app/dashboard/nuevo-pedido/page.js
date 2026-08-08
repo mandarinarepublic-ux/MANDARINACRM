@@ -538,12 +538,27 @@ function NuevoPedidoContenido() {
       }
       // El inbox necesita el número para dejar su nota y marcar la venta. Se
       // avisa ANTES de navegar: después de router.push esta pantalla se va.
+      //
+      // ⚠️ En su PROPIO try/catch, igual que el PATCH de sucursal y que
+      // dispararFactura. Si esto lanzara dentro del try grande lo agarraría el
+      // `catch (e) { setError(e.message) }` de abajo: se pintaría el banner rojo
+      // de error con el pedido YA creado en la base y `router.push` nunca
+      // correría. El vendedor vería "error", lo intentaría de nuevo y el pedido
+      // quedaría DUPLICADO. Un fallo al avisar no puede hacerse pasar por un
+      // fallo al crear.
       if (esEmbed) {
-        avisarPedidoCreado({
-          pedidoId: data.pedidoId,
-          montoTotal,
-          url: `${window.location.origin}/dashboard/pedido/${data.pedidoId}`,
-        })
+        try {
+          avisarPedidoCreado({
+            // El monto que manda el servidor gana: hoy coincide con el del
+            // formulario porque la fórmula está duplicada, pero si algún día allá
+            // se aplica un descuento o un redondeo, la nota del inbox mentiría.
+            pedidoId: data.pedidoId,
+            montoTotal: data.montoTotal ?? montoTotal,
+            url: `${window.location.origin}/dashboard/pedido/${data.pedidoId}`,
+          })
+        } catch (e) {
+          console.error('Error avisando al inbox del pedido creado:', e)
+        }
       }
       // Se conserva el embed al navegar: si no, el pedido recién creado
       // aparecería con el menú entero dentro del panel del inbox.

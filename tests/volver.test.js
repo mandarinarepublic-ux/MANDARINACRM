@@ -20,6 +20,31 @@ test('una ruta interna se respeta', async () => {
   assert.strictEqual(volverSeguro('/dashboard/historial'), '/dashboard/historial')
 })
 
+test('una ruta interna CON QUERY se respeta entera', async () => {
+  // El middleware guarda `pathname + search`: si se perdiera la query, quien
+  // abre PEDIDO MANUAL con la sesión vencida volvería sin `embed=1`, sin
+  // precarga y creando el pedido sin avisarle al inbox.
+  const volverSeguro = await cargar()
+  assert.strictEqual(
+    volverSeguro('/dashboard/nuevo-pedido?embed=1&celular=0999989663&nombre=Prueba'),
+    '/dashboard/nuevo-pedido?embed=1&celular=0999989663&nombre=Prueba',
+  )
+})
+
+test('la query no puede sacarte del sitio', async () => {
+  // Todo lo que va después del '?' es query: no cambia de host por más que
+  // parezca una URL. Y los trucos de ruta se siguen rechazando aunque traigan
+  // query detrás.
+  const volverSeguro = await cargar()
+  assert.strictEqual(
+    volverSeguro('/dashboard?next=https://evil.com'),
+    '/dashboard?next=https://evil.com',
+  )
+  assert.strictEqual(volverSeguro('//evil.com/?volver=/dashboard'), '/dashboard')
+  assert.strictEqual(volverSeguro('/\\evil.com?x=1'), '/dashboard')
+  assert.strictEqual(volverSeguro('https://evil.com/?volver=/dashboard'), '/dashboard')
+})
+
 test('los inbox de la lista blanca se aceptan', async () => {
   const volverSeguro = await cargar()
   assert.strictEqual(

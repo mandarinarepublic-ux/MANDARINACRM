@@ -69,8 +69,18 @@ export async function middleware(req) {
   }
 
   // Una página sin sesión va al login, recordando a dónde quería ir.
+  //
+  // Con la QUERY incluida, no solo la ruta. Antes se guardaba `pathname` pelado
+  // y eso perdía los parámetros: quien abría PEDIDO MANUAL desde el inbox con la
+  // cookie vencida volvía a `/dashboard/nuevo-pedido` sin `embed=1`, sin
+  // `celular` y sin `nombre`. O sea: sin precarga, con el menú entero metido en
+  // el panel del inbox y —lo grave— creando el pedido sin avisarle a nadie.
+  //
+  // Sigue siendo una ruta interna: empieza por '/' y todo lo que venga después
+  // del '?' es query, así que no puede cambiar de host. `searchParams.set`
+  // codifica el valor, y `volverSeguro` lo revisa igual antes de usarlo.
   const login = new URL('/', req.url)
-  if (pathname !== '/') login.searchParams.set('volver', pathname)
+  if (pathname !== '/') login.searchParams.set('volver', pathname + req.nextUrl.search)
   return NextResponse.redirect(login)
 }
 
