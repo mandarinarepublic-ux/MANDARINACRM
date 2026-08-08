@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import MapaPicker from '@/components/maps/MapaPicker'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
 import ItemProducto from '@/components/pedido/ItemProducto'
@@ -11,6 +11,7 @@ import PdfScaler from '@/components/pedido/PdfScaler'
 import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/identificacion'
 import { puedeVerTienda, tiendasDisponibles } from '@/lib/tiendasUsuario'
 import { parseFechaCalendario, diasHastaEntrega, hoyEcuador } from '@/lib/parseFecha'
+import { avisarPedidoCreado } from '@/lib/aviso-padre'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
 
@@ -122,8 +123,10 @@ function itemsParaPreview(items) {
   }))
 }
 
-export default function NuevoPedidoPage() {
+function NuevoPedidoContenido() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const esEmbed = searchParams?.get('embed') === '1'
   const [user, setUser] = useState(null)
   const [tienda, setTienda] = useState('MANDARINA')
   const [clienteId, setClienteId] = useState(null)
@@ -164,6 +167,23 @@ export default function NuevoPedidoPage() {
     if (!stored) { router.push('/'); return }
     const u = JSON.parse(stored)
     setUser(u)
+    // Precarga desde el inbox: solo celular y nombre. El buscador de cliente que
+    // ya existe hace el resto — si la cédula está registrada, trae dirección,
+    // ciudad y correo solo.
+    //
+    // El celular llega ya en formato ecuatoriano (0987654321) porque el inbox lo
+    // convierte antes de armar la URL; acá NO se vuelve a tocar. Si viene algo
+    // que no calza, se deja el campo vacío a propósito: un valor inválido
+    // precargado traba el formulario y es peor que no precargar nada.
+    const celularUrl = searchParams?.get('celular') || ''
+    const nombreUrl  = searchParams?.get('nombre') || ''
+    if (celularUrl || nombreUrl) {
+      setCliente((p) => ({
+        ...p,
+        ...(/^0\d{9}$/.test(celularUrl) ? { celular: celularUrl } : {}),
+        ...(nombreUrl ? { nombre: nombreUrl } : {}),
+      }))
+    }
     // Modo YAW: precargar cliente fijo y saltar directo a productos
     if (u.rol === 'VENDEDOR_YAW') {
       setTienda('YAW')
@@ -516,7 +536,18 @@ export default function NuevoPedidoPage() {
       if (emitirFactura) {
         dispararFactura(data.pedidoId, { ...cliente, cedula: String(cliente.cedula), celular: String(cliente.celular), tipoCodigo: tipoIdMeta(tipoId).codigo }, montoTotal)
       }
-      router.push(`/dashboard/pedido/${data.pedidoId}?nuevo=1`)
+      // El inbox necesita el número para dejar su nota y marcar la venta. Se
+      // avisa ANTES de navegar: después de router.push esta pantalla se va.
+      if (esEmbed) {
+        avisarPedidoCreado({
+          pedidoId: data.pedidoId,
+          montoTotal,
+          url: `${window.location.origin}/dashboard/pedido/${data.pedidoId}`,
+        })
+      }
+      // Se conserva el embed al navegar: si no, el pedido recién creado
+      // aparecería con el menú entero dentro del panel del inbox.
+      router.push(`/dashboard/pedido/${data.pedidoId}?nuevo=1${esEmbed ? '&embed=1' : ''}`)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -933,5 +964,18 @@ export default function NuevoPedidoPage() {
         )}
       </div>
     </div>
+  )
+}
+
+// useSearchParams() exige <Suspense> encima o el build falla.
+export default function NuevoPedidoPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <NuevoPedidoContenido />
+    </Suspense>
   )
 }
