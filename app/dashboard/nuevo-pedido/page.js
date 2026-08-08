@@ -574,14 +574,26 @@ function NuevoPedidoContenido() {
 
   const steps = ['Cliente', 'Productos', 'Entrega y Pago', 'Revisar']
 
+  // Ancho del contenido.
+  //
+  // Suelto en el CRM el formulario va con tope de 672px centrado (`max-w-2xl
+  // mx-auto`): en una pantalla ancha, sin ese tope, los campos quedarían
+  // larguísimos y feos.
+  //
+  // Dentro del panel del inbox el ancho YA lo acota el panel (el CRM cree tener
+  // 800px), así que el tope solo agrega vacío a los lados y desperdicia el poco
+  // sitio que hay. En embed se usa el ancho completo. El aire lateral no se
+  // pierde: el relleno `px-4` de los contenedores de arriba se conserva.
+  const anchoContenido = esEmbed ? 'w-full' : 'max-w-2xl mx-auto'
+
   return (
     <div className="flex flex-col h-screen md:h-auto">
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3 md:static md:border-0 md:bg-transparent">
-        <div className="flex items-center gap-3 mb-4 max-w-2xl mx-auto">
+        <div className={`flex items-center gap-3 mb-4 ${anchoContenido}`}>
           <button onClick={() => router.back()} className="text-gray-500 hover:text-white p-1">←</button>
           <h1 className="text-xl font-display font-bold text-white">Nueva Venta</h1>
         </div>
-        <div className="max-w-2xl mx-auto">
+        <div className={anchoContenido}>
           <div className="flex items-center gap-1 mb-2">
             {steps.map((s, i) => (
               <div key={s} className="flex items-center gap-1 flex-1">
@@ -601,7 +613,7 @@ function NuevoPedidoContenido() {
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto pb-28">
-        <div className="max-w-2xl mx-auto px-4 pt-4">
+        <div className={`${anchoContenido} px-4 pt-4`}>
           {error && (
             <div ref={errorRef} className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4 scroll-mt-20">
               {error}
@@ -953,7 +965,13 @@ function NuevoPedidoContenido() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-3">
+      {/* La barra de Atrás / Siguiente. Ojo: acá el problema NO era un tope de
+          ancho —esta barra nunca tuvo `max-w-2xl`— sino `md:left-60`, que la
+          corre 240px a la derecha para dejarle sitio al menú lateral. En embed
+          ese menú NO existe (lo quita el layout), así que esos 240px quedaban de
+          hueco muerto y el botón Siguiente no llegaba al borde izquierdo. Los
+          botones son `flex-1`, así que al soltar la barra se estiran solos. */}
+      <div className={`fixed bottom-0 left-0 right-0 ${esEmbed ? '' : 'md:left-60'} bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-3`}>
         {/* En el paso 4 "Atrás" se convierte en EDITAR: devuelve al paso de
             productos, que es lo que el cliente pide corregir el 99% de las veces. */}
         {step === 4 ? (
