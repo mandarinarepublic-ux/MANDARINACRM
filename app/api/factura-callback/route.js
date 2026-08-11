@@ -18,7 +18,7 @@ export async function POST(req) {
     return Response.json({ ok: true, pedido_id, datil_id, ride_url })
   } catch (e) {
     console.error('factura-callback error:', e)
-    registrarEvento({ fuente: 'webhook', nivel: 'error', mensaje: `Callback de factura: ${e.message}` })
+    await registrarEvento({ fuente: 'webhook', nivel: 'error', mensaje: `Callback de factura: ${e.message}` })
     const notFound = /no encontrado/i.test(e.message || '')
     return Response.json({ ok: false, error: e.message }, { status: notFound ? 404 : 500 })
   }

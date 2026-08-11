@@ -274,7 +274,7 @@ export async function POST(req) {
   } catch (e) {
     console.error('POST pedido error:', e)
     // Un fallo al crear el pedido casi siempre es de la escritura a Supabase/Sheets.
-    registrarEvento({ fuente: 'supabase', nivel: 'error', mensaje: `Crear pedido: ${e.message}` })
+    await registrarEvento({ fuente: 'supabase', nivel: 'error', mensaje: `Crear pedido: ${e.message}` })
     return Response.json({ error: 'Error al crear pedido: ' + e.message }, { status: 500 })
   }
 }
