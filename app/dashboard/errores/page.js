@@ -70,6 +70,26 @@ export default function ErroresPage() {
   // Recargar al cambiar filtros
   useEffect(() => { if (user) cargar() }, [fFuente, fNivel])
 
+  const [probando, setProbando] = useState(false)
+
+  // Dispara una alerta de prueba por el camino REAL (evento + Telegram) y
+  // recarga para que se vea aparecer en la lista.
+  async function probarAlerta() {
+    setProbando(true); setAviso('')
+    try {
+      const res = await fetch('/api/eventos', {
+        method: 'POST', headers: headers(),
+        body: JSON.stringify({ fuente: 'datil' }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d.ok) throw new Error(d.error || `Error ${res.status}`)
+      setAviso('🔔 Alerta de prueba lanzada. Debe aparecer abajo Y llegarte por Telegram. Si no llega el mensaje, el aviso está roto.')
+      await cargar()
+    } catch (e) {
+      setAviso(`No se pudo lanzar la prueba: ${e.message}`)
+    } finally { setProbando(false) }
+  }
+
   // Tope de la cola: suficiente para ir aplastando varios seguidos, y bajito
   // para no encolar decenas de llamadas a Meta desde el navegador. Para tandas
   // grandes está el botón "Reintentar Meta", que las manda de una al servidor.
@@ -179,6 +199,12 @@ export default function ErroresPage() {
               {reenviando === 'TODOS' ? '⏳ enviando...' : '🔄 Reintentar Meta'}
             </button>
           )}
+          {/* Una alarma que nunca se prueba es una alarma que no tienes: esta
+              misma ruta estuvo rota en silencio (los eventos no llegaban a la
+              tabla ni a Telegram). Esto la dispara de verdad. */}
+          <button onClick={probarAlerta} disabled={probando} className="btn-secondary text-xs px-3 py-2">
+            {probando ? '⏳ probando...' : '🔔 Probar alerta'}
+          </button>
           <button onClick={() => cargar()} disabled={loading} className="btn-secondary text-xs px-3 py-2">↻ Actualizar</button>
           <button onClick={() => router.back()} className="text-gray-500 hover:text-white text-sm px-2">← Volver</button>
         </div>

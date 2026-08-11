@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { getSupabase } from '@/lib/supabase'
 import { requireAdmin } from '@/lib/auth'
+import { registrarEvento } from '@/lib/eventos'
 import { facturasPendientes } from '@/lib/facturas-pendientes'
 
 // Desde cuándo se vigila que las facturas salgan. Los pedidos anteriores a esta
@@ -81,6 +82,36 @@ export async function GET(req) {
     return Response.json({ eventos: eventos || [], salud })
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })
+  }
+}
+
+// POST → dispara una alerta de PRUEBA por el camino real (evento en la tabla +
+// mensaje a Telegram). Solo ADMIN.
+//
+// Existe porque una alarma que nunca se prueba es una alarma que no tienes. Esta
+// misma ruta de aviso estuvo rota en silencio: los `registrarEvento` iban sin
+// `await` y en serverless la instancia se congela antes de que salgan, así que
+// hubo un 502 real en producción sin evento ni mensaje. Se arregló, pero la
+// única forma honesta de saber que HOY funciona es dispararla.
+//
+// Manda `nivel: 'error'` a propósito: es el único nivel que gatilla Telegram, y
+// probar con otro no probaría nada. El texto dice PRUEBA bien grande.
+export async function POST(req) {
+  try {
+    const auth = await requireAdmin(req)
+    if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status })
+
+    const { fuente = 'datil' } = await req.json().catch(() => ({}))
+
+    await registrarEvento({
+      fuente,
+      nivel: 'error',
+      mensaje: 'PRUEBA de alerta lanzada a mano desde el tablero de errores. No pasó nada malo: es para comprobar que el aviso llega.',
+    })
+
+    return Response.json({ ok: true })
+  } catch (e) {
+    return Response.json({ ok: false, error: e.message }, { status: 500 })
   }
 }
 

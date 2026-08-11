@@ -239,32 +239,22 @@ export async function POST(req) {
           vendedorId: vendedorNombre || vendedorId,
         }).catch(err => console.error('META CAPI error:', err.message))
       } else {
-        const celularRaw = String(cliente.celular || '')
-        const celularNorm = celularRaw.startsWith('0')
-          ? '593' + celularRaw.slice(1)
-          : celularRaw
-
-        const tiendaMeta = (tiendaId || '').toUpperCase().includes('IND')
-          ? 'INDSTORE'
-          : 'MANDARINA'
-
-        const capiPayload = {
-          'Event ID': pedidoId,
-          'Tienda':   tiendaMeta,
-          'nombre':   cliente.nombre   || '',
-          'apellido': '',
-          'correo':   cliente.email    || '',
-          'celular':  celularNorm,
-          'dni':      String(cliente.cedula || ''),
-          'ciudad':   cliente.ciudad   || '',
-          'valor':    parseFloat(montoTotal || 0).toFixed(2),
-        }
-
-        fetch('https://hook.us2.make.com/6yme139yby51ejizn4l8dhg4rai7d7bn', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(capiPayload),
-        }).catch(err => console.error('META CAPI webhook error:', err.message))
+        // Acá vivía el respaldo a Make: si el CAPI directo no estaba configurado,
+        // el Purchase se mandaba a un webhook de Make. **Se eliminó el 11-ago-2026.**
+        //
+        // Make está apagado por completo desde el 28-jul (los 33 escenarios en
+        // `isActive: false`), así que ese respaldo ya no llevaba a ningún lado.
+        // Y era una mina armada del mismo tipo que la que dejó 13 días sin
+        // facturar: iba suelto, sin mirar la respuesta, así que el día que
+        // `capiConfigurado()` cayera —un token que se vence, una variable que se
+        // borra— las ventas dejarían de llegar a Meta EN SILENCIO, y con ellas la
+        // optimización de la pauta.
+        //
+        // Ahora no hay respaldo: hay aviso. Si falta configuración, se grita.
+        await registrarEvento({
+          fuente: 'meta', nivel: 'error', pedidoId,
+          mensaje: 'La venta NO se envió a Meta: falta META_CAPI_TOKEN o los pixel id en el servidor',
+        })
       }
     } catch (capiErr) {
       console.error('META CAPI build error:', capiErr.message)
