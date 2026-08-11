@@ -19,7 +19,17 @@ import { COOKIE_SESION, verificarSesion, secretoSesion } from '@/lib/sesion'
 const RUTAS_PUBLICAS = [
   '/api/auth/login',       // sin esto nadie podría entrar nunca
   '/api/auth/logout',      // borrar la cookie no necesita permiso
-  '/api/factura-callback', // lo llama Dátil/Make desde fuera, no un usuario
+  // '/api/factura-callback' — SACADO de la lista pública el 11-ago-2026.
+  //   Estaba abierto para que Make avisara el id de la factura. Make lleva
+  //   apagado desde el 28-jul y el CRM ahora guarda la factura en el MISMO paso
+  //   en que la emite (lib/datil.js), así que no le queda ni un llamador
+  //   legítimo. Abierto era regalo puro: un POST sin credenciales sobrescribía
+  //   `factura_id` y `factura_pdf_url` de CUALQUIER pedido —o sea, a dónde
+  //   apunta el PDF que ve el cliente— y el repo es PÚBLICO, con el formato del
+  //   body a la vista. Verificado en producción: respondía `ok:true` incluso
+  //   para un pedido inexistente.
+  //   Sigue existiendo por si hay que reconciliar a mano, pero ahora exige
+  //   sesión o `Authorization: Bearer $CRM_API_TOKEN` como el resto de la API.
   '/api/shopify/sync',     // el cron de Vercel; valida su propio CRON_SECRET
   '/api/cron/pauta',       // el cron de Vercel; valida su propio CRON_SECRET
 ]
