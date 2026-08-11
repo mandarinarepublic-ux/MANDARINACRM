@@ -1,6 +1,13 @@
 export const dynamic = 'force-dynamic'
 import { getSupabase } from '@/lib/supabase'
 import { requireAdmin } from '@/lib/auth'
+import { facturasPendientes } from '@/lib/facturas-pendientes'
+
+// Desde cuándo se vigila que las facturas salgan. Los pedidos anteriores a esta
+// fecha quedaron sin factura cuando se apagó el escenario de Make (28-jul-2026)
+// y se decidió NO emitirlos hacia atrás: si se contaran, el tablero viviría en
+// rojo por algo que nadie va a tocar, y un rojo permanente se vuelve invisible.
+const VIGILAR_FACTURAS_DESDE = process.env.VIGILAR_FACTURAS_DESDE || '2026-08-11T00:00:00-05:00'
 
 // Tablero de errores — solo ADMIN.
 // GET  → { eventos, salud }  (lista filtrable + resumen por fuente)
@@ -48,6 +55,28 @@ export async function GET(req) {
         erroresSinResolver: suyos.filter(r => r.nivel === 'error' && !r.resuelto).length,
       }
     }
+
+    // Detector de SILENCIO: la salud de arriba solo sabe de fallas que alguien
+    // reportó. El 28-jul se apagó el escenario que emitía las facturas y NADIE
+    // lanzó un error, así que la fila de Dátil se quedó en blanco — y un blanco
+    // se ve igual que "todo bien". Trece días y ~40 pedidos así.
+    //
+    // Esto no espera a que algo falle: cuenta los pedidos que PIDIERON factura y
+    // no la tienen. Los que no piden factura NUNCA cuentan: facturar o no es una
+    // decisión del negocio, no una falla.
+    const { data: sinFactura } = await sb
+      .from('pedidos')
+      .select('pedido_id, fecha_pedido, factura_solicitada, factura_id')
+      .eq('factura_solicitada', true)
+      .is('factura_id', null)
+      .gte('fecha_pedido', new Date(VIGILAR_FACTURAS_DESDE).toISOString())
+      .order('fecha_pedido', { ascending: true })
+      .limit(500)
+
+    salud.datil.facturasPendientes = facturasPendientes(sinFactura, {
+      desde: VIGILAR_FACTURAS_DESDE,
+      ahora: new Date(),
+    })
 
     return Response.json({ eventos: eventos || [], salud })
   } catch (e) {

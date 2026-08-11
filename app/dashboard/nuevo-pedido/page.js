@@ -417,12 +417,22 @@ function NuevoPedidoContenido() {
   }
 
   async function dispararFactura(pedidoId, clienteData, montoTotal) {
-    // Se llama a NUESTRO endpoint, no a Make directo: el servidor decide si emite
-    // en Dátil o reenvía a Make (según DATIL_DIRECTO), y así la key de Dátil nunca
-    // sale al navegador.
+    // Se llama a NUESTRO endpoint, no a Datil directo, para que la key nunca
+    // salga al navegador.
+    //
+    // Ojo con el silencio: `fetch` NO lanza cuando el servidor responde 500 o
+    // 503, solo cuando se cae la red. Este try/catch estaba tragandose todo y
+    // la unica senal de que una factura no salio era un console.error que nadie
+    // mira. Ahora se revisa la respuesta y se avisa en pantalla; el servidor
+    // ademas lo deja en el tablero de ERRORES.
+    //
+    // Lo que NO puede pasar: que un fallo al FACTURAR se vea como un fallo al
+    // CREAR el pedido. Por eso esto vive fuera del try grande y solo avisa
+    // (mismo motivo que la nota del inbox, mas abajo): el pedido ya esta en la
+    // base y reintentarlo lo duplicaria.
     const cedula = String(clienteData.cedula || '')
     try {
-      await fetch('/api/factura/emitir', {
+      const res = await fetch('/api/factura/emitir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -437,8 +447,20 @@ function NuevoPedidoContenido() {
           },
         }),
       })
+
+      const d = await res.json().catch(() => ({}))
+      // Un 200 no basta: la factura existe cuando Datil devolvio su id.
+      if (!res.ok || !d.ok) throw new Error(d.error || `Error ${res.status}`)
     } catch(e) {
       console.error('Error disparando factura:', e)
+      // El pedido SI se creo. Lo que fallo es la factura, y hay que decirlo:
+      // callarlo es justo lo que dejo ~40 pedidos sin facturar sin que nadie
+      // se enterara.
+      alert(
+        `⚠️ El pedido ${pedidoId} se creó bien, pero la FACTURA NO se emitió.\n\n` +
+        `${e.message || 'error desconocido'}\n\n` +
+        'Queda registrada en el tablero de ERRORES. Puedes reintentar desde la pantalla del pedido.'
+      )
     }
   }
 

@@ -174,34 +174,41 @@ export default function PedidoDetailPage() {
     setEnviandoFactura(true); setFacturaError('')
     try {
       const total   = parseFloat(pedido.MONTO_TOTAL || 0)
-      const sinImp  = parseFloat((total / 1.15).toFixed(2))
-      const impuesto = parseFloat((total - sinImp).toFixed(2))
+      const cedula = String(cliente.CEDULA).trim()
 
-      const payload = {
-        pedido_id:   pedido.PEDIDO_ID,
-        numero:      (cliente.CELULAR || '').replace(/\D/g, ''),
-        CI:          String(cliente.CEDULA),
-        tipo_id:     '05',           // persona natural sin RUC
-        cliente:     cliente.NOMBRE,
-        email:       cliente.EMAIL,
-        total:       total.toFixed(2),
-        PrecioSinImp: sinImp.toFixed(2),
-        ValorImp:    impuesto.toFixed(2),
-      }
-
-      const res = await fetch('https://hook.us2.make.com/mjvj01tevojz6ayp7rrtt7wc6oa7v11n', {
+      // Por la ruta del servidor, que es la unica que habla con Datil.
+      //
+      // Antes este boton le pegaba al webhook de Make DESDE EL NAVEGADOR y daba
+      // por emitida la factura con solo ver un 200. Dos problemas: el servidor
+      // nunca se enteraba (asi que un fallo no podia llegar al tablero de
+      // ERRORES), y un webhook de Make con el escenario apagado contesta 200
+      // igual. Desde el 28-jul este boton decia "Factura emitida" sin emitir
+      // absolutamente nada.
+      const res = await fetch('/api/factura/emitir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          pedidoId: pedido.PEDIDO_ID,
+          montoTotal: total,
+          tipoId: cedula.length === 13 ? '04' : '05',   // 13 digitos = RUC
+          cliente: {
+            nombre:  cliente.NOMBRE,
+            cedula,
+            email:   cliente.EMAIL,
+            celular: (cliente.CELULAR || '').replace(/\D/g, ''),
+          },
+        }),
       })
 
-      if (!res.ok) throw new Error(`Error ${res.status}`)
+      const d = await res.json().catch(() => ({}))
+      // Un 200 no basta: la factura existe cuando Datil devolvio su id.
+      if (!res.ok || !d.ok) throw new Error(d.error || `Error ${res.status}`)
       setFacturaEnviada(true)
       // Log en bitácora
       await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ _log: `Factura emitida a ${cliente.EMAIL} · ${total.toFixed(2)}`, _usuarioId: user?.id }),
+        body: JSON.stringify({ _log: `Factura ${d.numero || d.datilId} emitida a ${cliente.EMAIL} · ${total.toFixed(2)}`, _usuarioId: user?.id }),
       }).catch(() => {})
     } catch(e) {
       setFacturaError(e.message || 'Error al enviar')

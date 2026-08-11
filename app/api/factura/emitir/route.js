@@ -1,11 +1,18 @@
 export const dynamic = 'force-dynamic'
 import { emitirFacturaDatil, datilDirectoActivo } from '@/lib/datil'
+import { registrarEvento } from '@/lib/eventos'
 
-// Punto único de emisión de factura, llamado por el cliente al crear un pedido.
-// Con DATIL_DIRECTO=1 emite DIRECTO en Dátil (lib/datil.js). Si no, reenvía al
-// webhook de Make como hasta ahora. El interruptor vive en el servidor: la key
-// de Dátil nunca llega al navegador, y se migra (o revierte) sin desplegar.
-const MAKE_WEBHOOK = 'https://hook.us2.make.com/mjvj01tevojz6ayp7rrtt7wc6oa7v11n'
+// Punto ÚNICO de emisión de factura. Emite directo en Dátil (lib/datil.js).
+//
+// Antes esto tenía un respaldo: si DATIL_DIRECTO no estaba puesto, reenviaba al
+// webhook de Make. Ese respaldo se quitó porque era PEOR que no tener nada:
+// el escenario de Make se detuvo el 28-jul-2026 (a mano, dando por hecho que el
+// CRM ya facturaba solo), y un webhook de Make apagado SIGUE contestando 200.
+// O sea que el respaldo reportaba "ok" mientras no se emitía ni una factura.
+// Trece días y ~40 pedidos así.
+//
+// Regla que queda: esta ruta solo dice "ok" si Dátil devolvió el id de una
+// factura. Cualquier otra cosa falla fuerte y queda en el tablero de ERRORES.
 
 export async function POST(req) {
   try {
@@ -13,35 +20,25 @@ export async function POST(req) {
     const { pedidoId, cliente, montoTotal, tipoId } = body
     if (!pedidoId) return Response.json({ ok: false, error: 'pedidoId requerido' }, { status: 400 })
 
-    if (datilDirectoActivo()) {
-      const r = await emitirFacturaDatil({ pedidoId, cliente, montoTotal, tipoId })
-      if (!r.ok) return Response.json({ ok: false, error: r.error }, { status: 502 })
-      return Response.json({ ok: true, via: 'directo', ...r })
+    // Sin el interruptor no hay a dónde emitir. Se avisa en vez de fingir que
+    // salió: ESTE es exactamente el silencio que nos costó los 13 días.
+    if (!datilDirectoActivo()) {
+      const falta = process.env.DATIL_API_KEY ? 'DATIL_DIRECTO' : 'DATIL_API_KEY'
+      const mensaje = `No se emitió la factura: falta configurar ${falta} en el servidor`
+      console.error(`factura/emitir ${pedidoId}: ${mensaje}`)
+      await registrarEvento({ fuente: 'datil', nivel: 'error', mensaje, pedidoId })
+      return Response.json({ ok: false, error: mensaje }, { status: 503 })
     }
 
-    // Respaldo: mismo payload que enviaba el cliente al webhook de Make.
-    const total = parseFloat(montoTotal || 0)
-    const sinImp = parseFloat((total / 1.15).toFixed(2))
-    const cedula = String(cliente?.cedula || '')
-    const res = await fetch(MAKE_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pedido_id:    pedidoId,
-        numero:       String(cliente?.celular || '').replace(/\D/g, ''),
-        CI:           cedula,
-        tipo_id:      tipoId || (cedula.length === 13 ? '04' : '05'),
-        cliente:      cliente?.nombre || '',
-        email:        cliente?.email || 'info@mandarinaec.com',
-        total:        total.toFixed(2),
-        PrecioSinImp: sinImp.toFixed(2),
-        ValorImp:     (total - sinImp).toFixed(2),
-      }),
-    })
-    if (!res.ok) return Response.json({ ok: false, error: `Make HTTP ${res.status}` }, { status: 502 })
-    return Response.json({ ok: true, via: 'make' })
+    // emitirFacturaDatil ya registra su propio evento (ok o error) con el
+    // detalle que devuelve Dátil, así que acá no se duplica.
+    const r = await emitirFacturaDatil({ pedidoId, cliente, montoTotal, tipoId })
+    if (!r.ok) return Response.json({ ok: false, error: r.error }, { status: 502 })
+    return Response.json({ ok: true, via: 'directo', ...r })
   } catch (e) {
     console.error('factura/emitir error:', e)
+    await registrarEvento({ fuente: 'datil', nivel: 'error', pedidoId: null,
+      mensaje: `Error emitiendo la factura: ${e.message}` })
     return Response.json({ ok: false, error: e.message }, { status: 500 })
   }
 }

@@ -184,12 +184,45 @@ export default function ErroresPage() {
         </div>
       </div>
 
+      {/* Facturas pedidas que no salieron.
+          Va ARRIBA de la tira de salud y no en la lista de eventos porque no es
+          un evento: nadie lo reportó. Es la ausencia de algo que debía pasar, y
+          eso no aparece solo en ninguna lista. */}
+      {(salud.datil?.facturasPendientes?.total || 0) > 0 && (
+        <div className="card p-3 mb-4 border border-red-500/50 bg-red-500/5">
+          <div className="text-sm font-semibold text-red-400">
+            🧾 {salud.datil.facturasPendientes.total} pedido{salud.datil.facturasPendientes.total > 1 ? 's' : ''} pidió factura y no la tiene
+          </div>
+          <div className="text-[11px] text-gray-400 mt-1">
+            El más viejo es de {formatFechaHumana(salud.datil.facturasPendientes.desde)}.
+            Solo se cuentan los pedidos con factura solicitada: los que no la piden nunca aparecen acá.
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {salud.datil.facturasPendientes.pedidos.slice(0, 12).map(p => (
+              <a key={p.pedido_id} href={`/dashboard/pedido/${p.pedido_id}`}
+                 className="text-[11px] px-2 py-1 rounded-lg bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors">
+                {p.pedido_id}
+              </a>
+            ))}
+            {salud.datil.facturasPendientes.total > 12 && (
+              <span className="text-[11px] px-2 py-1 text-gray-500">
+                +{salud.datil.facturasPendientes.total - 12} más
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Tira de salud por integración */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         {['meta', 'datil', 'supabase', 'webhook'].map(f => {
           const s = salud[f] || {}
           const okReciente = s.ultimoOk && (Date.now() - new Date(s.ultimoOk).getTime()) < 24 * 60 * 60 * 1000
-          const tienePend = (s.erroresSinResolver || 0) > 0
+          // Facturas que se pidieron y no salieron. No es un error que alguien
+          // haya reportado: es SILENCIO, y hasta hoy el silencio se pintaba de
+          // gris ("sin actividad"), igual que estar sano. Así pasaron 13 días.
+          const pendFacturas = s.facturasPendientes?.total || 0
+          const tienePend = (s.erroresSinResolver || 0) > 0 || pendFacturas > 0
           const estadoCls = tienePend ? 'border-red-500/50' : okReciente ? 'border-green-500/40' : 'border-gray-700'
           return (
             <div key={f} className={`card p-2.5 border ${estadoCls}`}>
@@ -197,11 +230,13 @@ export default function ErroresPage() {
                 {FUENTE_META[f].icon} {FUENTE_META[f].label}
               </div>
               <div className="mt-1 text-[11px] leading-tight">
-                {tienePend
-                  ? <span className="text-red-400 font-semibold">⚠️ {s.erroresSinResolver} sin resolver</span>
-                  : s.ultimoOk
-                    ? <span className="text-green-400">✓ OK {haceCuanto(s.ultimoOk)}</span>
-                    : <span className="text-gray-600">sin actividad</span>}
+                {pendFacturas > 0
+                  ? <span className="text-red-400 font-semibold">⚠️ {pendFacturas} sin facturar</span>
+                  : tienePend
+                    ? <span className="text-red-400 font-semibold">⚠️ {s.erroresSinResolver} sin resolver</span>
+                    : s.ultimoOk
+                      ? <span className="text-green-400">✓ OK {haceCuanto(s.ultimoOk)}</span>
+                      : <span className="text-gray-600">sin actividad</span>}
               </div>
               {s.ultimoError && (
                 <div className="text-[10px] text-gray-600 mt-0.5 truncate" title={s.mensajeError}>
