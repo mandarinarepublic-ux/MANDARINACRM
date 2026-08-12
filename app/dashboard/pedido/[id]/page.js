@@ -11,6 +11,7 @@ import ConversacionPanel from '@/components/pedido/ConversacionPanel'
 import Origen from './Origen'
 import { capturarHojasComoJpg, pesoKbDataUrl, dejarPintar } from '@/lib/generarPdf'
 import { enviarHojaPedido } from '@/lib/aviso-padre'
+import { botonFactura } from '@/lib/facturas-visibilidad'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -171,9 +172,21 @@ export default function PedidoDetailPage() {
     if (!cliente.EMAIL) return alert('El cliente no tiene email — necesario para la factura')
     if (!cliente.CEDULA) return alert('El cliente no tiene cédula')
 
+    // Emitir al SRI NO se deshace. Se confirma con los datos reales, mismo
+    // patrón que al crear el pedido (nuevo-pedido/page.js:479).
+    const total = parseFloat(pedido.MONTO_TOTAL || 0)
+    const ok = window.confirm(
+      '🧾 Se emitirá FACTURA ELECTRÓNICA al SRI\n\n' +
+      `Pedido: ${pedido.PEDIDO_ID}\n` +
+      `Cliente: ${cliente.NOMBRE || '(sin nombre)'}\n` +
+      `${String(cliente.CEDULA).trim().length === 13 ? 'RUC' : 'Cédula'}: ${cliente.CEDULA}\n` +
+      `Total: $${total.toFixed(2)}\n\n` +
+      'Esto NO se puede deshacer.'
+    )
+    if (!ok) return
+
     setEnviandoFactura(true); setFacturaError('')
     try {
-      const total   = parseFloat(pedido.MONTO_TOTAL || 0)
       const cedula = String(cliente.CEDULA).trim()
 
       // Por la ruta del servidor, que es la unica que habla con Datil.
@@ -204,6 +217,10 @@ export default function PedidoDetailPage() {
       // Un 200 no basta: la factura existe cuando Datil devolvio su id.
       if (!res.ok || !d.ok) throw new Error(d.error || `Error ${res.status}`)
       setFacturaEnviada(true)
+      // Recargar para que se vea el RIDE de verdad, no un cartel que dice que
+      // salió. Un "✅ emitida" sin la prueba al lado es exactamente lo que dejó
+      // pasar 13 días de facturación muerta.
+      await loadPedido()
       // Log en bitácora
       await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`, {
         method: 'PATCH',
@@ -440,14 +457,6 @@ export default function PedidoDetailPage() {
                 className="btn-primary text-xs px-4 py-2" style={{backgroundColor:'#3b82f6'}}>
                 📄 Ver RIDE
               </a>
-            </div>
-          )}
-
-          {/* Factura pendiente — si emitir_factura=TRUE pero aún no llega el callback */}
-          {pedido.EMITIR_FACTURA === 'TRUE' && !pedido.FACTURA_PDF_URL && (
-            <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-4 flex items-center gap-3">
-              <span className="text-xl">⏳</span>
-              <div className="text-gray-400 text-sm">Factura en proceso… (llega en 5–30 seg)</div>
             </div>
           )}
 
@@ -793,17 +802,17 @@ export default function PedidoDetailPage() {
             </Link>
           </div>
         )}
-        {/* Fila 2: factura (solo si aplica) */}
-        {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR') && pedido.EMITIR_FACTURA === 'TRUE' && (
+        {/* Fila 2: factura. Solo aparece si FALTA la factura — si ya existe, el
+            botón no se dibuja y arriba se ve la tarjeta azul con el RIDE.
+            La regla vive en lib/facturas-visibilidad.js, donde se puede probar. */}
+        {botonFactura(pedido, user?.rol) && (
           <div className="flex gap-2">
-            {!facturaEnviada ? (
-              <button onClick={emitirFactura} disabled={enviandoFactura}
-                className="w-full py-2 rounded-xl text-sm font-medium border border-yellow-500/40 text-yellow-400 bg-yellow-500/10">
-                {enviandoFactura ? '⏳ Enviando factura...' : '🧾 Emitir factura'}
-              </button>
-            ) : (
-              <div className="w-full text-center text-sm text-green-400 font-medium py-2">✅ Factura emitida</div>
-            )}
+            <button onClick={emitirFactura} disabled={enviandoFactura}
+              className={botonFactura(pedido, user?.rol) === 'PENDIENTE'
+                ? 'w-full py-2 rounded-xl text-sm font-medium border border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
+                : 'w-full py-2 rounded-xl text-sm font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all'}>
+              {enviandoFactura ? '⏳ Emitiendo...' : '🧾 Generar FACTURA SRI'}
+            </button>
           </div>
         )}
       </div>
