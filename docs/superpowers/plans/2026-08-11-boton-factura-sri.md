@@ -496,12 +496,167 @@ Actualizar la memoria `datil-facturacion-crm.md` con el resultado: si el botón 
 
 ---
 
+### Task 5: Pruebas del candado
+
+**Files:**
+- Modify: `lib/facturas-visibilidad.js`
+- Modify: `app/api/factura/emitir/route.js`
+- Modify: `tests/facturas-visibilidad.test.js`
+
+**Interfaces:**
+- Consumes: `yaFacturado(pedido)` del mismo módulo.
+- Produces: `decidirEmision(pedido) -> { accion: 'NO_EXISTE' | 'YA_FACTURADA' | 'EMITIR', datilId?, rideUrl? }`
+
+**Por qué:** el candado de la Task 2 quedó sin una sola prueba propia, y es el camino más sensible tributariamente del sistema. No se puede probar la ruta directamente sin hablar con Dátil —y emitir una factura de prueba al SRI no es una opción—, así que la decisión sale a una función pura y la ruta queda como puro cableado.
+
+- [ ] **Step 1: Escribir las pruebas que fallan**
+
+Agregar al final de `tests/facturas-visibilidad.test.js`:
+
+```js
+import { decidirEmision } from '../lib/facturas-visibilidad.js'
+
+// El candado de /api/factura/emitir no tenía ni una prueba propia. Es el
+// camino que emite al SRI: si se equivoca, o queda un pedido sin factura o
+// sale una factura duplicada, y ninguna de las dos se deshace.
+
+test('un pedido que no existe no se factura', () => {
+  // Antes, un UPDATE que no encontraba filas devolvía error: null y eso se
+  // reportaba como éxito. Un pedido inexistente tiene que FALLAR, no pasar.
+  assert.deepEqual(decidirEmision(null), { accion: 'NO_EXISTE' })
+  assert.deepEqual(decidirEmision(undefined), { accion: 'NO_EXISTE' })
+})
+
+test('un pedido con FACTURA_ID no se vuelve a facturar, y devuelve su RIDE', () => {
+  const r = decidirEmision({ FACTURA_ID: '51b3f2a1bae045bfbdae9b52ed40982e' })
+  assert.equal(r.accion, 'YA_FACTURADA')
+  assert.equal(r.datilId, '51b3f2a1bae045bfbdae9b52ed40982e')
+  assert.equal(r.rideUrl, 'https://link.datil.co/invoices/51b3f2a1bae045bfbdae9b52ed40982e/ride')
+})
+
+test('un pedido viejo con solo FACTURA_PDF_URL tampoco se refactura', () => {
+  // Los pedidos que emitió Make guardaron la URL sin el id de Dátil. Si este
+  // caso se colara, se emitiría una SEGUNDA factura de algo ya facturado.
+  const r = decidirEmision({ FACTURA_PDF_URL: 'https://link.datil.co/invoices/abc/ride' })
+  assert.equal(r.accion, 'YA_FACTURADA')
+  assert.equal(r.rideUrl, 'https://link.datil.co/invoices/abc/ride')
+})
+
+test('un pedido sin factura sí se emite', () => {
+  // El camino normal no puede haberse roto por poner el candado.
+  assert.deepEqual(decidirEmision({ PEDIDO_ID: 'MAN-AND-9000', FACTURA_ID: '', FACTURA_PDF_URL: '' }), { accion: 'EMITIR' })
+})
+```
+
+- [ ] **Step 2: Correr y verificar que FALLA**
+
+Run: `npm test`
+Expected: FAIL — `decidirEmision` no existe.
+
+- [ ] **Step 3: Agregar la función pura**
+
+Al final de `lib/facturas-visibilidad.js`:
+
+```js
+/**
+ * Qué hacer cuando alguien pide emitir la factura de un pedido.
+ *
+ * Vive acá y no suelta en la ruta porque acá se puede probar sin hablar con
+ * Dátil: emitir una factura de prueba al SRI no es una opción, así que la
+ * única forma de tener cobertura del camino más delicado es que la decisión
+ * sea una función pura.
+ */
+export function decidirEmision(pedido) {
+  if (!pedido) return { accion: 'NO_EXISTE' }
+  if (yaFacturado(pedido)) {
+    const datilId = pedido.FACTURA_ID || ''
+    return {
+      accion: 'YA_FACTURADA',
+      datilId,
+      rideUrl: datilId ? `https://link.datil.co/invoices/${datilId}/ride` : pedido.FACTURA_PDF_URL,
+    }
+  }
+  return { accion: 'EMITIR' }
+}
+```
+
+- [ ] **Step 4: Correr y verificar que PASA**
+
+Run: `npm test`
+Expected: PASS, las 4 nuevas y todas las anteriores.
+
+- [ ] **Step 5: Cablear la ruta a la función pura**
+
+En `app/api/factura/emitir/route.js`, cambiar el import de `yaFacturado` por `decidirEmision`:
+
+```js
+import { decidirEmision } from '@/lib/facturas-visibilidad'
+```
+
+y reemplazar el bloque del candado que puso la Task 2 por:
+
+```js
+    // Releer el pedido ANTES de emitir. El botón de la pantalla ya se esconde
+    // cuando hay factura, pero esconder un botón no protege de un doble toque,
+    // de una pestaña vieja, ni de dos personas a la vez. Y una factura
+    // duplicada ante el SRI no se deshace apretando "deshacer".
+    //
+    // La decisión vive en lib/facturas-visibilidad.js porque acá no se puede
+    // probar sin emitir de verdad.
+    const decision = decidirEmision(await getPedidoById(pedidoId))
+    if (decision.accion === 'NO_EXISTE') {
+      return Response.json({ ok: false, error: `El pedido ${pedidoId} no existe` }, { status: 404 })
+    }
+    if (decision.accion === 'YA_FACTURADA') {
+      // No es un error: es que alguien llegó primero. Se contesta con el id que
+      // YA existe para que la pantalla recargue y muestre el RIDE real.
+      return Response.json({
+        ok: true,
+        yaFacturado: true,
+        datilId: decision.datilId,
+        rideUrl: decision.rideUrl,
+      })
+    }
+```
+
+Comprobar que ya no queda ninguna referencia a `yaFacturado` en la ruta:
+
+Run: `grep -n "yaFacturado" app/api/factura/emitir/route.js`
+Expected: solo la clave `yaFacturado: true` de la respuesta JSON. Ninguna llamada a la función.
+
+- [ ] **Step 6: Correr pruebas y build**
+
+Run: `npm test && npm run build`
+Expected: todo en PASS y build exitoso.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/facturas-visibilidad.js app/api/factura/emitir/route.js tests/facturas-visibilidad.test.js
+git commit -m "test(factura): cubrir el candado que evita la factura duplicada
+
+El candado quedo sin una sola prueba propia, y es el camino que emite al
+SRI: si se equivoca, o queda un pedido sin factura o sale una duplicada, y
+ninguna de las dos se deshace.
+
+La ruta no se puede probar sin hablar con Datil, y emitir una factura de
+prueba al SRI no es una opcion. Asi que la decision sale a decidirEmision(),
+que es pura, y la ruta queda de puro cableado. Cuatro pruebas: pedido
+inexistente, ya facturado con id, ya facturado con solo el PDF (los viejos
+de Make) y el camino normal, que tenia que seguir emitiendo igual."
+```
+
+---
+
 ## Fuera de alcance (queda pendiente)
 
 Este plan **no arregla la causa**. Las facturas van a seguir dependiendo de que el celular del vendedor sobreviva los 4 segundos entre crear el pedido y emitir, y van a seguir cayéndose de vez en cuando. Lo que cambia es que ahora se pueden rescatar a mano.
 
+**Limitación conocida del candado (decidida a propósito el 11-ago):** la comprobación es "leer, luego actuar". Entre que se lee el pedido y que se guarda el `FACTURA_ID` hay una ventana de milisegundos en la que dos peticiones **verdaderamente simultáneas** podrían emitir doble. Cerrarla necesita una marca atómica en la base (columna nueva + `UPDATE` condicional que, si toca 0 filas, significa que alguien llegó primero). Rodrigo decidió dejarlo así: hoy hay un solo ADMIN, la ventana pasó de "siempre" a milisegundos, y es una mejora estricta sobre no tener nada. **No se olvide: el plan prometía cubrir "dos personas a la vez" y eso queda cubierto solo en parte.**
+
 Pendientes, en orden de valor:
 
+0. **Cerrar la ventana del candado** con la marca atómica descrita arriba, si algún día hay más de un ADMIN emitiendo.
 1. **Que el servidor emita** dentro de `POST /api/pedidos`, después de commitear el pedido y sin que un fallo de Dátil cambie la respuesta del alta. Ataca la causa.
 2. **Reintento automático** por cron sobre la lista que ya calcula `lib/facturas-pendientes.js`.
 3. **`registrarEvento` sin `await` en `lib/metaCapi.js`** (3 llamadas) y `enviarPurchase` sin `await` desde `POST /api/pedidos`. Misma familia de bug, decisión pendiente de Rodrigo porque awaitear ahí retrasa el alta del pedido.
