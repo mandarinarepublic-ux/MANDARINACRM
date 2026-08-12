@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic'
 import { emitirFacturaDatil, datilDirectoActivo } from '@/lib/datil'
 import { registrarEvento } from '@/lib/eventos'
+import { getPedidoById } from '@/lib/db/pedidos'
+import { yaFacturado } from '@/lib/facturas-visibilidad'
 
 // Punto ÚNICO de emisión de factura. Emite directo en Dátil (lib/datil.js).
 //
@@ -28,6 +30,26 @@ export async function POST(req) {
       console.error(`factura/emitir ${pedidoId}: ${mensaje}`)
       await registrarEvento({ fuente: 'datil', nivel: 'error', mensaje, pedidoId })
       return Response.json({ ok: false, error: mensaje }, { status: 503 })
+    }
+
+    // Releer el pedido ANTES de emitir. El botón de la pantalla ya se esconde
+    // cuando hay factura, pero esconder un botón no protege de un doble toque,
+    // de una pestaña vieja, ni de dos personas a la vez. Y una factura
+    // duplicada ante el SRI no se deshace apretando "deshacer".
+    const actual = await getPedidoById(pedidoId)
+    if (!actual) {
+      return Response.json({ ok: false, error: `El pedido ${pedidoId} no existe` }, { status: 404 })
+    }
+    if (yaFacturado(actual)) {
+      // No es un error: es que alguien llegó primero. Se contesta con el id que
+      // YA existe para que la pantalla recargue y muestre el RIDE real.
+      const datilId = actual.FACTURA_ID || ''
+      return Response.json({
+        ok: true,
+        yaFacturado: true,
+        datilId,
+        rideUrl: datilId ? `https://link.datil.co/invoices/${datilId}/ride` : actual.FACTURA_PDF_URL,
+      })
     }
 
     // emitirFacturaDatil ya registra su propio evento (ok o error) con el
