@@ -75,10 +75,13 @@ test('con solo FACTURA_PDF_URL también está facturado', () => {
   assert.equal(yaFacturado(pedido({ FACTURA_PDF_URL: 'https://link.datil.co/invoices/x/ride' })), true)
 })
 
-test('null no revienta', () => {
+test('sin pedido no hay botón', () => {
+  // Un pedido que todavía no cargó no puede ofrecer emitir al SRI. Ante la
+  // duda, el que NO se puede deshacer no se ofrece.
   assert.equal(yaFacturado(null), false)
   assert.equal(pidioFactura(null), false)
-  assert.equal(botonFactura(null, 'ADMIN'), 'OPCIONAL')
+  assert.equal(botonFactura(null, 'ADMIN'), null)
+  assert.equal(botonFactura(undefined, 'ADMIN'), null)
 })
 
 test('pidioFactura acepta TRUE, true y minúsculas', () => {
@@ -167,6 +170,7 @@ export function pidioFactura(pedido) {
  * toque ni de una pestaña vieja.
  */
 export function botonFactura(pedido, rol) {
+  if (!pedido) return null
   if (rol !== 'ADMIN') return null
   if (yaFacturado(pedido)) return null
   return pidioFactura(pedido) ? 'PENDIENTE' : 'OPCIONAL'
