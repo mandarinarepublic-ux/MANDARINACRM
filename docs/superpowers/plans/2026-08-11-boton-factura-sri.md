@@ -2,6 +2,49 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## ESTADO al 14-ago-2026
+
+**Los checkboxes de abajo quedaron sin marcar aunque el trabajo se hizo.** No les creas: el
+estado real está acá, y cada línea dice con qué se comprobó.
+
+| Task | Estado | Evidencia |
+|---|---|---|
+| 1. Módulo puro | ✅ hecho | `lib/facturas-visibilidad.js` + `bce1c89f` |
+| 2. Candado en el servidor | ✅ hecho | `2a5652dd` |
+| 3. La pantalla | ✅ hecho | `b43622ae` |
+| 5. Pruebas del candado | ✅ hecho | `97e23934` |
+| 4. Verificar contra producción | 🔶 a medias | ver abajo |
+
+**Desplegado el 14-ago:** los 8 commits estuvieron **9 días solo en local**. `main` iba
+`05ecb9c8..97e23934` sin subir, o sea el botón existía y **no lo veía nadie**. Se subió, y
+se confirmó que el despliegue `dpl_8ejEmKm5ySE9ToTmaZUaMsRwL7MM` es READY, del SHA
+`97e23934`, y que **el alias `crm.apps.mandarinaec.com` apunta a ÉL** — no a un
+redespliegue viejo.
+
+Verificado antes de subir: `npm test` 124/124 y `npm run build` limpio.
+
+De la Task 4:
+- **Step 1** ✅ el dominio real sirve este commit (arriba).
+- **Step 3** 🔶 a medias: sin credencial, `POST /api/factura/emitir` con
+  `NO-EXISTE-9999` devuelve **`401 {"error":"No autenticado"}`** — la ruta rechaza a un
+  desconocido. El **404** con sesión de ADMIN sigue **sin comprobar**: hace falta cookie.
+  Control de la herramienta: `GET /` da 200 (el login vive en `/`, no en `/login`).
+- **Steps 2, 4, 5, 6** ⬜ pendientes: los tiene que correr Rodrigo con su sesión.
+
+**Ojo con el email antes de apretar el botón.** `emitirFactura()` solo mira que el email no
+esté **vacío** (`if (!cliente.EMAIL)`, línea 172). No valida el formato. En la base hay
+**26 clientes con email inválido** —24 con un espacio EN MEDIO, tipo
+`ana piedad 112009@hotmail.com`— y esos pasan la validación y llegan a Dátil tal cual.
+Ya se corrigió uno (el cliente de `MAN-JAC-5609`); los otros 25 siguen ahí.
+
+**Sobre `MAN-JAC-5609`:** no es un fallo de emisión. Tiene `factura_solicitada = false` y
+**cero** eventos en `crm.eventos_sistema` (busqué `%5609%`). Nunca se intentó facturar
+porque no se marcó la casilla. Le toca el botón **gris**, no el amarillo.
+
+**Pendientes de emisión al 14-ago** (pidieron factura y no la tienen, desde que
+`DATIL_DIRECTO` está activo): `MAN-JAC-5586`, `MAN-JAC-5587`, `MAN-AND-5601`,
+`IND-CAM-5589`. El 13 y el 14 de agosto cerraron en cero.
+
 **Goal:** Revivir el botón de emitir factura de la pantalla del pedido —hoy muerto porque lee una columna que nadie escribe— y hacer que aparezca únicamente cuando falta la factura, con un candado en el servidor que impida emitir una segunda al SRI.
 
 **Architecture:** Toda la decisión de "¿se muestra el botón?" y "¿ya está facturado?" se saca a un módulo puro (`lib/facturas-visibilidad.js`) que se prueba con `node --test`. La pantalla y la ruta de emisión solo consumen ese módulo. La protección real vive en el servidor: `/api/factura/emitir` relee el pedido antes de hablar con Dátil.
