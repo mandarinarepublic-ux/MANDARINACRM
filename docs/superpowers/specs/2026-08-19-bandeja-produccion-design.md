@@ -172,21 +172,42 @@ La lista y el conteo leen de ahí. Hoy ese criterio está escrito en **tres siti
 Supabase **nunca se cumple**, es código muerto— y el filtro del repositorio), y
 esa duplicación es exactamente lo que produjo el falso positivo del §4.3.
 
-### 4.3 Completitud: un solo dato
+### 4.3 Completitud: dos niveles, los dos del mismo recurso
 
-El servidor declara **`completo: true | false`**, comparando lo recibido contra el
-total exacto **de la misma consulta y con los mismos filtros**. No son dos
-criterios que puedan divergir: es la misma consulta preguntada de dos formas.
+> **Corregido el 19-ago-2026 tras la verificación de la Task 1.** La versión
+> anterior declaraba un solo `completo` global y eliminaba el conteo por pedido.
+> La medición demostró que **PostgREST trunca cada recurso anidado por separado**,
+> así que un pedido con más de 1000 prendas perdería prendas en silencio: el
+> conteo global cuenta pedidos, no prendas. Hacía falta el conteo por pedido.
 
-- `completo = true` → la lista es la verdad. Sin avisos, sin comparar nada.
-- `completo = false` → faltan datos. Franja + botón.
+El servidor declara completitud en **dos niveles**:
 
-**No hay ningún conteo por pedido.** Se eliminó tras la objeción de Rodrigo: al
-incluir prendas eliminadas o entregadas en tienda daría un faltante que no existe.
-Sin resta, no hay falso positivo posible.
+| nivel | de dónde sale | qué detecta |
+|---|---|---|
+| **Global** | `count: 'exact'` sobre la consulta de pedidos | faltan **pedidos enteros** |
+| **Por pedido** | `total:prendas_en_taller(count)` — el **mismo recurso** anidado | faltan **prendas de ese pedido** |
+
+**Por qué esto NO reintroduce el falso positivo que detectó Rodrigo.** Su objeción
+era correcta contra un conteo que viniera de *otro sitio*: incluiría prendas
+`ELIMINADO` y `ENTREGADO_TIENDA` que el servidor no envía, y marcaría un faltante
+inexistente para siempre. Aquí el conteo sale **del mismo recurso anidado, con los
+mismos filtros que las prendas** (`prendas_en_taller`). Solo puede diferir si hubo
+truncamiento de verdad.
+
+Verificado con tablas desechables el 19-ago-2026:
+
+```
+padre con 1500 hijos → llegaron 1000, el count dijo 1500 → truncamiento detectado
+padre con 10 hijos   → llegaron 10,   el count dijo 10   → ok
+```
 
 **Ante la duda, incompleto.** Si el total viene desconocido, `completo = false`.
 No se puede afirmar que una lista está completa sin la evidencia de que lo está.
+
+**Riesgo residual aceptado por Rodrigo (19-ago-2026):** el techo pasa de "1000
+prendas en toda la base" (1261 hoy, ya cruzado) a "1000 prendas en **un solo
+pedido**". El pedido más grande de la historia tiene **31 prendas**. Y si algún día
+ocurriera, **se vería** en vez de perderse.
 
 ### 4.4 Los cuatro estados de la pantalla
 
@@ -205,11 +226,16 @@ de verdad no hay trabajo.
 ### 4.5 Recuperación
 
 - **En la franja**, si faltan pedidos: *"Faltan N pedidos por cargar · ⟳ Recargar"*.
-- **En la tarjeta**, si un pedido llegara con cero prendas: se muestra igual, con
-  *"⟳ Cargar prendas"* → llama a `/api/pedidos/{id}` (ya existe, join acotado, sin
-  tope). **No debería ocurrir nunca** con el join anidado; es la red de seguridad
-  que sustituye al `.filter(length > 0)`: donde antes se borraba la evidencia,
-  ahora se enseña con la salida al lado.
+- **En la tarjeta**, si a un pedido le faltan prendas (`llegaron < total` del mismo
+  recurso): *"⟳ Cargar las N prendas que faltan"* → llama a `/api/pedidos/{id}`
+  (ya existe, join acotado por un solo pedido).
+
+Tras la corrección de §4.3, **el botón por pedido vuelve a ser el mecanismo
+principal** —como se pidió al principio— y no una red decorativa: el conteo por
+pedido le da la información que necesita para saber cuándo aparecer.
+
+Sustituye al `.filter(length > 0)`: donde antes se borraba la evidencia, ahora se
+enseña con la salida al lado.
 
 ### 4.6 El aviso
 
@@ -290,13 +316,20 @@ contar contra SQL. Verificar con el rol equivocado no prueba nada.
 
 ## 6. Riesgos abiertos
 
-**El join anidado podría truncarse igual.** El diseño asume que el tope de 1000 se
-aplica a la tabla raíz (63 pedidos) y no a las prendas anidadas. Es lo que dice la
-documentación — y *lo que dice la documentación* es justo lo que nos metió aquí.
+**~~El join anidado podría truncarse igual.~~ VERIFICADO el 19-ago-2026: SÍ SE TRUNCA.**
 
-> **Primer paso del trabajo: verificarlo contra la base con un caso que lo fuerce.**
-> Si el tope también muerde ahí, la salida es una función SQL. Ya hay precedente
-> funcionando: `crm.pauta_embudo`.
+Se midió con tablas desechables (`crm.zz_prueba_*`, creadas, medidas y borradas):
+un padre con **1.500** hijos devolvió **1.000**. El tope se aplica **a cada recurso
+anidado por separado**, no solo a la tabla raíz. La suposición del diseño original
+era falsa.
+
+**No hizo falta la función SQL.** La misma medición encontró la salida: el `count`
+del recurso anidado **no se trunca** (devolvió 1.500) y se puede pedir junto a las
+filas. De ahí sale la corrección de §4.3.
+
+Lección: esto es exactamente lo que la Task 1 del plan existía para evitar. De
+haber construido sobre la suposición, habríamos reproducido el mismo bug en
+pequeño y **sin detección**.
 
 **La cola puede desbordarse.** Producción está acotada por el trabajo pendiente,
 no por la historia — pero el 18-ago tenía 258 pedidos y Despacho llegó a 388 con

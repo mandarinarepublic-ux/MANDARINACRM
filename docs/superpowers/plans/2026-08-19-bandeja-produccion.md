@@ -53,6 +53,32 @@ para David. `/api/pedidos` no se toca: las otras ocho pantallas siguen igual.
 
 ## Task 1: Verificar el riesgo abierto antes de construir nada
 
+> ## ✅ EJECUTADA el 19-ago-2026 — y el resultado cambió el diseño
+>
+> **SÍ SE TRUNCA.** Un padre con **1.500** hijos devolvió **1.000**: el tope de
+> PostgREST se aplica **a cada recurso anidado por separado**, no solo a la tabla
+> raíz. La suposición del spec era falsa.
+>
+> Medido con tablas desechables (`crm.zz_prueba_padre` / `zz_prueba_hijo`, creadas,
+> medidas y **borradas** — verificado: 0 tablas `zz_` en la base). No se usó el
+> script `.mjs` porque `SUPABASE_SERVICE_ROLE_KEY` no estaba disponible; se midió
+> por HTTP con la clave pública contra tablas de prueba con datos sintéticos.
+>
+> **No hizo falta la función SQL.** La misma medición encontró la salida:
+>
+> ```
+> zz_prueba_padre?select=id,prendas:zz_prueba_hijo(id),total:zz_prueba_hijo(count)
+>   padre 1: llegaron 1000 de 1500  <- TRUNCADO, detectado
+>   padre 2: llegaron 10 de 10      ok
+> ```
+>
+> El `count` del recurso anidado **no se trunca** y se puede pedir junto a las
+> filas. De ahí salen las correcciones a §4.3 y §4.5 del spec, y los cambios de las
+> tareas 5, 6 y 7 de este plan (ya aplicados abajo).
+>
+> El script `scripts/verificar-join-anidado.mjs` queda igualmente: sirve para
+> re-verificarlo contra los datos reales el día que haya credenciales.
+
 El spec asume que el tope de 1000 se aplica a la tabla raíz y no a las prendas
 anidadas. **Es una suposición sobre PostgREST, y suponer es exactamente lo que
 causó este bug.** Si falla, todo el diseño cambia a función SQL.
@@ -637,12 +663,22 @@ export async function listBandejaProduccion(usuario) {
 
   const sb = getSupabase()
 
-  // `count: 'exact'` sobre la MISMA consulta y los MISMOS filtros. No son dos
-  // criterios que puedan divergir: es la misma pregunta hecha de dos formas.
+  // DOS niveles de completitud, los dos del MISMO recurso:
+  //   · `count: 'exact'`              → ¿llegaron todos los PEDIDOS?
+  //   · `total:prendas_en_taller(count)` → ¿llegaron todas las PRENDAS de cada uno?
+  //
+  // El segundo hace falta porque PostgREST trunca CADA recurso anidado por
+  // separado: verificado el 19-ago-2026 con tablas desechables, un padre con 1500
+  // hijos devolvió 1000. El count global cuenta pedidos, no prendas, así que sin
+  // esto un pedido con más de 1000 prendas perdería prendas EN SILENCIO.
   const { data, error, count } = await sb
     .from('pedidos')
-    .select(`${COLS_PEDIDO}, prendas_en_taller(${COLS_PRENDA}), clientes(nombre,cedula,celular)`,
-            { count: 'exact' })
+    .select(
+      `${COLS_PEDIDO},` +
+      `prendas:prendas_en_taller(${COLS_PRENDA}),` +
+      `total_prendas:prendas_en_taller(count),` +
+      `clientes(nombre,cedula,celular)`,
+      { count: 'exact' })
     .eq('estado_pedido', 'EN_FABRICA')
   if (error) throw error
 
@@ -652,7 +688,19 @@ export async function listBandejaProduccion(usuario) {
   const pedidos = []
   let prendas = 0
   for (const p of filas) {
-    const mias = (p.prendas_en_taller || []).filter((d) => prendaEsDelUsuario(d.area, suyas))
+    // ⚠️ La comparación va ANTES de filtrar por área, y es a propósito.
+    //
+    // `total_prendas` cuenta TODAS las prendas del pedido, no solo las tuyas. Si
+    // se comparara contra `mias`, el 5599 (2 de sublimación + 1 de bordado) le
+    // diría a David "llegaron 2 de 3" y le pintaría el botón para siempre — el
+    // falso positivo que detectó Rodrigo el 19-ago.
+    //
+    // Comparando antes: si llegaron todas las del pedido, las de su área también.
+    const llegaron = (p.prendas || []).length
+    const totalPrendas = p.total_prendas?.[0]?.count ?? null
+    const completoPedido = esCompleta({ recibidas: llegaron, total: totalPrendas })
+
+    const mias = (p.prendas || []).filter((d) => prendaEsDelUsuario(d.area, suyas))
     // Un pedido sin prendas de su área NO es suyo: se excluye acá, en el servidor.
     // ⚠️ Esto NO es el `.filter(items.length > 0)` que se quita de la pantalla.
     // Aquel escondía pedidos cuyas prendas no habían LLEGADO; este excluye pedidos
@@ -670,11 +718,19 @@ export async function listBandejaProduccion(usuario) {
       CLIENTE_CEDULA: p.clientes?.cedula ?? '',
       CLIENTE_CELULAR: p.clientes?.celular ?? '',
       ESTADO_PEDIDO: 'EN_FABRICA',
+      // Para el botón: si no cuadran, a este pedido le faltan prendas.
+      PRENDAS_LLEGARON: llegaron,
+      PRENDAS_TOTAL: totalPrendas,
+      COMPLETO: completoPedido,
       items: mias.map(aPrenda),
     })
   }
 
-  return { pedidos, meta: { pedidos: pedidos.length, prendas, completo } }
+  const incompletos = pedidos.filter((p) => !p.COMPLETO).length
+  return {
+    pedidos,
+    meta: { pedidos: pedidos.length, prendas, completo, pedidosIncompletos: incompletos },
+  }
 }
 ```
 
@@ -731,7 +787,8 @@ import { getSupabase } from '@/lib/supabase'
  * dejarían de leerse. Y nunca "por flanco": eso da un aviso en toda la vida.
  */
 async function avisarSiHaceFalta(meta) {
-  if (meta.completo) return
+  // Dos motivos: faltan pedidos enteros, o a algún pedido le faltan prendas.
+  if (meta.completo && !meta.pedidosIncompletos) return
   try {
     const haceUnaHora = new Date(Date.now() - 60 * 60 * 1000).toISOString()
     const { data } = await getSupabase()
@@ -750,10 +807,13 @@ async function avisarSiHaceFalta(meta) {
 
   // CON await: en serverless la instancia se congela al responder y el evento se
   // pierde justo cuando había algo que registrar.
+  const motivo = !meta.completo
+    ? `llegaron ${meta.pedidos} pedido(s) y la base dice que hay mas`
+    : `${meta.pedidosIncompletos} pedido(s) llegaron sin todas sus prendas`
   await registrarEvento({
     fuente: 'supabase',
     nivel: 'error',
-    mensaje: `La bandeja de PRODUCCION se leyo INCOMPLETA: llegaron ${meta.pedidos} pedido(s) y la base dice que hay mas. Los pedidos que falten no se estan viendo en el taller.`,
+    mensaje: `La bandeja de PRODUCCION se leyo INCOMPLETA: ${motivo}. Lo que falte no se esta viendo en el taller.`,
   })
 }
 
@@ -980,25 +1040,32 @@ Dentro del `paginados.map(pedido => ...)`, justo después del `<Link>` del
 `PEDIDO_ID`, añade:
 
 ```jsx
-                          {pedido.itemsFiltrados.length === 0 && (
+                          {pedido.COMPLETO === false && (
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation()
                                 const r = await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`)
                                 if (!r.ok) return
                                 const d = await r.json()
+                                const todas = d.pedido?.items || []
                                 setPedidos(prev => prev.map(x => x.PEDIDO_ID === pedido.PEDIDO_ID
-                                  ? { ...x, itemsFiltrados: d.pedido?.items || [] } : x))
+                                  ? { ...x, itemsFiltrados: todas, PRENDAS_LLEGARON: todas.length, COMPLETO: true }
+                                  : x))
                               }}
                               className="badge bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30">
-                              ⟳ Cargar prendas
+                              ⟳ Cargar las {Math.max(0, (pedido.PRENDAS_TOTAL ?? 0) - (pedido.PRENDAS_LLEGARON ?? 0))} prendas que faltan
                             </button>
                           )}
 ```
 
-Este caso **no debería ocurrir nunca**: el servidor no manda pedidos sin prendas
-tuyas. Es la red de seguridad que sustituye al `.filter(length > 0)`: donde antes
-se borraba la evidencia, ahora se enseña con la salida al lado.
+⚠️ La condición es `COMPLETO === false`, **nunca** `itemsFiltrados.length === 0`.
+Un pedido puede tener cero prendas *de tu área* estando perfectamente completo — de
+los 63 en fábrica, 22 no tienen ninguna de David. Confundir las dos cosas pinta el
+botón en 22 pedidos que no tienen nada roto.
+
+`/api/pedidos/{id}` trae **un solo pedido**, así que sus prendas no pueden
+truncarse: el tope se aplica por recurso anidado y ahí hay un pedido con sus 3
+prendas, no 654 con 1261.
 
 - [ ] **Step 6: Correr las pruebas**
 
