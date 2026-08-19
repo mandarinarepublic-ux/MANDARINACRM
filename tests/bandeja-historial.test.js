@@ -82,3 +82,17 @@ test('el SELECT se arma con join, no concatenando plantillas', () => {
   assert.ok(/const SELECT = \[[\s\S]*?\]\.join\(','\)/.test(codigo),
     'el build se come el separador si se concatenan plantillas — ver el 19-ago-2026')
 })
+
+test('la busqueda por cliente NO se recorta a 50 en silencio', () => {
+  // searchClientes tope a 50 porque alimenta un desplegable, y "maria" ya trae
+  // 49 clientes reales: a la clienta 51 el Historial habria empezado a perder
+  // pedidos sin avisar. Es el mismo modo de falla de siempre, entrando por la
+  // puerta de atras.
+  const clientes = readFileSync(new URL('../lib/db/clientes.js', import.meta.url), 'utf8')
+  assert.ok(/idsClientesQueCoinciden/.test(repo),
+    'el historial no puede resolver clientes con el buscador del desplegable')
+  assert.ok(/tope = 2000/.test(clientes), 'el tope tiene que estar lejos del corte de PostgREST')
+  assert.ok(/truncado: ids\.length >= tope/.test(clientes),
+    'y si se alcanza, hay que poder decirlo')
+  assert.ok(/busquedaTruncada/.test(src), 'la pantalla debe avisar cuando se recorto')
+})

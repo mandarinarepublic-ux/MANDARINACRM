@@ -27,6 +27,9 @@ export default function HistorialPage() {
   const [hayMasPaginas, setHayMasPaginas] = useState(false)
   const [totalServidor, setTotalServidor] = useState(null)
   const [cargandoMas, setCargandoMas] = useState(false)
+  // Si la busqueda toco su tope, se dice: callarlo seria mostrar una lista
+  // incompleta con cara de completa.
+  const [busquedaTruncada, setBusquedaTruncada] = useState(false)
   // CARGANDO | ERROR | VACIO | LISTA. Antes solo había `loading`, y "vacío"
   // significaba tanto "no hay nada" como "no se pudo leer".
   const [estado, setEstado] = useState('CARGANDO')
@@ -130,6 +133,7 @@ export default function HistorialPage() {
       setPaginaActual(data.pagina ?? pag)
       setHayMasPaginas(!!data.hayMas)
       setTotalServidor(typeof data.total === 'number' ? data.total : null)
+      setBusquedaTruncada(!!data.busquedaTruncada)
       setEstado(lista.length === 0 && reemplazar ? 'VACIO' : 'LISTA')
     } catch (e) {
       // Una respuesta que no es JSON también es un fallo, no una lista vacía.
@@ -280,6 +284,13 @@ export default function HistorialPage() {
               </div>
             )}
           </div>
+          {/* Una búsqueda recortada se ve igual que una completa. Se avisa. */}
+          {busquedaTruncada && !loading && (
+            <div className="bg-yellow-500/10 border border-yellow-500/40 rounded-xl p-3 mb-3 text-xs text-yellow-300">
+              ⚠️ La búsqueda coincide con demasiados clientes y se recortó. Afina el término
+              (cédula o celular completos) para no perderte pedidos.
+            </div>
+          )}
           {loading ? (
             <SkeletonList count={6} />
           ) : estado === 'ERROR' ? (
