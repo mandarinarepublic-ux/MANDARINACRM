@@ -1,5 +1,6 @@
 import { fechaAhora } from '@/lib/sheets'
-import { generateItemId, calcularDiasEntregaDesdeSheet, subestadoInicial, logCambio } from '@/lib/pedidos'
+import { generateItemId, subestadoInicial, logCambio } from '@/lib/pedidos'
+import { calcularDiasEntregaDesdeSheet } from '@/lib/db/diasEntrega'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
 import { listPedidos, createPedido, generatePedidoId, siguienteNumeroPedido } from '@/lib/db/pedidos'
 import { crearPedidoConReintento } from '@/lib/reintento-pedido'
