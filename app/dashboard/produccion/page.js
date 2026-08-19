@@ -7,6 +7,7 @@ import { parseFecha, diasHastaEntrega, formatFechaDia, inicioDiaEcuador, finDiaE
 import { PdfConfeccion, PdfConfeccionPagina, paginarItems } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import { imagenAncho } from '@/lib/imagenes'
+import { estadoBandeja } from '@/lib/bandeja-estado'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -17,25 +18,11 @@ const SUBESTADO_CONFIG = {
 }
 const SUBESTADOS_ORDEN = ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO']
 
-function itemEsDeUsuario(itemArea, u) {
-  if (!itemArea) return false
-  if (u.rol === 'ADMIN') return true
-  if (u.rol === 'CORTE') return true
-  const areas = u.areas || []
-  // 'TODAS' es un comodín explícito y es distinto de no tener áreas.
-  if (areas.length === 1 && areas[0] === 'TODAS') return true
-  if (areas.length > 0) return areas.some(a => itemArea.includes(a))
-
-  // Sin áreas asignadas: el rol decide.
-  if (u.rol === 'ESTAMPADO')   return itemArea.includes('ESTAMPADO')
-  if (u.rol === 'SUBLIMACION') return itemArea.includes('SUBLIMACION')
-  if (u.rol === 'BORDADO')     return itemArea.includes('BORDADO')
-  // Un usuario de DISEÑO al que le quitaron TODAS las áreas llegaba hasta el
-  // `return true` de abajo y veía las prendas de todas las áreas — lo contrario
-  // de lo que quiso el admin. Sin áreas, no ve nada.
-  if (u.rol === 'DISEÑO') return false
-  return true
-}
+// itemEsDeUsuario vivía aquí. Ahora está en lib/areas-usuario.js y lo aplica el
+// SERVIDOR, contra la cookie firmada: mientras vivió en el navegador había que
+// mandar las 3.541 filas de la base entera para que el celular descartara el 95 %,
+// y `?rol=ADMIN` viajaba en la URL donde cualquiera podía cambiarlo.
+// Ver docs/superpowers/specs/2026-08-19-bandeja-produccion-design.md
 
 const AREAS_BASE_P = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
 const ORDEN_P = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO','ENTREGADO_TIENDA','ELIMINADO']
@@ -311,46 +298,64 @@ export default function ProduccionPage() {
   const [filtroArea, setFiltroArea] = useState('TODAS')
   const [filtroTienda, setFiltroTienda] = useState('TODAS')
   const [visibles, setVisibles] = useState(PAGE_SIZE_P)
+  // CARGANDO | ERROR | INCOMPLETO | VACIO | LISTA. Antes solo había `loading` y
+  // "vacío", y "vacío" significaba cinco cosas distintas.
+  const [estado, setEstado] = useState('CARGANDO')
+  const [errorTexto, setErrorTexto] = useState('')
 
   useEffect(() => { setVisibles(PAGE_SIZE_P) }, [busqueda, filtroSubestado, filtroArea, filtroTienda, fechaDesde, fechaHasta])
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
-    const u = JSON.parse(stored)
-    setUser(u)
-    loadItems(u)
+    setUser(JSON.parse(stored))
+    loadItems()
   }, [])
 
-  const loadItems = useCallback(async (u, intentos = 0) => {
-    setLoading(true)
+  const loadItems = useCallback(async () => {
+    setLoading(true); setEstado('CARGANDO'); setErrorTexto('')
     try {
-      const res = await fetch('/api/pedidos?rol=ADMIN&_t=' + Date.now(), { cache: 'no-store' })
-      const data = await res.json()
-      if (!data.pedidos?.length && intentos < 3) {
-        setTimeout(() => loadItems(u, intentos + 1), 1500)
+      // El servidor ya filtra por estado y por las áreas de quien pregunta (contra
+      // la cookie firmada), así que acá NO se vuelve a filtrar por EN_FABRICA, ni
+      // por área, ni por prendas. Y NO se manda `?rol=`: eso lo decidía el
+      // navegador.
+      const res = await fetch('/api/produccion', { cache: 'no-store' })
+      if (!res.ok) {
+        const detalle = await res.json().catch(() => ({}))
+        setErrorTexto(detalle.error || `HTTP ${res.status}`)
+        setPedidos([]); setEstado('ERROR')
         return
       }
-      const pedidosConItems = (data.pedidos || [])
-        .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA')
+      const data = await res.json()
+      const lista = (data.pedidos || [])
         .sort((a, b) => {
           const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
           const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
           if (fb - fa !== 0) return fb - fa
           return (b.PEDIDO_ID || '').localeCompare(a.PEDIDO_ID || '')
         })
-        .map(p => ({
-          ...p,
-          itemsFiltrados: (p.items || []).filter(item => {
-            if (item.SUBESTADO === 'ELIMINADO' || item.SUBESTADO === 'ENTREGADO_TIENDA') return false
-            if (u.rol !== 'ADMIN') return itemEsDeUsuario(item.AREA, u)
-            return true
-          })
-        }))
-        .filter(p => p.itemsFiltrados.length > 0)
-      setPedidos(pedidosConItems)
+        .map(p => ({ ...p, itemsFiltrados: p.items || [] }))
+      setPedidos(lista)
+      setEstado(estadoBandeja({ ok: true, completo: data.meta?.completo, pedidos: lista }))
+    } catch (e) {
+      // Una respuesta que no es JSON también es un fallo, no una lista vacía.
+      setErrorTexto(e?.message || 'Error de conexión')
+      setPedidos([]); setEstado('ERROR')
     } finally { setLoading(false) }
   }, [])
+
+  // Refresco al volver a la pestaña (decisión de Rodrigo, 19-ago-2026).
+  //
+  // La bandeja cargaba UNA sola vez al abrirse: quien la dejaba abierta toda la
+  // mañana no veía nada de lo que iba entrando. El taller mira el móvil a ratos,
+  // así que el momento en que importa refrescar es justo cuando vuelve.
+  useEffect(() => {
+    function alVolver() {
+      if (document.visibilityState === 'visible') loadItems()
+    }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => document.removeEventListener('visibilitychange', alVolver)
+  }, [loadItems])
 
   function handleSubestadoChange(itemId, nuevoSubestado) {
     setPedidos(prev => prev.map(p => ({
@@ -551,7 +556,21 @@ export default function ProduccionPage() {
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : filtered.length === 0 ? (
+          ) : estado === 'ERROR' ? (
+            /* Un fallo NO es "no hay trabajo". Antes los dos se veían igual y por
+               eso 21 pedidos invisibles pasaron 14 días sin que nadie avisara. */
+            <div className="card p-8 text-center border-red-500/40">
+              <div className="text-4xl mb-3">⚠️</div>
+              <div className="font-medium text-white">No se pudo cargar la bandeja</div>
+              <div className="text-sm text-gray-500 mt-1">{errorTexto}</div>
+              <div className="text-xs text-gray-600 mt-2 max-w-sm mx-auto">
+                No es que no haya trabajo: es que no pudimos leerlo. Si sigue pasando, avisa.
+              </div>
+              <button onClick={() => loadItems()} className="btn-primary text-sm px-4 py-2 mt-4">
+                Reintentar
+              </button>
+            </div>
+          ) : filtered.length === 0 && estado === 'VACIO' ? (
             <div className="card p-8 text-center">
               <div className="text-4xl mb-3">✅</div>
               <div className="font-medium text-white">¡Todo al día!</div>
@@ -559,6 +578,18 @@ export default function ProduccionPage() {
             </div>
           ) : (
             <>
+            {estado === 'INCOMPLETO' && (
+              <div className="bg-red-500/10 border border-red-500/40 rounded-xl p-3 mb-4 flex items-center gap-3">
+                <span className="text-xl">🚨</span>
+                <div className="flex-1">
+                  <div className="text-red-400 font-semibold text-sm">Esta lista está incompleta</div>
+                  <div className="text-xs text-gray-400">Faltan pedidos por cargar. No te fíes de lo que ves.</div>
+                </div>
+                <button onClick={() => loadItems()} className="btn-secondary text-xs px-3 py-2 flex-shrink-0">
+                  ⟳ Recargar
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-3">
               <div className="text-xs text-gray-600">
                 {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
@@ -591,6 +622,31 @@ export default function ProduccionPage() {
                             {pedido.PEDIDO_ID}
                           </Link>
                           {urgente && <span className="badge bg-red-500/20 text-red-400 text-xs">🚨 Urgente</span>}
+                          {/* A este pedido le faltan prendas. Antes se escondía el
+                              pedido entero con `.filter(items.length > 0)`; ahora se
+                              enseña con la salida al lado.
+                              ⚠️ La condición es COMPLETO === false, NUNCA
+                              itemsFiltrados.length === 0: de los 63 pedidos en
+                              fábrica, 22 no tienen ninguna prenda de David y están
+                              perfectamente completos. */}
+                          {pedido.COMPLETO === false && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                // /api/pedidos/{id} trae UN pedido: sus prendas no
+                                // pueden truncarse.
+                                const r = await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`)
+                                if (!r.ok) return
+                                const d = await r.json()
+                                const todas = d.pedido?.items || []
+                                setPedidos(prev => prev.map(x => x.PEDIDO_ID === pedido.PEDIDO_ID
+                                  ? { ...x, itemsFiltrados: todas, PRENDAS_LLEGARON: todas.length, COMPLETO: true }
+                                  : x))
+                              }}
+                              className="badge bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30">
+                              ⟳ Cargar las {Math.max(0, (pedido.PRENDAS_TOTAL ?? 0) - (pedido.PRENDAS_LLEGARON ?? 0))} prendas que faltan
+                            </button>
+                          )}
                           <span className="text-xs text-gray-600">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                         </div>
                         <div className="text-xs text-gray-500">
