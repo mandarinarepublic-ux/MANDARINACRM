@@ -1,7 +1,8 @@
 import { fechaAhora } from '@/lib/sheets'
-import { generatePedidoId, generateItemId, calcularDiasEntregaDesdeSheet, subestadoInicial, logCambio } from '@/lib/pedidos'
+import { generateItemId, calcularDiasEntregaDesdeSheet, subestadoInicial, logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
-import { listPedidos, listPedidoIds, createPedido } from '@/lib/db/pedidos'
+import { listPedidos, createPedido, generatePedidoId, siguienteNumeroPedido } from '@/lib/db/pedidos'
+import { crearPedidoConReintento } from '@/lib/reintento-pedido'
 import { upsertClienteByCedula } from '@/lib/db/clientes'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
@@ -62,28 +63,20 @@ export async function POST(req) {
 
     const now = fechaAhora()
 
-    // ✅ FIX duplicados (race condition): generar el ID en el ÚLTIMO momento
-    // (justo antes de guardar la fila), NO al inicio. Antes se calculaba al
-    // empezar el pedido y, mientras se guardaba el cliente y se subían fotos
-    // (1-2 s), un segundo pedido leía el mismo "máximo" y obtenía el MISMO número.
-    // Además verificamos que el NÚMERO no esté usado por ningún pedido de NINGUNA
-    // tienda (MAN-AND-2432 e IND-XAV-2432 compartían el 2432).
-    let pedidoId = await generatePedidoId(tiendaId, vendedorCodigo)
-    {
-      // Anti-colisión leyendo del backend activo (Sheets hoy, Supabase tras cutover)
-      // para no generar un PEDIDO_ID duplicado si el espejo del otro store va desfasado.
-      const idsExistentes = await listPedidoIds()
-      const numerosUsados = new Set(
-        idsExistentes
-          .map(id => parseInt((id || '').split('-').pop(), 10))
-          .filter(n => !isNaN(n))
-      )
-      const parts = pedidoId.split('-')
-      let num = parseInt(parts[parts.length - 1], 10)
-      while (numerosUsados.has(num)) num++   // sube hasta encontrar uno libre
-      parts[parts.length - 1] = String(num)
-      pedidoId = parts.join('-')
-    }
+    // El ID se genera en el ÚLTIMO momento, justo antes de guardar la fila, y no
+    // al empezar: antes se calculaba al inicio y, mientras se guardaba el cliente
+    // y se subían las fotos (1-2 s), un segundo pedido leía el mismo "máximo" y
+    // se llevaba el MISMO número.
+    //
+    // El número se pide ACÁ, al grabar, y NUNCA antes: nada queda reservado, así
+    // que una venta que no se completa no deja hueco en la numeración.
+    //
+    // Se fue la red anti-colisión que leía los 676 IDs y subía el número a mano.
+    // La garantía ahora la da la base: `crm.pedidos.unique_id` tiene índice
+    // único. Si dos vendedores coinciden en el mismo instante, la segunda
+    // inserción es rechazada y se reintenta con el número siguiente — y como esa
+    // fila no llegó a escribirse, tampoco deja hueco.
+    let { pedidoId, uniqueId } = await generatePedidoId(tiendaId, vendedorCodigo)
 
     const estadoPago = montoAbonado >= montoTotal ? 'PAGADO' : montoAbonado > 0 ? 'ABONO' : 'PENDIENTE'
 
@@ -101,8 +94,9 @@ export async function POST(req) {
     // Ver la migración crm_2026_08_02_origen_trigger.
 
     // Fila del pedido (dual-write). Mismo orden de columnas que el append previo.
-    await createPedido({
-      pedidoId,
+    const creado = await crearPedidoConReintento(pedidoId, uniqueId, (pid, uid) => createPedido({
+      pedidoId: pid,
+      uniqueId: uid,
       tiendaId,
       vendedorId: vendedorNombre || vendedorId,   // se guarda en VENDEDOR_ID tal cual
       clienteId,
@@ -123,7 +117,11 @@ export async function POST(req) {
       direccionPedido: direccionTexto || cliente.direccion || '',
       latitud: latitud || null,
       longitud: longitud || null,
-    })
+    }), siguienteNumeroPedido)
+    // Si hubo choque, el pedido quedó con OTRO número: todo lo que viene después
+    // (items, pagos, bitácora, factura, CAPI) tiene que usar el bueno.
+    pedidoId = creado.pedidoId
+    uniqueId = creado.uniqueId
 
     await logCambio(pedidoId, 'CREACION', '', 'EN_FABRICA', vendedorId)
 
