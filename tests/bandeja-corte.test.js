@@ -71,6 +71,34 @@ test('el contador cuenta solo lo que falta cortar', () => {
     'el encabezado debe contar pendiente + solicitado, no todos los items')
 })
 
+test('tiene filtro de fechas y control de orden', () => {
+  assert.ok(/setFechaDesde/.test(src) && /setFechaHasta/.test(src),
+    'faltaba poder acotar por fecha, como en Produccion y Despacho')
+  assert.ok(/inicioDiaEcuador/.test(src) && /finDiaEcuador/.test(src),
+    'el rango se corta en hora de Ecuador: recortar el ISO corre los pedidos de la noche')
+  assert.ok(/comparadorCorte\(orden\)/.test(src),
+    'el orden lo elige quien mira, no viene fijado del servidor')
+})
+
+test('un filtro puesto se avisa: "0 por cortar" filtrado no es "termine"', () => {
+  // Es el mismo modo de falla de siempre — vacio por fallo y vacio por acabado
+  // viendose igual —, ahora con los filtros como causa.
+  assert.ok(/hayFiltroQueEsconde/.test(codigo(src)),
+    'el encabezado y el estado vacio deben distinguir filtrado de terminado')
+  assert.ok(/Quitar el filtro de fechas|Quitar todos los filtros/.test(src),
+    'la salida del filtro tiene que estar a la vista, no hay que ir a buscarla')
+})
+
+test('los contadores respetan la fecha pero NO el estado de corte', () => {
+  // Si dependieran del estado, al pulsar "Cortado" los otros tres marcarian 0 y
+  // el filtro se comeria su propio mapa.
+  assert.ok(/const contadores = enVista\.reduce/.test(src),
+    'los contadores se calculan sobre lo que la fecha y la busqueda dejan ver')
+  const bloque = src.slice(src.indexOf('const enVista'), src.indexOf('const contadores'))
+  assert.ok(!/filtro ===/.test(bloque),
+    'enVista no puede mirar el filtro de estado de corte')
+})
+
 test('la identidad sale de la cookie y la bandeja es de corte', () => {
   assert.ok(/sesionActual\(\)/.test(api), 'quien pregunta se sabe por la cookie firmada')
   assert.ok(/ROLES_PERMITIDOS = \['ADMIN', 'CORTE'\]/.test(api),

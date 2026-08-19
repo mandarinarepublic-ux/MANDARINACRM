@@ -3,9 +3,10 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha, diasHastaEntrega, formatFechaDia } from '@/lib/parseFecha'
+import { parseFecha, diasHastaEntrega, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
 import { estadoBandeja } from '@/lib/bandeja-estado'
+import { comparadorCorte, ORDENES, ORDEN_POR_DEFECTO } from '@/lib/orden-corte'
 
 const CORTE_CONFIG = {
   PENDIENTE:   { label: '✂️ Pendiente',  color: 'bg-gray-600' },
@@ -13,6 +14,7 @@ const CORTE_CONFIG = {
   CORTADO:     { label: '✅ Cortado',    color: 'bg-green-500' },
 }
 const CORTE_ORDEN = ['PENDIENTE', 'SOLICITADO', 'CORTADO']
+
 
 function CorteCard({ item, userId, onCorteChange }) {
   const [subestadoCorte, setSubestadoCorte] = useState(item.SUBESTADO_CORTE || 'PENDIENTE')
@@ -133,13 +135,18 @@ export default function CortePage() {
   const [expandedPedido, setExpandedPedido] = useState(null)
   const [visibles, setVisibles] = useState(20)
   const PAGE_SIZE_C = 20
+  // Filtro por fecha DE PEDIDO, igual que en Producción y Despacho: que la misma
+  // caja signifique lo mismo en las tres pantallas.
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [orden, setOrden] = useState(ORDEN_POR_DEFECTO)
   // CARGANDO | ERROR | INCOMPLETO | VACIO | LISTA. Antes solo había `loading`, y
   // "sin ítems en este estado" significaba cinco cosas distintas — entre ellas
   // "la consulta falló" y "PostgREST cortó la lista en 1000".
   const [estado, setEstado] = useState('CARGANDO')
   const [errorTexto, setErrorTexto] = useState('')
 
-  useEffect(() => { setVisibles(20) }, [busqueda, filtro])
+  useEffect(() => { setVisibles(20) }, [busqueda, filtro, fechaDesde, fechaHasta, orden])
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -166,13 +173,8 @@ export default function CortePage() {
         return
       }
       const data = await res.json()
-      // FIFO: lo que lleva más esperando se corta primero.
+      // El orden ya NO se fija acá: lo elige quien mira, y se aplica al pintar.
       const lista = (data.pedidos || [])
-        .sort((a, b) => {
-          const diff = (parseFecha(a.FECHA_PEDIDO)||new Date(0)) - (parseFecha(b.FECHA_PEDIDO)||new Date(0))
-          if (diff !== 0) return diff
-          return (a.PEDIDO_ID || '').localeCompare(b.PEDIDO_ID || '')
-        })
         .map(p => ({ ...p, itemsFiltrados: p.items || [] }))
       setPedidos(lista)
       setEstado(estadoBandeja({ ok: true, completo: data.meta?.completo, pedidos: lista }))
@@ -200,7 +202,28 @@ export default function CortePage() {
     })))
   }
 
-  const contadores = pedidos.reduce((acc, p) => {
+  const hayFecha = Boolean(fechaDesde || fechaHasta)
+  const hayFiltroQueEsconde = hayFecha || Boolean(busqueda)
+
+  function dentroDeFechas(p) {
+    if (fechaDesde) {
+      const f = parseFecha(p.FECHA_PEDIDO), d = inicioDiaEcuador(fechaDesde)
+      if (!f || (d && f < d)) return false
+    }
+    if (fechaHasta) {
+      const f = parseFecha(p.FECHA_PEDIDO), h = finDiaEcuador(fechaHasta)
+      if (!f || (h && f > h)) return false
+    }
+    return true
+  }
+
+  // Los contadores de las pestañas respetan la fecha y la búsqueda, pero NO el
+  // estado de corte: si dependieran de él, al pulsar "Cortado" los otros tres
+  // marcarían 0 y el filtro se comería su propio mapa.
+  const enVista = pedidos.filter(p => dentroDeFechas(p) && (!busqueda || coincideBusqueda(p, busqueda) ||
+    p.itemsFiltrados.some(i => i.PRODUCTO_NOMBRE?.toLowerCase().includes(busqueda.toLowerCase()))))
+
+  const contadores = enVista.reduce((acc, p) => {
     p.itemsFiltrados.forEach(i => {
       const c = i.SUBESTADO_CORTE || 'PENDIENTE'
       acc[c] = (acc[c] || 0) + 1
@@ -214,7 +237,7 @@ export default function CortePage() {
   const porCortar = (contadores.PENDIENTE || 0) + (contadores.SOLICITADO || 0)
   const yaCortados = contadores.CORTADO || 0
 
-  const filtered = pedidos.map(p => ({
+  const filtered = pedidos.filter(dentroDeFechas).map(p => ({
     ...p,
     itemsFiltrados: p.itemsFiltrados.filter(i => {
       const corte = i.SUBESTADO_CORTE || 'PENDIENTE'
@@ -227,8 +250,10 @@ export default function CortePage() {
     // faltaron prendas por cargar sí, aunque llegue vacío: es justo el que no
     // hay que esconder. Esa es la diferencia entre "no aplica" y "no se leyó".
   })).filter(p => p.itemsFiltrados.length > 0 || p.COMPLETO === false)
+    .sort(comparadorCorte(orden))
 
   const totalItems = filtered.reduce((s, p) => s + p.itemsFiltrados.length, 0)
+  const ordenActual = ORDENES[orden] || ORDENES[ORDEN_POR_DEFECTO]
   const paginados = filtered.slice(0, visibles)
   const hayMas = filtered.length > visibles
 
@@ -240,18 +265,57 @@ export default function CortePage() {
             <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-white p-1 text-lg">←</button>
             <div className="flex-1">
               <h1 className="text-xl font-display font-bold text-white">✂️ Corte de Tela</h1>
+              {/* ☠️ Con un filtro puesto, "0 por cortar" NO significa que se
+                  acabó el trabajo. Se dice en la misma línea del número, porque
+                  es justo ahí donde se lee mal. */}
               <p className="text-xs text-gray-500">
                 {porCortar} por cortar
                 {yaCortados > 0 && ` · ${yaCortados} ya cortada(s)`}
-                {filtro !== 'TODOS' && ` · viendo ${totalItems}`}
+                {hayFiltroQueEsconde && <span className="text-mandarina-400"> · con filtro puesto</span>}
               </p>
             </div>
             <button onClick={() => loadItems()} title="Actualizar"
               className="text-gray-500 hover:text-white text-lg px-2 py-1 flex-shrink-0">⟳</button>
           </div>
 
-          <input className="input w-full mb-3" placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
+          <input className="input w-full mb-2" placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
             value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+
+          {/* Orden y rango de fechas. Mismo formato que Producción y Despacho. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <div className="flex flex-col gap-1 col-span-2 sm:col-span-2">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Orden</span>
+              <select value={orden} onChange={e => setOrden(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                  ${orden !== ORDEN_POR_DEFECTO ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
+                {Object.entries(ORDENES).map(([k, o]) => (
+                  <option key={k} value={k}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Pedido desde</span>
+              <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                  ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Pedido hasta</span>
+              <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                  ${fechaHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`} />
+            </div>
+          </div>
+
+          {/* La salida del filtro tiene que estar SIEMPRE a la vista mientras el
+              filtro esté puesto: si hay que buscarla, la bandeja se queda
+              filtrada sin que nadie lo note. */}
+          {hayFecha && (
+            <button onClick={() => { setFechaDesde(''); setFechaHasta('') }}
+              className="w-full mb-3 min-h-[40px] text-xs text-mandarina-400 hover:text-white bg-mandarina-500/10 border border-mandarina-500/40 rounded-xl px-3 transition-all">
+              ✕ Quitar el filtro de fechas — estás viendo {enVista.length} de {pedidos.length} pedido(s)
+            </button>
+          )}
 
           {/* Filtros con contadores grandes */}
           <div className="grid grid-cols-4 gap-2">
@@ -316,18 +380,32 @@ export default function CortePage() {
                 se dice con todas las letras en vez de "sin ítems en este estado". */}
             {filtered.length === 0 ? (
               <div className="card p-8 text-center">
-                <div className="text-4xl mb-3">{porCortar === 0 ? '✅' : '🔎'}</div>
+                {/* Vacío por un filtro y vacío porque no queda trabajo NO son lo
+                    mismo, y ese es justo el par que se confunde. Si hay filtro
+                    puesto, la salida va aquí mismo. */}
+                <div className="text-4xl mb-3">{hayFiltroQueEsconde ? '🔎' : (porCortar === 0 ? '✅' : '🔎')}</div>
                 <div className="font-medium text-white">
-                  {porCortar === 0 ? 'No hay tela por cortar' : 'Nada con este filtro'}
+                  {hayFiltroQueEsconde
+                    ? 'Nada con este filtro'
+                    : (porCortar === 0 ? 'No hay tela por cortar' : 'Nada en este estado')}
                 </div>
                 <div className="text-sm text-gray-500 mt-1">
-                  {porCortar === 0 ? 'Todo al día' : `Quedan ${porCortar} prenda(s) por cortar en otro estado`}
+                  {hayFiltroQueEsconde
+                    ? 'Los filtros de arriba están escondiendo el resto'
+                    : (porCortar === 0 ? 'Todo al día' : `Quedan ${porCortar} prenda(s) por cortar en otro estado`)}
                 </div>
+                {hayFiltroQueEsconde && (
+                  <button onClick={() => { setBusqueda(''); setFechaDesde(''); setFechaHasta(''); setFiltro('PENDIENTE') }}
+                    className="btn-secondary text-sm px-4 py-2 mt-4">
+                    ✕ Quitar todos los filtros
+                  </button>
+                )}
               </div>
             ) : (
             <>
-            <div className="text-xs text-gray-600 mb-3">
-              {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
+            <div className="text-xs text-gray-600 mb-3 flex items-center justify-between gap-2">
+              <span>{hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`} · {totalItems} prenda(s)</span>
+              <span className="text-gray-500 flex-shrink-0">{ordenActual.corto} ↓</span>
             </div>
             <div className="space-y-3">
               {paginados.map(pedido => {
