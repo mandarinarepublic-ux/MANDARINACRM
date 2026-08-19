@@ -1325,3 +1325,36 @@ Queda para después, con el mismo patrón por familias (§3 del spec):
 - Agregados: **Tablero, Inicio, Calendario**.
 - El **peaje de corte** del tablero (columna Producción en cero).
 - La fuga de `/api/clientes?all=1` y el `?rol=ADMIN` de `/api/pedidos`.
+
+---
+
+## Verificado en producción — 19-ago-2026
+
+**Cadena de evidencia del despliegue** (no basta con un `● Ready`: ya hubo un
+redespliegue de código viejo que se veía igual de verde):
+
+| qué | cómo se comprobó | resultado |
+|---|---|---|
+| El commit está en `main` | `git status -sb` | `main...origin/main`, sin *ahead* |
+| Vercel construyó **ese** commit | `list_deployments` | `e86402e2` · `READY` · `target: production` |
+| **El dominio sirve ese despliegue** | los assets de `crm.apps.mandarinaec.com` llevan `?dpl=` | `dpl_FSJBzRaZmfys455mzcWMpEYgWevf` — el mismo id |
+
+⚠️ **Una señal que NO sirve, y casi la reporto como buena:** `/api/produccion`
+devuelve 401 en el dominio… pero `/api/produccion-inventado` **también**. El
+middleware intercepta todo `/api/*` antes de saber si la ruta existe, así que ese
+401 solo prueba que el middleware funciona, no que el endpoint esté desplegado.
+El control negativo lo cazó. La señal buena es el `?dpl=` de los assets.
+
+### Falta el paso 3: abrir la bandeja con la cuenta de David
+
+No se puede hacer sin sus credenciales. Queda pendiente comprobar:
+
+- [ ] `MAN-AND-5599` aparece con sus 2 camisetas de sublimación (Goku y Vegeta)
+- [ ] El número de pedidos coincide con `node scripts/test-bandeja-produccion.mjs`
+- [ ] No sale la franja roja
+- [ ] Cambiar de pestaña y volver refresca la lista
+
+### Y falta correr la reconciliación
+
+`node scripts/test-bandeja-produccion.mjs` necesita `SUPABASE_SERVICE_ROLE_KEY` en
+`.env.local`, que hoy está vacía (`vercel env pull` no trae los secretos).
