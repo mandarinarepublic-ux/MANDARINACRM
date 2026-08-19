@@ -44,6 +44,19 @@ export default function HistorialPage() {
         if (f.fechaHasta)   setFechaHasta(f.fechaHasta)
         if (f.fechaDesde || f.fechaHasta) setMostrarFecha(true)
       } catch (_) {}
+
+      // Un `?estado=` en la URL manda sobre lo que quedó guardado. Lo usa el
+      // enlace "Ver despachados" de la bandeja de Despacho: quien viene de ahí
+      // espera ver los despachados, no los filtros de su última visita.
+      //
+      // Se lee de window y no con useSearchParams a propósito: ese hook obliga a
+      // envolver la pantalla en <Suspense> o el build falla (ver la nota en
+      // app/dashboard/layout.js). Acá estamos dentro de un useEffect, que solo
+      // corre en el navegador, así que window siempre existe.
+      try {
+        const pedido = new URLSearchParams(window.location.search).get('estado')
+        if (pedido && ESTADOS.includes(pedido)) setFiltroEstado(pedido)
+      } catch (_) {}
     }
     loadPedidos(u)
     loadCotizaciones(u)

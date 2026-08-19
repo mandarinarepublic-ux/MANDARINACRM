@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
+import { estadoBandeja } from '@/lib/bandeja-estado'
+import { showToast } from '@/components/ToastHost'
 
 // Un pedido está CERRADO para despacho cuando alguien lo dio por salido:
 // COMPLETADO (guía registrada o cerrado a mano), ENTREGADO o CANCELADO.
@@ -72,12 +74,12 @@ export default function DespachosPage() {
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [mostrarFecha, setMostrarFecha] = useState(false)
-  const [tab, setTab] = useState('PENDIENTE')
   const [expandedPedidos, setExpandedPedidos] = useState(new Set())
   const [visibles, setVisibles] = useState(20)
   const PAGE_SIZE_D = 20
-
-  function handleTab(t) { setTab(t); setExpandedPedidos(new Set()); setVisibles(20) }
+  const [estado, setEstado] = useState('CARGANDO')
+  const [errorTexto, setErrorTexto] = useState('')
+  const [cerradosCount, setCerradosCount] = useState(null)
 
   useEffect(() => { setVisibles(20) }, [busqueda, fechaDesde, fechaHasta])
 
@@ -88,33 +90,21 @@ export default function DespachosPage() {
     loadPedidos()
   }, [])
 
-  async function loadPedidos(intentos = 0) {
-    setLoading(true)
+  async function loadPedidos() {
+    setLoading(true); setEstado('CARGANDO'); setErrorTexto('')
     try {
-      const res = await fetch('/api/pedidos?rol=ADMIN&_t=' + Date.now(), { cache: 'no-store' })
-      const data = await res.json()
-      // Si llega vacío y tenemos reintentos disponibles, volvemos a intentar
-      if (!data.pedidos?.length && intentos < 3) {
-        setTimeout(() => loadPedidos(intentos + 1), 1500)
+      // Solo lo que NO ha salido. Los cerrados se consultan en Historial: traerlos
+      // aca costaba 590 pedidos por carga y exponia la bandeja al tope de 1000.
+      const res = await fetch('/api/despacho', { cache: 'no-store' })
+      if (!res.ok) {
+        const detalle = await res.json().catch(() => ({}))
+        setErrorTexto(detalle.error || `HTTP ${res.status}`)
+        setPedidos([]); setEstado('ERROR')
         return
       }
-      // Entra TODO el pedido vivo, sin exigir que sus ítems estén en LISTO.
-      // Antes solo aparecían los EN_FABRICA con todos los ítems marcados LISTO, y
-      // como no todos los diseñadores los marcan, había pedidos ya terminados que
-      // nunca llegaban a esta pantalla. Un pedido se cierra por decisión de
-      // despacho, no por el estado de los botones de producción.
-      // Se traen TODOS: las pestañas separan pendientes de cerrados.
-      // Orden: del más ANTIGUO al más nuevo (FIFO) — se despacha primero lo que
-      // lleva más tiempo esperando.
-      // Primero los que la fábrica YA terminó, después los que siguen dentro.
-      //
-      // Los dos grupos se ven y los dos se pueden cerrar, igual que antes: a veces
-      // hay que dar por entregado algo que no pasó por el flujo (entrega en mano,
-      // taxi). Lo que cambia es que quien despacha ya no tiene que buscar sus 5
-      // pedidos listos entre 66 que siguen en producción.
-      //
-      // Dentro de cada grupo se mantiene el FIFO de siempre: primero lo que lleva
-      // más tiempo esperando.
+      const data = await res.json()
+      // Primero lo que la fabrica ya termino, despues lo que sigue dentro. Dentro
+      // de cada grupo, FIFO: primero lo que lleva mas esperando.
       const lista = (data.pedidos || [])
         .sort((a, b) => {
           const pa = prioridadDespacho(a), pb = prioridadDespacho(b)
@@ -124,14 +114,17 @@ export default function DespachosPage() {
           return (a.PEDIDO_ID || '').localeCompare(b.PEDIDO_ID || '')
         })
       setPedidos(lista)
+      setCerradosCount(data.meta?.cerrados ?? null)
+      setEstado(estadoBandeja({ ok: true, completo: data.meta?.completo, pedidos: lista }))
+    } catch (e) {
+      setErrorTexto(e?.message || 'Error de conexion')
+      setPedidos([]); setEstado('ERROR')
     } finally { setLoading(false) }
   }
 
   const hayFecha = fechaDesde || fechaHasta
 
   const filtered = pedidos.filter(p => {
-    if (tab === 'PENDIENTE' && esCerrado(p)) return false
-    if (tab === 'COMPLETADO' && !esCerrado(p)) return false
     if (busqueda && !coincideBusqueda(p, busqueda)) return false
     if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO), d = inicioDiaEcuador(fechaDesde); if (!f || (d && f < d)) return false }
     if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO), h = finDiaEcuador(fechaHasta); if (!f || (h && f > h)) return false }
@@ -153,10 +146,9 @@ export default function DespachosPage() {
   //
   // Los de fabrica siguen abajo, visibles, en su grupo — pero no son pendiente
   // suyo, porque no dependen de ella.
-  const listosCount = pedidos.filter(p => !esCerrado(p) && prioridadDespacho(p) === LISTO_PARA_SALIR).length
-  const enFabricaCount = pedidos.filter(p => !esCerrado(p) && prioridadDespacho(p) !== LISTO_PARA_SALIR).length
+  const listosCount = pedidos.filter(p => prioridadDespacho(p) === LISTO_PARA_SALIR).length
+  const enFabricaCount = pedidos.filter(p => prioridadDespacho(p) !== LISTO_PARA_SALIR).length
   const pendienteCount = listosCount
-  const completadoCount = pedidos.filter(p => esCerrado(p)).length
 
   async function handleFotoGuia(file) {
     if (!file) return
@@ -195,6 +187,7 @@ export default function DespachosPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { alert('Error: ' + (data.error || 'No se pudo cerrar el pedido')); return }
+      showToast(`✅ ${p.PEDIDO_ID} entregado`)
       await loadPedidos()
     } catch (e) {
       alert('Error de conexión: ' + (e?.message || e))
@@ -219,9 +212,9 @@ export default function DespachosPage() {
       })
       const data = await res.json()
       if (!res.ok) { alert('Error: ' + (data.error || 'No se pudo guardar')); return }
+      showToast(`✅ ${pedidoId} despachado con guía`)
       setSelectedPedido(null)
       setGuia({ numero: '', transportista: 'SERVIENTREGA', fotoBase64: null, fotoPreview: null })
-      handleTab('COMPLETADO')
       loadPedidos()
     } finally { setSaving(false); setSavingMsg('') }
   }
@@ -230,32 +223,26 @@ export default function DespachosPage() {
     <div className="flex flex-col h-screen md:h-auto">
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
         <div className="max-w-3xl mx-auto">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-display font-bold text-white">Despachos</h1>
-            <span className="text-xs text-gray-500">{pedidos.length} pedido(s)</span>
-          </div>
-
-          <div className="flex gap-2 mb-3">
-            <button onClick={() => handleTab('PENDIENTE')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all flex items-center justify-center gap-2
-                ${tab === 'PENDIENTE' ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' : 'border-gray-700 text-gray-500 hover:border-gray-600'}`}>
-              📦 Por despachar
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-display font-bold text-white">Despachos</h1>
               {pendienteCount > 0 && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'PENDIENTE' ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-gray-400'}`}>
+                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-yellow-500 text-black">
                   {pendienteCount}
                 </span>
               )}
-            </button>
-            <button onClick={() => handleTab('COMPLETADO')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all flex items-center justify-center gap-2
-                ${tab === 'COMPLETADO' ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'border-gray-700 text-gray-500 hover:border-gray-600'}`}>
-              ✅ Completados
-              {completadoCount > 0 && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'COMPLETADO' ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
-                  {completadoCount}
-                </span>
-              )}
-            </button>
+            </div>
+            {/* La pestaña "Completados" se fue a Historial, que es la pantalla
+                hecha para consultar el pasado. Traía 590 pedidos cerrados en cada
+                carga —969 kB para pintar 20— y, sobre todo, dejaba a Despacho
+                expuesto al tope de 1000 filas de PostgREST: el mismo que dejó 21
+                pedidos invisibles en Producción durante 14 días. `crm.pedidos` va
+                por 661 y cruza las 1000 en septiembre.
+                Trayendo solo lo vivo el problema no vuelve por construcción. */}
+            <Link href="/dashboard/historial?estado=COMPLETADO"
+              className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded-xl px-3 py-2 transition-all flex-shrink-0">
+              ✅ Ver despachados{cerradosCount != null ? ` (${cerradosCount})` : ''} →
+            </Link>
           </div>
 
           <div className="mb-2">
@@ -281,16 +268,27 @@ export default function DespachosPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
-          {loading ? (
+          {estado === 'CARGANDO' ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : filtered.length === 0 ? (
-            <div className="card p-8 text-center">
-              <div className="text-4xl mb-3">{tab === 'PENDIENTE' ? '✅' : '📦'}</div>
-              <div className="text-gray-400 font-medium">
-                {tab === 'PENDIENTE' ? '¡Todo despachado!' : 'No hay pedidos completados aún'}
+          ) : estado === 'ERROR' ? (
+            /* Un fallo NO es "todo despachado". Antes los dos se veían igual. */
+            <div className="card p-8 text-center border-red-500/40">
+              <div className="text-4xl mb-3">⚠️</div>
+              <div className="font-medium text-white">No se pudo cargar la bandeja</div>
+              <div className="text-sm text-gray-500 mt-1">{errorTexto}</div>
+              <div className="text-xs text-gray-600 mt-2">
+                No es que no haya nada que despachar: es que no pudimos leerlo.
               </div>
+              <button onClick={() => loadPedidos()} className="btn-primary text-sm px-4 py-2 mt-4">
+                Reintentar
+              </button>
+            </div>
+          ) : filtered.length === 0 && estado === 'VACIO' ? (
+            <div className="card p-8 text-center">
+              <div className="text-4xl mb-3">✅</div>
+              <div className="text-gray-400 font-medium">¡Todo despachado!</div>
             </div>
           ) : (
             <>
@@ -309,7 +307,7 @@ export default function DespachosPage() {
                 con todas las letras aunque abajo haya pedidos en producción: eso
                 es contexto, no trabajo suyo. Es el momento en que despacho sabe
                 que terminó. */}
-            {tab === 'PENDIENTE' && listosCount === 0 && (
+            {listosCount === 0 && (
               <div className="card p-6 text-center mb-3 border-green-500/30">
                 <div className="text-3xl mb-2">✅</div>
                 <div className="font-medium text-white">No hay nada por despachar</div>
@@ -325,7 +323,7 @@ export default function DespachosPage() {
                 const esCompletado = esCerrado(p)
                 // Encabezado al empezar cada grupo. Solo en "Por despachar":
                 // en Completados están todos cerrados y no hay dos grupos.
-                const abreGrupo = tab === 'PENDIENTE' &&
+                const abreGrupo =
                   (i === 0 || prioridadDespacho(paginados[i - 1]) !== prioridadDespacho(p))
                 const listo = prioridadDespacho(p) === LISTO_PARA_SALIR
                 const etiqueta = ESTADO_ETIQUETA[p.ESTADO_PEDIDO] ||
