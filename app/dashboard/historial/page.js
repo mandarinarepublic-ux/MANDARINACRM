@@ -3,14 +3,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
-import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, formatFechaCorta, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
-import { filtrarPedidosPorTienda } from '@/lib/tiendasUsuario'
 import { SkeletonList } from '@/components/Skeleton'
 import { imagenAncho } from '@/lib/imagenes'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
-const PAGE_SIZE = 30
 const LS_FILTROS = 'mp_historial_filtros_v2'
 
 export default function HistorialPage() {
@@ -26,7 +23,14 @@ export default function HistorialPage() {
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [mostrarFecha, setMostrarFecha] = useState(false)
-  const [visibles, setVisibles] = useState(PAGE_SIZE)
+  const [paginaActual, setPaginaActual] = useState(0)
+  const [hayMasPaginas, setHayMasPaginas] = useState(false)
+  const [totalServidor, setTotalServidor] = useState(null)
+  const [cargandoMas, setCargandoMas] = useState(false)
+  // CARGANDO | ERROR | VACIO | LISTA. Antes solo había `loading`, y "vacío"
+  // significaba tanto "no hay nada" como "no se pudo leer".
+  const [estado, setEstado] = useState('CARGANDO')
+  const [errorTexto, setErrorTexto] = useState('')
   const [expandedPedidos, setExpandedPedidos] = useState(new Set())
   const [filtroPago, setFiltroPago] = useState('TODOS')
 
@@ -58,7 +62,9 @@ export default function HistorialPage() {
         if (pedido && ESTADOS.includes(pedido)) setFiltroEstado(pedido)
       } catch (_) {}
     }
-    loadPedidos(u)
+    // Los pedidos NO se piden acá: los dispara el efecto de los filtros en
+    // cuanto `user` deja de ser null. Llamarlos también aquí traería la primera
+    // página dos veces, y con los filtros todavía sin restaurar del localStorage.
     loadCotizaciones(u)
   }, [])
 
@@ -82,50 +88,64 @@ export default function HistorialPage() {
     return () => clearTimeout(t)
   }, [busqueda])
 
-  useEffect(() => { setVisibles(PAGE_SIZE) }, [busquedaDebounced, filtroEstado, filtroTienda, filtroPago, fechaDesde, fechaHasta])
+  // Cada filtro dispara una consulta nueva y vuelve a la primera página. Antes
+  // se traían los 680 pedidos y se filtraba en el navegador.
+  useEffect(() => {
+    if (!user) return
+    cargarPagina(0, true)
+  }, [user, busquedaDebounced, filtroEstado, filtroTienda, filtroPago, fechaDesde, fechaHasta])
 
-  async function loadPedidos(u, intentos = 0) {
-    setLoading(true)
+  /**
+   * Trae UNA página del historial ya filtrada por el servidor.
+   *
+   * `reemplazar` distingue "cambiaste un filtro" (se pinta de cero) de "diste a
+   * cargar más" (se agrega abajo).
+   */
+  async function cargarPagina(pag, reemplazar) {
+    if (reemplazar) { setLoading(true); setEstado('CARGANDO') } else { setCargandoMas(true) }
+    setErrorTexto('')
     try {
-      // Un VENDEDOR solo ve sus propias ventas (filtro server-side scope=mios,
-      // igual que Mis Pedidos y que las cotizaciones). ADMIN y los roles de
-      // fábrica/despacho necesitan verlo todo para trabajar.
-      const query = u.rol === 'VENDEDOR'
-        ? `vendedor=${encodeURIComponent(u.nombre || u.id)}&vendedorId=${encodeURIComponent(u.id)}&rol=VENDEDOR&scope=mios`
-        : 'rol=ADMIN'
-      const res = await fetch(`/api/pedidos?${query}&_t=` + Date.now(), { cache: 'no-store' })
-      const data = await res.json()
-      if (!data.pedidos?.length && intentos < 3) {
-        setTimeout(() => loadPedidos(u, intentos + 1), 1500)
+      // NO se manda `rol`: el alcance de cada quien (un VENDEDOR solo lo suyo,
+      // YAW solo su tienda, las tiendas asignadas) lo aplica el servidor contra
+      // la cookie firmada. Acá solo viajan los filtros de la pantalla.
+      const q = new URLSearchParams({ pagina: String(pag) })
+      if (filtroEstado !== 'TODOS')  q.set('estado', filtroEstado)
+      if (filtroTienda !== 'TODAS')  q.set('tienda', filtroTienda)
+      if (filtroPago !== 'TODOS')    q.set('pago', filtroPago)
+      if (busquedaDebounced.trim())  q.set('q', busquedaDebounced.trim())
+      if (fechaDesde) { const d = inicioDiaEcuador(fechaDesde); if (d) q.set('desde', d.toISOString()) }
+      if (fechaHasta) { const h = finDiaEcuador(fechaHasta);    if (h) q.set('hasta', h.toISOString()) }
+
+      const res = await fetch(`/api/historial?${q}`, { cache: 'no-store' })
+      if (!res.ok) {
+        const detalle = await res.json().catch(() => ({}))
+        setErrorTexto(detalle.error || `HTTP ${res.status}`)
+        if (reemplazar) setPedidos([])
+        setEstado('ERROR')
         return
       }
-      let lista = data.pedidos || []
-      if (u.rol === 'VENDEDOR_YAW') lista = lista.filter(p => p.TIENDA_ID === 'YAW')
-      // Acceso por tienda: un vendedor solo ve las tiendas que tiene asignadas
-      // en Usuarios (ADMIN y los roles de fábrica no se filtran).
-      lista = filtrarPedidosPorTienda(u, lista)
-      lista = lista.sort((a, b) => {
-        const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
-        const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
-        if (fb - fa !== 0) return fb - fa
-        return (b.PEDIDO_ID || '').localeCompare(a.PEDIDO_ID || '')
-      })
-      setPedidos(lista)
-    } finally { setLoading(false) }
+      const data = await res.json()
+      const lista = data.pedidos || []
+      setPedidos(prev => (reemplazar ? lista : [...prev, ...lista]))
+      setPaginaActual(data.pagina ?? pag)
+      setHayMasPaginas(!!data.hayMas)
+      setTotalServidor(typeof data.total === 'number' ? data.total : null)
+      setEstado(lista.length === 0 && reemplazar ? 'VACIO' : 'LISTA')
+    } catch (e) {
+      // Una respuesta que no es JSON también es un fallo, no una lista vacía.
+      setErrorTexto(e?.message || 'Error de conexión')
+      if (reemplazar) setPedidos([])
+      setEstado('ERROR')
+    } finally { setLoading(false); setCargandoMas(false) }
   }
 
   const isYAW = user?.rol === 'VENDEDOR_YAW'
   const hayFecha = fechaDesde || fechaHasta
 
-  const filtered = pedidos.filter(p => {
-    if (filtroEstado !== 'TODOS' && p.ESTADO_PEDIDO !== filtroEstado) return false
-    if (!isYAW && filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
-    if (filtroPago !== 'TODOS' && p.ESTADO_PAGO !== filtroPago) return false
-    if (busquedaDebounced && !coincideBusqueda(p, busquedaDebounced)) return false
-    if (fechaDesde) { const f = parseFecha(p.FECHA_PEDIDO), d = inicioDiaEcuador(fechaDesde); if (!f || (d && f < d)) return false }
-    if (fechaHasta) { const f = parseFecha(p.FECHA_PEDIDO), h = finDiaEcuador(fechaHasta); if (!f || (h && f > h)) return false }
-    return true
-  })
+  // Ya viene filtrado por el servidor: estado, tienda, pago, fechas, búsqueda y
+  // el alcance del rol. Volver a filtrar acá solo podría ESCONDER de más — y
+  // sobre una página de 30, escondería justo lo que el servidor decidió mostrar.
+  const filtered = pedidos
 
   // Cotizaciones (aparte de producción): se muestran solo cuando el filtro es
   // TODOS o COTIZACIÓN, y sin filtro de pago (no aplican estados/pago de pedido).
@@ -146,13 +166,16 @@ export default function HistorialPage() {
   })
 
   // Lista combinada (pedido | cotizacion) ordenada por fecha desc.
-  const combinados = [
+  //
+  // Las cotizaciones siguen viniendo enteras y se mezclan acá: hay UNA en toda
+  // la base. Si algún día fueran cientos habría que paginarlas también, pero
+  // montar eso hoy sería resolver un problema que no existe.
+  const paginados = [
     ...filtered.map(p => ({ _tipo: 'pedido', _fecha: parseFecha(p.FECHA_PEDIDO) || new Date(0), p })),
     ...filteredCot.map(c => ({ _tipo: 'cotizacion', _fecha: new Date(c.created_at || c.fecha) || new Date(0), c })),
   ].sort((a, b) => b._fecha - a._fecha)
 
-  const paginados = combinados.slice(0, visibles)
-  const hayMas = combinados.length > visibles
+  const hayMas = hayMasPaginas
 
   function expandirTodos() { setExpandedPedidos(new Set(paginados.filter(x => x._tipo === 'pedido').map(x => x.p.PEDIDO_ID))) }
   function contraerTodos()  { setExpandedPedidos(new Set()) }
@@ -239,12 +262,14 @@ export default function HistorialPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between mb-3">
+            {/* El total lo cuenta la BASE, no la página: antes decía "30 de 30"
+                porque solo había traído 30. */}
             <div className="text-xs text-gray-600">
               {loading
                 ? 'Cargando...'
-                : hayMas
-                  ? `Mostrando ${paginados.length} de ${combinados.length} registro(s)`
-                  : `${combinados.length} registro(s)`}
+                : totalServidor !== null
+                  ? `Mostrando ${filtered.length} de ${totalServidor} pedido(s)`
+                  : `${paginados.length} registro(s)`}
             </div>
             {!loading && filtered.length > 0 && (
               <div className="flex gap-2">
@@ -257,7 +282,20 @@ export default function HistorialPage() {
           </div>
           {loading ? (
             <SkeletonList count={6} />
-          ) : combinados.length === 0 ? (
+          ) : estado === 'ERROR' ? (
+            /* Un fallo NO es "no hay registros". Antes los dos se veían igual, y
+               encima había 3 reintentos silenciosos que convertían el error en
+               una espera larga y después en una lista vacía. */
+            <div className="card p-8 text-center border-red-500/40">
+              <div className="text-4xl mb-3">⚠️</div>
+              <div className="font-medium text-white">No se pudo cargar el historial</div>
+              <div className="text-sm text-gray-500 mt-1">{errorTexto}</div>
+              <div className="text-xs text-gray-600 mt-2">No es que no haya nada: es que no pudimos leerlo.</div>
+              <button onClick={() => cargarPagina(0, true)} className="btn-primary text-sm px-4 py-2 mt-4">
+                Reintentar
+              </button>
+            </div>
+          ) : paginados.length === 0 ? (
             <div className="card p-8 text-center text-gray-600"><div className="text-3xl mb-3">📭</div>No hay registros con estos filtros</div>
           ) : (
             <>
@@ -365,11 +403,16 @@ export default function HistorialPage() {
                   )
                 })}
               </div>
+              {/* Trae la SIGUIENTE página de la base, no recorta una lista que
+                  ya estaba entera en el navegador. */}
               {hayMas && (
                 <button
-                  onClick={() => setVisibles(v => v + PAGE_SIZE)}
-                  className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
-                  Cargar más ({combinados.length - visibles} restantes)
+                  onClick={() => cargarPagina(paginaActual + 1, false)}
+                  disabled={cargandoMas}
+                  className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all disabled:opacity-50">
+                  {cargandoMas
+                    ? 'Cargando...'
+                    : `Cargar más${totalServidor !== null ? ` (${Math.max(0, totalServidor - filtered.length)} restantes)` : ''}`}
                 </button>
               )}
             </>
