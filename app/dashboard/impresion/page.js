@@ -82,15 +82,25 @@ export default function ImpresionPage() {
         return String(a.PEDIDO_ID).localeCompare(String(b.PEDIDO_ID))
       })
       setPedidos(enFabrica)
-      // UNA sola lectura de toda la hoja CLIENTES. Antes se hacía un fetch por
-      // pedido en paralelo (hasta 30), lo que saturaba Google Sheets (429) y
-      // dejaba pedidos sin la sección de datos del cliente de forma aleatoria.
-      const r = await fetch('/api/clientes?all=1')
-      if (!r.ok) throw new Error(`No se pudieron cargar los clientes (HTTP ${r.status})`)
-      const d = await r.json()
+      // Solo los clientes de ESTOS pedidos, no la agenda entera.
+      //
+      // Antes se hacía un fetch por pedido en paralelo (hasta 30), lo que
+      // saturaba Google Sheets (429) y dejaba pedidos sin la sección de datos
+      // del cliente de forma aleatoria. La cura fue `?all=1`, que traía los 900
+      // con cédula: se pasó de un extremo al otro. Ahora se piden por id, en
+      // tandas, que es una sola lectura por tanda y nada de más.
+      const idsUnicos = [...new Set(enFabrica.map(p => p.CLIENTE_ID).filter(Boolean))]
       const map = {}
-      for (const c of (d.clientes || [])) {
-        if (c.CLIENTE_ID) map[c.CLIENTE_ID] = c
+      // ⚠️ En tandas de 100: los ids viajan en la URL y con cientos se pasa del
+      // largo que aguanta una petición GET.
+      for (let i = 0; i < idsUnicos.length; i += 100) {
+        const tanda = idsUnicos.slice(i, i + 100)
+        const r = await fetch(`/api/clientes?ids=${encodeURIComponent(tanda.join(','))}`)
+        if (!r.ok) throw new Error(`No se pudieron cargar los clientes (HTTP ${r.status})`)
+        const d = await r.json()
+        for (const c of (d.clientes || [])) {
+          if (c.CLIENTE_ID) map[c.CLIENTE_ID] = c
+        }
       }
       setClientesMap(map)
       return enFabrica   // el llamador puede verificar contra datos frescos
