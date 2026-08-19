@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, diasHastaEntrega, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
-import { filtrarPedidosPorTienda } from '@/lib/tiendasUsuario'
 
 // ─── Constantes de etapa ───────────────────────────────────────────────────────
 // El flujo físico de una prenda: ✂️ CORTE → 🏭 PRODUCCIÓN → 🚚 DESPACHO
@@ -105,7 +104,18 @@ function clasificarPedido(p) {
   if (estado === 'COMPLETADO' || estado === 'DESPACHO' || estado === 'ENTREGADO') {
     return { etapa: 'DESPACHO', sub: 'DESPACHADO' }
   }
-  if (activos.length === 0) return null
+
+  // ☠️ Un pedido SIN prendas que fabricar ya NO devuelve null.
+  //
+  // Devolver null lo borraba del tablero entero: `.filter(x => x.clasif)`. Y no
+  // son casos raros — son los pedidos cuyas prendas van todas por ENTREGA EN
+  // TIENDA. Medido el 19-ago-2026: MAN-JAC-5681 (de hoy), MAN-JAC-5677 y
+  // MAN-JAC-5609 estaban vivos, en EN_FABRICA, y no aparecían en ninguna parte.
+  //
+  // No hay nada que cortar ni que producir: lo único pendiente es entregarlos,
+  // así que van a DESPACHO. Es la misma familia del bug de `.filter(items > 0)`
+  // de Producción: sin prendas NO significa que no pase nada.
+  if (activos.length === 0) return { etapa: 'DESPACHO', sub: 'LISTO' }
 
   const etapasItems = activos.map(etapaItem)
   if (etapasItems.some(e => e === 'CORTE')) return { etapa: 'CORTE', sub: 'EN_CORTE' }
@@ -290,6 +300,11 @@ export default function TableroPage() {
   const [entregaDesde, setEntregaDesde] = useState('')
   const [entregaHasta, setEntregaHasta] = useState('')
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
+  // CARGANDO | ERROR | INCOMPLETO | LISTA. Antes solo había `loading`, y un
+  // fallo se veía igual que un tablero sin trabajo pendiente.
+  const [estado, setEstado] = useState('CARGANDO')
+  const [errorTexto, setErrorTexto] = useState('')
+  const [cerradosCount, setCerradosCount] = useState(null)
 
   const filtrosFechaActivos = [creacionDesde, creacionHasta, entregaDesde, entregaHasta].filter(Boolean).length
   function limpiarFechas() { setCreacionDesde(''); setCreacionHasta(''); setEntregaDesde(''); setEntregaHasta('') }
@@ -299,23 +314,38 @@ export default function TableroPage() {
     if (!stored) { router.push('/'); return }
     const u = JSON.parse(stored)
     setUser(u)
-    loadPedidos()
   }, [])
 
-  const loadPedidos = useCallback(async (intentos = 0) => {
-    setLoading(true)
+  // El interruptor "Ver despachados" ahora cambia lo que se PIDE, no lo que se
+  // esconde: por eso recarga.
+  useEffect(() => { loadPedidos() }, [loadPedidos])
+
+  const loadPedidos = useCallback(async () => {
+    setLoading(true); setEstado('CARGANDO'); setErrorTexto('')
     try {
-      const res = await fetch('/api/pedidos?rol=ADMIN&_t=' + Date.now(), { cache: 'no-store' })
-      const data = await res.json()
-      if (!data.pedidos?.length && intentos < 3) {
-        setTimeout(() => loadPedidos(intentos + 1), 1500)
+      // Solo lo VIVO. Antes traía los 680 con sus cinco tablas y el navegador
+      // descartaba 590 porque "Ver despachados" arranca apagado: el 87% del
+      // peso viajaba para ser tirado.
+      //
+      // NO se manda `rol=ADMIN`: el acceso por tienda lo aplica el servidor
+      // contra la cookie firmada.
+      const res = await fetch(`/api/tablero${incluirDespachados ? '?cerrados=1' : ''}`, { cache: 'no-store' })
+      if (!res.ok) {
+        const detalle = await res.json().catch(() => ({}))
+        setErrorTexto(detalle.error || `HTTP ${res.status}`)
+        setPedidos([]); setEstado('ERROR')
         return
       }
-      // Acceso por tienda: solo afecta a los roles de venta (ver lib/tiendasUsuario).
-      const u = JSON.parse(localStorage.getItem('mp_user') || '{}')
-      setPedidos(filtrarPedidosPorTienda(u, data.pedidos || []))
+      const data = await res.json()
+      setPedidos(data.pedidos || [])
+      setCerradosCount(typeof data.cerrados === 'number' ? data.cerrados : null)
+      setEstado(data.completo === false ? 'INCOMPLETO' : 'LISTA')
+    } catch (e) {
+      // Una respuesta que no es JSON también es un fallo, no un tablero vacío.
+      setErrorTexto(e?.message || 'Error de conexión')
+      setPedidos([]); setEstado('ERROR')
     } finally { setLoading(false) }
-  }, [])
+  }, [incluirDespachados])
 
   // ¿La prenda tiene trabajo PENDIENTE (no LISTO) en el área de producción dada?
   const itemPendienteEnArea = (i, area) => {
@@ -546,8 +576,28 @@ export default function TableroPage() {
             <div className="flex justify-center py-16">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
             </div>
+          ) : estado === 'ERROR' ? (
+            /* Un fallo NO es un tablero sin trabajo. Antes los dos se veían
+               igual, con 3 reintentos silenciosos de por medio. */
+            <div className="card p-8 text-center border-red-500/40">
+              <div className="text-4xl mb-3">⚠️</div>
+              <div className="font-medium text-white">No se pudo cargar el tablero</div>
+              <div className="text-sm text-gray-500 mt-1">{errorTexto}</div>
+              <div className="text-xs text-gray-600 mt-2">No es que no haya trabajo: es que no pudimos leerlo.</div>
+              <button onClick={() => loadPedidos()} className="btn-primary text-sm px-4 py-2 mt-4">Reintentar</button>
+            </div>
           ) : (
             <>
+              {estado === 'INCOMPLETO' && (
+                <div className="bg-red-500/10 border border-red-500/40 rounded-xl p-3 mb-4 flex items-center gap-3">
+                  <span className="text-xl">🚨</span>
+                  <div className="flex-1">
+                    <div className="text-red-400 font-semibold text-sm">Este tablero está incompleto</div>
+                    <div className="text-xs text-gray-400">Faltan pedidos por cargar. No te fíes de los conteos.</div>
+                  </div>
+                  <button onClick={() => loadPedidos()} className="btn-secondary text-xs px-3 py-2 flex-shrink-0">⟳ Recargar</button>
+                </div>
+              )}
               {/* Pendientes por área — resumen + filtro (clic para enfocar un área) */}
               <div className="card p-3 mb-4">
                 <div className="flex items-center justify-between mb-2">
