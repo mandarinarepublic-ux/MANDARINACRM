@@ -541,6 +541,18 @@ export default function ProduccionPage() {
                 ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
                 value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
             </div>
+            {/* Expandir/Contraer viven acá, en la cabecera fija, y no abajo con la
+                lista: allí se iban con el scroll y había que subir hasta arriba
+                para contraer lo que acababas de abrir. */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Ver</span>
+              <div className="flex gap-2">
+                <button onClick={expandirTodos}
+                  className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊞ Expandir</button>
+                <button onClick={contraerTodos}
+                  className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊟ Contraer</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -590,16 +602,10 @@ export default function ProduccionPage() {
                 </button>
               </div>
             )}
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs text-gray-600">
-                {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={expandirTodos}
-                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊞ Expandir</button>
-                <button onClick={contraerTodos}
-                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊟ Contraer</button>
-              </div>
+            {/* Expandir/Contraer se subieron a la cabecera fija, junto a los
+                filtros: acá abajo se iban con el scroll. */}
+            <div className="text-xs text-gray-600 mb-3">
+              {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
             </div>
             <div className="space-y-3">
               {paginados.map(pedido => {
