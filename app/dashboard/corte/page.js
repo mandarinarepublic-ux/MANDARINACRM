@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, diasHastaEntrega, formatFechaDia } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
+import { estadoBandeja } from '@/lib/bandeja-estado'
 
 const CORTE_CONFIG = {
   PENDIENTE:   { label: '✂️ Pendiente',  color: 'bg-gray-600' },
@@ -132,6 +133,11 @@ export default function CortePage() {
   const [expandedPedido, setExpandedPedido] = useState(null)
   const [visibles, setVisibles] = useState(20)
   const PAGE_SIZE_C = 20
+  // CARGANDO | ERROR | INCOMPLETO | VACIO | LISTA. Antes solo había `loading`, y
+  // "sin ítems en este estado" significaba cinco cosas distintas — entre ellas
+  // "la consulta falló" y "PostgREST cortó la lista en 1000".
+  const [estado, setEstado] = useState('CARGANDO')
+  const [errorTexto, setErrorTexto] = useState('')
 
   useEffect(() => { setVisibles(20) }, [busqueda, filtro])
 
@@ -145,25 +151,47 @@ export default function CortePage() {
   }, [])
 
   const loadItems = useCallback(async () => {
-    setLoading(true)
+    setLoading(true); setEstado('CARGANDO'); setErrorTexto('')
     try {
-      const res = await fetch('/api/pedidos?rol=ADMIN')
+      // El servidor ya filtra por EN_FABRICA y ya excluye lo eliminado y lo de
+      // entrega en tienda (vista `prendas_en_taller`). Acá NO se vuelve a
+      // filtrar, y NO se manda `?rol=`: eso lo decidía el navegador.
+      //
+      // Corte NO se reparte por área: ve todas las prendas de la fábrica.
+      const res = await fetch('/api/corte', { cache: 'no-store' })
+      if (!res.ok) {
+        const detalle = await res.json().catch(() => ({}))
+        setErrorTexto(detalle.error || `HTTP ${res.status}`)
+        setPedidos([]); setEstado('ERROR')
+        return
+      }
       const data = await res.json()
-      const resultado = (data.pedidos || [])
-        .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA')
+      // FIFO: lo que lleva más esperando se corta primero.
+      const lista = (data.pedidos || [])
         .sort((a, b) => {
           const diff = (parseFecha(a.FECHA_PEDIDO)||new Date(0)) - (parseFecha(b.FECHA_PEDIDO)||new Date(0))
           if (diff !== 0) return diff
           return (a.PEDIDO_ID || '').localeCompare(b.PEDIDO_ID || '')
         })
-        .map(p => ({
-          ...p,
-          itemsFiltrados: (p.items || []).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
-        }))
-        .filter(p => p.itemsFiltrados.length > 0)
-      setPedidos(resultado)
+        .map(p => ({ ...p, itemsFiltrados: p.items || [] }))
+      setPedidos(lista)
+      setEstado(estadoBandeja({ ok: true, completo: data.meta?.completo, pedidos: lista }))
+    } catch (e) {
+      // Una respuesta que no es JSON también es un fallo, no una lista vacía.
+      setErrorTexto(e?.message || 'Error de conexión')
+      setPedidos([]); setEstado('ERROR')
     } finally { setLoading(false) }
   }, [])
+
+  // Refresco al volver a la pestaña: el taller mira el móvil a ratos y la
+  // bandeja cargaba UNA sola vez al abrirse.
+  useEffect(() => {
+    function alVolver() {
+      if (document.visibilityState === 'visible') loadItems()
+    }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => document.removeEventListener('visibilitychange', alVolver)
+  }, [loadItems])
 
   function handleCorteChange(itemId, nuevoEstado) {
     setPedidos(prev => prev.map(p => ({
@@ -180,6 +208,12 @@ export default function CortePage() {
     return acc
   }, {})
 
+  // Lo que de verdad le falta cortar a corte. El encabezado contaba TODOS los
+  // ítems en fábrica, cortados incluidos: el número nunca bajaba por más que se
+  // trabajara, así que la bandeja no podía llegar a cero y no informaba de nada.
+  const porCortar = (contadores.PENDIENTE || 0) + (contadores.SOLICITADO || 0)
+  const yaCortados = contadores.CORTADO || 0
+
   const filtered = pedidos.map(p => ({
     ...p,
     itemsFiltrados: p.itemsFiltrados.filter(i => {
@@ -189,7 +223,10 @@ export default function CortePage() {
         i.PRODUCTO_NOMBRE?.toLowerCase().includes(busqueda.toLowerCase())
       return matchF && matchB
     })
-  })).filter(p => p.itemsFiltrados.length > 0)
+    // Un pedido sin ítems en este filtro no interesa — PERO uno al que le
+    // faltaron prendas por cargar sí, aunque llegue vacío: es justo el que no
+    // hay que esconder. Esa es la diferencia entre "no aplica" y "no se leyó".
+  })).filter(p => p.itemsFiltrados.length > 0 || p.COMPLETO === false)
 
   const totalItems = filtered.reduce((s, p) => s + p.itemsFiltrados.length, 0)
   const paginados = filtered.slice(0, visibles)
@@ -203,8 +240,14 @@ export default function CortePage() {
             <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-white p-1 text-lg">←</button>
             <div className="flex-1">
               <h1 className="text-xl font-display font-bold text-white">✂️ Corte de Tela</h1>
-              <p className="text-xs text-gray-500">{totalItems} ítem(s)</p>
+              <p className="text-xs text-gray-500">
+                {porCortar} por cortar
+                {yaCortados > 0 && ` · ${yaCortados} ya cortada(s)`}
+                {filtro !== 'TODOS' && ` · viendo ${totalItems}`}
+              </p>
             </div>
+            <button onClick={() => loadItems()} title="Actualizar"
+              className="text-gray-500 hover:text-white text-lg px-2 py-1 flex-shrink-0">⟳</button>
           </div>
 
           <input className="input w-full mb-3" placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
@@ -232,17 +275,60 @@ export default function CortePage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
-          {loading ? (
+          {estado === 'CARGANDO' ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : filtered.length === 0 ? (
+          ) : estado === 'ERROR' ? (
+            /* Un fallo NO es "no hay nada que cortar". Antes los dos se veían igual. */
+            <div className="card p-8 text-center border-red-500/40">
+              <div className="text-4xl mb-3">⚠️</div>
+              <div className="font-medium text-white">No se pudo cargar la bandeja</div>
+              <div className="text-sm text-gray-500 mt-1">{errorTexto}</div>
+              <div className="text-xs text-gray-600 mt-2">
+                No es que no haya nada que cortar: es que no pudimos leerlo.
+              </div>
+              <button onClick={() => loadItems()} className="btn-primary text-sm px-4 py-2 mt-4">
+                Reintentar
+              </button>
+            </div>
+          ) : filtered.length === 0 && estado === 'VACIO' ? (
             <div className="card p-8 text-center">
-              <div className="text-4xl mb-3">✂️</div>
-              <div className="font-medium text-white">Sin ítems en este estado</div>
+              <div className="text-4xl mb-3">✅</div>
+              <div className="font-medium text-white">No hay tela por cortar</div>
+              <div className="text-sm text-gray-500 mt-1">Todo al día</div>
             </div>
           ) : (
             <>
+            {estado === 'INCOMPLETO' && (
+              <div className="bg-red-500/10 border border-red-500/40 rounded-xl p-3 mb-4 flex items-center gap-3">
+                <span className="text-xl">🚨</span>
+                <div className="flex-1">
+                  <div className="text-red-400 font-semibold text-sm">Esta lista está incompleta</div>
+                  <div className="text-xs text-gray-400">Faltan pedidos por cargar. No te fíes de lo que ves.</div>
+                </div>
+                <button onClick={() => loadItems()} className="btn-secondary text-xs px-3 py-2 flex-shrink-0">
+                  ⟳ Recargar
+                </button>
+              </div>
+            )}
+            {/* Con el filtro en PENDIENTE, quedarse sin nada es la buena noticia:
+                se dice con todas las letras en vez de "sin ítems en este estado". */}
+            {filtered.length === 0 ? (
+              <div className="card p-8 text-center">
+                <div className="text-4xl mb-3">{porCortar === 0 ? '✅' : '🔎'}</div>
+                <div className="font-medium text-white">
+                  {porCortar === 0 ? 'No hay tela por cortar' : 'Nada con este filtro'}
+                </div>
+                <div className="text-sm text-gray-500 mt-1">
+                  {porCortar === 0 ? 'Todo al día' : `Quedan ${porCortar} prenda(s) por cortar en otro estado`}
+                </div>
+              </div>
+            ) : (
+            <>
+            <div className="text-xs text-gray-600 mb-3">
+              {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
+            </div>
             <div className="space-y-3">
               {paginados.map(pedido => {
                 const diasR = diasHastaEntrega(pedido.FECHA_ENTREGA_PROMETIDA)
@@ -254,13 +340,38 @@ export default function CortePage() {
                     <button onClick={() => setExpandedPedido(isExpanded ? null : pedido.PEDIDO_ID)}
                       className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <Link href={`/dashboard/pedido/${pedido.PEDIDO_ID}`} onClick={e => e.stopPropagation()}
                             className="font-mono text-sm font-medium text-mandarina-400 hover:underline">
                             {pedido.PEDIDO_ID}
                           </Link>
                           {urgente && <span className="badge bg-red-500/20 text-red-400 text-xs">🚨 Urgente</span>}
                           <span className="text-xs text-gray-600">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
+                          {/* A este pedido le faltaron prendas por cargar. Antes se
+                              escondía el pedido entero; ahora se enseña con la
+                              salida al lado.
+                              ⚠️ La condición es COMPLETO === false, NUNCA
+                              itemsFiltrados.length === 0: con el filtro puesto en
+                              CORTADO, casi todos los pedidos sanos llegan a cero. */}
+                          {pedido.COMPLETO === false && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                // /api/pedidos/{id} trae UN pedido: sus prendas no
+                                // pueden truncarse.
+                                const r = await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`)
+                                if (!r.ok) return
+                                const d = await r.json()
+                                const todas = (d.pedido?.items || [])
+                                  .filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
+                                setPedidos(prev => prev.map(x => x.PEDIDO_ID === pedido.PEDIDO_ID
+                                  ? { ...x, itemsFiltrados: todas, PRENDAS_LLEGARON: todas.length, COMPLETO: true }
+                                  : x))
+                              }}
+                              className="badge bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30">
+                              ⟳ Cargar las {Math.max(0, (pedido.PRENDAS_TOTAL ?? 0) - (pedido.PRENDAS_LLEGARON ?? 0))} prendas que faltan
+                            </button>
+                          )}
                           {/* Estado corte: resumen + dots */}
                           <div className="flex items-center gap-1.5 ml-auto flex-wrap justify-end max-w-[55%]">
                             <span className="text-xs font-medium text-gray-400">
@@ -303,6 +414,8 @@ export default function CortePage() {
                 className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
                 Cargar más ({filtered.length - visibles} restantes)
               </button>
+            )}
+            </>
             )}
             </>
           )}
