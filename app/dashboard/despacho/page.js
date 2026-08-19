@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
@@ -15,6 +15,18 @@ import { imagenAncho } from '@/lib/imagenes'
 // nadie lo despachara: había 225 pedidos así, ninguno con guía.
 const ESTADOS_CERRADOS = ['COMPLETADO', 'ENTREGADO', 'CANCELADO']
 const esCerrado = (p) => ESTADOS_CERRADOS.includes(p?.ESTADO_PEDIDO)
+
+// Orden dentro de "Por despachar": primero lo que la fábrica terminó.
+//
+// La pestaña trae TODO lo vivo (ver la nota de arriba: si solo mostrara lo
+// terminado, un pedido que producción no marcó LISTO nunca llegaría acá). Pero
+// mezclados, los 5 que de verdad están listos se pierden entre los 66 que siguen
+// en producción. Se ordenan, no se esconden.
+const LISTO_PARA_SALIR = 0
+const SIGUE_EN_FABRICA = 1
+function prioridadDespacho(p) {
+  return p?.ESTADO_PEDIDO === 'DESPACHO' ? LISTO_PARA_SALIR : SIGUE_EN_FABRICA
+}
 
 const ESTADO_ETIQUETA = {
   PENDIENTE_FABRICA: { txt: '⏳ Pend. fábrica', cls: 'bg-gray-500/20 text-gray-400' },
@@ -94,8 +106,19 @@ export default function DespachosPage() {
       // Se traen TODOS: las pestañas separan pendientes de cerrados.
       // Orden: del más ANTIGUO al más nuevo (FIFO) — se despacha primero lo que
       // lleva más tiempo esperando.
+      // Primero los que la fábrica YA terminó, después los que siguen dentro.
+      //
+      // Los dos grupos se ven y los dos se pueden cerrar, igual que antes: a veces
+      // hay que dar por entregado algo que no pasó por el flujo (entrega en mano,
+      // taxi). Lo que cambia es que quien despacha ya no tiene que buscar sus 5
+      // pedidos listos entre 66 que siguen en producción.
+      //
+      // Dentro de cada grupo se mantiene el FIFO de siempre: primero lo que lleva
+      // más tiempo esperando.
       const lista = (data.pedidos || [])
         .sort((a, b) => {
+          const pa = prioridadDespacho(a), pb = prioridadDespacho(b)
+          if (pa !== pb) return pa - pb
           const diff = (parseFecha(a.FECHA_PEDIDO)||new Date(0)) - (parseFecha(b.FECHA_PEDIDO)||new Date(0))
           if (diff !== 0) return diff
           return (a.PEDIDO_ID || '').localeCompare(b.PEDIDO_ID || '')
@@ -272,8 +295,13 @@ export default function DespachosPage() {
               </div>
             </div>
             <div className="space-y-2">
-              {paginados.map(p => {
+              {paginados.map((p, i) => {
                 const esCompletado = esCerrado(p)
+                // Encabezado al empezar cada grupo. Solo en "Por despachar":
+                // en Completados están todos cerrados y no hay dos grupos.
+                const abreGrupo = tab === 'PENDIENTE' &&
+                  (i === 0 || prioridadDespacho(paginados[i - 1]) !== prioridadDespacho(p))
+                const listo = prioridadDespacho(p) === LISTO_PARA_SALIR
                 const etiqueta = ESTADO_ETIQUETA[p.ESTADO_PEDIDO] ||
                   { txt: p.ESTADO_PEDIDO, cls: 'bg-gray-500/20 text-gray-400' }
                 const montoTotal = parseFloat(p.MONTO_TOTAL || 0)
@@ -282,7 +310,19 @@ export default function DespachosPage() {
                 const isExpanded = expandedPedidos.has(p.PEDIDO_ID)
 
                 return (
-                  <div key={p.PEDIDO_ID}
+                  <Fragment key={p.PEDIDO_ID}>
+                  {abreGrupo && (
+                    <div className={`flex items-center gap-2 pt-3 pb-1 ${i === 0 ? '' : 'mt-3 border-t border-gray-800'}`}>
+                      <span className="text-sm">{listo ? '📦' : '🏭'}</span>
+                      <span className={`text-xs font-semibold uppercase tracking-wider ${listo ? 'text-yellow-400' : 'text-blue-400'}`}>
+                        {listo ? 'Listos para salir' : 'Todavía en producción'}
+                      </span>
+                      <span className="text-xs text-gray-600">
+                        · {filtered.filter(x => prioridadDespacho(x) === prioridadDespacho(p)).length}
+                      </span>
+                    </div>
+                  )}
+                  <div
                     className={`card overflow-hidden border-l-4 ${esCompletado ? 'border-l-green-500' : 'border-l-yellow-500'}`}>
 
                     {/* Cabecera — siempre visible, clic para expandir */}
@@ -440,6 +480,7 @@ export default function DespachosPage() {
                       </div>
                     )}
                   </div>
+                  </Fragment>
                 )
               })}
             </div>
