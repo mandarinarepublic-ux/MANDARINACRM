@@ -144,7 +144,18 @@ export default function DespachosPage() {
   function expandirTodos() { setExpandedPedidos(new Set(paginados.map(p => p.PEDIDO_ID))) }
   function contraerTodos()  { setExpandedPedidos(new Set()) }
 
-  const pendienteCount = pedidos.filter(p => !esCerrado(p)).length
+  // El contador cuenta SOLO lo que despacho puede despachar hoy.
+  //
+  // Antes contaba todo lo no cerrado: 71, de los cuales 66 seguian en fabrica.
+  // Erika podia despachar absolutamente todo lo suyo y el numero no bajaba, asi
+  // que la bandeja nunca llegaba a cero y no le decia nada. Una bandeja que no
+  // puede vaciarse no informa: solo pesa.
+  //
+  // Los de fabrica siguen abajo, visibles, en su grupo — pero no son pendiente
+  // suyo, porque no dependen de ella.
+  const listosCount = pedidos.filter(p => !esCerrado(p) && prioridadDespacho(p) === LISTO_PARA_SALIR).length
+  const enFabricaCount = pedidos.filter(p => !esCerrado(p) && prioridadDespacho(p) !== LISTO_PARA_SALIR).length
+  const pendienteCount = listosCount
   const completadoCount = pedidos.filter(p => esCerrado(p)).length
 
   async function handleFotoGuia(file) {
@@ -294,6 +305,21 @@ export default function DespachosPage() {
                   className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊟ Contraer</button>
               </div>
             </div>
+            {/* La bandeja en blanco. Si no queda nada listo para salir, se dice
+                con todas las letras aunque abajo haya pedidos en producción: eso
+                es contexto, no trabajo suyo. Es el momento en que despacho sabe
+                que terminó. */}
+            {tab === 'PENDIENTE' && listosCount === 0 && (
+              <div className="card p-6 text-center mb-3 border-green-500/30">
+                <div className="text-3xl mb-2">✅</div>
+                <div className="font-medium text-white">No hay nada por despachar</div>
+                <div className="text-sm text-gray-500 mt-1">
+                  {enFabricaCount > 0
+                    ? `${enFabricaCount} pedido(s) siguen en producción — los ves abajo por si quieres adelantarte`
+                    : 'Todo al día'}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               {paginados.map((p, i) => {
                 const esCompletado = esCerrado(p)
