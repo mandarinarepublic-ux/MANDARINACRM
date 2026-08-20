@@ -6,7 +6,8 @@ import { parseFecha } from '@/lib/parseFecha'
 import { PdfConfeccion, PdfConfeccionPagina, paginarItems } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import { generarPdfDesdeIds } from '@/lib/generarPdf'
-import { filtrarPedidosPorTienda, puedeVerTienda } from '@/lib/tiendasUsuario'
+import { puedeVerTienda } from '@/lib/tiendasUsuario'
+import { seFabrica } from '@/lib/prenda-se-fabrica'
 
 // Color por tienda para la orden de confección (mismo criterio que Producción).
 const TIENDA_COLORS = { MANDARINA: '#FF6B00', INDSTORE: '#E91E8C', YAW: '#6C3FC5' }
@@ -136,6 +137,7 @@ export default function CalendarioPage() {
   const [user, setUser] = useState(null)
   const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [errorTexto, setErrorTexto] = useState('')
   const hoy = useMemo(() => hoyISO(), [])
 
   const [cur, setCur] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
@@ -146,8 +148,33 @@ export default function CalendarioPage() {
   const [previewPedido, setPreviewPedido] = useState(null)  // pedido cuya hoja se previsualiza
   const [pdfPedido, setPdfPedido] = useState(null)   // pedido montado off-screen para descargar
   const [generandoPdf, setGenerandoPdf] = useState(null)
+  const [cargandoPreview, setCargandoPreview] = useState(null)
 
-  // Descarga la orden de producción (confección) del pedido en preview.
+  /**
+   * Abre la hoja de confección de un pedido.
+   *
+   * La grilla trae lo MÍNIMO para pintar el mes (sin fotos, detalles ni notas):
+   * traer todo eso de 250 pedidos para que alguien abra uno era justo el
+   * problema que tenía esta pantalla. Así que la hoja se arma pidiendo ese
+   * pedido completo, que es una lectura acotada por id.
+   */
+  async function abrirPreview(p) {
+    setCargandoPreview(p.PEDIDO_ID)
+    try {
+      const r = await fetch(`/api/pedidos/${p.PEDIDO_ID}`, { cache: 'no-store' })
+      if (!r.ok) throw new Error(`No se pudo leer el pedido (HTTP ${r.status})`)
+      const d = await r.json()
+      if (!d.pedido) throw new Error('El pedido no devolvió datos')
+      // ☠️ Las ELIMINADAS y las de ENTREGA EN TIENDA no van en una orden de
+      // producción: no hay nada que fabricar. Mismo criterio que Impresión.
+      setPreviewPedido({ ...d.pedido, items: (d.pedido.items || []).filter(seFabrica) })
+    } catch (e) {
+      alert('No se pudo abrir la hoja: ' + (e?.message || e))
+    } finally { setCargandoPreview(null) }
+  }
+
+  // Descarga la orden de producción del pedido que ya está en preview (y que por
+  // tanto ya viene completo: no hace falta volver a pedirlo).
   async function descargarPdfConfeccion(p) {
     if (generandoPdf) return
     setGenerandoPdf(p.PEDIDO_ID)
@@ -169,25 +196,44 @@ export default function CalendarioPage() {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
     setUser(JSON.parse(stored))
-    loadPedidos()
   }, [])
 
-  const loadPedidos = useCallback(async (intentos = 0) => {
-    setLoading(true)
+  const loadPedidos = useCallback(async () => {
+    setLoading(true); setErrorTexto('')
     try {
-      const res = await fetch('/api/pedidos?rol=ADMIN&_t=' + Date.now(), { cache: 'no-store' })
-      const data = await res.json()
-      if (!data.pedidos?.length && intentos < 3) {
-        setTimeout(() => loadPedidos(intentos + 1), 1500)
+      // Solo el mes que se está viendo, más los atrasados que siguen abiertos.
+      // Antes traía los 683 pedidos con sus cinco tablas para pintar un mes.
+      //
+      // El acceso por tienda lo aplica el servidor contra la cookie firmada; ya
+      // no se manda `?rol=ADMIN` ni se filtra en el navegador.
+      const mes = `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}`
+      const res = await fetch(`/api/calendario?mes=${mes}`, { cache: 'no-store' })
+      if (!res.ok) {
+        const detalle = await res.json().catch(() => ({}))
+        setErrorTexto(detalle.error || `HTTP ${res.status}`)
+        setPedidos([])
         return
       }
-      // Acceso por tienda: un VENDEDOR solo ve sus tiendas asignadas (un usuario
-      // de YAW ve solo YAW). ADMIN y los roles de fábrica ven todo — el filtro
-      // no los toca (ver lib/tiendasUsuario).
-      const u = JSON.parse(localStorage.getItem('mp_user') || '{}')
-      setPedidos(filtrarPedidosPorTienda(u, data.pedidos || []))
+      const data = await res.json()
+      setPedidos(data.pedidos || [])
+      if (data.completo === false) {
+        setErrorTexto('⚠️ El mes llegó incompleto: faltan entregas por cargar. Recarga.')
+      }
+    } catch (e) {
+      // Una respuesta que no es JSON también es un fallo, no un mes sin entregas.
+      setErrorTexto(e?.message || 'Error de conexión')
+      setPedidos([])
     } finally { setLoading(false) }
-  }, [])
+  }, [cur])
+
+  // Cambiar de mes pide ese mes a la base, no recorta una lista que ya estaba
+  // entera en el navegador.
+  //
+  // ☠️ Este efecto va DESPUES de declarar loadPedidos: la lista de dependencias
+  // se evalua DURANTE el render, y una const todavia sin inicializar lanza
+  // ReferenceError y tumba la pantalla entera. Paso el 19-ago-2026 en el
+  // Tablero — lo cubre tests/hooks-orden.test.js.
+  useEffect(() => { loadPedidos() }, [loadPedidos])
 
   // ¿el pedido pasa los filtros de tienda / estado / sub-área?
   const pasaFiltros = useCallback((p) => {
@@ -518,7 +564,8 @@ export default function CalendarioPage() {
                     </Link>
                     <span className={`badge text-[10px] ${ESTADO_META[k].chip} ${ESTADO_META[k].text} hidden sm:inline`}>{ESTADO_META[k].label}</span>
                     {/* Preview de la hoja de producción, sin salir del calendario. */}
-                    <button onClick={() => setPreviewPedido(p)}
+                    <button onClick={() => abrirPreview(p)}
+                      disabled={cargandoPreview === p.PEDIDO_ID}
                       title="Ver hoja de producción"
                       className="flex-shrink-0 text-xs font-bold px-2.5 py-2 rounded-lg bg-gray-800 border border-gray-700 text-mandarina-400 hover:bg-gray-700">
                       👁️ Ver
