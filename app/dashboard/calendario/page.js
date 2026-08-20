@@ -262,11 +262,20 @@ export default function CalendarioPage() {
       if (!f || !pasaFiltros(p)) return
       ;(porDia[f] = porDia[f] || []).push(p)
       const [py, pm] = f.split('-').map(Number)
-      if (py === y && pm === m + 1) {
+      const delMes = py === y && pm === m + 1
+      const k = estadoColor(p, hoy)
+
+      if (delMes) {
         conteo.total++
-        const k = estadoColor(p, hoy)
-        if (k in conteo) conteo[k]++
+        if (k === 'amb' || k === 'grn') conteo[k]++
       }
+      // ATRASADOS se cuenta SIEMPRE, caiga en el mes que caiga.
+      //
+      // Antes solo contaba los del mes visible: el 20-ago la pantalla decía 19
+      // cuando había 22 pedidos vencidos y sin entregar — los otros 3 vencieron
+      // en julio y seguían abiertos. Un contador de atrasados que se reinicia
+      // cada mes es justo el que no hay que creer.
+      if (k === 'red') conteo.red++
     })
     Object.values(porDia).forEach(arr => arr.sort((a, b) => (a.PEDIDO_ID || '').localeCompare(b.PEDIDO_ID || '')))
     return { porDia, statsMes: conteo }

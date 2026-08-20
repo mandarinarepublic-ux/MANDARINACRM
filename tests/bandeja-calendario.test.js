@@ -74,3 +74,14 @@ test('el SELECT se arma con join, no concatenando plantillas', () => {
   assert.ok(/const SELECT = \[[\s\S]*?\]\.join\(','\)/.test(sinComentarios(repo)),
     'el build se come el separador si se concatenan plantillas — ver el 19-ago-2026')
 })
+
+test('☠️ ATRASADOS cuenta todos, no solo los del mes visible', () => {
+  // El 20-ago la pantalla decia 19 cuando habia 22 pedidos vencidos y sin
+  // entregar: los otros 3 vencieron en julio y seguian abiertos. Un contador de
+  // atrasados que se reinicia cada mes es justo el que no hay que creer.
+  const codigo = sinComentarios(src)
+  assert.ok(/if \(k === 'red'\) conteo\.red\+\+/.test(codigo),
+    'el rojo se cuenta fuera del bloque `delMes`')
+  assert.ok(/if \(delMes\) \{[\s\S]{0,200}?if \(k === 'amb' \|\| k === 'grn'\) conteo\[k\]\+\+/.test(codigo),
+    'los demas si son del mes')
+})
