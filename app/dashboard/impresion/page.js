@@ -22,7 +22,10 @@ const H2C_OPTS = {
 // real del día; ver los ya impresos es la excepción (reimpresiones).
 const F_PENDIENTES = 'PENDIENTES'
 const F_IMPRESOS   = 'IMPRESOS'
-const F_TODOS      = 'TODOS'
+// La pestana "Todos" se fue: era la union exacta de las otras dos (10 + 65 = 75)
+// y el lote maximo son 30, asi que nadie iba a imprimirlos juntos. Lo unico que
+// aportaba era buscar sin saber si el pedido ya se imprimio — y eso ahora lo
+// resuelve la busqueda, que mira SIEMPRE las dos pestanas.
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
@@ -64,23 +67,23 @@ export default function ImpresionPage() {
     setLoading(true)
     setLoadError('')
     try {
-      const res = await fetch('/api/pedidos?rol=ADMIN')
-      if (!res.ok) throw new Error(`No se pudieron cargar los pedidos (HTTP ${res.status})`)
+      // Solo los pedidos en fábrica (75), no los 683 con sus cinco tablas.
+      //
+      // El servidor ya filtra por estado, ordena FIFO y deja fuera de cada
+      // pedido las prendas que NO se fabrican (eliminadas y de entrega en
+      // tienda). Acá no se vuelve a filtrar nada de eso.
+      //
+      // Y NO se manda `?rol=ADMIN`: eso lo decidía el navegador.
+      const res = await fetch('/api/impresion', { cache: 'no-store' })
+      if (!res.ok) {
+        const detalle = await res.json().catch(() => ({}))
+        throw new Error(detalle.error || `No se pudieron cargar los pedidos (HTTP ${res.status})`)
+      }
       const data = await res.json()
-      const enFabrica = (data.pedidos || []).filter(p =>
-        p.ESTADO_PEDIDO === 'EN_FABRICA' || p.ESTADO_PEDIDO === 'PENDIENTE_FABRICA'
-      )
-      // Orden estable: el pedido más ANTIGUO primero (es el que lleva más tiempo
-      // esperando). Sin esto, "Seleccionar todos" recortaba a 30 en el orden
-      // arbitrario en que viniera la hoja/tabla.
-      enFabrica.sort((a, b) => {
-        const fa = parseFecha(a.FECHA_PEDIDO)
-        const fb = parseFecha(b.FECHA_PEDIDO)
-        if (fa && fb) return fa - fb
-        if (fa) return -1
-        if (fb) return 1
-        return String(a.PEDIDO_ID).localeCompare(String(b.PEDIDO_ID))
-      })
+      const enFabrica = data.pedidos || []
+      if (data.completo === false) {
+        setLoadError('⚠️ La lista llegó incompleta: faltan pedidos por cargar. No imprimas a ciegas, recarga.')
+      }
       setPedidos(enFabrica)
       // Solo los clientes de ESTOS pedidos, no la agenda entera.
       //
@@ -115,9 +118,15 @@ export default function ImpresionPage() {
   const filtered = useMemo(() => pedidos.filter(p => {
     if (filtroTienda !== 'TODAS' && p.TIENDA_ID !== filtroTienda) return false
 
+    // Buscando, la pestaña NO limita: si escribes un número de pedido lo
+    // encuentras esté impreso o no. Eso es lo que hacía falta de la pestaña
+    // "Todos" — lo demás era ver 75 juntos, que no le sirve a nadie con un lote
+    // máximo de 30.
     const yaImpreso = !!p.FECHA_IMPRESION_PRODUCCION
-    if (filtroImpresion === F_PENDIENTES && yaImpreso) return false
-    if (filtroImpresion === F_IMPRESOS && !yaImpreso) return false
+    if (!busqueda) {
+      if (filtroImpresion === F_PENDIENTES && yaImpreso) return false
+      if (filtroImpresion === F_IMPRESOS && !yaImpreso) return false
+    }
 
     // Los extremos del rango son días de ECUADOR: 00:00:00 y 23:59:59.999 allá.
     // Tomarlos como medianoche UTC corría el rango 5 horas (se colaban pedidos
@@ -421,7 +430,6 @@ export default function ImpresionPage() {
             {[
               { v: F_PENDIENTES, label: '📋 Pendientes' },
               { v: F_IMPRESOS,   label: '🖨️ Ya impresos' },
-              { v: F_TODOS,      label: 'Todos' },
             ].map(op => (
               <button key={op.v} onClick={() => setFiltroImpresion(op.v)} disabled={printing}
                 className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all disabled:opacity-50
