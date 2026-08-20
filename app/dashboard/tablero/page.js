@@ -316,10 +316,6 @@ export default function TableroPage() {
     setUser(u)
   }, [])
 
-  // El interruptor "Ver despachados" ahora cambia lo que se PIDE, no lo que se
-  // esconde: por eso recarga.
-  useEffect(() => { loadPedidos() }, [loadPedidos])
-
   const loadPedidos = useCallback(async () => {
     setLoading(true); setEstado('CARGANDO'); setErrorTexto('')
     try {
@@ -346,6 +342,16 @@ export default function TableroPage() {
       setPedidos([]); setEstado('ERROR')
     } finally { setLoading(false) }
   }, [incluirDespachados])
+
+  // El interruptor "Ver despachados" ahora cambia lo que se PIDE, no lo que se
+  // esconde: por eso recarga.
+  //
+  // ☠️ Este efecto va DESPUÉS de declarar `loadPedidos`, no antes. La lista de
+  // dependencias se evalúa DURANTE el render, y una `const` todavía sin
+  // inicializar lanza ReferenceError — la pantalla entera muere con
+  // "Application error: a client-side exception has occurred". El build compila
+  // sin chistar: solo se ve abriendo la página.
+  useEffect(() => { loadPedidos() }, [loadPedidos])
 
   // ¿La prenda tiene trabajo PENDIENTE (no LISTO) en el área de producción dada?
   const itemPendienteEnArea = (i, area) => {
