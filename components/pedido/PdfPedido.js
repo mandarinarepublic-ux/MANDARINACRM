@@ -328,7 +328,14 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
   // hora a la que se imprimiera la hoja).
   const diasRestantes = diasHastaFecha(entrega)
   const urgente = diasRestantes !== null && diasRestantes <= 2
-  const totalPrendas = (pedido?.items||[]).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)
+  // Dos números DISTINTOS, y los dos importan:
+  //   · lineasPedido   = cuántas prendas distintas tiene el pedido. Sale del
+  //     CONTEO de la base (`PRENDAS_TOTAL`), no de las filas que llegaron, para
+  //     que el papel delate una lista recortada aunque el software no se entere.
+  //   · unidadesPedido = piezas físicas. El IND-XAV-5641 tenía 3 prendas pero 4
+  //     unidades (una iba ×2). Quien despacha cuenta piezas, no líneas.
+  const lineasPedido = pedido?.PRENDAS_TOTAL ?? (pedido?.items || []).length
+  const unidadesPedido = (pedido?.items||[]).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)
   const areas = [...new Set((pedido?.items||[]).map(i=>i.AREA).filter(Boolean))].join(', ') || '—'
 
   return (
@@ -350,19 +357,7 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
         </div>
         <div style={{ float:'right', textAlign:'right' }}>
           {urgente && <div style={{ display:'inline-block', backgroundColor:'#ef4444', color:'#fff', fontSize:'10px', fontWeight:'800', padding:'3px 10px', borderRadius:'20px', marginBottom:'3px', textTransform:'uppercase' }}>🚨 URGENTE</div>}
-          {/* ☠️ SIEMPRE se imprime cuántas prendas lleva el pedido, aunque quepan
-              en una sola hoja.
-              El 17-ago-2026 el IND-XAV-5641 salió con UNA de sus tres prendas.
-              Como cabía en una página, el contador "Pág. 1/1" no se pintaba y la
-              hoja no delataba nada: en el taller parecía una orden normal.
-              Este número viene del CONTEO de la base (`PRENDAS_TOTAL`), no de las
-              filas que llegaron, así que si faltara alguna el papel lo canta. */}
-          <div style={{ display:'inline-block', backgroundColor:tiendaColor+'15', border:`1px solid ${tiendaColor}40`, borderRadius:'8px', padding:'3px 12px', marginBottom:'3px', marginLeft:'6px' }}>
-            <span style={{ fontSize:'10px', fontWeight:'800', color:tiendaColor }}>
-              {totalPaginas > 1 && `Pág. ${paginaActual}/${totalPaginas} · `}
-              {(pedido?.PRENDAS_TOTAL ?? items?.length ?? 0)} prenda(s) en el pedido
-            </span>
-          </div>
+          {totalPaginas > 1 && <div style={{ display:'inline-block', backgroundColor:tiendaColor+'15', border:`1px solid ${tiendaColor}40`, borderRadius:'8px', padding:'3px 12px', marginBottom:'3px', marginLeft:'6px' }}><span style={{ fontSize:'10px', fontWeight:'800', color:tiendaColor }}>Pág. {paginaActual}/{totalPaginas}</span></div>}
           <div style={{ fontSize:'9px', color:'#1a1a1a', marginBottom:'1px', clear:'both', fontWeight:'600' }}>Entrega comprometida</div>
           <div style={{ fontSize:'13px', fontWeight:'700', color:urgente?'#ef4444':'#1a1a1a' }}>
             {entrega ? entrega.toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'}) : '—'}
@@ -376,16 +371,38 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
         <div style={{ clear:'both' }} />
       </div>
 
-      {paginaActual === 1 && (
-        <div style={{ backgroundColor:'#f0f0f0', padding:'5px 48px', borderBottom:'1px solid #d0d0d0', boxSizing:'border-box' }}>
-          {[['VENDEDOR', pedido?.VENDEDOR_ID||'—'], ['PRENDAS', totalPrendas], ['ÁREAS', areas]].map(([k,v]) => (
-            <span key={k} style={{ display:'inline-block', marginRight:'24px' }}>
-              <span style={{ fontSize:'9px', color:'#1a1a1a', fontWeight:'700' }}>{k}: </span>
-              <span style={{ fontSize:'10px', fontWeight:'900', color:'#1a1a1a' }}>{v}</span>
+      {/* ☠️ EL CONTROL DE LA HOJA — va en TODAS las páginas, no solo en la primera.
+          El 17-ago-2026 el IND-XAV-5641 se imprimió con UNA de sus tres prendas y
+          la fábrica produjo de menos: la hoja no llevaba ninguna marca que
+          delatara lo que faltaba.
+          Quien fabrica y quien despacha cuentan contra estos dos números:
+            · PRENDAS  = líneas del pedido, y sale del CONTEO de la base
+              (`PRENDAS_TOTAL`), no de las filas que llegaron. Si faltara alguna,
+              el papel lo canta aunque el software falle.
+            · UNIDADES = piezas físicas. NO es lo mismo: el 5641 tenía 3 prendas
+              pero 4 unidades porque una iba ×2. Quien despacha cuenta piezas.
+          Antes esta franja decía "PRENDAS" mostrando las UNIDADES: dos números
+          distintos con el mismo nombre. */}
+      <div style={{ backgroundColor:'#1a1a1a', padding:'7px 48px', boxSizing:'border-box', overflow:'hidden' }}>
+        <div style={{ float:'left' }}>
+          <span style={{ fontSize:'10px', color:'#fff', fontWeight:'700', letterSpacing:'1px', marginRight:'10px' }}>TOTAL DEL PEDIDO</span>
+          <span style={{ fontSize:'20px', fontWeight:'900', color:'#fff', letterSpacing:'-0.5px' }}>{lineasPedido}</span>
+          <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'4px', marginRight:'14px' }}>PRENDAS</span>
+          <span style={{ fontSize:'20px', fontWeight:'900', color:tiendaColor, letterSpacing:'-0.5px' }}>{unidadesPedido}</span>
+          <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'4px' }}>UNIDADES</span>
+          {totalPaginas > 1 && (
+            <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'14px', opacity:0.85 }}>
+              · esta hoja: {items?.length || 0} de {lineasPedido}
             </span>
-          ))}
+          )}
         </div>
-      )}
+        <div style={{ float:'right', textAlign:'right', paddingTop:'3px' }}>
+          <span style={{ fontSize:'9px', color:'#fff', fontWeight:'700', opacity:0.85 }}>
+            VENDEDOR: {pedido?.VENDEDOR_ID || '—'} · ÁREAS: {areas}
+          </span>
+        </div>
+        <div style={{ clear:'both' }} />
+      </div>
 
       <div style={{ padding:'10px 48px 50px', boxSizing:'border-box', overflow:'hidden' }}>
         {(items||[]).map((item, idx) => {

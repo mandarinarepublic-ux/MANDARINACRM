@@ -123,12 +123,30 @@ test('☠️ NO se puede seleccionar un pedido incompleto', () => {
     'seleccionar todos tambien debe dejarlos fuera')
 })
 
-test('☠️ la hoja impresa dice SIEMPRE cuantas prendas lleva el pedido', () => {
-  // Con una sola pagina el contador "Pag. 1/1" no se pintaba, asi que el papel
-  // no delataba nada: en el taller parecia una orden normal.
+test('☠️ la hoja impresa lleva el control en TODAS las paginas', () => {
   const pdf = readFileSync(new URL('../components/pedido/PdfPedido.js', import.meta.url), 'utf8')
   const codigo = sinComentarios(pdf)
-  assert.ok(/prenda\(s\) en el pedido/.test(codigo), 'el total va siempre en la hoja')
+
+  assert.ok(/TOTAL DEL PEDIDO/.test(codigo), 'el control tiene que verse, no ser un pie de pagina')
+  assert.ok(/PRENDAS/.test(codigo) && /UNIDADES/.test(codigo),
+    'dos numeros distintos: lineas del pedido y piezas fisicas')
+
+  // ☠️ Antes esta franja iba dentro de `{paginaActual === 1 && (...)}`: quien
+  // fabricaba con la hoja 2 no tenia ningun control contra el que contar.
+  const franja = codigo.slice(codigo.indexOf('TOTAL DEL PEDIDO') - 600, codigo.indexOf('TOTAL DEL PEDIDO'))
+  assert.ok(!/paginaActual === 1 && \($/.test(franja.trim()),
+    'el control no puede estar limitado a la primera pagina')
+
   assert.ok(/pedido\?\.PRENDAS_TOTAL/.test(codigo),
-    'y sale del CONTEO de la base, no de las filas que llegaron')
+    'las PRENDAS salen del CONTEO de la base, no de las filas que llegaron')
+})
+
+test('☠️ prendas y unidades NO son el mismo numero', () => {
+  // El IND-XAV-5641 tenia 3 prendas pero 4 unidades (una iba x2). La franja
+  // llamaba "PRENDAS" a las unidades: dos numeros distintos con el mismo nombre,
+  // y quien despacha cuenta piezas.
+  const pdf = readFileSync(new URL('../components/pedido/PdfPedido.js', import.meta.url), 'utf8')
+  const codigo = sinComentarios(pdf)
+  assert.ok(/const lineasPedido = pedido\?\.PRENDAS_TOTAL/.test(codigo))
+  assert.ok(/const unidadesPedido = .*reduce.*CANTIDAD/.test(codigo))
 })
