@@ -350,7 +350,19 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
         </div>
         <div style={{ float:'right', textAlign:'right' }}>
           {urgente && <div style={{ display:'inline-block', backgroundColor:'#ef4444', color:'#fff', fontSize:'10px', fontWeight:'800', padding:'3px 10px', borderRadius:'20px', marginBottom:'3px', textTransform:'uppercase' }}>🚨 URGENTE</div>}
-          {totalPaginas > 1 && <div style={{ display:'inline-block', backgroundColor:tiendaColor+'15', border:`1px solid ${tiendaColor}40`, borderRadius:'8px', padding:'3px 12px', marginBottom:'3px', marginLeft:'6px' }}><span style={{ fontSize:'10px', fontWeight:'800', color:tiendaColor }}>Pág. {paginaActual}/{totalPaginas}</span></div>}
+          {/* ☠️ SIEMPRE se imprime cuántas prendas lleva el pedido, aunque quepan
+              en una sola hoja.
+              El 17-ago-2026 el IND-XAV-5641 salió con UNA de sus tres prendas.
+              Como cabía en una página, el contador "Pág. 1/1" no se pintaba y la
+              hoja no delataba nada: en el taller parecía una orden normal.
+              Este número viene del CONTEO de la base (`PRENDAS_TOTAL`), no de las
+              filas que llegaron, así que si faltara alguna el papel lo canta. */}
+          <div style={{ display:'inline-block', backgroundColor:tiendaColor+'15', border:`1px solid ${tiendaColor}40`, borderRadius:'8px', padding:'3px 12px', marginBottom:'3px', marginLeft:'6px' }}>
+            <span style={{ fontSize:'10px', fontWeight:'800', color:tiendaColor }}>
+              {totalPaginas > 1 && `Pág. ${paginaActual}/${totalPaginas} · `}
+              {(pedido?.PRENDAS_TOTAL ?? items?.length ?? 0)} prenda(s) en el pedido
+            </span>
+          </div>
           <div style={{ fontSize:'9px', color:'#1a1a1a', marginBottom:'1px', clear:'both', fontWeight:'600' }}>Entrega comprometida</div>
           <div style={{ fontSize:'13px', fontWeight:'700', color:urgente?'#ef4444':'#1a1a1a' }}>
             {entrega ? entrega.toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'}) : '—'}

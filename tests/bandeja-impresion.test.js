@@ -94,3 +94,41 @@ test('el SELECT se arma con join, no concatenando plantillas', () => {
   assert.ok(/const SELECT = \[[\s\S]*?\]\.join\(','\)/.test(sinComentarios(repo)),
     'el build se come el separador si se concatenan plantillas — ver el 19-ago-2026')
 })
+
+// ─── Que no se imprima una orden INCOMPLETA (21-ago-2026) ───────────────────
+//
+// El 17-ago el IND-XAV-5641 salio con UNA de sus tres prendas: la pantalla nunca
+// supo que las otras dos existian (tope de 1000 de PostgREST), asi que el PDF se
+// genero "bien" y la fabrica produjo de menos. Verificado por posicion fisica:
+// la talla M estaba en la fila 15 y las otras dos en la 1016 y la 1137.
+
+test('☠️ el repo trae el CONTEO real de prendas, no solo las que llegaron', () => {
+  assert.ok(/total_prendas:detalle_pedido\(count\)/.test(repo),
+    'el count anidado NO se trunca; la lista anidada SI')
+  assert.ok(/PRENDAS_TOTAL/.test(repo) && /COMPLETO/.test(repo),
+    'hay que poder comparar lo que llego contra lo que hay')
+})
+
+test('solo evidencia POSITIVA marca un pedido incompleto', () => {
+  // Si el conteo no llega, se asume completo: el peor caso es quedarse sin
+  // aviso, nunca bloquear una impresion buena.
+  assert.ok(/!hayConteo \|\| todas >= total/.test(repo))
+})
+
+test('☠️ NO se puede seleccionar un pedido incompleto', () => {
+  const codigo = sinComentarios(src)
+  assert.ok(/pedido\.COMPLETO === false/.test(codigo), 'toggleSelect debe bloquearlo')
+  // "Seleccionar todos" no pasa por toggleSelect: sin esto se colarian en el lote.
+  assert.ok(/filtered\.filter\(p => p\.COMPLETO !== false\)/.test(codigo),
+    'seleccionar todos tambien debe dejarlos fuera')
+})
+
+test('☠️ la hoja impresa dice SIEMPRE cuantas prendas lleva el pedido', () => {
+  // Con una sola pagina el contador "Pag. 1/1" no se pintaba, asi que el papel
+  // no delataba nada: en el taller parecia una orden normal.
+  const pdf = readFileSync(new URL('../components/pedido/PdfPedido.js', import.meta.url), 'utf8')
+  const codigo = sinComentarios(pdf)
+  assert.ok(/prenda\(s\) en el pedido/.test(codigo), 'el total va siempre en la hoja')
+  assert.ok(/pedido\?\.PRENDAS_TOTAL/.test(codigo),
+    'y sale del CONTEO de la base, no de las filas que llegaron')
+})

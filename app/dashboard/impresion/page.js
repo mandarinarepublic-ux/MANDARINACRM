@@ -172,6 +172,22 @@ export default function ImpresionPage() {
       setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
       return
     }
+
+    // ☠️ NO se imprime un pedido al que le faltan prendas.
+    //
+    // El 17-ago-2026 el IND-XAV-5641 salió con UNA de sus tres prendas: la
+    // pantalla nunca supo que las otras dos existían, así que el PDF se generó
+    // "bien" y la fábrica produjo de menos. Una orden incompleta es PEOR que no
+    // imprimir: en el taller parece válida y nadie la cuestiona.
+    if (pedido.COMPLETO === false) {
+      alert(
+        `⚠️ ${id} NO se puede imprimir todavía.\n\n` +
+        `El pedido tiene ${pedido.PRENDAS_TOTAL} prenda(s) y solo se pudieron leer ` +
+        `${pedido.PRENDAS_LLEGARON}. Si se imprimiera así, la fábrica produciría de menos.\n\n` +
+        `Recarga la pantalla (↻) e inténtalo de nuevo.`
+      )
+      return
+    }
     // Los diálogos van FUERA del updater de estado: React puede invocar el
     // updater más de una vez, y eso mostraba el confirm por duplicado.
     if (selected.size >= MAX_LOTE_IMPRESION) {
@@ -195,14 +211,27 @@ export default function ImpresionPage() {
     if (printing) return
     if (selected.size > 0) { setSelected(new Set()); return }
 
-    const sinImprimir = filtered.filter(p => !p.FECHA_IMPRESION_PRODUCCION)
-    let candidatos = sinImprimir
-    if (sinImprimir.length === 0 && filtered.length > 0) {
-      const ok = window.confirm(`Los ${filtered.length} pedido(s) YA fueron impresos. ¿Reimprimirlos?`)
-      if (!ok) return
-      candidatos = filtered
+    // Los incompletos quedan FUERA también acá: "Seleccionar todos" no pasa por
+    // toggleSelect, así que sin esto se colarían en el lote sin que nadie lo vea.
+    const completos = filtered.filter(p => p.COMPLETO !== false)
+    const incompletos = filtered.length - completos.length
+    if (incompletos > 0) {
+      alert(
+        `⚠️ ${incompletos} pedido(s) quedan fuera del lote: no se pudieron leer todas sus prendas.\n\n` +
+        `Imprimirlos así haría que la fábrica produjera de menos. Recarga (↻) e inténtalo de nuevo.`
+      )
     }
-    const omitidos = filtered.length - candidatos.length
+
+    const sinImprimir = completos.filter(p => !p.FECHA_IMPRESION_PRODUCCION)
+    let candidatos = sinImprimir
+    if (sinImprimir.length === 0 && completos.length > 0) {
+      const ok = window.confirm(`Los ${completos.length} pedido(s) YA fueron impresos. ¿Reimprimirlos?`)
+      if (!ok) return
+      candidatos = completos
+    }
+    // Sobre `completos`, no sobre `filtered`: los incompletos ya se avisaron
+    // aparte y no deben contarse como "omitidos por estar impresos".
+    const omitidos = completos.length - candidatos.length
     if (candidatos.length > MAX_LOTE_IMPRESION) {
       alert(
         `Se seleccionan los ${MAX_LOTE_IMPRESION} más antiguos (máximo por lote).\n` +
