@@ -141,6 +141,16 @@ test('☠️ la hoja impresa lleva el control en TODAS las paginas', () => {
     'las PRENDAS salen del CONTEO de la base, no de las filas que llegaron')
 })
 
+test('☠️ una hoja suelta tiene que poder identificarse sola', () => {
+  // Con 3 hojas, las tres decian "esta hoja: 2 de 6": el mismo texto en todas.
+  // Si se traspapelaba una, nadie lo notaba. Ahora cada hoja dice cual es y que
+  // rango de prendas trae (#1–#2, #3–#4, #5–#6).
+  const pdf = readFileSync(new URL('../components/pedido/PdfPedido.js', import.meta.url), 'utf8')
+  const codigo = sinComentarios(pdf)
+  assert.ok(/HOJA \{paginaActual\} DE \{totalPaginas\}/.test(codigo))
+  assert.ok(/offsetIdx \|\| 0\) \+ 1/.test(codigo), 'el rango arranca en el offset de la hoja')
+})
+
 test('☠️ prendas y unidades NO son el mismo numero', () => {
   // El IND-XAV-5641 tenia 3 prendas pero 4 unidades (una iba x2). La franja
   // llamaba "PRENDAS" a las unidades: dos numeros distintos con el mismo nombre,

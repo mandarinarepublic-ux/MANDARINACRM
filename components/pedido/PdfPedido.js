@@ -390,9 +390,14 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
           <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'4px', marginRight:'14px' }}>PRENDAS</span>
           <span style={{ fontSize:'20px', fontWeight:'900', color:tiendaColor, letterSpacing:'-0.5px' }}>{unidadesPedido}</span>
           <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'4px' }}>UNIDADES</span>
+          {/* ☠️ Cuando el pedido no cabe en una hoja, el papel tiene que decir CUÁL
+              hoja es y QUÉ prendas trae. Decía solo "esta hoja: 2 de 6" — igual en
+              las tres hojas, así que perder una no se notaba. Con el rango (#1–#2,
+              #3–#4, #5–#6) quien fabrica ve el hueco sin contar nada. */}
           {totalPaginas > 1 && (
-            <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'14px', opacity:0.85 }}>
-              · esta hoja: {items?.length || 0} de {lineasPedido}
+            <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'14px', opacity:0.9 }}>
+              · HOJA {paginaActual} DE {totalPaginas}: prendas #{(offsetIdx || 0) + 1}
+              {(items?.length || 0) > 1 ? `–#${(offsetIdx || 0) + items.length}` : ''}
             </span>
           )}
         </div>
