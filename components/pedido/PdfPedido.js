@@ -335,7 +335,7 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
   const diasRestantes = diasHastaFecha(entrega)
   const urgente = diasRestantes !== null && diasRestantes <= 2
   // Dos números DISTINTOS, y los dos importan:
-  //   · lineasPedido   = cuántas prendas distintas tiene el pedido. Sale del
+  //   · lineasPedido   = cuántos DISEÑOS distintos tiene el pedido. Sale del
   //     CONTEO de la base (`PRENDAS_TOTAL`), no de las filas que llegaron, para
   //     que el papel delate una lista recortada aunque el software no se entere.
   //   · unidadesPedido = piezas físicas. El IND-XAV-5641 tenía 3 prendas pero 4
@@ -385,18 +385,21 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
           la fábrica produjo de menos: la hoja no llevaba ninguna marca que
           delatara lo que faltaba.
           Quien fabrica y quien despacha cuentan contra estos dos números:
-            · PRENDAS  = líneas del pedido, y sale del CONTEO de la base
+            · DISEÑOS  = líneas del pedido, y sale del CONTEO de la base
               (`PRENDAS_TOTAL`), no de las filas que llegaron. Si faltara alguna,
               el papel lo canta aunque el software falle.
-            · UNIDADES = piezas físicas. NO es lo mismo: el 5641 tenía 3 prendas
-              pero 4 unidades porque una iba ×2. Quien despacha cuenta piezas.
-          Antes esta franja decía "PRENDAS" mostrando las UNIDADES: dos números
-          distintos con el mismo nombre. */}
+            · UNIDADES = piezas físicas. NO es lo mismo: el 5641 tenía 3 diseños
+              pero 4 unidades porque uno iba ×2. Quien despacha cuenta piezas.
+          ⚠️ El de arriba se llamó "PRENDAS" hasta el 21-ago-2026 y confundía:
+          "3 PRENDAS · 15 UNIDADES" se lee como que hay 3 prendas cuando las
+          prendas de verdad son 15. Cada línea es UN DISEÑO; las prendas son las
+          unidades. (Antes de eso la franja llegó a decir "PRENDAS" mostrando las
+          UNIDADES: dos números distintos con el mismo nombre.) */}
       <div style={{ backgroundColor:'#1a1a1a', padding:'7px 48px', boxSizing:'border-box', overflow:'hidden' }}>
         <div style={{ float:'left' }}>
           <span style={{ fontSize:'10px', color:'#fff', fontWeight:'700', letterSpacing:'1px', marginRight:'10px' }}>TOTAL DEL PEDIDO</span>
           <span style={{ fontSize:'20px', fontWeight:'900', color:'#fff', letterSpacing:'-0.5px' }}>{lineasPedido}</span>
-          <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'4px', marginRight:'14px' }}>PRENDAS</span>
+          <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'4px', marginRight:'14px' }}>DISEÑOS</span>
           <span style={{ fontSize:'20px', fontWeight:'900', color:tiendaColor, letterSpacing:'-0.5px' }}>{unidadesPedido}</span>
           <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'4px' }}>UNIDADES</span>
           {/* ☠️ Cuando el pedido no cabe en una hoja, el papel tiene que decir CUÁL
@@ -405,13 +408,13 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
               #3–#4, #5–#6) quien fabrica ve el hueco sin contar nada. */}
           {totalPaginas > 1 && (
             <span style={{ fontSize:'11px', color:'#fff', fontWeight:'700', marginLeft:'14px', opacity:0.9 }}>
-              · HOJA {paginaActual} DE {totalPaginas}: prendas #{(offsetIdx || 0) + 1}
+              · HOJA {paginaActual} DE {totalPaginas}: diseños #{(offsetIdx || 0) + 1}
               {(items?.length || 0) > 1 ? `–#${(offsetIdx || 0) + items.length}` : ''}
             </span>
           )}
           {yaEntregadas > 0 && (
             <span style={{ fontSize:'11px', color:'#fff', fontWeight:'800', marginLeft:'14px' }}>
-              · ✓ {yaEntregadas} YA ENTREGADA{yaEntregadas > 1 ? 'S' : ''} EN TIENDA
+              · ✓ {yaEntregadas} ENTREGADO{yaEntregadas > 1 ? 'S' : ''} EN TIENDA
             </span>
           )}
         </div>

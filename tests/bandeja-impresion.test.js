@@ -70,7 +70,7 @@ test('☠️ el visto de "entregada en tienda" se pinta en la hoja', () => {
   assert.ok(/entregadaEnTienda/.test(codigo), 'la hoja tiene que distinguirla')
   assert.ok(/✓/.test(codigo), 'con un visto, no con letra chica')
   // Quien despacha necesita saber cuantas del total NO va a empacar.
-  assert.ok(/YA ENTREGADA/.test(codigo), 'y el conteo va en la franja de control')
+  assert.ok(/ENTREGADO\{yaEntregadas > 1/.test(codigo), 'y el conteo va en la franja de control')
 })
 
 // ─── Tinta ──────────────────────────────────────────────────────────────────
@@ -164,8 +164,11 @@ test('☠️ la hoja impresa lleva el control en TODAS las paginas', () => {
   const codigo = sinComentarios(pdf)
 
   assert.ok(/TOTAL DEL PEDIDO/.test(codigo), 'el control tiene que verse, no ser un pie de pagina')
-  assert.ok(/PRENDAS/.test(codigo) && /UNIDADES/.test(codigo),
-    'dos numeros distintos: lineas del pedido y piezas fisicas')
+  // ⚠️ La etiqueta es DISEÑOS, no PRENDAS: "3 PRENDAS · 15 UNIDADES" se lee como
+  // que hay 3 prendas, cuando las prendas de verdad son las 15. Cada linea del
+  // pedido es UN DISEÑO.
+  assert.ok(/>DISEÑOS</.test(codigo), 'las lineas del pedido se llaman DISEÑOS en el papel')
+  assert.ok(/>UNIDADES</.test(codigo), 'y las piezas fisicas, UNIDADES')
 
   // ☠️ Antes esta franja iba dentro de `{paginaActual === 1 && (...)}`: quien
   // fabricaba con la hoja 2 no tenia ningun control contra el que contar.
