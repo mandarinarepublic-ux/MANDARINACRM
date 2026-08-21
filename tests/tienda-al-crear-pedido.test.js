@@ -13,7 +13,7 @@
 import test from 'node:test'
 import assert from 'node:assert'
 import { readFileSync } from 'node:fs'
-import { puedeVerTienda, tiendasDe, filtraPorTienda } from '../lib/tiendasUsuario.js'
+import { puedeVerTienda, tiendasDe, filtraPorTienda, puedeVender } from '../lib/tiendasUsuario.js'
 
 const api = readFileSync(new URL('../app/api/pedidos/route.js', import.meta.url), 'utf8')
 const sinComentarios = (t) => t.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
@@ -77,4 +77,35 @@ test('el POST identifica al usuario antes de crear nada', () => {
   assert.ok(/sesionActual\(\)/.test(hastaCliente),
     'la sesion se lee ANTES de tocar la base: si no, se crea el cliente y luego se rechaza')
   assert.ok(/usuario\.ACTIVO !== 'TRUE'/.test(hastaCliente), 'un usuario desactivado no vende')
+})
+
+// ─── DISEÑO que ademas vende (permiso por persona, 21-ago-2026) ─────────────
+
+const DISENADOR_VENDE = { rol: 'DISEÑO', tiendas: ['INDSTORE', 'MANDARINA'], accesos: ['VENTAS'] }
+const DISENADOR_NORMAL = { rol: 'DISEÑO', tiendas: [], accesos: [] }
+
+test('☠️ un diseñador con permiso de vender NO puede vender de YAW', () => {
+  // Sin esto, su rol no estaba en ROLES_FILTRADOS y podia registrar una venta de
+  // CUALQUIER tienda por API. La pantalla solo ofrece MANDARINA e INDSTORE, pero
+  // esconder no es restringir.
+  assert.strictEqual(puedeVerTienda(DISENADOR_VENDE, 'YAW'), false)
+  assert.strictEqual(puedeVerTienda(DISENADOR_VENDE, 'INDSTORE'), true)
+  assert.strictEqual(puedeVerTienda(DISENADOR_VENDE, 'MANDARINA'), true)
+})
+
+test('un diseñador SIN el permiso sigue sin filtrarse por tienda', () => {
+  // Su trabajo es transversal: produccion no se reparte por tienda.
+  assert.strictEqual(filtraPorTienda(DISENADOR_NORMAL), false)
+})
+
+test('el permiso VENTAS se lee por persona, no por rol', () => {
+  assert.strictEqual(puedeVender(DISENADOR_VENDE), true)
+  assert.strictEqual(puedeVender(DISENADOR_NORMAL), false)
+  assert.strictEqual(puedeVender({ rol: 'DISEÑO' }), false, 'sin accesos, no vende')
+  assert.strictEqual(puedeVender(null), false)
+})
+
+test('el POST mira los accesos, no solo el rol', () => {
+  assert.ok(/accesos: usuario\.ACCESOS/.test(post),
+    'sin pasarlos, un diseñador con permiso podria vender de cualquier tienda')
 })

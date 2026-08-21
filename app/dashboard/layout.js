@@ -12,8 +12,10 @@ const NAV_ALL = [
   { href:'/dashboard',              label:'Inicio',       icon:'🏠', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/tablero',      label:'Tablero',      icon:'📊', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/calendario',   label:'Calendario',   icon:'📅', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
-  { href:'/dashboard/nuevo-pedido', label:'Nueva Venta',  icon:'➕', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'] },
-  { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'] },
+  // `oAcceso`: ademas del rol, lo ve quien tenga ese permiso marcado por persona.
+  // Asi los de DISEÑO pueden vender sin dejar de ser produccion (21-ago-2026).
+  { href:'/dashboard/nuevo-pedido', label:'Nueva Venta',  icon:'➕', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'], oAcceso:'VENTAS' },
+  { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'], oAcceso:'VENTAS' },
   { href:'/dashboard/historial',    label:'Historial',    icon:'📋', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/catalogo',     label:'Catálogo',     icon:'🛍️', roles:['ADMIN','VENDEDOR'] },
   { href:'/dashboard/cotizacion',   label:'Cotización',   icon:'📄', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'] },
@@ -47,9 +49,17 @@ const ROL_PRIORITY = {
 function getNavItems(user) {
   const rol = user?.rol
   const accesos = Array.isArray(user?.accesos) ? user.accesos : []
-  // Un ítem con `acceso` se muestra solo si la persona lo tiene marcado; el
-  // resto sigue filtrándose por rol, igual que siempre.
-  const all = NAV_ALL.filter(n => (n.acceso ? accesos.includes(n.acceso) : n.roles.includes(rol)))
+  // Tres formas de ganarse un item del menu:
+  //   `acceso`  → SOLO por permiso de persona (los inbox, que no son del CRM).
+  //   `oAcceso` → por rol O por permiso: la venta, que hace DISEÑO ademas de
+  //                su trabajo. Sin este 'o' habria que darles rol VENDEDOR y
+  //                perderian la bandeja de Produccion.
+  //   `roles`   → solo por rol, como siempre.
+  const all = NAV_ALL.filter(n => {
+    if (n.acceso) return accesos.includes(n.acceso)
+    if (n.roles?.includes(rol)) return true
+    return n.oAcceso ? accesos.includes(n.oAcceso) : false
+  })
   const priority = ROL_PRIORITY[rol] || []
   if (!priority.length) return all
   const inicio = all.find(n => n.href === '/dashboard')

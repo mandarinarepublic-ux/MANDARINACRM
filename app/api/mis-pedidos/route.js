@@ -15,6 +15,18 @@ import { registrarEvento } from '@/lib/eventos'
 // solo lo suyo.
 const VEN_TODO = ['ADMIN', 'CORTE', 'DISEÑO', 'ESTAMPADO', 'SUBLIMACION', 'BORDADO', 'DESPACHO']
 
+/**
+ * ⚠️ Quien tiene el permiso VENTAS ve SOLO LO SUYO, aunque su rol esté en
+ * VEN_TODO.
+ *
+ * Los de DISEÑO pueden vender desde el 21-ago-2026, y su rol está en esa lista
+ * porque en Producción necesitan ver todo el taller. Pero esta pantalla se llama
+ * "Mis Pedidos": si les devolviera los 70 pedidos en fábrica, el nombre sería
+ * mentira y no encontrarían la venta que acaban de tomar.
+ */
+const tieneVentas = (usuario) =>
+  (Array.isArray(usuario?.ACCESOS) ? usuario.ACCESOS : []).includes('VENTAS')
+
 export async function GET() {
   try {
     const sesion = await sesionActual()
@@ -28,7 +40,7 @@ export async function GET() {
     const { pedidos, completo } = await listMisPedidos({
       nombre: usuario.NOMBRE,
       id: usuario.USUARIO_ID,
-      verTodo: VEN_TODO.includes(rol),
+      verTodo: VEN_TODO.includes(rol) && !tieneVentas(usuario),
     })
 
     return Response.json({ pedidos, completo })

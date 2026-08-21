@@ -207,13 +207,17 @@ export default function UsuariosPage() {
     </div>
   )
 
-  // Acceso a los inbox de WhatsApp. Es un permiso aparte del rol: hay gente que
-  // vende y no atiende chats, y al revés.
+  // Permisos que van APARTE del rol: hay gente que vende y no atiende chats, y
+  // al revés. Y desde el 21-ago-2026, gente de producción que además vende.
   const AccesosPicker = ({ valor, onChange }) => (
-    <div className="flex gap-2">
+    <div className="flex gap-2 flex-wrap">
       {[
         ['INBOX_MANDARINA', '🍊 Inbox Mandarina'],
         ['INBOX_INDSTORE',  '🏪 Inbox Indstore'],
+        // Deja registrar ventas a quien no es VENDEDOR — p.ej. los de DISEÑO.
+        // Se marca por persona a propósito: si dependiera del rol, un diseñador
+        // nuevo podría vender sin que nadie lo decidiera.
+        ['VENTAS',          '➕ Puede vender'],
       ].map(([clave, etiqueta]) => (
         <label key={clave} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all
           ${valor.includes(clave) ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 text-gray-500'}`}>

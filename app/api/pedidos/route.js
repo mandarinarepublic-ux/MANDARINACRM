@@ -100,8 +100,14 @@ export async function POST(req) {
     // ⚠️ Solo se aplica a los roles de venta y solo si tienen tiendas asignadas
     // — mismo criterio que `lib/tiendasUsuario.js`: un dato faltante no puede
     // dejar a nadie sin poder vender.
+    // Se pasan también los `accesos`: quien tiene el permiso VENTAS cuenta como
+    // rol de venta a efectos de tienda, aunque sea de DISEÑO.
     if (!puedeVerTienda(
-      { rol: String(usuario.ROL || '').toUpperCase(), tiendas: usuario.TIENDAS },
+      {
+        rol: String(usuario.ROL || '').toUpperCase(),
+        tiendas: usuario.TIENDAS,
+        accesos: usuario.ACCESOS,
+      },
       tiendaId,
     )) {
       return Response.json(
