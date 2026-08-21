@@ -11,6 +11,7 @@ import { enviarPurchase, capiConfigurado, debeEnviarCapi } from '@/lib/metaCapi'
 import { registrarEvento } from '@/lib/eventos'
 import { sesionActual } from '@/lib/auth'
 import { getUsuarioById } from '@/lib/db/usuarios'
+import { puedeVerTienda } from '@/lib/tiendasUsuario'
 import { notificarVenta } from '@/lib/telegram'
 
 export const dynamic = 'force-dynamic'
@@ -65,11 +66,49 @@ export async function POST(req) {
   try {
     const body = await req.json()
     const {
-      tiendaId, vendedorId, vendedorNombre, vendedorCodigo,
+      tiendaId,
       cliente, items, pagos: pagosInput,
       emitirFactura, fechaEntregaPrometida,
       notasVendedor, direccionTexto, latitud, longitud,
     } = body
+
+    // ☠️ QUIÉN VENDE Y EN QUÉ TIENDA NO LO DECIDE EL NAVEGADOR.
+    //
+    // Antes `vendedorId`, `vendedorNombre` y `vendedorCodigo` venían del cuerpo
+    // y se guardaban tal cual. Con eso, cualquiera con una sesión podía crear un
+    // pedido **a nombre de otro vendedor** — y eso decide comisiones, el ranking
+    // del panel y a quién le reclaman si algo sale mal.
+    //
+    // La pantalla ya mandaba siempre el usuario logueado, así que tomarlo de la
+    // cookie no cambia nada legítimo: solo cierra la puerta.
+    const sesion = await sesionActual()
+    if (!sesion?.id) return Response.json({ error: 'No autenticado' }, { status: 401 })
+    const usuario = await getUsuarioById(sesion.id)
+    if (!usuario) return Response.json({ error: 'Sesion invalida, vuelve a entrar' }, { status: 401 })
+    if (usuario.ACTIVO !== 'TRUE') return Response.json({ error: 'Usuario desactivado' }, { status: 403 })
+
+    const vendedorId     = usuario.USUARIO_ID
+    const vendedorNombre = usuario.NOMBRE
+    const vendedorCodigo = usuario.CODIGO
+
+    // ☠️ Y la TIENDA se comprueba contra las que tiene asignadas.
+    //
+    // La pantalla de Nueva Venta ya solo ofrece las suyas, pero eso es esconder,
+    // no restringir: un POST a mano podía crear un pedido de cualquier tienda.
+    // Klever, por ejemplo, no debe registrar ventas de YAW (21-ago-2026).
+    //
+    // ⚠️ Solo se aplica a los roles de venta y solo si tienen tiendas asignadas
+    // — mismo criterio que `lib/tiendasUsuario.js`: un dato faltante no puede
+    // dejar a nadie sin poder vender.
+    if (!puedeVerTienda(
+      { rol: String(usuario.ROL || '').toUpperCase(), tiendas: usuario.TIENDAS },
+      tiendaId,
+    )) {
+      return Response.json(
+        { error: `No tienes acceso a la tienda ${tiendaId}` },
+        { status: 403 },
+      )
+    }
 
     // Cliente: upsert por cédula (dual-write). Si existe, actualiza conservando
     // lo previo cuando el nuevo venga vacío; si no, lo crea. Devuelve su CLIENTE_ID.
