@@ -10,6 +10,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState(null)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [errorTexto, setErrorTexto] = useState('')
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -19,103 +20,47 @@ export default function DashboardPage() {
     loadData(u)
   }, [])
 
-  async function loadData(u) {
+  async function loadData() {
+    setErrorTexto('')
     try {
-      const res = await fetch(`/api/pedidos?vendedor=${u.id}&rol=${u.rol}`)
+      // Los agregados los calcula la BASE. Antes se traian los 690 pedidos con
+      // sus cinco tablas y se sumaba aca — y `detalle_pedido` pedia 1314 filas
+      // cuando PostgREST devuelve 1000 como mucho: 314 prendas ya se perdian,
+      // falseando el conteo por area y pudiendo dar por LISTO un pedido al que
+      // solo le faltaban prendas por cargar.
+      //
+      // Y NO se manda `?rol=`: el alcance sale de la cookie firmada.
+      const res = await fetch('/api/inicio', { cache: 'no-store' })
+      if (!res.ok) {
+        const detalle = await res.json().catch(() => ({}))
+        setErrorTexto(detalle.error || `HTTP ${res.status}`)
+        return
+      }
       const d = await res.json()
-      const pedidos = d.pedidos || []
-      setData(buildStats(pedidos, u))
+      setData(d.resumen || null)
+    } catch (e) {
+      // Una respuesta que no es JSON tambien es un fallo, no un panel en cero.
+      setErrorTexto(e?.message || 'Error de conexion')
     } finally { setLoading(false) }
-  }
-
-  function buildStats(pedidosTodos, u) {
-    // VENDEDOR_YAW solo ve pedidos de tienda YAW
-    const pedidos = (u.rol === 'VENDEDOR')
-      ? pedidosTodos.filter(p => p.VENDEDOR_ID === u.id || p.VENDEDOR_ID === u.nombre)
-      : u.rol === 'VENDEDOR_YAW'
-      ? pedidosTodos.filter(p => p.TIENDA_ID === 'YAW')
-      : pedidosTodos
-
-    const hoy = hoyEcuador()
-    const mesActual = hoy.slice(0, 7)
-
-    // FECHA_PEDIDO es un instante. Recortar su ISO (que Supabase manda en UTC)
-    // metía los pedidos de la tarde-noche en el día siguiente: las ventas de hoy
-    // arrastraban las de ayer después de las 19:00. Se agrupa por día de Ecuador.
-    const diaDe = (p) => fechaISOEcuador(p.FECHA_PEDIDO)
-
-    const pedidosHoy = pedidos.filter(p => diaDe(p) === hoy)
-    const pedidosMes = pedidos.filter(p => diaDe(p).slice(0, 7) === mesActual)
-
-    const ventasMes = pedidosMes.reduce((s, p) => s + parseFloat(p.MONTO_TOTAL || 0), 0)
-    const ventasHoy = pedidosHoy.reduce((s, p) => s + parseFloat(p.MONTO_TOTAL || 0), 0)
-    const cobradoMes = pedidosMes.reduce((s, p) => s + parseFloat(p.MONTO_ABONADO || 0), 0)
-    // Clamp por fila: un sobrepago (envío incluido en el abono) deja MONTO_PENDIENTE
-    // negativo en datos históricos; no debe restar del total "por cobrar".
-    const pendienteTotal = pedidos.reduce((s, p) => s + Math.max(0, parseFloat(p.MONTO_PENDIENTE || 0)), 0)
-
-    const porEstado = {
-      PENDIENTE_FABRICA: pedidos.filter(p => p.ESTADO_PEDIDO === 'PENDIENTE_FABRICA').length,
-      EN_FABRICA:        pedidos.filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA').length,
-      DESPACHO:          pedidos.filter(p => p.ESTADO_PEDIDO === 'DESPACHO').length,
-      ENTREGADO:         pedidos.filter(p => p.ESTADO_PEDIDO === 'ENTREGADO').length,
-    }
-
-    const atrasados = pedidos.filter(p => {
-      if (!p.FECHA_ENTREGA_PROMETIDA) return false
-      if (p.ESTADO_PEDIDO === 'ENTREGADO' || p.ESTADO_PEDIDO === 'CANCELADO') return false
-      return p.FECHA_ENTREGA_PROMETIDA.slice(0,10) < hoy
-    })
-
-    const porVendedor = {}
-    pedidosMes.forEach(p => {
-      if (!porVendedor[p.VENDEDOR_ID]) porVendedor[p.VENDEDOR_ID] = { monto: 0, count: 0 }
-      porVendedor[p.VENDEDOR_ID].monto += parseFloat(p.MONTO_TOTAL || 0)
-      porVendedor[p.VENDEDOR_ID].count++
-    })
-
-    const porTienda = {
-      MANDARINA: pedidosMes.filter(p => p.TIENDA_ID === 'MANDARINA').reduce((s,p) => s + parseFloat(p.MONTO_TOTAL||0), 0),
-      INDSTORE:  pedidosMes.filter(p => p.TIENDA_ID === 'INDSTORE').reduce((s,p) => s + parseFloat(p.MONTO_TOTAL||0), 0),
-    }
-
-    const allItems = pedidos
-      .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA' || p.ESTADO_PEDIDO === 'PENDIENTE_FABRICA')
-      .flatMap(p => (p.items || []).filter(i => i.SUBESTADO !== 'LISTO'))
-
-    const porArea = {}
-    allItems.forEach(i => { const a = i.AREA || 'SIN ÁREA'; if (!porArea[a]) porArea[a] = 0; porArea[a]++ })
-
-    // Por instante, no por día: ordenar por el día dejaba el empate de todos los
-    // pedidos de una misma fecha al azar del orden de llegada.
-    const misRecientes = [...pedidos]
-      .sort((a, b) => {
-        const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
-        const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
-        return fb - fa
-      })
-      .slice(0, 5)
-
-    // Para despacho: listos y en despacho
-    const listos = pedidos.filter(p =>
-      p.ESTADO_PEDIDO === 'EN_FABRICA' &&
-      (p.items||[]).length > 0 &&
-      (p.items||[]).filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA').every(i => i.SUBESTADO === 'LISTO')
-    )
-    const enDespacho = pedidos.filter(p => p.ESTADO_PEDIDO === 'DESPACHO')
-
-    return {
-      ventasHoy, ventasMes, cobradoMes, pendienteTotal,
-      totalPedidos: pedidos.length, pedidosHoy: pedidosHoy.length,
-      porEstado, atrasados, porVendedor, porTienda,
-      allItems, porArea, misRecientes,
-      listos, enDespacho, // para dashboard despacho
-    }
   }
 
   if (!user || loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+
+  // Un fallo NO es un panel en cero. Antes cualquier error dejaba `data` en null
+  // y la pantalla pintaba ceros, que se leen como "hoy no se vendió nada".
+  if (errorTexto || !data) return (
+    <div className="max-w-md mx-auto mt-10 card p-8 text-center border-red-500/40">
+      <div className="text-4xl mb-3">⚠️</div>
+      <div className="font-medium text-white">No se pudo cargar el panel</div>
+      <div className="text-sm text-gray-500 mt-1">{errorTexto || 'Sin datos'}</div>
+      <div className="text-xs text-gray-600 mt-2">No es que no haya ventas: es que no pudimos leerlas.</div>
+      <button onClick={() => { setLoading(true); loadData() }} className="btn-primary text-sm px-4 py-2 mt-4">
+        Reintentar
+      </button>
     </div>
   )
 
@@ -285,9 +230,14 @@ function DashboardVendedor({ data, user }) {
 
 // ─── DESPACHO ─────────────────────────────────────────────────────────────────
 function DashboardDespacho({ data, user }) {
-  // FIX #16: data.listos y data.enDespacho ahora vienen de buildStats
-  const listos = data.listos || []
-  const enDespacho = data.enDespacho || []
+  // Ahora son NÚMEROS, no arreglos: la base los cuenta y manda el conteo.
+  //
+  // ☠️ `listos` se calcula con NOT EXISTS sobre la tabla completa. En el
+  // navegador dependía de que las prendas hubieran llegado, y con el tope de
+  // 1000 de PostgREST podían faltar: un pedido incompleto parecía tenerlo todo
+  // LISTO y aparecía como listo para despachar sin estarlo.
+  const listos = data.listos || 0
+  const enDespacho = data.enDespacho || 0
   return (
     <div className="max-w-xl mx-auto px-4 pt-4 pb-6">
       <div className="mb-6">
@@ -295,8 +245,8 @@ function DashboardDespacho({ data, user }) {
         <p className="text-gray-500 text-sm capitalize">{new Date().toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'})}</p>
       </div>
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="card p-4 text-center"><div className="text-3xl font-bold text-yellow-400">{listos.length}</div><div className="text-xs text-gray-500 mt-1">Listos para despacho</div></div>
-        <div className="card p-4 text-center"><div className="text-3xl font-bold text-purple-400">{enDespacho.length}</div><div className="text-xs text-gray-500 mt-1">En despacho</div></div>
+        <div className="card p-4 text-center"><div className="text-3xl font-bold text-yellow-400">{listos}</div><div className="text-xs text-gray-500 mt-1">Listos para despacho</div></div>
+        <div className="card p-4 text-center"><div className="text-3xl font-bold text-purple-400">{enDespacho}</div><div className="text-xs text-gray-500 mt-1">En despacho</div></div>
       </div>
       <Link href="/dashboard/despacho" className="card p-4 flex items-center justify-between hover:border-gray-700 transition-all block mb-3">
         <div className="flex items-center gap-3"><span className="text-2xl">🚚</span><div><div className="text-white font-semibold text-sm">Módulo de despacho</div><div className="text-xs text-gray-500">Gestionar guías y entregas</div></div></div>
@@ -385,14 +335,25 @@ function DashboardYAW({ data, user }) {
   )
 }
 function DashboardDiseno({ data, user }) {
-  // Filtrar ítems por las áreas del usuario
-  const misItems = data.allItems.filter(i => {
+  // Suma las prendas pendientes de las áreas de este usuario.
+  //
+  // Antes se filtraba `data.allItems`, que traía TODAS las prendas del CRM al
+  // navegador — y ademas venían recortadas por el tope de 1000 de PostgREST.
+  // Ahora la base entrega los conteos ya agrupados por área.
+  const sumaDeMisAreas = (mapa) => {
     const areas = (user.areas || [])
-    if (areas.length === 0 || (areas.length === 1 && areas[0] === 'TODAS')) return true
-    return areas.some(a => (i.AREA || '').toUpperCase().includes(a.toUpperCase()))
-  })
-  const totalPendientes = misItems.length
-  const urgentes = misItems.filter(i => i.fechaEntrega && Math.ceil((new Date(i.fechaEntrega)-new Date())/86400000)<=2).length
+    const todas = areas.length === 0 || (areas.length === 1 && areas[0] === 'TODAS')
+    return Object.entries(mapa || {}).reduce((total, [area, n]) => {
+      if (todas) return total + n
+      return areas.some(a => String(area).toUpperCase().includes(String(a).toUpperCase()))
+        ? total + n : total
+    }, 0)
+  }
+  const totalPendientes = sumaDeMisAreas(data.porArea)
+  // ☠️ Los urgentes salen de `porAreaUrgente`, calculado en la base con la fecha
+  // de entrega del PEDIDO. Antes se leía `i.fechaEntrega` de cada prenda — un
+  // campo que los ítems NO tienen —, así que este número era SIEMPRE 0.
+  const urgentes = sumaDeMisAreas(data.porAreaUrgente)
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <div className="mb-6 pt-2">

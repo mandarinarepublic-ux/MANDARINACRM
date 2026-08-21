@@ -14,6 +14,7 @@ export default function MisPedidosPage() {
   const [user, setUser] = useState(null)
   const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [errorTexto, setErrorTexto] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
@@ -24,23 +25,37 @@ export default function MisPedidosPage() {
     if (!stored) { router.push('/'); return }
     const u = JSON.parse(stored)
     setUser(u)
-    loadPedidos(u)
+    loadPedidos()
   }, [])
 
-  async function loadPedidos(u) {
-    setLoading(true)
+  async function loadPedidos() {
+    setLoading(true); setErrorTexto('')
     try {
-      const res = await fetch(`/api/pedidos?vendedor=${encodeURIComponent(u.nombre || u.id)}&vendedorId=${u.id}&rol=${u.rol}&scope=mios`)
+      // El servidor ya filtra por vendedor y por EN_FABRICA, y ordena por número
+      // (más reciente primero). Acá no se vuelve a filtrar ni a ordenar.
+      //
+      // ☠️ Antes se mandaba `?vendedor=&vendedorId=&rol=&scope=mios`. Ese `scope`
+      // NO filtraba en la base: traía los 690 pedidos, los filtraba en memoria y
+      // pedía las cuatro tablas del join con un `.in()` de 690 ids — donde
+      // `detalle_pedido` perdía 314 filas por el tope de PostgREST. Y los tres
+      // parámetros los ponía el navegador, así que cambiando la URL se veían los
+      // pedidos de otro vendedor.
+      const res = await fetch('/api/mis-pedidos', { cache: 'no-store' })
+      if (!res.ok) {
+        const detalle = await res.json().catch(() => ({}))
+        setErrorTexto(detalle.error || `HTTP ${res.status}`)
+        setPedidos([])
+        return
+      }
       const data = await res.json()
-      const ordenados = (data.pedidos || [])
-        .filter(p => p.ESTADO_PEDIDO === 'EN_FABRICA')
-        .sort((a, b) => {
-          const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
-          const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
-          if (fb - fa !== 0) return fb - fa
-          return (b.PEDIDO_ID || '').localeCompare(a.PEDIDO_ID || '')
-        })
-      setPedidos(ordenados)
+      setPedidos(data.pedidos || [])
+      if (data.completo === false) {
+        setErrorTexto('⚠️ La lista llegó incompleta: faltan pedidos por cargar. Recarga.')
+      }
+    } catch (e) {
+      // Una respuesta que no es JSON también es un fallo, no una lista vacía.
+      setErrorTexto(e?.message || 'Error de conexión')
+      setPedidos([])
     } finally { setLoading(false) }
   }
 
@@ -105,6 +120,14 @@ export default function MisPedidosPage() {
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
             </div>
+          ) : errorTexto ? (
+            /* Un fallo NO es "no tienes pedidos". Antes los dos se veian igual. */
+            <div className="card p-8 text-center border-red-500/40">
+              <div className="text-4xl mb-3">⚠️</div>
+              <div className="font-medium text-white">No se pudieron cargar tus pedidos</div>
+              <div className="text-sm text-gray-500 mt-1">{errorTexto}</div>
+              <button onClick={() => loadPedidos()} className="btn-primary text-sm px-4 py-2 mt-4">Reintentar</button>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="card p-8 text-center text-gray-600">
               <div className="text-3xl mb-3">📦</div>
@@ -125,7 +148,7 @@ export default function MisPedidosPage() {
                       <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
                       <span className="text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                     </div>
-                    <div className="text-xs text-gray-500">{p.items?.length || 0} prenda(s) · {formatFechaDia(p.FECHA_PEDIDO)}</div>
+                    <div className="text-xs text-gray-500">{p.PRENDAS ?? 0} prenda(s) · {formatFechaDia(p.FECHA_PEDIDO)}</div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
                     <span className={`badge text-xs ${ESTADO_COLORS[p.ESTADO_PEDIDO]}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO] || p.ESTADO_PEDIDO}</span>
