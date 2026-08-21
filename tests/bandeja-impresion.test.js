@@ -6,7 +6,7 @@
 import test from 'node:test'
 import assert from 'node:assert'
 import { readFileSync } from 'node:fs'
-import { seFabrica } from '../lib/prenda-se-fabrica.js'
+import { seFabrica, seImprime, entregadaEnTienda } from '../lib/prenda-se-fabrica.js'
 
 const src = readFileSync(new URL('../app/dashboard/impresion/page.js', import.meta.url), 'utf8')
 const repo = readFileSync(new URL('../lib/db/impresion.js', import.meta.url), 'utf8')
@@ -25,33 +25,69 @@ test('☠️ una prenda ELIMINADA no se imprime', () => {
   // PdfPedido pintaba TODOS los items del pedido sin mirar nada: el taller
   // habria fabricado algo que se cancelo. Hoy no ha pasado (0 prendas eliminadas
   // en toda la base, 0 eliminaciones en la bitacora), pero la funcion existe.
+  assert.strictEqual(seImprime({ subestado: 'ELIMINADO' }), false)
+  assert.strictEqual(seImprime({ subestado: 'SOLICITADO', eliminado: true }), false)
   assert.strictEqual(seFabrica({ subestado: 'ELIMINADO' }), false)
-  assert.strictEqual(seFabrica({ subestado: 'SOLICITADO', eliminado: true }), false)
 })
 
-test('☠️ una prenda de ENTREGA EN TIENDA no se imprime', () => {
-  // No hay nada que fabricar con ellas. Se estaban imprimiendo: 3 el 19-ago.
-  assert.strictEqual(seFabrica({ subestado: 'ENTREGADO_TIENDA' }), false)
+test('☠️ la de ENTREGA EN TIENDA SI se imprime, pero NO se fabrica', () => {
+  // Del 19 al 21-ago-2026 se ocultaba de la hoja. Al poner el TOTAL en la franja
+  // de control eso volvio la hoja mentirosa: decia "6 PRENDAS" y pintaba 5, que
+  // es justo la señal que significa "lista recortada". 5 pedidos EN_FABRICA
+  // daban esa falsa alarma.
+  const p = { subestado: 'ENTREGADO_TIENDA' }
+  assert.strictEqual(seImprime(p), true, 'sale en papel para que el total cuadre')
+  assert.strictEqual(seFabrica(p), false, 'pero no hay nada que producir')
+  assert.strictEqual(entregadaEnTienda(p), true, 'y el papel la marca con el visto')
 })
 
 test('lo que SI se fabrica sigue imprimiendose', () => {
   for (const sub of ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO', '']) {
-    assert.strictEqual(seFabrica({ subestado: sub }), true, `${sub || '(vacio)'} deberia imprimirse`)
+    assert.strictEqual(seImprime({ subestado: sub }), true, `${sub || '(vacio)'} deberia imprimirse`)
+    assert.strictEqual(seFabrica({ subestado: sub }), true, `${sub || '(vacio)'} deberia fabricarse`)
   }
   // El subestado compuesto por area tambien.
   assert.strictEqual(seFabrica({ subestado: 'ESTAMPADO:LISTO|BORDADO:EN_PROCESO' }), true)
 })
 
 test('el filtro no se deja engañar por mayusculas ni por null', () => {
-  assert.strictEqual(seFabrica({ subestado: 'eliminado' }), false)
+  assert.strictEqual(seImprime({ subestado: 'eliminado' }), false)
+  assert.strictEqual(entregadaEnTienda({ subestado: 'entregado_tienda' }), true)
   assert.strictEqual(seFabrica({ subestado: 'entregado_tienda' }), false)
-  assert.strictEqual(seFabrica(null), false)
-  assert.strictEqual(seFabrica({}), true, 'sin subestado es una prenda normal')
+  assert.strictEqual(seImprime(null), false)
+  assert.strictEqual(entregadaEnTienda(null), false)
+  assert.strictEqual(seImprime({}), true, 'sin subestado es una prenda normal')
 })
 
 test('el filtro se aplica en el REPO, no en el PDF', () => {
-  assert.ok(/\.filter\(seFabrica\)/.test(repo),
+  assert.ok(/\.filter\(seImprime\)/.test(repo),
     'si se dejara al PDF, cualquier otro consumidor volveria a imprimir lo eliminado')
+})
+
+test('☠️ el visto de "entregada en tienda" se pinta en la hoja', () => {
+  const pdf = readFileSync(new URL('../components/pedido/PdfPedido.js', import.meta.url), 'utf8')
+  const codigo = sinComentarios(pdf)
+  assert.ok(/entregadaEnTienda/.test(codigo), 'la hoja tiene que distinguirla')
+  assert.ok(/✓/.test(codigo), 'con un visto, no con letra chica')
+  // Quien despacha necesita saber cuantas del total NO va a empacar.
+  assert.ok(/YA ENTREGADA/.test(codigo), 'y el conteo va en la franja de control')
+})
+
+// ─── Tinta ──────────────────────────────────────────────────────────────────
+
+test('la hoja de produccion no gasta tinta en fondos', () => {
+  // Se imprime a diario y a granel: los recuadros grises eran tinta sin
+  // informacion, y en una impresora B/N los pastel salian todos iguales.
+  const pdf = readFileSync(new URL('../components/pedido/PdfPedido.js', import.meta.url), 'utf8')
+  const conf = pdf.slice(pdf.indexOf('export function PdfConfeccionPagina'))
+  // Se permiten DOS fondos, y los dos son señal, no decoracion:
+  //   #1a1a1a → la franja negra del control (PRENDAS / UNIDADES / HOJA X DE Y)
+  //   #ef4444 → el chip URGENTE, que tiene que saltar a la vista
+  const PERMITIDOS = /^backgroundColor:'#(fff|1a1a1a|ef4444)'$/
+  const fondos = (conf.match(/backgroundColor:'#[0-9a-fA-F]{3,6}'/g) || [])
+    .filter(f => !PERMITIDOS.test(f))
+  assert.deepStrictEqual(fondos, [],
+    `la hoja de confeccion no puede llevar fondos de color: ${fondos.join(', ')}`)
 })
 
 // ─── El estado fantasma ─────────────────────────────────────────────────────

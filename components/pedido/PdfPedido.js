@@ -2,6 +2,7 @@
 import { parseFechaCalendario, diasHastaFecha } from '@/lib/parseFecha'
 import { paginarItems, paginarItemsCliente, distribuirFilasCliente } from '@/lib/paginarItems'
 import { imagenAncho, fotoPrincipal } from '@/lib/imagenes'
+import { entregadaEnTienda } from '@/lib/prenda-se-fabrica'
 
 // Re-export por compatibilidad: las pantallas ya importaban paginarItems desde aquí.
 export { paginarItems, paginarItemsCliente, distribuirFilasCliente, pesoItem, CAPACIDAD_HOJA_CONF } from '@/lib/paginarItems'
@@ -29,11 +30,13 @@ function recortarTexto(t) {
   return { texto: s.slice(0, MAX_TEXTO_HOJA).trimEnd() + '…', recortado: true }
 }
 
-function BloqueTexto({ valor, titulo, colorTitulo, fondo, borde }) {
+// Sin fondo de color: en la hoja de producción es tinta que no dice nada, y en
+// una impresora en blanco y negro los tres tonos pastel salían igual de grises.
+function BloqueTexto({ valor, titulo }) {
   const { texto, recortado } = recortarTexto(valor)
   return (
-    <div style={{ backgroundColor:fondo, borderRadius:'7px', padding:'7px 9px', border:`1px solid ${borde}`, marginBottom:'6px' }}>
-      <div style={{ fontSize:'7px', color:colorTitulo, fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>{titulo}</div>
+    <div style={{ borderRadius:'7px', padding:'7px 9px', border:'1.5px solid #1a1a1a', marginBottom:'6px' }}>
+      <div style={{ fontSize:'8px', color:'#1a1a1a', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>{titulo}</div>
       <div style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5, fontWeight:'600' }}>{texto}</div>
       {recortado && (
         <div style={{ fontSize:'8px', color:'#b91c1c', fontWeight:'800', marginTop:'3px' }}>
@@ -99,9 +102,12 @@ function PrendaCliente({ item, numero, tiendaColor, anchoCompleto }) {
   )
 }
 
+// ⚠️ SIN FONDOS. La hoja de producción se imprime todos los días y a granel: los
+// recuadros grises eran tinta pura sin información. Todo va con borde negro sobre
+// papel blanco, que además se lee mejor en una impresora en blanco y negro.
 function Ficha({ label, value, color, big }) {
   return (
-    <div style={{ backgroundColor:'#f5f5f5', borderRadius:'8px', padding:'8px 12px', border:'1px solid #e0e0e0', marginBottom:'6px', boxSizing:'border-box' }}>
+    <div style={{ borderRadius:'8px', padding:'8px 12px', border:'1.5px solid #1a1a1a', marginBottom:'6px', boxSizing:'border-box' }}>
       <div style={{ fontSize:'9px', color:'#1a1a1a', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'4px', fontWeight:'600' }}>{label}</div>
       <div style={{ fontSize: big ? '22px' : '13px', fontWeight:'900', color: color || '#1a1a1a', lineHeight:1.2, textAlign:'center' }}>{value}</div>
     </div>
@@ -337,14 +343,17 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
   const lineasPedido = pedido?.PRENDAS_TOTAL ?? (pedido?.items || []).length
   const unidadesPedido = (pedido?.items||[]).reduce((s,i)=>s+parseInt(i.CANTIDAD||1),0)
   const areas = [...new Set((pedido?.items||[]).map(i=>i.AREA).filter(Boolean))].join(', ') || '—'
+  // Las que el cliente ya se llevó de la tienda: salen en la hoja con su visto,
+  // pero quien despacha tiene que saber cuántas NO va a empacar.
+  const yaEntregadas = (pedido?.items||[]).filter(i => entregadaEnTienda({ subestado: i.SUBESTADO })).length
 
   return (
     <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", backgroundColor:'#fff', width:`${PAGE_W}px`, height:`${PAGE_H}px`, overflow:'hidden', position:'relative', boxSizing:'border-box' }}>
 
-      <div style={{ borderBottom:`4px solid ${tiendaColor}`, padding:'10px 48px', backgroundColor:'#fafafa', overflow:'hidden', boxSizing:'border-box' }}>
+      <div style={{ borderBottom:`4px solid ${tiendaColor}`, padding:'10px 48px', overflow:'hidden', boxSizing:'border-box' }}>
         <div style={{ float:'left', overflow:'hidden' }}>
           {esYaw
-            ? <div style={{ float:'left', width:'40px', height:'40px', backgroundColor:'#fff', border:'2px solid #e0e0e0', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center', marginRight:'10px', marginTop:'4px', boxSizing:'border-box' }}>
+            ? <div style={{ float:'left', width:'40px', height:'40px', border:'2px solid #1a1a1a', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center', marginRight:'10px', marginTop:'4px', boxSizing:'border-box' }}>
                 <span style={{ fontSize:'13px', fontWeight:'900', color:'#1a1a1a', letterSpacing:'-0.5px' }}>YAW</span>
               </div>
             : <img src={logo} style={{ float:'left', width:'40px', height:'40px', objectFit:'contain', marginRight:'10px', marginTop:'4px' }} alt="logo" />
@@ -357,7 +366,7 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
         </div>
         <div style={{ float:'right', textAlign:'right' }}>
           {urgente && <div style={{ display:'inline-block', backgroundColor:'#ef4444', color:'#fff', fontSize:'10px', fontWeight:'800', padding:'3px 10px', borderRadius:'20px', marginBottom:'3px', textTransform:'uppercase' }}>🚨 URGENTE</div>}
-          {totalPaginas > 1 && <div style={{ display:'inline-block', backgroundColor:tiendaColor+'15', border:`1px solid ${tiendaColor}40`, borderRadius:'8px', padding:'3px 12px', marginBottom:'3px', marginLeft:'6px' }}><span style={{ fontSize:'10px', fontWeight:'800', color:tiendaColor }}>Pág. {paginaActual}/{totalPaginas}</span></div>}
+          {totalPaginas > 1 && <div style={{ display:'inline-block', border:`1.5px solid ${tiendaColor}`, borderRadius:'8px', padding:'3px 12px', marginBottom:'3px', marginLeft:'6px' }}><span style={{ fontSize:'10px', fontWeight:'800', color:tiendaColor }}>Pág. {paginaActual}/{totalPaginas}</span></div>}
           <div style={{ fontSize:'9px', color:'#1a1a1a', marginBottom:'1px', clear:'both', fontWeight:'600' }}>Entrega comprometida</div>
           <div style={{ fontSize:'13px', fontWeight:'700', color:urgente?'#ef4444':'#1a1a1a' }}>
             {entrega ? entrega.toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'}) : '—'}
@@ -400,6 +409,11 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
               {(items?.length || 0) > 1 ? `–#${(offsetIdx || 0) + items.length}` : ''}
             </span>
           )}
+          {yaEntregadas > 0 && (
+            <span style={{ fontSize:'11px', color:'#fff', fontWeight:'800', marginLeft:'14px' }}>
+              · ✓ {yaEntregadas} YA ENTREGADA{yaEntregadas > 1 ? 'S' : ''} EN TIENDA
+            </span>
+          )}
         </div>
         <div style={{ float:'right', textAlign:'right', paddingTop:'3px' }}>
           <span style={{ fontSize:'9px', color:'#fff', fontWeight:'700', opacity:0.85 }}>
@@ -423,15 +437,26 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
           const fotoSizePx = FOTO_SIZES[fotos.length] || 134
           const fotoRows = fotos.length <= 2 ? [fotos] : fotos.length === 3 ? [fotos.slice(0,2), fotos.slice(2)] : [fotos.slice(0,2), fotos.slice(2,4)]
 
-          return (
-            <div key={idx} style={{ marginBottom:'10px', border:'2px solid #e0e0e0', borderRadius:'12px', overflow:'hidden' }}>
+          // El cliente ya se llevó esta prenda de la tienda: no hay nada que
+          // fabricar ni que empacar. Sale igual en la hoja — si se ocultara, el
+          // total de la franja no cuadraría con lo impreso — pero con el ✓ bien
+          // visible para que nadie la vuelva a producir.
+          const yaSalio = entregadaEnTienda({ subestado: item.SUBESTADO })
 
-              <div style={{ borderBottom:`3px solid ${tiendaColor}`, padding:'7px 14px', overflow:'hidden', backgroundColor:'#fff' }}>
+          return (
+            <div key={idx} style={{ marginBottom:'10px', border:'2px solid #1a1a1a', borderRadius:'12px', overflow:'hidden' }}>
+
+              <div style={{ borderBottom:`3px solid ${tiendaColor}`, padding:'7px 14px', overflow:'hidden' }}>
                 <span style={{ float:'left' }}>
-                  <span style={{ display:'inline-block', backgroundColor:tiendaColor, color:'#fff', fontSize:'11px', fontWeight:'900', padding:'3px 11px', borderRadius:'20px', marginRight:'10px', fontFamily:'monospace' }}>#{globalIdx+1}</span>
+                  <span style={{ display:'inline-block', border:`2px solid ${tiendaColor}`, color:tiendaColor, fontSize:'11px', fontWeight:'900', padding:'2px 10px', borderRadius:'20px', marginRight:'10px', fontFamily:'monospace' }}>#{globalIdx+1}</span>
                   <span style={{ fontSize:'14px', fontWeight:'800', color:'#1a1a1a' }}>{item.PRODUCTO_NOMBRE}</span>
+                  {yaSalio && (
+                    <span style={{ display:'inline-block', marginLeft:'10px', border:'2px solid #1a1a1a', borderRadius:'20px', padding:'2px 12px', fontSize:'11px', fontWeight:'900', color:'#1a1a1a', textTransform:'uppercase' }}>
+                      ✓ Entregada en tienda — no fabricar
+                    </span>
+                  )}
                 </span>
-                {item.AREA && <span style={{ float:'right', display:'inline-block', border:`2px solid ${tiendaColor}`, color:tiendaColor, fontSize:'11px', fontWeight:'800', padding:'3px 16px', borderRadius:'20px', textTransform:'uppercase', backgroundColor:'#fff', textAlign:'center' }}>{item.AREA}</span>}
+                {item.AREA && <span style={{ float:'right', display:'inline-block', border:`2px solid ${tiendaColor}`, color:tiendaColor, fontSize:'11px', fontWeight:'800', padding:'3px 16px', borderRadius:'20px', textTransform:'uppercase', textAlign:'center' }}>{item.AREA}</span>}
                 <div style={{ clear:'both' }} />
               </div>
 
@@ -443,7 +468,7 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                         <div key={ri} style={{ overflow:'hidden', marginBottom:ri < fotoRows.length-1 ? '5px' : '0' }}>
                           {row.map((f, fi) => (
                             <div key={fi} style={{ float:'left', textAlign:'center', marginRight:fi < row.length-1 ? '5px' : '0' }}>
-                              <img src={imagenAncho(f.url, 600)} style={{ width:`${fotoSizePx}px`, height:`${fotoSizePx}px`, objectFit:'cover', borderRadius:'8px', border:'2px solid #ddd', backgroundColor:'#f5f5f5', display:'block' }} />
+                              <img src={imagenAncho(f.url, 600)} style={{ width:`${fotoSizePx}px`, height:`${fotoSizePx}px`, objectFit:'cover', borderRadius:'8px', border:'1.5px solid #1a1a1a', display:'block' }} />
                               <div style={{ fontSize:'8px', color:'#1a1a1a', marginTop:'3px', textTransform:'uppercase', letterSpacing:'0.5px', fontWeight:'700' }}>{f.label}</div>
                             </div>
                           ))}
@@ -452,7 +477,7 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                       ))}
                     </div>
                   ) : (
-                    <div style={{ width:'160px', height:'160px', backgroundColor:'#f5f5f5', borderRadius:'10px', border:'2px dashed #ddd', textAlign:'center', paddingTop:'45px', boxSizing:'border-box' }}>
+                    <div style={{ width:'160px', height:'160px', borderRadius:'10px', border:'2px dashed #1a1a1a', textAlign:'center', paddingTop:'45px', boxSizing:'border-box' }}>
                       <div style={{ fontSize:'24px', marginBottom:'5px' }}>✏️</div>
                       <div style={{ fontSize:'9px', color:'#1a1a1a', fontWeight:'600' }}>Sin imágenes</div>
                     </div>
@@ -478,16 +503,14 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                   </div>
 
                   {item.DETALLE_PERSONALIZADO && (
-                    <BloqueTexto valor={item.DETALLE_PERSONALIZADO} titulo="📋 Instrucciones"
-                      colorTitulo="#b45309" fondo="#fff8e1" borde="#ffe082" />
+                    <BloqueTexto valor={item.DETALLE_PERSONALIZADO} titulo="📋 Instrucciones" />
                   )}
                   {item.NOTAS_AREA && (
-                    <BloqueTexto valor={item.NOTAS_AREA} titulo="📝 Nota de área"
-                      colorTitulo="#1d4ed8" fondo="#eff6ff" borde="#bfdbfe" />
+                    <BloqueTexto valor={item.NOTAS_AREA} titulo="📝 Nota de área" />
                   )}
                   {item.ARCHIVO_DISENO_URL && (
-                    <div style={{ backgroundColor:'#f0fdf4', borderRadius:'7px', padding:'7px 9px', border:'1px solid #bbf7d0' }}>
-                      <div style={{ fontSize:'7px', color:'#15803d', fontWeight:'800', marginBottom:'2px' }}>📎 Archivo AI/PSD</div>
+                    <div style={{ borderRadius:'7px', padding:'7px 9px', border:'1.5px solid #1a1a1a' }}>
+                      <div style={{ fontSize:'8px', color:'#1a1a1a', fontWeight:'800', marginBottom:'2px' }}>📎 Archivo AI/PSD</div>
                       <div style={{ fontSize:'8px', color:'#1a1a1a', wordBreak:'break-all', lineHeight:1.4, fontWeight:'600' }}>{item.ARCHIVO_DISENO_URL.split('/').pop()}</div>
                     </div>
                   )}
@@ -496,14 +519,24 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                 <div style={{ clear:'both' }} />
               </div>
 
-              <div style={{ backgroundColor:'#f5f5f5', padding:'6px 14px', borderTop:'1px solid #e0e0e0', overflow:'hidden' }}>
-                <span style={{ float:'left', fontSize:'7px', color:'#1a1a1a', fontWeight:'800', textTransform:'uppercase', lineHeight:'16px', marginRight:'12px' }}>Control</span>
-                {['Confeccionado','Diseño aplicado','Revisado','Listo para despacho'].map(step => (
-                  <span key={step} style={{ float:'left', marginRight:'14px', overflow:'hidden' }}>
-                    <span style={{ float:'left', width:'13px', height:'13px', border:'2px solid #aaa', borderRadius:'3px', marginRight:'4px', marginTop:'1px', display:'block', boxSizing:'border-box' }} />
-                    <span style={{ float:'left', fontSize:'8px', color:'#1a1a1a', lineHeight:'15px', fontWeight:'600' }}>{step}</span>
+              {/* Una prenda que ya salió de la tienda no se confecciona ni se
+                  revisa: dejarle las casillas en blanco invita a producirla. */}
+              <div style={{ padding:'6px 14px', borderTop:'1.5px solid #1a1a1a', overflow:'hidden' }}>
+                {yaSalio ? (
+                  <span style={{ float:'left', fontSize:'11px', color:'#1a1a1a', fontWeight:'900', lineHeight:'16px', textTransform:'uppercase', letterSpacing:'0.5px' }}>
+                    ✓✓✓ Ya entregada en tienda — nada que confeccionar ni que despachar
                   </span>
-                ))}
+                ) : (
+                  <>
+                    <span style={{ float:'left', fontSize:'7px', color:'#1a1a1a', fontWeight:'800', textTransform:'uppercase', lineHeight:'16px', marginRight:'12px' }}>Control</span>
+                    {['Confeccionado','Diseño aplicado','Revisado','Listo para despacho'].map(step => (
+                      <span key={step} style={{ float:'left', marginRight:'14px', overflow:'hidden' }}>
+                        <span style={{ float:'left', width:'13px', height:'13px', border:'2px solid #1a1a1a', borderRadius:'3px', marginRight:'4px', marginTop:'1px', display:'block', boxSizing:'border-box' }} />
+                        <span style={{ float:'left', fontSize:'8px', color:'#1a1a1a', lineHeight:'15px', fontWeight:'600' }}>{step}</span>
+                      </span>
+                    ))}
+                  </>
+                )}
                 <div style={{ clear:'both' }} />
               </div>
 
@@ -512,7 +545,7 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
         })}
       </div>
 
-      <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'8px 48px', backgroundColor:'#f5f5f5', borderTop:'2px solid #e0e0e0', overflow:'hidden', boxSizing:'border-box' }}>
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'8px 48px', borderTop:'1.5px solid #1a1a1a', overflow:'hidden', boxSizing:'border-box' }}>
         <div style={{ float:'left', overflow:'hidden' }}>
           {esYaw
             ? <span style={{ float:'left', fontSize:'8px', color:'#1a1a1a', lineHeight:'22px', fontWeight:'900' }}>YAW</span>

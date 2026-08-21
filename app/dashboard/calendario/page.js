@@ -7,7 +7,7 @@ import { PdfConfeccion, PdfConfeccionPagina, paginarItems } from '@/components/p
 import PdfScaler from '@/components/pedido/PdfScaler'
 import { generarPdfDesdeIds } from '@/lib/generarPdf'
 import { puedeVerTienda } from '@/lib/tiendasUsuario'
-import { seFabrica } from '@/lib/prenda-se-fabrica'
+import { seImprime } from '@/lib/prenda-se-fabrica'
 
 // Color por tienda para la orden de confección (mismo criterio que Producción).
 const TIENDA_COLORS = { MANDARINA: '#FF6B00', INDSTORE: '#E91E8C', YAW: '#6C3FC5' }
@@ -167,7 +167,7 @@ export default function CalendarioPage() {
       if (!d.pedido) throw new Error('El pedido no devolvió datos')
       // ☠️ Las ELIMINADAS y las de ENTREGA EN TIENDA no van en una orden de
       // producción: no hay nada que fabricar. Mismo criterio que Impresión.
-      setPreviewPedido({ ...d.pedido, items: (d.pedido.items || []).filter(seFabrica) })
+      setPreviewPedido({ ...d.pedido, items: (d.pedido.items || []).filter(seImprime) })
     } catch (e) {
       alert('No se pudo abrir la hoja: ' + (e?.message || e))
     } finally { setCargandoPreview(null) }

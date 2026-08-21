@@ -53,8 +53,8 @@ test('la hoja de confeccion pide el pedido COMPLETO', () => {
   const codigo = sinComentarios(src)
   assert.ok(/fetch\(`\/api\/pedidos\/\$\{p\.PEDIDO_ID\}`/.test(codigo),
     'sin esto la preview saldria sin fotos ni detalles')
-  assert.ok(/\.filter\(seFabrica\)/.test(codigo),
-    'y no puede incluir eliminadas ni entrega en tienda: no hay nada que fabricar')
+  assert.ok(/\.filter\(seImprime\)/.test(codigo),
+    'la eliminada no sale en papel; la de entrega en tienda SI, con su visto')
 })
 
 test('el acceso por tienda se aplica en el SERVIDOR', () => {
