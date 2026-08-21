@@ -88,11 +88,15 @@ test('la busqueda por cliente NO se recorta a 50 en silencio', () => {
   // 49 clientes reales: a la clienta 51 el Historial habria empezado a perder
   // pedidos sin avisar. Es el mismo modo de falla de siempre, entrando por la
   // puerta de atras.
+  //
+  // ⚠️ Esta prueba EXIGIA `tope = 2000` y `ids.length >= tope`, o sea que estaba
+  // cristalizando el bug: 2000 esta POR ENCIMA del corte de PostgREST, y con 1000
+  // filas devueltas "1000 >= 2000" es false. La guardia iba a callar justo al
+  // truncarse. El detalle vive en tests/lecturas-no-se-truncan.test.js.
   const clientes = readFileSync(new URL('../lib/db/clientes.js', import.meta.url), 'utf8')
   assert.ok(/idsClientesQueCoinciden/.test(repo),
     'el historial no puede resolver clientes con el buscador del desplegable')
-  assert.ok(/tope = 2000/.test(clientes), 'el tope tiene que estar lejos del corte de PostgREST')
-  assert.ok(/truncado: ids\.length >= tope/.test(clientes),
-    'y si se alcanza, hay que poder decirlo')
+  assert.ok(/count: 'exact'/.test(clientes), 'el aviso sale del conteo real, no de un umbral')
+  assert.ok(/ids\.length < count/.test(clientes), 'y si llegaron menos de los que hay, se dice')
   assert.ok(/busquedaTruncada/.test(src), 'la pantalla debe avisar cuando se recorto')
 })
