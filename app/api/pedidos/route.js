@@ -9,20 +9,49 @@ import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
 import { enviarPurchase, capiConfigurado, debeEnviarCapi } from '@/lib/metaCapi'
 import { registrarEvento } from '@/lib/eventos'
+import { sesionActual } from '@/lib/auth'
+import { getUsuarioById } from '@/lib/db/usuarios'
 import { notificarVenta } from '@/lib/telegram'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(req) {
+/**
+ * Lista de pedidos con el join completo.
+ *
+ * ☠️ YA NO ACEPTA `?rol=`, `?vendedor=` NI `?vendedorId=`.
+ *
+ * Durante meses cualquiera con una sesión —de cualquier rol— podía pedir
+ * `?rol=ADMIN` y llevarse los 690 pedidos con nombre, cédula y celular de cada
+ * cliente. El servidor obedecía al navegador: quien preguntaba decía quién era.
+ *
+ * Ahora la identidad sale de la cookie firmada y el alcance se aplica según el
+ * rol REAL. Los parámetros que llegaran se ignoran en silencio: no hay ninguno
+ * legítimo que mandar.
+ *
+ * ⚠️ Esta ruta trae las cinco tablas unidas y **pierde prendas**: pide
+ * `detalle_pedido` con un `.in()` de todos los ids —1314 filas— y PostgREST
+ * corta en 1000. Ninguna pantalla la usa ya; cada una tiene su cola acotada
+ * (/api/produccion, /api/corte, /api/despacho, /api/historial, /api/tablero,
+ * /api/impresion, /api/calendario, /api/inicio, /api/mis-pedidos). Si vuelves a
+ * necesitar una lista, haz otra cola — no la revivas.
+ */
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url)
-    // Lectura vía repo: respeta DATA_BACKEND (Sheets hoy, Supabase tras el cutover).
-    // El join (items/pagos/cliente/guía) y el filtro scope='mios' viven en listPedidos.
+    const sesion = await sesionActual()
+    if (!sesion?.id) return Response.json({ error: 'No autenticado' }, { status: 401 })
+
+    const usuario = await getUsuarioById(sesion.id)
+    if (!usuario) return Response.json({ error: 'Sesion invalida, vuelve a entrar' }, { status: 401 })
+    if (usuario.ACTIVO !== 'TRUE') return Response.json({ error: 'Usuario desactivado' }, { status: 403 })
+
+    const rol = String(usuario.ROL || '').toUpperCase()
+    // Un VENDEDOR solo ve lo suyo. `vendedor_id` guarda el NOMBRE en unos
+    // pedidos y el uuid en otros, así que se pasan los dos.
     const result = await listPedidos({
-      vendedor:   searchParams.get('vendedor'),
-      vendedorId: searchParams.get('vendedorId'),
-      rol:        searchParams.get('rol'),
-      scope:      searchParams.get('scope'),
+      vendedor:   usuario.NOMBRE,
+      vendedorId: usuario.USUARIO_ID,
+      rol,
+      scope: rol === 'VENDEDOR' ? 'mios' : null,
     })
 
     return Response.json({ pedidos: result })
