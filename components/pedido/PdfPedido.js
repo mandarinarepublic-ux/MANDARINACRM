@@ -450,9 +450,12 @@ export function PdfConfeccionPagina({ pedido, items, tiendaColor, paginaActual, 
                 <span style={{ float:'left' }}>
                   <span style={{ display:'inline-block', border:`2px solid ${tiendaColor}`, color:tiendaColor, fontSize:'11px', fontWeight:'900', padding:'2px 10px', borderRadius:'20px', marginRight:'10px', fontFamily:'monospace' }}>#{globalIdx+1}</span>
                   <span style={{ fontSize:'14px', fontWeight:'800', color:'#1a1a1a' }}>{item.PRODUCTO_NOMBRE}</span>
+                  {/* Chip corto a proposito: el aviso completo va en la barra de
+                      abajo. Con el texto largo, el chip del area se caia a una
+                      segunda linea y descuadraba la cabecera de la prenda. */}
                   {yaSalio && (
                     <span style={{ display:'inline-block', marginLeft:'10px', border:'2px solid #1a1a1a', borderRadius:'20px', padding:'2px 12px', fontSize:'11px', fontWeight:'900', color:'#1a1a1a', textTransform:'uppercase' }}>
-                      ✓ Entregada en tienda — no fabricar
+                      ✓ Entregada
                     </span>
                   )}
                 </span>
