@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase'
 import { registrarEvento } from '@/lib/eventos'
 import { traerGastoDiario, traerDetalleAnuncios } from '@/lib/pauta/meta'
 import { archivarArtePendiente } from '@/lib/pauta/arte'
+import { evaluarSaludPauta, textoAviso, DIAS_BASE } from '@/lib/pauta/salud'
 import { hoyEcuador, isoMasDias } from '@/lib/parseFecha'
 
 // Baja el gasto de Meta a crm.pauta_dia.
@@ -49,6 +50,60 @@ async function adsSinArte(sb, adAccountId) {
     .from('pauta_dia').select('ad_id')
     .eq('ad_account_id', adAccountId).is('arte_url', null)
   return [...new Set((data || []).map((f) => f.ad_id))]
+}
+
+/**
+ * ¿La pauta de esta cuenta sigue entregando? Si no, avisa.
+ *
+ * ☠️ POR QUÉ: del 16 al 20-ago-2026 MANDARINA pasó de ~$14 diarios con 10-35
+ * conversaciones a $0,00. Cuatro días. Los anuncios seguían en ACTIVE y este
+ * mismo cron siguió cargando datos sin quejarse — el sistema estaba sano
+ * informando que no pasaba nada. Se descubrió de casualidad el 21-ago.
+ *
+ * Va DESPUÉS del upsert y en su propio try: el gasto es lo importante del cron y
+ * no puede quedarse sin guardar porque falle un aviso.
+ *
+ * Nivel 'error' a propósito, no 'aviso': `registrarEvento` solo dispara Telegram
+ * con 'error', y esto tiene que sonar en el celular. Un aviso no se mira.
+ */
+async function avisarSiCayo(sb, cuenta) {
+  const { data, error } = await sb
+    .from('pauta_dia')
+    .select('fecha, gasto, estado')
+    .eq('ad_account_id', cuenta.ad_account_id)
+    .gte('fecha', isoMasDias(hoyEcuador(), -(DIAS_BASE + 2)))
+    .order('fecha', { ascending: true })
+  if (error) throw new Error(error.message)
+
+  // Una fila por anuncio y día → un punto por día.
+  const porDia = new Map()
+  for (const f of data || []) {
+    const d = porDia.get(f.fecha) || { fecha: f.fecha, gasto: 0, anunciosActivos: 0 }
+    d.gasto += Number(f.gasto) || 0
+    if (String(f.estado || '').toUpperCase().includes('ACTIV')) d.anunciosActivos++
+    porDia.set(f.fecha, d)
+  }
+  // El día en curso todavía se está llenando: incluirlo daría una caída falsa
+  // todas las mañanas.
+  const dias = [...porDia.values()]
+    .filter((d) => d.fecha < hoyEcuador())
+    .sort((a, b) => (a.fecha < b.fecha ? -1 : 1))
+
+  const salud = evaluarSaludPauta(dias)
+  if (!salud.debeAvisar) return { cuenta: cuenta.nombre, ...salud, aviso: false }
+
+  const ultimo = dias[dias.length - 1]
+  await registrarEvento({
+    fuente: 'meta',
+    nivel: salud.recuperada ? 'aviso' : 'error',
+    mensaje: textoAviso(cuenta.nombre || cuenta.tienda_id, salud, ultimo.fecha),
+    detalle: {
+      adAccountId: cuenta.ad_account_id, fecha: ultimo.fecha,
+      gasto: salud.gastoUltimo, base: salud.base,
+      diasCaidos: salud.diasCaidos, anunciosActivos: salud.activos,
+    },
+  })
+  return { cuenta: cuenta.nombre, ...salud, aviso: true }
 }
 
 async function correr({ arteViejo = false } = {}) {
@@ -102,6 +157,15 @@ async function correr({ arteViejo = false } = {}) {
 
       resumen.cuentas.push({ cuenta: c.nombre, tienda: c.tienda_id, filas: registros.length })
       resumen.filas += registros.length
+
+      // ¿Sigue entregando? Va acá, con el gasto ya guardado, y en su propio try:
+      // el aviso no puede tumbar la carga.
+      try {
+        const salud = await avisarSiCayo(sb, c)
+        ;(resumen.salud = resumen.salud || []).push(salud)
+      } catch (e) {
+        resumen.errores.push({ cuenta: c.nombre, error: `salud: ${e.message}` })
+      }
 
       // EL ARTE SE ESCRIBE ACÁ, NUNCA EN EL UPSERT.
       //
