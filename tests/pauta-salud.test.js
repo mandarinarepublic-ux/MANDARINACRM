@@ -27,42 +27,90 @@ const REAL = [
   { fecha: '2026-08-16', gasto:  0.26, anunciosActivos: 5 },
   { fecha: '2026-08-17', gasto:  0.00, anunciosActivos: 3 },
   { fecha: '2026-08-18', gasto:  0.00, anunciosActivos: 1 },
-  { fecha: '2026-08-19', gasto:  0.66, anunciosActivos: 5 },
-  { fecha: '2026-08-20', gasto:  2.46, anunciosActivos: 6 },
+  { fecha: '2026-08-19', gasto:  0.68, anunciosActivos: 5 },
+  // ⚠️ CIFRAS CONSOLIDADAS. El 21-ago estos dos días se leían como $2,46 y nada,
+  // y con esa lectura se reportaron "cuatro días de pauta muerta hasta hoy".
+  // Falso: ya se había recuperado. La caída fue del 16 al 19.
+  { fecha: '2026-08-20', gasto: 21.22, anunciosActivos: 8 },
+  { fecha: '2026-08-21', gasto: 25.88, anunciosActivos: 11 },
 ]
 
+// `hasta` simula el cron corriendo la mañana siguiente a esa fecha: la serie
+// llega hasta ahí, y los últimos días son PROVISIONALES.
 const hasta = (f) => REAL.slice(0, REAL.findIndex((d) => d.fecha === f) + 1)
 
-test('☠️ habría avisado el 16-ago, el primer día de la caída', () => {
-  const s = evaluarSaludPauta(hasta('2026-08-16'))
-  assert.strictEqual(s.caida, true, '$0,26 contra ~$15 normales es una caída')
-  assert.strictEqual(s.diasCaidos, 1)
-  assert.strictEqual(s.debeAvisar, true, 'el primer día SIEMPRE avisa')
+// ─── ☠️ El dato provisional (22-ago-2026) ───────────────────────────────────
+//
+// Meta ajusta el gasto de los últimos ~3 días. Un dato provisional llega BAJO y
+// sube después. Me pasó a mí antes que al código: leí que el 20-ago MANDARINA
+// había gastado $2,46 y reporté cuatro días de pauta muerta. La cifra real era
+// $21,22 — ya se había recuperado.
+
+test('☠️ NO grita una caída con datos que todavía se mueven', () => {
+  // Lo que el cron habría visto el 21-ago a las 07:00: el 20-ago con su cifra
+  // provisional de $2,46. Sin la guarda, esto es una alarma falsa.
+  const comoSeVeiaEl21 = [
+    ...hasta('2026-08-19'),
+    { fecha: '2026-08-20', gasto: 2.46, anunciosActivos: 6 },   // provisional; real $21,22
+  ]
+  const s = evaluarSaludPauta(comoSeVeiaEl21)
+  assert.ok(!s.debeAvisar || s.diasCaidos >= 2,
+    'no puede disparar por un solo día cuya cifra aún no está firme')
 })
 
-test('los cuatro días de silencio quedan contados', () => {
+test('la cifra provisional NO entra en el veredicto', () => {
+  // Mismos días, cambiando SOLO el valor provisional del último: el resultado
+  // tiene que ser idéntico, porque ese día no se usa para decidir.
+  const base = hasta('2026-08-19')
+  const conBajo  = evaluarSaludPauta([...base, { fecha: '2026-08-20', gasto: 0.10, anunciosActivos: 6 }])
+  const conAlto  = evaluarSaludPauta([...base, { fecha: '2026-08-20', gasto: 21.22, anunciosActivos: 6 }])
+  assert.strictEqual(conBajo.diasCaidos, conAlto.diasCaidos,
+    'el último dato no puede cambiar el diagnóstico: todavía no es firme')
+})
+
+test('una falsa alarma es peor que avisar tarde', () => {
+  // Se prefiere perder dos días de aviso antes que gritar en falso: el push del
+  // inbox murió por avisos que la gente aprendió a ignorar.
+  const s = evaluarSaludPauta([
+    ...hasta('2026-08-15'),
+    { fecha: '2026-08-16', gasto: 0.00, anunciosActivos: 5 },   // provisional
+  ])
+  assert.strictEqual(s.debeAvisar, false, 'un solo día provisional en cero no basta')
+})
+
+// El cron de la mañana del día D ve la serie hasta D-1.
+const cronDelDia = (d) => evaluarSaludPauta(hasta(d))
+
+test('☠️ la caída del 16-ago sí se caza — con dos días de margen', () => {
+  // El cron del 18 evalúa hasta el 16 (los dos posteriores aún se mueven) y ahí
+  // ya ve el $0,26 contra ~$15 normales. Dos días de retraso a cambio de no
+  // gritar en falso; antes de esto no había ningún aviso, nunca.
+  const s = cronDelDia('2026-08-18')
+  assert.strictEqual(s.caida, true, '$0,26 contra ~$15 normales es una caída')
+  assert.strictEqual(s.diasCaidos, 1)
+  assert.strictEqual(s.debeAvisar, true)
+})
+
+test('los días de silencio quedan contados', () => {
+  // Serie completa: los firmes llegan al 19, y del 16 al 19 son cuatro.
   const s = evaluarSaludPauta(REAL)
-  assert.strictEqual(s.diasCaidos, 5, 'del 16 al 20 inclusive')
-  assert.ok(s.base > 12 && s.base < 18, `la base normal ronda los $14, no ${s.base}`)
+  assert.strictEqual(s.diasCaidos, 4, 'del 16 al 19 inclusive')
+  assert.ok(s.base > 10 && s.base < 18, `la base normal ronda los $14, no ${s.base}`)
 })
 
 test('☠️ insiste, NO se calla después del primer aviso', () => {
   // El push del inbox tenía un enfriamiento DE FLANCO: UN aviso por cliente en
   // toda su vida. Por eso parecía funcionar mientras no funcionaba. Una pauta
-  // muerta hace cuatro días tiene que seguir molestando.
-  const avisos = REAL
-    .filter((d) => d.fecha >= '2026-08-16')
-    .map((d) => evaluarSaludPauta(hasta(d.fecha)))
-    .filter((s) => s.debeAvisar).length
-  assert.ok(avisos >= 2, `en 5 días caídos solo habría avisado ${avisos} vez/veces`)
+  // muerta hace días tiene que seguir molestando.
+  const dias = ['2026-08-18','2026-08-19','2026-08-20','2026-08-21']
+  const avisos = dias.map(cronDelDia).filter((s) => s.caida && s.debeAvisar).length
+  assert.ok(avisos >= 2, `en 4 mañanas con la pauta caída solo avisó ${avisos} vez/veces`)
 })
 
 test('pero no manda el mismo aviso todos los días', () => {
-  const avisos = REAL
-    .filter((d) => d.fecha >= '2026-08-16')
-    .map((d) => evaluarSaludPauta(hasta(d.fecha)))
-    .filter((s) => s.debeAvisar).length
-  assert.ok(avisos < 5, 'avisar los 5 días entrena a ignorarlo')
+  const dias = ['2026-08-18','2026-08-19','2026-08-20','2026-08-21']
+  const avisos = dias.map(cronDelDia).filter((s) => s.caida && s.debeAvisar).length
+  assert.ok(avisos < dias.length, 'avisar todas las mañanas entrena a ignorarlo')
 })
 
 test('☠️ el aviso dice que los anuncios están ACTIVE y no gastan', () => {
@@ -75,9 +123,20 @@ test('☠️ el aviso dice que los anuncios están ACTIVE y no gastan', () => {
 })
 
 test('si no hay anuncios activos, el aviso NO acusa', () => {
-  const s = evaluarSaludPauta([...hasta('2026-08-15'), { fecha: '2026-08-16', gasto: 0, anunciosActivos: 0 }])
+  // Apagar la pauta a propósito es válido: el texto no puede sonar a avería.
+  // Hacen falta los dos días provisionales POR DETRÁS del día que se evalúa,
+  // porque son los que la guarda descarta.
+  const s = evaluarSaludPauta([
+    ...hasta('2026-08-15'),
+    { fecha: '2026-08-16', gasto: 0, anunciosActivos: 0 },   // el día que se juzga
+    { fecha: '2026-08-17', gasto: 0, anunciosActivos: 0 },   // provisional
+    { fecha: '2026-08-18', gasto: 0, anunciosActivos: 0 },   // provisional
+  ])
+  assert.strictEqual(s.caida, true)
+  assert.strictEqual(s.activos, 0)
   const txt = textoAviso('MANDARINA', s, '16-ago')
-  assert.ok(/si los apagaste tú/i.test(txt), 'apagar la pauta a propósito es válido')
+  assert.ok(/si los apagaste tú/i.test(txt))
+  assert.ok(!/ACTIVE/.test(txt), 'no puede acusar de avería lo que puede ser una decisión')
 })
 
 // ─── Lo que NO debe avisar ──────────────────────────────────────────────────
