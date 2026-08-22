@@ -8,6 +8,7 @@ import { subirFoto } from '@/lib/subirImagen'
 import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/identificacion'
 import { imagenAncho } from '@/lib/imagenes'
 import { formatFechaDia } from '@/lib/parseFecha'
+import { emailPareceValido, limpiarEmail } from '@/lib/email-cliente'
 
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
@@ -264,6 +265,18 @@ export default function EditarPedidoPage() {
                 <input className="input text-sm" placeholder="Ciudad (ej: Quito)" value={ciudadEdit} onChange={e=>setCiudadEdit(e.target.value)} />
                 <textarea className="input resize-none text-sm leading-relaxed" rows={4} value={direccionEdit} onChange={e=>setDireccionEdit(e.target.value)} placeholder={'CIUDAD: \nCalle principal: \nCalle secundaria: \nLugar de referencia: '} />
                 <input className="input text-sm" placeholder="Email" value={emailEdit} onChange={e=>setEmailEdit(e.target.value)} />
+                {/* Esta es la pantalla por donde se ARREGLAN los correos rotos, así
+                    que es la que más necesita decir si quedó bien. No bloquea:
+                    guardar un correo dudoso es mejor que no poder corregir la
+                    dirección de un pedido por culpa del correo. */}
+                {!!emailEdit.trim() && !emailPareceValido(emailEdit) && (
+                  <p className="text-red-400 text-xs">
+                    ✗ Eso no parece un correo: <span className="font-mono">{limpiarEmail(emailEdit)}</span> — la factura va a rebotar.
+                  </p>
+                )}
+                {!!emailEdit.trim() && emailPareceValido(emailEdit) && limpiarEmail(emailEdit) !== emailEdit && (
+                  <p className="text-gray-400 text-xs">Se guardará como <span className="font-mono">{limpiarEmail(emailEdit)}</span></p>
+                )}
                 <input className="input text-sm" placeholder="Celular" value={celularEdit} onChange={e=>setCelularEdit(e.target.value)} />
                 <button onClick={saveDireccion} disabled={saving} className="btn-primary text-sm px-4 py-2">{saving?'⏳ Guardando...':'💾 Guardar'}</button>
               </div>

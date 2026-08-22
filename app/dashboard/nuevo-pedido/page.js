@@ -12,6 +12,7 @@ import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/
 import { puedeVerTienda, tiendasDisponibles } from '@/lib/tiendasUsuario'
 import { parseFechaCalendario, diasHastaEntrega, hoyEcuador } from '@/lib/parseFecha'
 import { avisarPedidoCreado } from '@/lib/aviso-padre'
+import { emailPareceValido, limpiarEmail } from '@/lib/email-cliente'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
 
@@ -366,6 +367,17 @@ function NuevoPedidoContenido() {
       return 'La dirección completa es obligatoria'
     }
     if (emitirFactura && !cliente.email.trim()) return '⚠️ Para emitir factura necesitas el correo del cliente'
+    // ☠️ Que el campo NO esté vacío no es que sea un correo. Medido el
+    // 21-ago-2026: 9 clientes con correos imposibles —"diegopicotv@@mail.com",
+    // "gabrielasalvador3108@gmailcom", ".con", ".conm"— y cada uno es una factura
+    // que rebota DESPUÉS de la venta, cuando el cliente ya se fue.
+    //
+    // Solo frena cuando va con factura: ahí falla seguro y el momento de
+    // arreglarlo es con el cliente enfrente. Sin factura solo se avisa (ver el
+    // campo), porque trabar una venta por un correo mal dictado es peor.
+    if (emitirFactura && !emailPareceValido(cliente.email)) {
+      return `⚠️ Ese correo no va a servir para la factura: "${limpiarEmail(cliente.email)}". Revísalo con el cliente.`
+    }
     return null
   }
 
@@ -750,6 +762,22 @@ function NuevoPedidoContenido() {
                     onChange={e => setCliente(p => ({...p, email: e.target.value}))} />
                   {emitirFactura && !cliente.email && (
                     <p className="text-yellow-400 text-xs mt-1">⚠️ Necesitas el correo para emitir factura</p>
+                  )}
+                  {/* El aviso sale mientras escribe, no al intentar avanzar: si el
+                      cliente está enfrente, este es el único momento de corregirlo.
+                      Se muestra el correo YA LIMPIO porque es lo que se va a
+                      guardar — los espacios se quitan solos y no valen un regaño. */}
+                  {!!cliente.email.trim() && !emailPareceValido(cliente.email) && (
+                    <p className="text-red-400 text-xs mt-1">
+                      ✗ Eso no parece un correo: <span className="font-mono">{limpiarEmail(cliente.email)}</span>
+                      {emitirFactura ? ' — la factura va a rebotar.' : ' — se va a guardar así.'}
+                    </p>
+                  )}
+                  {!!cliente.email.trim() && emailPareceValido(cliente.email)
+                    && limpiarEmail(cliente.email) !== cliente.email && (
+                    <p className="text-gray-400 text-xs mt-1">
+                      Se guardará como <span className="font-mono">{limpiarEmail(cliente.email)}</span>
+                    </p>
                   )}
                 </div>
               </div>

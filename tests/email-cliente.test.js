@@ -67,3 +67,30 @@ test('la venta NO se bloquea por un correo raro', () => {
   assert.ok(!/emailPareceValido/.test(src),
     'el repo de clientes no puede rechazar una escritura por el formato del correo')
 })
+
+// ─── Los formularios (21-ago-2026) ───────────────────────────────────────────
+
+test('☠️ el formulario mira la FORMA del correo, no solo que exista', () => {
+  // Solo comprobaba `!cliente.email.trim()`. Por ahi entraron los 9 imposibles:
+  // "diegopicotv@@mail.com", "gabrielasalvador3108@gmailcom", ".con", ".conm".
+  const src = readFileSync(new URL('../app/dashboard/nuevo-pedido/page.js', import.meta.url), 'utf8')
+  assert.ok(/emailPareceValido\(cliente\.email\)/.test(src))
+  assert.ok(/emitirFactura && !emailPareceValido/.test(src),
+    'frena SOLO cuando va con factura: ahi el rebote es seguro')
+})
+
+test('☠️ sin factura NO se traba la venta por el correo', () => {
+  const src = readFileSync(new URL('../app/dashboard/nuevo-pedido/page.js', import.meta.url), 'utf8')
+  const validador = src.slice(src.indexOf('function validateStep1'), src.indexOf('function validateStep2'))
+  const frenos = validador.match(/!emailPareceValido/g) || []
+  assert.strictEqual(frenos.length, 1, 'un solo freno, y va condicionado a emitirFactura')
+  assert.ok(!/return .*emailPareceValido\(cliente\.email\) *\?/.test(validador))
+})
+
+test('la pantalla de EDITAR tambien avisa', () => {
+  // Es la pantalla por donde se arreglan los correos rotos: es la que mas
+  // necesita decir si quedo bien. Ahi no bloquea, solo avisa.
+  const src = readFileSync(new URL('../app/dashboard/editar-pedido/[id]/page.js', import.meta.url), 'utf8')
+  assert.ok(/emailPareceValido\(emailEdit\)/.test(src))
+  assert.ok(/limpiarEmail\(emailEdit\)/.test(src), 'y muestra como va a quedar guardado')
+})
