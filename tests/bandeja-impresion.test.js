@@ -199,3 +199,38 @@ test('☠️ prendas y unidades NO son el mismo numero', () => {
   assert.ok(/const lineasPedido = pedido\?\.PRENDAS_TOTAL/.test(codigo))
   assert.ok(/const unidadesPedido = .*reduce.*CANTIDAD/.test(codigo))
 })
+
+// ─── El PAGO en la hoja del cliente ─────────────────────────────────────────
+//
+// ☠️ CASO REAL, 19→26-ago-2026. La cola propia dejo fuera del select
+// `estado_pago` y `monto_abonado`. PdfPedido calcula
+//     const abonado = parseFloat(pedido?.MONTO_ABONADO || 0)
+//     const isPagado = pedido?.ESTADO_PAGO === 'PAGADO' || saldo < 0.01
+// asi que con `undefined` el abono era 0 y NUNCA daba pagado: todas las hojas
+// salieron en rojo, "ABONO DEL 0% — SALDO PENDIENTE", cobrando otra vez el total.
+// De 81 pedidos EN_FABRICA, 67 estaban PAGADOS. Desde el 19-ago se imprimieron
+// asi 85 pedidos ya cobrados.
+//
+// Se le cobra de mas a un cliente que ya pago: eso no puede volver en silencio.
+
+test('la cola trae con que decidir el estado de pago', () => {
+  for (const col of ['estado_pago', 'monto_abonado']) {
+    assert.ok(new RegExp(`'${col}'`).test(repo),
+      `${col} tiene que estar en el select o la hoja dira "saldo pendiente" a quien ya pago`)
+  }
+})
+
+test('y los entrega con el nombre que la hoja lee', () => {
+  for (const campo of ['ESTADO_PAGO', 'MONTO_ABONADO']) {
+    assert.ok(new RegExp(`${campo}:`).test(repo),
+      `sin mapear ${campo}, traerlo de la base no sirve de nada`)
+  }
+})
+
+test('la hoja decide el pago con esos dos campos, no con otros', () => {
+  // Si alguien renombra lo que lee el PDF, esta prueba lo caza antes que el
+  // cliente. Es el unico punto donde los dos archivos tienen que coincidir.
+  const pdf = readFileSync(new URL('../components/pedido/PdfPedido.js', import.meta.url), 'utf8')
+  assert.ok(/MONTO_ABONADO/.test(pdf) && /ESTADO_PAGO/.test(pdf),
+    'PdfPedido cambio de campos: la cola de impresion tiene que seguirlo')
+})
