@@ -7,6 +7,7 @@ import { parseFecha, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/l
 import { imagenAncho } from '@/lib/imagenes'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
+import BarraFiltros from '@/components/BarraFiltros'
 import { estadoBandeja } from '@/lib/bandeja-estado'
 import { showToast } from '@/components/ToastHost'
 
@@ -66,9 +67,15 @@ function resizeImageBase64(file) {
 // Con lo que arranca la bandeja. Sirve de dos cosas: el estado inicial, y la
 // referencia contra la que se decide si lo restaurado ESCONDE algo (ver
 // lib/estado-pantalla.js `hayFiltro`). Un filtro nuevo agregado aqui entra solo.
+const CHIP_D = {
+  busqueda:   (v) => `🔍 ${v}`,
+  fechaDesde: (v) => `Desde ${v}`,
+  fechaHasta: (v) => `Hasta ${v}`,
+}
+
 const POR_DEFECTO_D = {
   busqueda: '', fechaDesde: '', fechaHasta: '',
-  visibles: 20, scroll: 0, expandidos: [],
+  visibles: 20, scroll: 0, expandidos: [], panelAbierto: false,
 }
 
 export default function DespachosPage() {
@@ -87,8 +94,10 @@ export default function DespachosPage() {
 
   // Filtros, paginacion, tarjetas abiertas y scroll sobreviven a que la pantalla
   // se remonte (salir y volver, descarte de pestana, arranque en frio de la PWA).
-  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
-    useEstadoPantalla('despacho', POR_DEFECTO_D, { alFiltrar: { visibles: PAGE_SIZE_D, scroll: 0 } })
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros,
+          quitarFiltro, chipsDe } =
+    useEstadoPantalla('despacho', POR_DEFECTO_D,
+      { alFiltrar: { visibles: PAGE_SIZE_D, scroll: 0 }, noSonFiltro: ['visibles', 'scroll', 'expandidos', 'panelAbierto'] })
   const { busqueda, fechaDesde, fechaHasta, visibles } = valores
   const setBusqueda   = (v) => setFiltro('busqueda', v)
   const setFechaDesde = (v) => setFiltro('fechaDesde', v)
@@ -241,34 +250,29 @@ export default function DespachosPage() {
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
-      <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center justify-between mb-3 gap-2">
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-display font-bold text-white">Despachos</h1>
-              {pendienteCount > 0 && (
-                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-yellow-500 text-black">
-                  {pendienteCount}
-                </span>
-              )}
-            </div>
-            {/* La pestaña "Completados" se fue a Historial, que es la pantalla
-                hecha para consultar el pasado. Traía 590 pedidos cerrados en cada
-                carga —969 kB para pintar 20— y, sobre todo, dejaba a Despacho
-                expuesto al tope de 1000 filas de PostgREST: el mismo que dejó 21
-                pedidos invisibles en Producción durante 14 días. `crm.pedidos` va
-                por 661 y cruza las 1000 en septiembre.
-                Trayendo solo lo vivo el problema no vuelve por construcción. */}
-            <Link href="/dashboard/historial?estado=COMPLETADO"
-              className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded-xl px-3 py-2 transition-all flex-shrink-0">
-              ✅ Ver despachados{cerradosCount != null ? ` (${cerradosCount})` : ''} →
-            </Link>
-          </div>
-
-          <div className="mb-2">
-            <input className="input w-full" placeholder="Buscar por pedido, nombre, cédula o celular..."
-              value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          </div>
+      <BarraFiltros
+        titulo="Despachos"
+        insignia={pendienteCount > 0 && (
+          <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-yellow-500 text-black flex-shrink-0">
+            {pendienteCount}
+          </span>
+        )}
+        accion={(
+          <Link href="/dashboard/historial?estado=COMPLETADO"
+            className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded-xl px-3 py-2 transition-all flex-shrink-0">
+            ✅ Ver despachados{cerradosCount != null ? ` (${cerradosCount})` : ''} →
+          </Link>
+        )}
+        busqueda={busqueda}
+        onBusqueda={setBusqueda}
+        chips={chipsDe(CHIP_D)}
+        onQuitarChip={quitarFiltro}
+        onLimpiar={limpiarFiltros}
+        abierto={valores.panelAbierto}
+        onAlternarPanel={() => set('panelAbierto', (v) => !v)}
+        onExpandir={expandirTodos}
+        onContraer={contraerTodos}
+      >
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha desde</span>
@@ -283,14 +287,7 @@ export default function DespachosPage() {
                 value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
             </div>
           </div>
-          <div className="flex gap-2 mt-2">
-            <button onClick={expandirTodos}
-              className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊞ Expandir</button>
-            <button onClick={contraerTodos}
-              className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊟ Contraer</button>
-          </div>
-        </div>
-      </div>
+      </BarraFiltros>
 
       <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">

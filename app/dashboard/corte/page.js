@@ -9,6 +9,7 @@ import { estadoBandeja } from '@/lib/bandeja-estado'
 import { comparadorCorte, ORDENES, ORDEN_POR_DEFECTO } from '@/lib/orden-corte'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
+import BarraFiltros from '@/components/BarraFiltros'
 
 const CORTE_CONFIG = {
   PENDIENTE:   { label: '✂️ Pendiente',  color: 'bg-gray-600' },
@@ -129,9 +130,16 @@ function CorteCard({ item, userId, onCorteChange }) {
 
 // Con lo que arranca la bandeja: estado inicial Y referencia para decidir si lo
 // restaurado ESCONDE algo (lib/estado-pantalla.js `hayFiltro`).
+const CHIP_C = {
+  busqueda:   (v) => `🔍 ${v}`,
+  orden:      (v) => `↕ ${v}`,
+  fechaDesde: (v) => `Desde ${v}`,
+  fechaHasta: (v) => `Hasta ${v}`,
+}
+
 const POR_DEFECTO_C = {
   filtro: 'PENDIENTE', busqueda: '', fechaDesde: '', fechaHasta: '', orden: ORDEN_POR_DEFECTO,
-  visibles: 20, scroll: 0, expandido: null,
+  visibles: 20, scroll: 0, expandido: null, panelAbierto: false,
 }
 
 export default function CortePage() {
@@ -147,8 +155,16 @@ export default function CortePage() {
   //
   // La caja de fecha es la fecha DE PEDIDO, igual que en Produccion y Despacho:
   // que la misma caja signifique lo mismo en las tres pantallas.
-  const { valores, set, setFiltro: setCampoFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
-    useEstadoPantalla('corte', POR_DEFECTO_C, { alFiltrar: { visibles: 20, scroll: 0 } })
+  const { valores, set, setFiltro: setCampoFiltro, restaurado, avisoFiltro, ocultarAviso,
+          limpiarFiltros, quitarFiltro, chipsDe } =
+    useEstadoPantalla('corte', POR_DEFECTO_C, {
+      alFiltrar: { visibles: 20, scroll: 0 },
+      // `filtro` (Todos/Pendiente/Solicitado/Cortado) NO cuenta como filtro
+      // escondido: sus cuatro botones estan SIEMPRE a la vista, con su contador
+      // y el activo resaltado. Esa es justo la condicion que hace seguro no
+      // avisar — el control se ve, no hay forma de no enterarse.
+      noSonFiltro: ['visibles', 'scroll', 'expandido', 'panelAbierto', 'filtro'],
+    })
   const { filtro, busqueda, fechaDesde, fechaHasta, orden, visibles } = valores
   const expandedPedido = valores.expandido
   const setFiltro       = (v) => setCampoFiltro('filtro', v)
@@ -283,28 +299,49 @@ export default function CortePage() {
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
-      <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center gap-3 mb-3">
-            <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-white p-1 text-lg">←</button>
-            <div className="flex-1">
-              <h1 className="text-xl font-display font-bold text-white">✂️ Corte de Tela</h1>
-              {/* ☠️ Con un filtro puesto, "0 por cortar" NO significa que se
-                  acabó el trabajo. Se dice en la misma línea del número, porque
-                  es justo ahí donde se lee mal. */}
-              <p className="text-xs text-gray-500">
-                {porCortar} por cortar
-                {yaCortados > 0 && ` · ${yaCortados} ya cortada(s)`}
-                {hayFiltroQueEsconde && <span className="text-mandarina-400"> · con filtro puesto</span>}
-              </p>
+      <BarraFiltros
+        titulo="✂️ Corte de Tela"
+        insignia={(
+          /* ☠️ Con un filtro puesto, "0 por cortar" NO significa que se acabó el
+             trabajo. Se dice en la misma línea del número, que es donde se lee mal. */
+          <span className="text-xs text-gray-500 truncate">
+            {porCortar} por cortar
+            {yaCortados > 0 && ` · ${yaCortados} ya cortada(s)`}
+            {hayFiltroQueEsconde && <span className="text-mandarina-400"> · con filtro puesto</span>}
+          </span>
+        )}
+        accion={(
+          <button onClick={() => loadItems()} title="Actualizar"
+            className="text-gray-500 hover:text-white text-lg px-2 py-1 flex-shrink-0">⟳</button>
+        )}
+        busqueda={busqueda}
+        onBusqueda={setBusqueda}
+        placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
+        chips={chipsDe(CHIP_C)}
+        onQuitarChip={quitarFiltro}
+        onLimpiar={limpiarFiltros}
+        abierto={valores.panelAbierto}
+        onAlternarPanel={() => set('panelAbierto', (v) => !v)}
+        /* Los cuatro contadores: siempre a la vista, nunca en el panel. */
+        debajo={(
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { key: 'TODOS',      label: 'Todos',          icon: '📋', count: Object.values(contadores).reduce((s,n)=>s+n,0), cls: 'bg-mandarina-500 border-mandarina-400' },
+                { key: 'PENDIENTE',  label: 'Pendiente',      icon: '✂️',  count: contadores.PENDIENTE||0,  cls: 'bg-gray-600 border-gray-500' },
+                { key: 'SOLICITADO', label: 'Solicitado',     icon: '🛒', count: contadores.SOLICITADO||0, cls: 'bg-yellow-500 border-yellow-400' },
+                { key: 'CORTADO',    label: 'Cortado',        icon: '✅', count: contadores.CORTADO||0,    cls: 'bg-green-500 border-green-400' },
+              ].map(f => (
+                <button key={f.key} onClick={() => setFiltro(f.key)}
+                  className={`flex flex-col items-center py-3 px-2 rounded-xl border-2 text-white transition-all
+                    ${filtro === f.key ? f.cls : 'border-gray-700 bg-gray-800/50 text-gray-500 hover:text-gray-300'}`}>
+                  <span className="text-xl mb-1">{f.icon}</span>
+                  <span className="text-lg font-black">{f.count}</span>
+                  <span className="text-xs font-medium">{f.label}</span>
+                </button>
+              ))}
             </div>
-            <button onClick={() => loadItems()} title="Actualizar"
-              className="text-gray-500 hover:text-white text-lg px-2 py-1 flex-shrink-0">⟳</button>
-          </div>
-
-          <input className="input w-full mb-2" placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
-            value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-
+        )}
+      >
           {/* Orden y rango de fechas. Mismo formato que Producción y Despacho. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
             <div className="flex flex-col gap-1 col-span-2 sm:col-span-2">
@@ -340,26 +377,7 @@ export default function CortePage() {
               ✕ Quitar el filtro de fechas — estás viendo {enVista.length} de {pedidos.length} pedido(s)
             </button>
           )}
-
-          {/* Filtros con contadores grandes */}
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              { key: 'TODOS',      label: 'Todos',          icon: '📋', count: Object.values(contadores).reduce((s,n)=>s+n,0), cls: 'bg-mandarina-500 border-mandarina-400' },
-              { key: 'PENDIENTE',  label: 'Pendiente',      icon: '✂️',  count: contadores.PENDIENTE||0,  cls: 'bg-gray-600 border-gray-500' },
-              { key: 'SOLICITADO', label: 'Solicitado',     icon: '🛒', count: contadores.SOLICITADO||0, cls: 'bg-yellow-500 border-yellow-400' },
-              { key: 'CORTADO',    label: 'Cortado',        icon: '✅', count: contadores.CORTADO||0,    cls: 'bg-green-500 border-green-400' },
-            ].map(f => (
-              <button key={f.key} onClick={() => setFiltro(f.key)}
-                className={`flex flex-col items-center py-3 px-2 rounded-xl border-2 text-white transition-all
-                  ${filtro === f.key ? f.cls : 'border-gray-700 bg-gray-800/50 text-gray-500 hover:text-gray-300'}`}>
-                <span className="text-xl mb-1">{f.icon}</span>
-                <span className="text-lg font-black">{f.count}</span>
-                <span className="text-xs font-medium">{f.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      </BarraFiltros>
 
       <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">

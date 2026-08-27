@@ -10,6 +10,7 @@ import { imagenAncho } from '@/lib/imagenes'
 import { estadoBandeja } from '@/lib/bandeja-estado'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
+import BarraFiltros from '@/components/BarraFiltros'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -287,10 +288,20 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
 // Con lo que arranca la bandeja: estado inicial Y referencia para decidir si lo
 // restaurado ESCONDE algo (lib/estado-pantalla.js `hayFiltro`). Un filtro nuevo
 // agregado aqui entra solo en el aviso, sin tocar nada mas.
+const CHIP_P = {
+  busqueda:        (v) => `🔍 ${v}`,
+  filtroSubestado: (v) => ({ SOLICITADO: '⏳ Solicitado', EN_PROCESO: '🔧 En proceso',
+                             ENVIADO_APROBACION: '📤 Aprobación', LISTO: '✅ Listo' }[v] || v),
+  filtroArea:      (v) => `🧩 ${v.charAt(0) + v.slice(1).toLowerCase()}`,
+  filtroTienda:    (v) => ({ MANDARINA: '🍊 Mandarina', INDSTORE: '🏬 Indstore' }[v] || v),
+  fechaDesde:      (v) => `Desde ${v}`,
+  fechaHasta:      (v) => `Hasta ${v}`,
+}
+
 const POR_DEFECTO_P = {
   busqueda: '', filtroSubestado: 'TODOS', filtroArea: 'TODAS', filtroTienda: 'TODAS',
   fechaDesde: '', fechaHasta: '',
-  visibles: PAGE_SIZE_P, scroll: 0, expandidos: [],
+  visibles: PAGE_SIZE_P, scroll: 0, expandidos: [], panelAbierto: false,
 }
 
 export default function ProduccionPage() {
@@ -303,8 +314,10 @@ export default function ProduccionPage() {
 
   // Filtros, paginacion, tarjetas abiertas y scroll sobreviven a que la pantalla
   // se remonte (salir y volver, descarte de pestana, arranque en frio de la PWA).
-  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
-    useEstadoPantalla('produccion', POR_DEFECTO_P, { alFiltrar: { visibles: PAGE_SIZE_P, scroll: 0 } })
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros,
+          quitarFiltro, chipsDe } =
+    useEstadoPantalla('produccion', POR_DEFECTO_P,
+      { alFiltrar: { visibles: PAGE_SIZE_P, scroll: 0 }, noSonFiltro: ['visibles', 'scroll', 'expandidos', 'panelAbierto'] })
   const { busqueda, filtroSubestado, filtroArea, filtroTienda, fechaDesde, fechaHasta, visibles } = valores
   const setBusqueda       = (v) => setFiltro('busqueda', v)
   const setFiltroSubestado = (v) => setFiltro('filtroSubestado', v)
@@ -505,24 +518,25 @@ export default function ProduccionPage() {
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
-      <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-white p-1">←</button>
-              <div>
-                <h1 className="text-xl font-display font-bold text-white">Producción</h1>
-                <p className="text-xs text-gray-500">{totalPendientes} ítem(s) pendientes{areaLabel}</p>
-              </div>
-            </div>
-            <Link href="/dashboard/impresion" className="btn-secondary text-xs px-3 py-2">🖨️ Imprimir</Link>
-          </div>
-
-          <div className="mb-2">
-            <input className="input w-full" placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
-              value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          </div>
-
+      <BarraFiltros
+        titulo="Producción"
+        insignia={(
+          <span className="text-xs text-gray-500 truncate">{totalPendientes} ítem(s) pendientes{areaLabel}</span>
+        )}
+        accion={(
+          <Link href="/dashboard/impresion" className="btn-secondary text-xs px-3 py-2 flex-shrink-0">🖨️ Imprimir</Link>
+        )}
+        busqueda={busqueda}
+        onBusqueda={setBusqueda}
+        placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
+        chips={chipsDe(CHIP_P)}
+        onQuitarChip={quitarFiltro}
+        onLimpiar={limpiarFiltros}
+        abierto={valores.panelAbierto}
+        onAlternarPanel={() => set('panelAbierto', (v) => !v)}
+        onExpandir={expandirTodos}
+        onContraer={contraerTodos}
+      >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {/* Subestado */}
             <div className="flex flex-col gap-1">
@@ -570,21 +584,8 @@ export default function ProduccionPage() {
                 ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
                 value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
             </div>
-            {/* Expandir/Contraer viven acá, en la cabecera fija, y no abajo con la
-                lista: allí se iban con el scroll y había que subir hasta arriba
-                para contraer lo que acababas de abrir. */}
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Ver</span>
-              <div className="flex gap-2">
-                <button onClick={expandirTodos}
-                  className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊞ Expandir</button>
-                <button onClick={contraerTodos}
-                  className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊟ Contraer</button>
-              </div>
-            </div>
           </div>
-        </div>
-      </div>
+      </BarraFiltros>
 
       <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">

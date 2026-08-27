@@ -96,3 +96,50 @@ test('un filtro NUEVO entra solo, sin tocar esta funcion', () => {
   assert.strictEqual(hayFiltro({ ...conNuevo }, conNuevo, NO_SON_FILTRO), false)
   assert.ok(hayFiltro({ ...conNuevo, filtroInventado: 'ALGO' }, conNuevo, NO_SON_FILTRO))
 })
+
+// ── Los chips de filtros activos ─────────────────────────────────────────────
+//
+// Con el panel de filtros plegado, los chips son LO ÚNICO que dice qué se está
+// escondiendo. Si un filtro no sale como chip, filtras a ciegas.
+import { filtrosActivos } from '../lib/estado-pantalla.js'
+
+const ETIQUETAS = {
+  busqueda: (v) => `Buscar: ${v}`,
+  filtroTienda: (v) => ({ MANDARINA: '🍊 Mandarina', INDSTORE: 'Indstore' }[v] || v),
+}
+
+test('sin filtros no hay chips', () => {
+  assert.deepStrictEqual(filtrosActivos({ ...POR_DEFECTO }, POR_DEFECTO, NO_SON_FILTRO, ETIQUETAS), [])
+})
+
+test('cada filtro puesto da su chip, con su etiqueta', () => {
+  const chips = filtrosActivos(
+    { ...POR_DEFECTO, busqueda: 'ana', filtroTienda: 'MANDARINA' },
+    POR_DEFECTO, NO_SON_FILTRO, ETIQUETAS)
+  assert.deepStrictEqual(chips.map((c) => c.etiqueta), ['Buscar: ana', '🍊 Mandarina'])
+  assert.deepStrictEqual(chips.map((c) => c.clave), ['busqueda', 'filtroTienda'])
+})
+
+test('scroll y paginacion NO son chips', () => {
+  assert.deepStrictEqual(
+    filtrosActivos({ ...POR_DEFECTO, visibles: 200, scroll: 900 }, POR_DEFECTO, NO_SON_FILTRO, ETIQUETAS), [])
+})
+
+test('un filtro sin etiqueta se pinta crudo, nunca invisible', () => {
+  const chips = filtrosActivos({ ...POR_DEFECTO, fechaDesde: '2026-08-01' }, POR_DEFECTO, NO_SON_FILTRO, ETIQUETAS)
+  assert.strictEqual(chips.length, 1)
+  assert.strictEqual(chips[0].etiqueta, '2026-08-01')
+})
+
+test('una etiqueta que revienta no borra el chip', () => {
+  const chips = filtrosActivos({ ...POR_DEFECTO, busqueda: 'x' }, POR_DEFECTO, NO_SON_FILTRO,
+    { busqueda: () => { throw new Error('boom') } })
+  assert.strictEqual(chips.length, 1, 'el chip tiene que salir igual')
+  assert.strictEqual(chips[0].etiqueta, 'x')
+})
+
+test('un filtro NUEVO sale como chip solo', () => {
+  const conNuevo = { ...POR_DEFECTO, filtroInventado: 'TODOS' }
+  const chips = filtrosActivos({ ...conNuevo, filtroInventado: 'ALGO' }, conNuevo, NO_SON_FILTRO, ETIQUETAS)
+  assert.deepStrictEqual(chips.map((c) => c.clave), ['filtroInventado'])
+})

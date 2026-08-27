@@ -96,17 +96,3 @@ test('hay UNA sola lista de areas, compartida', () => {
   // `AREAS` de lib/pedidos.js ya se desincronizo con lib/pedidos-client.js.
   assert.ok(!/const AREAS_\w*\s*=\s*\[/.test(src), 'nadie define su propia lista acá')
 })
-
-// ─── Expandir/Contraer en la parte fija ─────────────────────────────────────
-
-for (const pantalla of ['despacho', 'historial', 'produccion']) {
-  test(`${pantalla}: Expandir/Contraer viven en la cabecera fija`, () => {
-    const p = readFileSync(new URL(`../app/dashboard/${pantalla}/page.js`, import.meta.url), 'utf8')
-    const iCabecera = p.indexOf('sticky top-0')
-    const iScroll = p.indexOf('ref={contenedorRef}')
-    const iBoton = p.indexOf('⊞ Expandir')
-    assert.ok(iCabecera > 0 && iScroll > 0 && iBoton > 0, 'faltan piezas en la pantalla')
-    assert.ok(iBoton > iCabecera && iBoton < iScroll,
-      'los botones tienen que estar entre la cabecera fija y el area que scrollea')
-  })
-}

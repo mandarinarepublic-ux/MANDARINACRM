@@ -8,6 +8,7 @@ import { SkeletonList } from '@/components/Skeleton'
 import { imagenAncho } from '@/lib/imagenes'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
+import BarraFiltros from '@/components/BarraFiltros'
 import { AREAS_FILTRABLES } from '@/lib/areas-filtrables'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
@@ -27,9 +28,22 @@ const ETIQUETA_AREA = {
   'ENTREGA EN TIENDA': '🏪 Entrega en tienda',
 }
 
+// Cómo se lee cada filtro en su chip. Un filtro sin entrada aquí se pinta con su
+// valor crudo: feo, pero nunca invisible (lib/estado-pantalla.js `filtrosActivos`).
+const CHIP_H = {
+  busqueda:     (v) => `🔍 ${v}`,
+  filtroEstado: (v) => `📋 ${v.charAt(0) + v.slice(1).toLowerCase()}`,
+  filtroTienda: (v) => ({ MANDARINA: '🍊 Mandarina', INDSTORE: '🏬 Indstore' }[v] || v),
+  filtroPago:   (v) => ({ PENDIENTE: '⚠ Pendiente', ABONO: '🔶 Abono', PAGADO: '✅ Pagado' }[v] || v),
+  filtroArea:   (v) => ETIQUETA_AREA[v] || v,
+  fechaDesde:   (v) => `Desde ${v}`,
+  fechaHasta:   (v) => `Hasta ${v}`,
+}
+
 // Estado inicial Y referencia del aviso (lib/estado-pantalla.js `hayFiltro`).
 const POR_DEFECTO_H = {
   filtroEstado: 'TODOS', filtroTienda: 'TODAS', filtroArea: 'TODAS', busqueda: '',
+  panelAbierto: false,
   fechaDesde: '', fechaHasta: '', filtroPago: 'TODOS',
   expandidos: [], scroll: 0,
 }
@@ -40,9 +54,10 @@ export default function HistorialPage() {
   const [pedidos, setPedidos] = useState([])
   const [cotizaciones, setCotizaciones] = useState([])
   const [loading, setLoading] = useState(true)
-  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros,
+          quitarFiltro, chipsDe } =
     useEstadoPantalla('historial', POR_DEFECTO_H,
-      { alFiltrar: { scroll: 0 }, noSonFiltro: ['scroll', 'expandidos'] })
+      { alFiltrar: { scroll: 0 }, noSonFiltro: ['scroll', 'expandidos', 'panelAbierto'] })
   const { filtroEstado, filtroTienda, filtroArea, busqueda, fechaDesde, fechaHasta, filtroPago } = valores
   const setFiltroEstado = (v) => setFiltro('filtroEstado', v)
   const setFiltroTienda = (v) => setFiltro('filtroTienda', v)
@@ -66,6 +81,10 @@ export default function HistorialPage() {
   // significaba tanto "no hay nada" como "no se pudo leer".
   const [estado, setEstado] = useState('CARGANDO')
   const [errorTexto, setErrorTexto] = useState('')
+
+  const chips = chipsDe(CHIP_H)
+  // Sin nada que expandir, los iconos no salen: un boton que no hace nada estorba.
+  const hayLista = !loading && filtered.length > 0
 
   const contenedorRef = useRef(null)
   useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y), restaurado && !loading)
@@ -223,23 +242,21 @@ export default function HistorialPage() {
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
-      <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-display font-bold text-white">
-              {isYAW ? 'Historial YAW' : 'Historial de Ventas'}
-            </h1>
-            {(user?.rol === 'ADMIN' || user?.rol === 'VENDEDOR' || isYAW) && (
-              <Link href="/dashboard/nuevo-pedido" className="btn-primary text-sm px-4 py-2">+ Nueva</Link>
-            )}
-          </div>
-          {/* Fila 1: Buscador */}
-          <div className="mb-2">
-            <input className="input w-full" placeholder="Buscar por pedido, nombre, cedula o celular..."
-              value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          </div>
-
-          {/* Fila 2: combos — 2 por fila en movil, 3 en desktop */}
+      <BarraFiltros
+        titulo={isYAW ? 'Historial YAW' : 'Historial de Ventas'}
+        accion={(user?.rol === 'ADMIN' || user?.rol === 'VENDEDOR' || isYAW) && (
+          <Link href="/dashboard/nuevo-pedido" className="btn-primary text-sm px-4 py-2 flex-shrink-0">+ Nueva</Link>
+        )}
+        busqueda={busqueda}
+        onBusqueda={setBusqueda}
+        chips={chips}
+        onQuitarChip={quitarFiltro}
+        onLimpiar={limpiarFiltros}
+        abierto={valores.panelAbierto}
+        onAlternarPanel={() => set('panelAbierto', (v) => !v)}
+        onExpandir={hayLista ? expandirTodos : undefined}
+        onContraer={hayLista ? contraerTodos : undefined}
+      >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {/* Estado */}
             <div className="flex flex-col gap-1">
@@ -301,16 +318,7 @@ export default function HistorialPage() {
               </select>
             </div>
           </div>
-          {!loading && filtered.length > 0 && (
-            <div className="flex gap-2 mt-2">
-              <button onClick={expandirTodos}
-                className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊞ Expandir</button>
-              <button onClick={contraerTodos}
-                className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊟ Contraer</button>
-            </div>
-          )}
-        </div>
-      </div>
+      </BarraFiltros>
 
       <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">

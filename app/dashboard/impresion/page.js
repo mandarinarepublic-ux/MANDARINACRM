@@ -5,6 +5,7 @@ import { PdfGraciasPagina, PdfConfeccionPagina, paginarItems, paginarItemsClient
 import { parseFecha, formatFechaHumana, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
+import BarraFiltros from '@/components/BarraFiltros'
 
 const MAX_LOTE_IMPRESION = 30
 
@@ -41,9 +42,16 @@ const dejarPintar = () =>
 // ⚠️ La SELECCIÓN del lote NO se guarda a propósito. Volver mañana y encontrar
 // 30 pedidos ya marcados, elegidos en otra sesión y quizá ya impresos por otra
 // persona, es pedir que alguien le dé a Imprimir sin mirar.
+const CHIP_I = {
+  busqueda:     (v) => `🔍 ${v}`,
+  filtroTienda: (v) => ({ MANDARINA: '🍊 Mandarina', INDSTORE: '🏪 Indstore' }[v] || v),
+  fechaDesde:   (v) => `Desde ${v}`,
+  fechaHasta:   (v) => `Hasta ${v}`,
+}
+
 const POR_DEFECTO_I = {
   busqueda: '', filtroTienda: 'TODAS', filtroImpresion: F_PENDIENTES,
-  fechaDesde: '', fechaHasta: '', scroll: 0,
+  fechaDesde: '', fechaHasta: '', scroll: 0, panelAbierto: false,
 }
 
 export default function ImpresionPage() {
@@ -63,8 +71,14 @@ export default function ImpresionPage() {
   // oculto. Antes se montaba el lote entero (hasta 30 pedidos ≈ 90 hojas A4),
   // lo que disparaba el uso de memoria y colgaba el navegador en celular.
   const [renderIds, setRenderIds] = useState([])
-  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
-    useEstadoPantalla('impresion', POR_DEFECTO_I, { alFiltrar: { scroll: 0 } })
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros,
+          quitarFiltro, chipsDe } =
+    useEstadoPantalla('impresion', POR_DEFECTO_I, {
+      alFiltrar: { scroll: 0 },
+      // `filtroImpresion` son las dos pestanas, siempre a la vista y con la
+      // activa resaltada: no hay forma de no ver cual esta puesta.
+      noSonFiltro: ['scroll', 'panelAbierto', 'filtroImpresion'],
+    })
   const { busqueda, filtroTienda, filtroImpresion, fechaDesde, fechaHasta } = valores
   const setBusqueda        = (v) => setFiltro('busqueda', v)
   const setFiltroTienda    = (v) => setFiltro('filtroTienda', v)
@@ -458,37 +472,69 @@ export default function ImpresionPage() {
 
   return (
     <div className="flex flex-col h-screen md:h-auto">
-      <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h1 className="text-xl font-display font-bold text-white">🖨️ Imprimir Pedidos</h1>
-              <p className="text-xs text-gray-500">
-                {totalPendientes > 0
-                  ? `${totalPendientes} pendiente(s) por imprimir`
-                  : 'Todo al día — no hay pendientes'}
-              </p>
+      <BarraFiltros
+        titulo="🖨️ Imprimir Pedidos"
+        insignia={(
+          <span className="text-xs text-gray-500 truncate">
+            {totalPendientes > 0
+              ? `${totalPendientes} pendiente(s) por imprimir`
+              : 'Todo al día — no hay pendientes'}
+          </span>
+        )}
+        accion={(
+          <button onClick={() => router.back()} className="text-gray-500 hover:text-white text-sm flex-shrink-0">← Volver</button>
+        )}
+        busqueda={busqueda}
+        onBusqueda={setBusqueda}
+        chips={chipsDe(CHIP_I)}
+        onQuitarChip={quitarFiltro}
+        onLimpiar={limpiarFiltros}
+        abierto={valores.panelAbierto}
+        onAlternarPanel={() => set('panelAbierto', (v) => !v)}
+        /* Las pestañas y el contador del lote NUNCA se pliegan: sin ver cuántos
+           llevas seleccionados no se puede imprimir con cabeza. */
+        debajo={(
+          <>
+            <div className="flex gap-1 mb-2 p-1 bg-gray-900 rounded-xl">
+              {[
+                { v: F_PENDIENTES, label: '📋 Pendientes' },
+                { v: F_IMPRESOS,   label: '🖨️ Ya impresos' },
+              ].map(op => (
+                <button key={op.v} onClick={() => setFiltroImpresion(op.v)} disabled={printing}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all disabled:opacity-50
+                    ${filtroImpresion === op.v ? 'bg-mandarina-500 text-white' : 'text-gray-400 hover:text-white'}`}>
+                  {op.label}
+                </button>
+              ))}
             </div>
-            <button onClick={() => router.back()} className="text-gray-500 hover:text-white text-sm">← Volver</button>
-          </div>
-
-          {/* Filtro por estado de impresión */}
-          <div className="flex gap-1 mb-2 p-1 bg-gray-900 rounded-xl">
-            {[
-              { v: F_PENDIENTES, label: '📋 Pendientes' },
-              { v: F_IMPRESOS,   label: '🖨️ Ya impresos' },
-            ].map(op => (
-              <button key={op.v} onClick={() => setFiltroImpresion(op.v)} disabled={printing}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all disabled:opacity-50
-                  ${filtroImpresion === op.v ? 'bg-mandarina-500 text-white' : 'text-gray-400 hover:text-white'}`}>
-                {op.label}
+            <div className="flex items-center justify-between mt-1">
+              <button onClick={selectAll} disabled={printing || filtered.length === 0}
+                className="text-sm text-mandarina-400 hover:text-mandarina-300 disabled:opacity-40">
+                {selected.size > 0 ? 'Deseleccionar todos' : 'Seleccionar todos (sin imprimir)'}
               </button>
-            ))}
-          </div>
+              <span className={`text-xs ${selected.size >= MAX_LOTE_IMPRESION ? 'text-amber-400 font-semibold' : 'text-gray-500'}`}>
+                {filtered.length} en lista · {selected.size}/{MAX_LOTE_IMPRESION} seleccionado(s)
+              </span>
+            </div>
 
-          <input className="input mb-2" placeholder="Buscar por pedido, nombre, cédula o celular..."
-            value={busqueda} onChange={e => setBusqueda(e.target.value)} disabled={printing} />
-
+            {seleccionadosOcultos.length > 0 && (
+              <div className="mt-2 flex items-center justify-between gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                <span className="text-xs text-amber-300">
+                  ⚠️ {seleccionadosOcultos.length} seleccionado(s) no se ven con estos filtros — igual se imprimirán
+                </span>
+                <button disabled={printing}
+                  onClick={() => setSelected(prev => {
+                    const ocultos = new Set(seleccionadosOcultos)
+                    return new Set([...prev].filter(id => !ocultos.has(id)))
+                  })}
+                  className="text-xs text-amber-400 hover:text-amber-200 underline flex-shrink-0 disabled:opacity-50">
+                  Quitarlos
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      >
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div>
               <label className="label">Tienda</label>
@@ -517,34 +563,7 @@ export default function ImpresionPage() {
                 className="btn-ghost text-xs w-full py-2.5 disabled:opacity-50">Limpiar filtros</button>
             </div>
           </div>
-
-          <div className="flex items-center justify-between mt-1">
-            <button onClick={selectAll} disabled={printing || filtered.length === 0}
-              className="text-sm text-mandarina-400 hover:text-mandarina-300 disabled:opacity-40">
-              {selected.size > 0 ? 'Deseleccionar todos' : 'Seleccionar todos (sin imprimir)'}
-            </button>
-            <span className={`text-xs ${selected.size >= MAX_LOTE_IMPRESION ? 'text-amber-400 font-semibold' : 'text-gray-500'}`}>
-              {filtered.length} en lista · {selected.size}/{MAX_LOTE_IMPRESION} seleccionado(s)
-            </span>
-          </div>
-
-          {seleccionadosOcultos.length > 0 && (
-            <div className="mt-2 flex items-center justify-between gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
-              <span className="text-xs text-amber-300">
-                ⚠️ {seleccionadosOcultos.length} seleccionado(s) no se ven con estos filtros — igual se imprimirán
-              </span>
-              <button disabled={printing}
-                onClick={() => setSelected(prev => {
-                  const ocultos = new Set(seleccionadosOcultos)
-                  return new Set([...prev].filter(id => !ocultos.has(id)))
-                })}
-                className="text-xs text-amber-400 hover:text-amber-200 underline flex-shrink-0 disabled:opacity-50">
-                Quitarlos
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      </BarraFiltros>
 
       <div ref={contenedorRef} className="flex-1 overflow-y-auto pb-24">
         <div className="max-w-3xl mx-auto px-4 py-3">
