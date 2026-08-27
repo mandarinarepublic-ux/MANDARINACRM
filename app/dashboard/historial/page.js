@@ -8,6 +8,7 @@ import { SkeletonList } from '@/components/Skeleton'
 import { imagenAncho } from '@/lib/imagenes'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
+import { AREAS_FILTRABLES } from '@/lib/areas-filtrables'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
 // El guardado a mano de los filtros se fue a lib/estado-pantalla.js, compartido
@@ -15,9 +16,20 @@ const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO
 // abrir Historial podias estar viendo una rebanada de agosto creyendo que era
 // todo, sin una sola pista en pantalla.
 
+// Cómo se lee cada área en el desplegable. Los valores son los de la base
+// (lib/areas-filtrables.js); esto es solo la etiqueta.
+const ETIQUETA_AREA = {
+  ESTAMPADO: '🖨️ Estampado',
+  BORDADO: '🧵 Bordado',
+  SUBLIMACION: '🌡️ Sublimación',
+  'PRODUCTO SIN DISEÑO': '📦 Producto sin diseño',
+  'PREMIUM - SIN DISEÑO': '⭐ Premium sin diseño',
+  'ENTREGA EN TIENDA': '🏪 Entrega en tienda',
+}
+
 // Estado inicial Y referencia del aviso (lib/estado-pantalla.js `hayFiltro`).
 const POR_DEFECTO_H = {
-  filtroEstado: 'TODOS', filtroTienda: 'TODAS', busqueda: '',
+  filtroEstado: 'TODOS', filtroTienda: 'TODAS', filtroArea: 'TODAS', busqueda: '',
   fechaDesde: '', fechaHasta: '', filtroPago: 'TODOS',
   expandidos: [], scroll: 0,
 }
@@ -31,13 +43,14 @@ export default function HistorialPage() {
   const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
     useEstadoPantalla('historial', POR_DEFECTO_H,
       { alFiltrar: { scroll: 0 }, noSonFiltro: ['scroll', 'expandidos'] })
-  const { filtroEstado, filtroTienda, busqueda, fechaDesde, fechaHasta, filtroPago } = valores
+  const { filtroEstado, filtroTienda, filtroArea, busqueda, fechaDesde, fechaHasta, filtroPago } = valores
   const setFiltroEstado = (v) => setFiltro('filtroEstado', v)
   const setFiltroTienda = (v) => setFiltro('filtroTienda', v)
   const setBusqueda     = (v) => setFiltro('busqueda', v)
   const setFechaDesde   = (v) => setFiltro('fechaDesde', v)
   const setFechaHasta   = (v) => setFiltro('fechaHasta', v)
   const setFiltroPago   = (v) => setFiltro('filtroPago', v)
+  const setFiltroArea   = (v) => setFiltro('filtroArea', v)
   const expandedPedidos = useMemo(() => new Set(valores.expandidos), [valores.expandidos])
   const setExpandedPedidos = (x) =>
     set('expandidos', (prev) => [...(typeof x === 'function' ? x(new Set(prev)) : x)])
@@ -110,7 +123,7 @@ export default function HistorialPage() {
   useEffect(() => {
     if (!user || !restaurado) return
     cargarPagina(0, true)
-  }, [user, restaurado, busquedaDebounced, filtroEstado, filtroTienda, filtroPago, fechaDesde, fechaHasta])
+  }, [user, restaurado, busquedaDebounced, filtroEstado, filtroTienda, filtroPago, filtroArea, fechaDesde, fechaHasta])
 
   /**
    * Trae UNA página del historial ya filtrada por el servidor.
@@ -129,6 +142,7 @@ export default function HistorialPage() {
       if (filtroEstado !== 'TODOS')  q.set('estado', filtroEstado)
       if (filtroTienda !== 'TODAS')  q.set('tienda', filtroTienda)
       if (filtroPago !== 'TODOS')    q.set('pago', filtroPago)
+      if (filtroArea !== 'TODAS')    q.set('area', filtroArea)
       if (busquedaDebounced.trim())  q.set('q', busquedaDebounced.trim())
       if (fechaDesde) { const d = inicioDiaEcuador(fechaDesde); if (d) q.set('desde', d.toISOString()) }
       if (fechaHasta) { const h = finDiaEcuador(fechaHasta);    if (h) q.set('hasta', h.toISOString()) }
@@ -273,31 +287,45 @@ export default function HistorialPage() {
                 <option value="PAGADO">✅ Pagado</option>
               </select>
             </div>
+            {/* Área. La lista sale de lib/areas-filtrables.js — una sola, para que
+                la pantalla y el servidor no puedan desincronizarse. */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Área</span>
+              <select
+                value={filtroArea}
+                onChange={e => setFiltroArea(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                  ${filtroArea !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
+                <option value="TODAS">Todas</option>
+                {AREAS_FILTRABLES.map(a => <option key={a} value={a}>{ETIQUETA_AREA[a] || a}</option>)}
+              </select>
+            </div>
           </div>
+          {!loading && filtered.length > 0 && (
+            <div className="flex gap-2 mt-2">
+              <button onClick={expandirTodos}
+                className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊞ Expandir</button>
+              <button onClick={contraerTodos}
+                className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊟ Contraer</button>
+            </div>
+          )}
         </div>
       </div>
 
       <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
-          <div className="flex items-center justify-between mb-3">
-            {/* El total lo cuenta la BASE, no la página: antes decía "30 de 30"
-                porque solo había traído 30. */}
-            <div className="text-xs text-gray-600">
-              {loading
-                ? 'Cargando...'
-                : totalServidor !== null
-                  ? `Mostrando ${filtered.length} de ${totalServidor} pedido(s)`
-                  : `${paginados.length} registro(s)`}
-            </div>
-            {!loading && filtered.length > 0 && (
-              <div className="flex gap-2">
-                <button onClick={expandirTodos}
-                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊞ Expandir</button>
-                <button onClick={contraerTodos}
-                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊟ Contraer</button>
-              </div>
-            )}
+          {/* El total lo cuenta la BASE, no la página: antes decía "30 de 30"
+              porque solo había traído 30. Expandir/Contraer se subieron a la
+              cabecera fija (26-ago-2026): acá se iban con el scroll justo cuando
+              hacen falta, que es con la lista larga. El contador se queda porque
+              describe lo que hay debajo — no es una acción. */}
+          <div className="text-xs text-gray-600 mb-3">
+            {loading
+              ? 'Cargando...'
+              : totalServidor !== null
+                ? `Mostrando ${filtered.length} de ${totalServidor} pedido(s)`
+                : `${paginados.length} registro(s)`}
           </div>
           {/* Una búsqueda recortada se ve igual que una completa. Se avisa. */}
           {busquedaTruncada && !loading && (

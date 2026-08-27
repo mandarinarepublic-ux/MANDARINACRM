@@ -33,6 +33,7 @@ export async function GET(req) {
       desde:    searchParams.get('desde'),
       hasta:    searchParams.get('hasta'),
       busqueda: searchParams.get('q'),
+      area:     searchParams.get('area'),
     })
 
     return Response.json({ ...resultado, tamanoPagina: TAMANO_PAGINA })

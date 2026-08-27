@@ -283,6 +283,12 @@ export default function DespachosPage() {
                 value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
             </div>
           </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={expandirTodos}
+              className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊞ Expandir</button>
+            <button onClick={contraerTodos}
+              className="flex-1 min-h-[44px] text-xs text-gray-300 hover:text-white bg-gray-800 border border-gray-700 rounded-xl px-2 transition-all">⊟ Contraer</button>
+          </div>
         </div>
       </div>
 
@@ -313,16 +319,12 @@ export default function DespachosPage() {
             </div>
           ) : (
             <>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs text-gray-600">
-                {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={expandirTodos}
-                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊞ Expandir</button>
-                <button onClick={contraerTodos}
-                  className="text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 transition-all">⊟ Contraer</button>
-              </div>
+            {/* Expandir/Contraer se subieron a la cabecera fija (26-ago-2026):
+                acá abajo se iban con el scroll justo cuando hacían falta, que es
+                con la lista larga. El contador sí se queda: describe lo que hay
+                debajo, no es una acción. Mismo sitio que en Producción. */}
+            <div className="text-xs text-gray-600 mb-3">
+              {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
             </div>
             {/* La bandeja en blanco. Si no queda nada listo para salir, se dice
                 con todas las letras aunque abajo haya pedidos en producción: eso
