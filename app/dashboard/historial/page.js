@@ -83,8 +83,6 @@ export default function HistorialPage() {
   const [errorTexto, setErrorTexto] = useState('')
 
   const chips = chipsDe(CHIP_H)
-  // Sin nada que expandir, los iconos no salen: un boton que no hace nada estorba.
-  const hayLista = !loading && filtered.length > 0
 
   const contenedorRef = useRef(null)
   useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y), restaurado && !loading)
@@ -254,8 +252,11 @@ export default function HistorialPage() {
         onLimpiar={limpiarFiltros}
         abierto={valores.panelAbierto}
         onAlternarPanel={() => set('panelAbierto', (v) => !v)}
-        onExpandir={hayLista ? expandirTodos : undefined}
-        onContraer={hayLista ? contraerTodos : undefined}
+        /* Sin nada que expandir los iconos no salen. Va INLINE a proposito:
+           sacarlo a una const arriba lo ponia antes de `filtered` y tumbaba la
+           pantalla entera con un ReferenceError. */
+        onExpandir={!loading && filtered.length > 0 ? expandirTodos : undefined}
+        onContraer={!loading && filtered.length > 0 ? contraerTodos : undefined}
       >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {/* Estado */}
