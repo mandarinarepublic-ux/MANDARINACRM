@@ -8,6 +8,8 @@ import PdfScaler from '@/components/pedido/PdfScaler'
 import { generarPdfDesdeIds } from '@/lib/generarPdf'
 import { puedeVerTienda } from '@/lib/tiendasUsuario'
 import { seImprime } from '@/lib/prenda-se-fabrica'
+import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
+import AvisoFiltros from '@/components/AvisoFiltros'
 
 // Color por tienda para la orden de confección (mismo criterio que Producción).
 const TIENDA_COLORS = { MANDARINA: '#FF6B00', INDSTORE: '#E91E8C', YAW: '#6C3FC5' }
@@ -132,6 +134,28 @@ function MultiSelect({ icon, opciones, sel, onChange, resumen }) {
 }
 
 // ─── Página ─────────────────────────────────────────────────────────────────
+// 'YYYY-MM' ⇄ Date del dia 1. El mes viaja como texto porque un Date no
+// sobrevive a JSON.stringify (vuelve como cadena y rompe .getFullYear()).
+function fechaAMes(d) {
+  if (!(d instanceof Date) || isNaN(d)) return fechaAMes(new Date())
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+function mesAFecha(mes) {
+  const [a, m] = String(mes || '').split('-').map(Number)
+  if (a && m >= 1 && m <= 12) return new Date(a, m - 1, 1)
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), 1)
+}
+
+// Estado inicial Y referencia del aviso (lib/estado-pantalla.js `hayFiltro`).
+const POR_DEFECTO_CAL = {
+  mes: null,                                   // null = el mes de hoy
+  filtroTienda: 'TODAS',
+  estados: ['amb', 'azu', 'grn', 'red'],       // ordenados, ver setEstados
+  subareas: [...AREAS_BASE].sort(),
+  scroll: 0,
+}
+
 export default function CalendarioPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -140,11 +164,26 @@ export default function CalendarioPage() {
   const [errorTexto, setErrorTexto] = useState('')
   const hoy = useMemo(() => hoyISO(), [])
 
-  const [cur, setCur] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
-  const [filtroTienda, setFiltroTienda] = useState('TODAS')
-  const [estados, setEstados] = useState(() => new Set(['red', 'amb', 'azu', 'grn']))
-  const [subareas, setSubareas] = useState(() => new Set(AREAS_BASE))
   const [selDia, setSelDia] = useState(null)
+
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
+    useEstadoPantalla('calendario', POR_DEFECTO_CAL,
+      // El MES no enciende el aviso: la cabecera lo dice con todas sus letras,
+      // asi que nadie puede confundirse sobre que esta mirando.
+      { alFiltrar: { scroll: 0 }, noSonFiltro: ['scroll', 'mes'] })
+  const { filtroTienda } = valores
+  const cur = useMemo(() => mesAFecha(valores.mes), [valores.mes])
+  const estados = useMemo(() => new Set(valores.estados), [valores.estados])
+  const subareas = useMemo(() => new Set(valores.subareas), [valores.subareas])
+  const setFiltroTienda = (v) => setFiltro('filtroTienda', v)
+  const setCur = (x) => set('mes', (prev) => fechaAMes(typeof x === 'function' ? x(mesAFecha(prev)) : x))
+  // Ordenados al guardar: sin eso, marcar y desmarcar deja la misma seleccion en
+  // otro orden y el aviso la leeria como "filtro puesto".
+  const setEstados  = (s) => setFiltro('estados', [...s].sort())
+  const setSubareas = (s) => setFiltro('subareas', [...s].sort())
+
+  const contenedorRef = useRef(null)
+  useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y), restaurado && !loading)
   const [previewPedido, setPreviewPedido] = useState(null)  // pedido cuya hoja se previsualiza
   const [pdfPedido, setPdfPedido] = useState(null)   // pedido montado off-screen para descargar
   const [generandoPdf, setGenerandoPdf] = useState(null)
@@ -468,8 +507,9 @@ export default function CalendarioPage() {
       </div>
 
       {/* Contenido */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 py-4">
+          <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {loading ? (
             <div className="flex justify-center py-16">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />

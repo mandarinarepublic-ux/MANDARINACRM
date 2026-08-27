@@ -1,9 +1,11 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, diasHastaEntrega, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
+import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
+import AvisoFiltros from '@/components/AvisoFiltros'
 
 // ─── Constantes de etapa ───────────────────────────────────────────────────────
 // El flujo físico de una prenda: ✂️ CORTE → 🏭 PRODUCCIÓN → 🚚 DESPACHO
@@ -284,22 +286,42 @@ function Columna({ etapaKey, resumen, pedidos }) {
 }
 
 // ─── Página principal ──────────────────────────────────────────────────────────
+// Estado inicial Y referencia del aviso (lib/estado-pantalla.js `hayFiltro`).
+const POR_DEFECTO_T = {
+  busqueda: '', filtroTienda: 'TODAS', filtroArea: 'TODAS',
+  incluirDespachados: false, tabMovil: 'CORTE', mostrarFiltros: false,
+  creacionDesde: '', creacionHasta: '', entregaDesde: '', entregaHasta: '',
+  scroll: 0,
+}
+
 export default function TableroPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(true)
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroTienda, setFiltroTienda] = useState('TODAS')
-  const [filtroArea, setFiltroArea] = useState('TODAS')
-  const [incluirDespachados, setIncluirDespachados] = useState(false)
-  const [tabMovil, setTabMovil] = useState('CORTE')
-  // Filtros de fecha
-  const [creacionDesde, setCreacionDesde] = useState('')
-  const [creacionHasta, setCreacionHasta] = useState('')
-  const [entregaDesde, setEntregaDesde] = useState('')
-  const [entregaHasta, setEntregaHasta] = useState('')
-  const [mostrarFiltros, setMostrarFiltros] = useState(false)
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
+    useEstadoPantalla('tablero', POR_DEFECTO_T, {
+      alFiltrar: { scroll: 0 },
+      // Nada de esto ESCONDE pedidos: la pestaña de móvil y el cajón de filtros
+      // solo cambian lo que se ve en pantalla, e `incluirDespachados` muestra
+      // MÁS, no menos. El aviso es para lo que oculta.
+      noSonFiltro: ['scroll', 'tabMovil', 'mostrarFiltros', 'incluirDespachados'],
+    })
+  const { busqueda, filtroTienda, filtroArea, incluirDespachados, tabMovil,
+          creacionDesde, creacionHasta, entregaDesde, entregaHasta, mostrarFiltros } = valores
+  const setBusqueda      = (v) => setFiltro('busqueda', v)
+  const setFiltroTienda  = (v) => setFiltro('filtroTienda', v)
+  const setFiltroArea    = (v) => setFiltro('filtroArea', v)
+  const setCreacionDesde = (v) => setFiltro('creacionDesde', v)
+  const setCreacionHasta = (v) => setFiltro('creacionHasta', v)
+  const setEntregaDesde  = (v) => setFiltro('entregaDesde', v)
+  const setEntregaHasta  = (v) => setFiltro('entregaHasta', v)
+  const setIncluirDespachados = (v) => set('incluirDespachados', v)
+  const setTabMovil      = (v) => set('tabMovil', v)
+  const setMostrarFiltros = (v) => set('mostrarFiltros', v)
+
+  const contenedorRef = useRef(null)
+  useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y), restaurado && !loading)
   // CARGANDO | ERROR | INCOMPLETO | LISTA. Antes solo había `loading`, y un
   // fallo se veía igual que un tablero sin trabajo pendiente.
   const [estado, setEstado] = useState('CARGANDO')
@@ -576,8 +598,9 @@ export default function TableroPage() {
       </div>
 
       {/* ── Contenido ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 py-4">
+          <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {loading ? (
             <div className="flex justify-center py-16">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />

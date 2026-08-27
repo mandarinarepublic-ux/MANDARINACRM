@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
@@ -7,6 +7,8 @@ import { parseFecha, diasHastaEntrega, formatFechaDia, inicioDiaEcuador, finDiaE
 import { imagenAncho } from '@/lib/imagenes'
 import { estadoBandeja } from '@/lib/bandeja-estado'
 import { comparadorCorte, ORDENES, ORDEN_POR_DEFECTO } from '@/lib/orden-corte'
+import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
+import AvisoFiltros from '@/components/AvisoFiltros'
 
 const CORTE_CONFIG = {
   PENDIENTE:   { label: '✂️ Pendiente',  color: 'bg-gray-600' },
@@ -125,28 +127,46 @@ function CorteCard({ item, userId, onCorteChange }) {
   )
 }
 
+// Con lo que arranca la bandeja: estado inicial Y referencia para decidir si lo
+// restaurado ESCONDE algo (lib/estado-pantalla.js `hayFiltro`).
+const POR_DEFECTO_C = {
+  filtro: 'PENDIENTE', busqueda: '', fechaDesde: '', fechaHasta: '', orden: ORDEN_POR_DEFECTO,
+  visibles: 20, scroll: 0, expandido: null,
+}
+
 export default function CortePage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filtro, setFiltro] = useState('PENDIENTE')
-  const [busqueda, setBusqueda] = useState('')
-  const [expandedPedido, setExpandedPedido] = useState(null)
-  const [visibles, setVisibles] = useState(20)
   const PAGE_SIZE_C = 20
-  // Filtro por fecha DE PEDIDO, igual que en Producción y Despacho: que la misma
-  // caja signifique lo mismo en las tres pantallas.
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
-  const [orden, setOrden] = useState(ORDEN_POR_DEFECTO)
+
+  // Filtros, paginacion, tarjeta abierta y scroll sobreviven a que la pantalla se
+  // remonte (salir y volver, descarte de pestana, arranque en frio de la PWA).
+  // `setCampoFiltro` y no `setFiltro`: aqui `filtro` YA es el nombre de un filtro.
+  //
+  // La caja de fecha es la fecha DE PEDIDO, igual que en Produccion y Despacho:
+  // que la misma caja signifique lo mismo en las tres pantallas.
+  const { valores, set, setFiltro: setCampoFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
+    useEstadoPantalla('corte', POR_DEFECTO_C, { alFiltrar: { visibles: 20, scroll: 0 } })
+  const { filtro, busqueda, fechaDesde, fechaHasta, orden, visibles } = valores
+  const expandedPedido = valores.expandido
+  const setFiltro       = (v) => setCampoFiltro('filtro', v)
+  const setBusqueda     = (v) => setCampoFiltro('busqueda', v)
+  const setFechaDesde   = (v) => setCampoFiltro('fechaDesde', v)
+  const setFechaHasta   = (v) => setCampoFiltro('fechaHasta', v)
+  const setOrden        = (v) => setCampoFiltro('orden', v)
+  const setVisibles     = (v) => set('visibles', v)
+  const setExpandedPedido = (v) => set('expandido', v)
   // CARGANDO | ERROR | INCOMPLETO | VACIO | LISTA. Antes solo había `loading`, y
   // "sin ítems en este estado" significaba cinco cosas distintas — entre ellas
   // "la consulta falló" y "PostgREST cortó la lista en 1000".
   const [estado, setEstado] = useState('CARGANDO')
   const [errorTexto, setErrorTexto] = useState('')
 
-  useEffect(() => { setVisibles(20) }, [busqueda, filtro, fechaDesde, fechaHasta, orden])
+  const contenedorRef = useRef(null)
+  useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y),
+    restaurado && !loading)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -157,8 +177,12 @@ export default function CortePage() {
     loadItems()
   }, [])
 
-  const loadItems = useCallback(async () => {
-    setLoading(true); setEstado('CARGANDO'); setErrorTexto('')
+  // `silencioso`: refrescar SIN desmontar la lista. Ver el mismo comentario en
+  // produccion/page.js — el spinner se llevaba la posicion del scroll cada vez
+  // que alguien volvia a la pestana.
+  const loadItems = useCallback(async (silencioso = false) => {
+    if (!silencioso) { setLoading(true); setEstado('CARGANDO') }
+    setErrorTexto('')
     try {
       // El servidor ya filtra por EN_FABRICA y ya excluye lo eliminado y lo de
       // entrega en tienda (vista `prendas_en_taller`). Acá NO se vuelve a
@@ -189,7 +213,7 @@ export default function CortePage() {
   // bandeja cargaba UNA sola vez al abrirse.
   useEffect(() => {
     function alVolver() {
-      if (document.visibilityState === 'visible') loadItems()
+      if (document.visibilityState === 'visible') loadItems(true)   // sin spinner
     }
     document.addEventListener('visibilitychange', alVolver)
     return () => document.removeEventListener('visibilitychange', alVolver)
@@ -337,8 +361,9 @@ export default function CortePage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {estado === 'CARGANDO' ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />

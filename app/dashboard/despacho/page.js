@@ -1,10 +1,12 @@
 'use client'
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
+import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
+import AvisoFiltros from '@/components/AvisoFiltros'
 import { estadoBandeja } from '@/lib/bandeja-estado'
 import { showToast } from '@/components/ToastHost'
 
@@ -61,6 +63,14 @@ function resizeImageBase64(file) {
   })
 }
 
+// Con lo que arranca la bandeja. Sirve de dos cosas: el estado inicial, y la
+// referencia contra la que se decide si lo restaurado ESCONDE algo (ver
+// lib/estado-pantalla.js `hayFiltro`). Un filtro nuevo agregado aqui entra solo.
+const POR_DEFECTO_D = {
+  busqueda: '', fechaDesde: '', fechaHasta: '',
+  visibles: 20, scroll: 0, expandidos: [],
+}
+
 export default function DespachosPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -70,18 +80,28 @@ export default function DespachosPage() {
   const [guia, setGuia] = useState({ numero: '', transportista: 'SERVIENTREGA', fotoBase64: null, fotoPreview: null })
   const [saving, setSaving] = useState(false)
   const [savingMsg, setSavingMsg] = useState('')
-  const [busqueda, setBusqueda] = useState('')
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
-  const [mostrarFecha, setMostrarFecha] = useState(false)
-  const [expandedPedidos, setExpandedPedidos] = useState(new Set())
-  const [visibles, setVisibles] = useState(20)
   const PAGE_SIZE_D = 20
   const [estado, setEstado] = useState('CARGANDO')
   const [errorTexto, setErrorTexto] = useState('')
   const [cerradosCount, setCerradosCount] = useState(null)
 
-  useEffect(() => { setVisibles(20) }, [busqueda, fechaDesde, fechaHasta])
+  // Filtros, paginacion, tarjetas abiertas y scroll sobreviven a que la pantalla
+  // se remonte (salir y volver, descarte de pestana, arranque en frio de la PWA).
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
+    useEstadoPantalla('despacho', POR_DEFECTO_D, { alFiltrar: { visibles: PAGE_SIZE_D, scroll: 0 } })
+  const { busqueda, fechaDesde, fechaHasta, visibles } = valores
+  const setBusqueda   = (v) => setFiltro('busqueda', v)
+  const setFechaDesde = (v) => setFiltro('fechaDesde', v)
+  const setFechaHasta = (v) => setFiltro('fechaHasta', v)
+  const setVisibles   = (v) => set('visibles', v)
+  // Set adentro, lista afuera: un Set no sobrevive a JSON.stringify.
+  const expandedPedidos = useMemo(() => new Set(valores.expandidos), [valores.expandidos])
+  const setExpandedPedidos = (x) =>
+    set('expandidos', (prev) => [...(typeof x === 'function' ? x(new Set(prev)) : x)])
+
+  const contenedorRef = useRef(null)
+  useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y),
+    restaurado && estado !== 'CARGANDO')
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -266,8 +286,9 @@ export default function DespachosPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {estado === 'CARGANDO' ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />

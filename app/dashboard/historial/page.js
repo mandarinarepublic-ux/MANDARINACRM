@@ -1,14 +1,26 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
 import { parseFecha, formatFechaCorta, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { SkeletonList } from '@/components/Skeleton'
 import { imagenAncho } from '@/lib/imagenes'
+import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
+import AvisoFiltros from '@/components/AvisoFiltros'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
-const LS_FILTROS = 'mp_historial_filtros_v2'
+// El guardado a mano de los filtros se fue a lib/estado-pantalla.js, compartido
+// con las demas bandejas. Lo de aqui no caducaba NUNCA y no avisaba de nada: al
+// abrir Historial podias estar viendo una rebanada de agosto creyendo que era
+// todo, sin una sola pista en pantalla.
+
+// Estado inicial Y referencia del aviso (lib/estado-pantalla.js `hayFiltro`).
+const POR_DEFECTO_H = {
+  filtroEstado: 'TODOS', filtroTienda: 'TODAS', busqueda: '',
+  fechaDesde: '', fechaHasta: '', filtroPago: 'TODOS',
+  expandidos: [], scroll: 0,
+}
 
 export default function HistorialPage() {
   const router = useRouter()
@@ -16,13 +28,20 @@ export default function HistorialPage() {
   const [pedidos, setPedidos] = useState([])
   const [cotizaciones, setCotizaciones] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filtroEstado, setFiltroEstado] = useState('TODOS')
-  const [filtroTienda, setFiltroTienda] = useState('TODAS')
-  const [busqueda, setBusqueda] = useState('')
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
+    useEstadoPantalla('historial', POR_DEFECTO_H,
+      { alFiltrar: { scroll: 0 }, noSonFiltro: ['scroll', 'expandidos'] })
+  const { filtroEstado, filtroTienda, busqueda, fechaDesde, fechaHasta, filtroPago } = valores
+  const setFiltroEstado = (v) => setFiltro('filtroEstado', v)
+  const setFiltroTienda = (v) => setFiltro('filtroTienda', v)
+  const setBusqueda     = (v) => setFiltro('busqueda', v)
+  const setFechaDesde   = (v) => setFiltro('fechaDesde', v)
+  const setFechaHasta   = (v) => setFiltro('fechaHasta', v)
+  const setFiltroPago   = (v) => setFiltro('filtroPago', v)
+  const expandedPedidos = useMemo(() => new Set(valores.expandidos), [valores.expandidos])
+  const setExpandedPedidos = (x) =>
+    set('expandidos', (prev) => [...(typeof x === 'function' ? x(new Set(prev)) : x)])
   const [busquedaDebounced, setBusquedaDebounced] = useState('')
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
-  const [mostrarFecha, setMostrarFecha] = useState(false)
   const [paginaActual, setPaginaActual] = useState(0)
   const [hayMasPaginas, setHayMasPaginas] = useState(false)
   const [totalServidor, setTotalServidor] = useState(null)
@@ -34,37 +53,37 @@ export default function HistorialPage() {
   // significaba tanto "no hay nada" como "no se pudo leer".
   const [estado, setEstado] = useState('CARGANDO')
   const [errorTexto, setErrorTexto] = useState('')
-  const [expandedPedidos, setExpandedPedidos] = useState(new Set())
-  const [filtroPago, setFiltroPago] = useState('TODOS')
+
+  const contenedorRef = useRef(null)
+  useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y), restaurado && !loading)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
     const u = JSON.parse(stored)
     setUser(u)
-    if (u.rol !== 'VENDEDOR_YAW') {
-      try {
-        const f = JSON.parse(localStorage.getItem(LS_FILTROS) || '{}')
-        if (f.filtroEstado) setFiltroEstado(f.filtroEstado)
-        if (f.filtroTienda) setFiltroTienda(f.filtroTienda)
-        if (f.fechaDesde)   setFechaDesde(f.fechaDesde)
-        if (f.fechaHasta)   setFechaHasta(f.fechaHasta)
-        if (f.fechaDesde || f.fechaHasta) setMostrarFecha(true)
-      } catch (_) {}
+    // YAW nunca arrastra filtros de una visita a otra: entra siempre a la lista
+    // limpia. `useEstadoPantalla` ya restauró en su propio efecto, que corre
+    // antes que este, así que acá se deshace.
+    if (u.rol === 'VENDEDOR_YAW') { limpiarFiltros(); return }
 
-      // Un `?estado=` en la URL manda sobre lo que quedó guardado. Lo usa el
-      // enlace "Ver despachados" de la bandeja de Despacho: quien viene de ahí
-      // espera ver los despachados, no los filtros de su última visita.
-      //
-      // Se lee de window y no con useSearchParams a propósito: ese hook obliga a
-      // envolver la pantalla en <Suspense> o el build falla (ver la nota en
-      // app/dashboard/layout.js). Acá estamos dentro de un useEffect, que solo
-      // corre en el navegador, así que window siempre existe.
-      try {
-        const pedido = new URLSearchParams(window.location.search).get('estado')
-        if (pedido && ESTADOS.includes(pedido)) setFiltroEstado(pedido)
-      } catch (_) {}
-    }
+    // Un `?estado=` en la URL manda sobre lo que quedó guardado. Lo usa el
+    // enlace "Ver despachados" de la bandeja de Despacho: quien viene de ahí
+    // espera ver los despachados, no los filtros de su última visita.
+    //
+    // Se lee de window y no con useSearchParams a propósito: ese hook obliga a
+    // envolver la pantalla en <Suspense> o el build falla (ver la nota en
+    // app/dashboard/layout.js). Acá estamos dentro de un useEffect, que solo
+    // corre en el navegador, así que window siempre existe.
+    try {
+      const pedido = new URLSearchParams(window.location.search).get('estado')
+      if (pedido && ESTADOS.includes(pedido)) {
+        setFiltroEstado(pedido)
+        // El filtro lo pidió el enlace, no la visita anterior: decir "se
+        // guardaron tus filtros" acá sería mentira.
+        ocultarAviso()
+      }
+    } catch (_) {}
     // Los pedidos NO se piden acá: los dispara el efecto de los filtros en
     // cuanto `user` deja de ser null. Llamarlos también aquí traería la primera
     // página dos veces, y con los filtros todavía sin restaurar del localStorage.
@@ -82,11 +101,6 @@ export default function HistorialPage() {
   }
 
   useEffect(() => {
-    if (!user) return
-    localStorage.setItem(LS_FILTROS, JSON.stringify({ filtroEstado, filtroTienda, fechaDesde, fechaHasta }))
-  }, [user, filtroEstado, filtroTienda, fechaDesde, fechaHasta])
-
-  useEffect(() => {
     const t = setTimeout(() => setBusquedaDebounced(busqueda), 250)
     return () => clearTimeout(t)
   }, [busqueda])
@@ -94,9 +108,9 @@ export default function HistorialPage() {
   // Cada filtro dispara una consulta nueva y vuelve a la primera página. Antes
   // se traían los 680 pedidos y se filtraba en el navegador.
   useEffect(() => {
-    if (!user) return
+    if (!user || !restaurado) return
     cargarPagina(0, true)
-  }, [user, busquedaDebounced, filtroEstado, filtroTienda, filtroPago, fechaDesde, fechaHasta])
+  }, [user, restaurado, busquedaDebounced, filtroEstado, filtroTienda, filtroPago, fechaDesde, fechaHasta])
 
   /**
    * Trae UNA página del historial ya filtrada por el servidor.
@@ -263,8 +277,9 @@ export default function HistorialPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           <div className="flex items-center justify-between mb-3">
             {/* El total lo cuenta la BASE, no la página: antes decía "30 de 30"
                 porque solo había traído 30. */}

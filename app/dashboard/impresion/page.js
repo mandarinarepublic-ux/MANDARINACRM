@@ -3,6 +3,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { PdfGraciasPagina, PdfConfeccionPagina, paginarItems, paginarItemsCliente } from '@/components/pedido/PdfPedido'
 import { parseFecha, formatFechaHumana, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
+import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
+import AvisoFiltros from '@/components/AvisoFiltros'
 
 const MAX_LOTE_IMPRESION = 30
 
@@ -34,6 +36,16 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const dejarPintar = () =>
   new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 0))))
 
+// Con lo que arranca la pantalla: estado inicial Y referencia del aviso.
+//
+// ⚠️ La SELECCIÓN del lote NO se guarda a propósito. Volver mañana y encontrar
+// 30 pedidos ya marcados, elegidos en otra sesión y quizá ya impresos por otra
+// persona, es pedir que alguien le dé a Imprimir sin mirar.
+const POR_DEFECTO_I = {
+  busqueda: '', filtroTienda: 'TODAS', filtroImpresion: F_PENDIENTES,
+  fechaDesde: '', fechaHasta: '', scroll: 0,
+}
+
 export default function ImpresionPage() {
   const router = useRouter()
   const [pedidos, setPedidos] = useState([])
@@ -51,11 +63,17 @@ export default function ImpresionPage() {
   // oculto. Antes se montaba el lote entero (hasta 30 pedidos ≈ 90 hojas A4),
   // lo que disparaba el uso de memoria y colgaba el navegador en celular.
   const [renderIds, setRenderIds] = useState([])
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroTienda, setFiltroTienda] = useState('TODAS')
-  const [filtroImpresion, setFiltroImpresion] = useState(F_PENDIENTES)
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
+    useEstadoPantalla('impresion', POR_DEFECTO_I, { alFiltrar: { scroll: 0 } })
+  const { busqueda, filtroTienda, filtroImpresion, fechaDesde, fechaHasta } = valores
+  const setBusqueda        = (v) => setFiltro('busqueda', v)
+  const setFiltroTienda    = (v) => setFiltro('filtroTienda', v)
+  const setFiltroImpresion = (v) => setFiltro('filtroImpresion', v)
+  const setFechaDesde      = (v) => setFiltro('fechaDesde', v)
+  const setFechaHasta      = (v) => setFiltro('fechaHasta', v)
+
+  const contenedorRef = useRef(null)
+  useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y), restaurado && !loading)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -528,8 +546,9 @@ export default function ImpresionPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-24">
+      <div ref={contenedorRef} className="flex-1 overflow-y-auto pb-24">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />

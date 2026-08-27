@@ -1,13 +1,21 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
+import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
+import AvisoFiltros from '@/components/AvisoFiltros'
 
 const ESTADO_LABELS = { EN_FABRICA:'En Producción', DESPACHO:'Para despacho', ENTREGADO:'Entregado' }
 const ESTADO_COLORS = { EN_FABRICA:'text-blue-400 bg-blue-500/10', DESPACHO:'text-purple-400 bg-purple-500/10', ENTREGADO:'text-green-400 bg-green-500/10' }
 
+
+// Estado inicial Y referencia del aviso (lib/estado-pantalla.js `hayFiltro`).
+// `mostrarFecha` solo abre el cajón: no esconde nada, por eso no es filtro.
+const POR_DEFECTO_MP = {
+  busqueda: '', fechaDesde: '', fechaHasta: '', mostrarFecha: false, scroll: 0,
+}
 
 export default function MisPedidosPage() {
   const router = useRouter()
@@ -15,10 +23,18 @@ export default function MisPedidosPage() {
   const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(true)
   const [errorTexto, setErrorTexto] = useState('')
-  const [busqueda, setBusqueda] = useState('')
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
-  const [mostrarFecha, setMostrarFecha] = useState(false)
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
+    useEstadoPantalla('mis-pedidos', POR_DEFECTO_MP,
+      { alFiltrar: { scroll: 0 }, noSonFiltro: ['scroll', 'mostrarFecha'] })
+  const { busqueda, fechaDesde, fechaHasta, mostrarFecha } = valores
+  const setBusqueda    = (v) => setFiltro('busqueda', v)
+  const setFechaDesde  = (v) => setFiltro('fechaDesde', v)
+  const setFechaHasta  = (v) => setFiltro('fechaHasta', v)
+  // Abrir el cajón de fechas no filtra nada: va por `set`, no por `setFiltro`.
+  const setMostrarFecha = (v) => set('mostrarFecha', v)
+
+  const contenedorRef = useRef(null)
+  useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y), restaurado && !loading)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -114,8 +130,9 @@ export default function MisPedidosPage() {
           )}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />

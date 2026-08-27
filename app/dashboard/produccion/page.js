@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
@@ -8,6 +8,8 @@ import { PdfConfeccion, PdfConfeccionPagina, paginarItems } from '@/components/p
 import PdfScaler from '@/components/pedido/PdfScaler'
 import { imagenAncho } from '@/lib/imagenes'
 import { estadoBandeja } from '@/lib/bandeja-estado'
+import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
+import AvisoFiltros from '@/components/AvisoFiltros'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -282,28 +284,47 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
   )
 }
 
+// Con lo que arranca la bandeja: estado inicial Y referencia para decidir si lo
+// restaurado ESCONDE algo (lib/estado-pantalla.js `hayFiltro`). Un filtro nuevo
+// agregado aqui entra solo en el aviso, sin tocar nada mas.
+const POR_DEFECTO_P = {
+  busqueda: '', filtroSubestado: 'TODOS', filtroArea: 'TODAS', filtroTienda: 'TODAS',
+  fechaDesde: '', fechaHasta: '',
+  visibles: PAGE_SIZE_P, scroll: 0, expandidos: [],
+}
+
 export default function ProduccionPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(true)
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroSubestado, setFiltroSubestado] = useState('TODOS')
-  const [expandedPedidos, setExpandedPedidos] = useState(new Set())
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
-  const [mostrarFecha, setMostrarFecha] = useState(false)
   const [generandoPdf, setGenerandoPdf] = useState(null)
   const [pdfPreviewPedido, setPdfPreviewPedido] = useState(null)
-  const [filtroArea, setFiltroArea] = useState('TODAS')
-  const [filtroTienda, setFiltroTienda] = useState('TODAS')
-  const [visibles, setVisibles] = useState(PAGE_SIZE_P)
+
+  // Filtros, paginacion, tarjetas abiertas y scroll sobreviven a que la pantalla
+  // se remonte (salir y volver, descarte de pestana, arranque en frio de la PWA).
+  const { valores, set, setFiltro, restaurado, avisoFiltro, ocultarAviso, limpiarFiltros } =
+    useEstadoPantalla('produccion', POR_DEFECTO_P, { alFiltrar: { visibles: PAGE_SIZE_P, scroll: 0 } })
+  const { busqueda, filtroSubestado, filtroArea, filtroTienda, fechaDesde, fechaHasta, visibles } = valores
+  const setBusqueda       = (v) => setFiltro('busqueda', v)
+  const setFiltroSubestado = (v) => setFiltro('filtroSubestado', v)
+  const setFiltroArea     = (v) => setFiltro('filtroArea', v)
+  const setFiltroTienda   = (v) => setFiltro('filtroTienda', v)
+  const setFechaDesde     = (v) => setFiltro('fechaDesde', v)
+  const setFechaHasta     = (v) => setFiltro('fechaHasta', v)
+  const setVisibles       = (v) => set('visibles', v)
+  // Set adentro, lista afuera: un Set no sobrevive a JSON.stringify.
+  const expandedPedidos = useMemo(() => new Set(valores.expandidos), [valores.expandidos])
+  const setExpandedPedidos = (x) =>
+    set('expandidos', (prev) => [...(typeof x === 'function' ? x(new Set(prev)) : x)])
   // CARGANDO | ERROR | INCOMPLETO | VACIO | LISTA. Antes solo había `loading` y
   // "vacío", y "vacío" significaba cinco cosas distintas.
   const [estado, setEstado] = useState('CARGANDO')
   const [errorTexto, setErrorTexto] = useState('')
 
-  useEffect(() => { setVisibles(PAGE_SIZE_P) }, [busqueda, filtroSubestado, filtroArea, filtroTienda, fechaDesde, fechaHasta])
+  const contenedorRef = useRef(null)
+  useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y),
+    restaurado && !loading)
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -312,8 +333,16 @@ export default function ProduccionPage() {
     loadItems()
   }, [])
 
-  const loadItems = useCallback(async () => {
-    setLoading(true); setEstado('CARGANDO'); setErrorTexto('')
+  // `silencioso`: refrescar SIN desmontar la lista.
+  //
+  // ☠️ El refresco al volver a la pestana (19-ago-2026) llamaba a esto tal cual,
+  // y `setLoading(true)` cambia el render a `loading ? <spinner> : <lista>`. La
+  // lista desaparecia, el contenedor con scroll se colapsaba y la posicion se
+  // perdia cada vez que alguien miraba otra pestana. Con `silencioso` los datos
+  // se cambian por debajo y nadie pierde donde estaba.
+  const loadItems = useCallback(async (silencioso = false) => {
+    if (!silencioso) { setLoading(true); setEstado('CARGANDO') }
+    setErrorTexto('')
     try {
       // El servidor ya filtra por estado y por las áreas de quien pregunta (contra
       // la cookie firmada), así que acá NO se vuelve a filtrar por EN_FABRICA, ni
@@ -351,7 +380,7 @@ export default function ProduccionPage() {
   // así que el momento en que importa refrescar es justo cuando vuelve.
   useEffect(() => {
     function alVolver() {
-      if (document.visibilityState === 'visible') loadItems()
+      if (document.visibilityState === 'visible') loadItems(true)   // sin spinner
     }
     document.addEventListener('visibilitychange', alVolver)
     return () => document.removeEventListener('visibilitychange', alVolver)
@@ -557,8 +586,9 @@ export default function ProduccionPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {urgentes > 0 && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4">
               <div className="text-red-400 font-semibold text-sm">🚨 {urgentes} pedido(s) urgente(s) — entrega en ≤2 días</div>
