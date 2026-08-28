@@ -219,10 +219,10 @@ fotoPecho = await processPhoto(item.fotoPecho || item.imagenShopify || '', `${it
 productos `Talla, Color` y otros `Color, Talla`. Se identifican por **nombre de
 opción**, nunca por posición — misma regla que ya se aplicó en el HOME v6.
 
-Sobre el área: `PRODUCTO SIN DISEÑO` es lo que es —algo del catálogo, ya
-diseñado, que solo hay que tomar y despachar— y es una categoría viva (342 ítems
-en 60 días). El proceso acordado es que **el pedido entra y el admin completa lo
-que falte**, área incluida si hiciera falta.
+Sobre el área: **decidido — `PRODUCTO SIN DISEÑO`**. Es lo que es —algo del
+catálogo, ya diseñado, que solo hay que tomar y despachar— y es una categoría
+viva (342 ítems en 60 días). El proceso acordado es que **el pedido entra y el
+admin completa lo que falte**, área incluida si hiciera falta.
 
 ### 4.5 Que no entre dos veces
 
@@ -342,6 +342,6 @@ ser bastante mayor. No cambia el diseño, pero sí la urgencia.
 | El pedido entra **incompleto** y el admin completa | Rodrigo | El objetivo es enterarse, no la perfección del dato |
 | Las prendas entran **con la foto de Shopify** | Rodrigo | Para reconocer la prenda de un vistazo |
 | Las **dos** tiendas | Rodrigo | `mandarinaec.com` e `indlovers.com` |
-| Área `PRODUCTO SIN DISEÑO` | propuesta, pendiente de confirmar | Es lo que es y ya se usa |
+| Área `PRODUCTO SIN DISEÑO` | Rodrigo | Es lo que es y ya se usa (342 ítems en 60 días) |
 | Entrar por `/api/pedidos`, no escribir directo | diseño | No duplicar el camino de creación |
 | `shopify_order_id` con índice único | diseño | Shopify reintenta |
