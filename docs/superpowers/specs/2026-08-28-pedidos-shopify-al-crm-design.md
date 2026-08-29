@@ -65,6 +65,14 @@ clase de código que se desincroniza en silencio (ya pasó con `roles.js` y con
 `pedidos.js` vs `pedidos-client.js`). **Descartado: el webhook arma el mismo
 payload que la pantalla de Nueva Venta y entra por la misma puerta.**
 
+**Sacar las ~200 líneas que crean el pedido a una función común.** Es lo
+correcto a largo plazo y evita la llamada de la app a sí misma. Se descartó por
+**radio de explosión**: si el refactor sale mal no falla el pedido web, falla
+TODA la venta de las tres tiendas. Y la red es débil — las pruebas de esa ruta
+(`api-pedidos-blindada`, `identidad-vendedor`) **leen el archivo como texto**, no
+ejecutan nada, así que no cazarían un cambio de comportamiento. Se puede hacer
+más adelante, cuando la web venda lo suficiente como para justificarlo.
+
 **Deducir el área del taller desde el producto.** Requiere una tabla
 producto→técnica que hoy no existe y que habría que mantener sobre 225
 productos. Demasiado trabajo para el volumen actual. Descartado.
@@ -145,6 +153,48 @@ pedido se crea recién ahí. O sea que el aviso de Telegram del no pagado **no e
 un descarte**: es un aviso de que hay alguien a quien perseguir, y si termina
 pagando entra solo. Un mismo pedido puede generar primero el aviso y después el
 alta — es lo esperado, no un duplicado.
+
+### 4.2-bis Cómo se autentica el webhook
+
+`/api/pedidos` **exige sesión** y saca el vendedor de la cookie — candado puesto
+el 21-ago para que nadie cree pedidos a nombre de otro:
+
+```js
+const sesion = await sesionActual()
+if (!sesion?.id) return Response.json({ error: 'No autenticado' }, { status: 401 })
+const vendedorId = usuario.USUARIO_ID
+```
+
+O sea que el webhook no puede llamar la ruta a secas. La solución: **un usuario
+real** en `crm.usuarios`, y el webhook firma una sesión para él con
+`firmarSesion()` y `secretoSesion()` — la app firmando con su propio secreto, no
+una credencial inventada.
+
+```
+USUARIO_ID     (uuid nuevo)
+NOMBRE         TIENDA WEB
+CODIGO         WEB
+ROL            VENTAS
+TIENDAS        MANDARINA,INDSTORE
+ACTIVO         TRUE
+PASSWORD_HASH  (vacío — nadie puede entrar con él a mano)
+```
+
+**Efecto secundario bueno:** el `CODIGO` va en el id del pedido, así que las
+ventas web quedan como **`MAN-WEB-5701`** e **`IND-WEB-…`**. Se reconocen de un
+vistazo en cualquier bandeja, sin filtrar por nada.
+
+☠️ **La app se llama a sí misma, y eso ya mató LINKPAGO 7 días** (8→14 ago): el
+candado de sesión dejó sin credencial la llamada interna, y el `.catch` solo
+miraba errores de RED — **un 401 no es un error de red**, así que el fallo se
+descartó solo. Reglas de esta ruta, no negociables:
+
+1. **Mirar `res.ok` siempre.** Nunca asumir que un `fetch` que no lanzó salió bien.
+2. Si la llamada falla, **avisar por Telegram con el motivo y el número de pedido
+   de Shopify**, para poder cargarlo a mano. Un pedido que no entra tiene que
+   hacer ruido.
+3. Contestarle **200 a Shopify igual** cuando ya se avisó: si se devuelve error,
+   Shopify reintenta 19 veces y termina borrando la suscripción.
 
 ### 4.3 El cliente
 
@@ -345,3 +395,4 @@ ser bastante mayor. No cambia el diseño, pero sí la urgencia.
 | Área `PRODUCTO SIN DISEÑO` | Rodrigo | Es lo que es y ya se usa (342 ítems en 60 días) |
 | Entrar por `/api/pedidos`, no escribir directo | diseño | No duplicar el camino de creación |
 | `shopify_order_id` con índice único | diseño | Shopify reintenta |
+| Usuario **TIENDA WEB** + sesión firmada, en vez de refactorizar `/api/pedidos` | Rodrigo | Radio de explosión: si falla, falla solo el pedido web |
