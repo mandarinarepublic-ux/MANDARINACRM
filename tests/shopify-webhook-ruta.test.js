@@ -10,7 +10,10 @@ test('☠️ lee el cuerpo CRUDO antes de parsear, o la firma nunca cuadra', () 
 })
 
 test('☠️ MIRA res.ok en la llamada a /api/pedidos — la lección de LINKPAGO', () => {
-  assert.ok(/res\.ok|\.ok\b/.test(ruta), 'un 401 no lanza: sin res.ok el fallo se descarta solo')
+  // El patrón real, no solo que la cadena "res.ok" aparezca en algún lado: con
+  // /res\.ok|\.ok\b/ una lógica INVERTIDA (`if (res.ok) { tratar como error }`)
+  // pasaría igual. Exige el `if (!res.ok)` puntual.
+  assert.ok(/if\s*\(\s*!res\.ok\s*\)/.test(ruta), 'tiene que ser exactamente if (!res.ok), no cualquier mención de .ok')
 })
 
 test('☠️ si la creación falla, avisa por Telegram', () => {
@@ -58,4 +61,54 @@ test('☠️ /api/pedidos NO está en RUTAS_PUBLICAS — esa ruta saca al vended
   // queremos. Si esto se abriera, cualquiera crearía pedidos a nombre de
   // cualquier vendedor sin sesión.
   assert.ok(!rutasPublicas.includes('/api/pedidos'), rutasPublicas.join(', '))
+})
+
+// ☠️ RONDA 2: orders/create y orders/paid del MISMO pedido llegan con
+// milisegundos de diferencia. Sin ramificar por el tema, los dos pasan el
+// select de "¿ya entró?" a la vez y los dos crean un pedido — el caso NORMAL,
+// no uno raro.
+
+test('ramifica por X-Shopify-Topic: orders/paid es el único tema que crea el pedido', () => {
+  assert.ok(/x-shopify-topic/i.test(ruta), 'tiene que leer la cabecera del tema')
+  assert.ok(/orders\/paid/.test(ruta), 'orders/paid es el único camino de creación')
+  assert.ok(/orders\/create/.test(ruta), 'orders/create solo avisa si viene sin pagar')
+})
+
+test('☠️ un orders/create pagado NO crea nada — se lo deja a orders/paid', () => {
+  // Si esto faltara, un pedido pagado entraría dos veces casi siempre: es la
+  // secuencia normal de Shopify, no una carrera rara.
+  assert.ok(/topic === 'orders\/create'/.test(ruta))
+  assert.ok(/estaPagado\(order\)/.test(ruta))
+})
+
+test('☠️ revisa el error al marcar shopify_order_id — si falla en silencio, el próximo reintento duplica', () => {
+  assert.ok(/const\s*\{\s*error:\s*\w+\s*\}\s*=\s*await\s+sb\.from\('pedidos'\)/.test(ruta),
+    'tiene que leer el error de la respuesta del update, no ignorarlo')
+  assert.ok(/if\s*\(errorMarcado\)/.test(ruta), 'y hacer algo si ese error viene')
+})
+
+test('☠️ un pedido creado sin marcar el shopify_order_id avisa por Telegram', () => {
+  // Sin esto, el pedido queda creado pero irreconocible para el próximo
+  // reintento de Shopify: entraría una segunda vez.
+  const bloque = ruta.slice(ruta.indexOf("if (errorMarcado)"))
+  assert.ok(/notificarPedidoWebFallido/.test(bloque))
+})
+
+test('☠️ no crea un pedido sin prendas — .every() sobre un arreglo vacío da true y se auto-despacha', () => {
+  assert.ok(/payload\.items\??\.length/.test(ruta), 'tiene que comprobar que items no esté vacío')
+  assert.ok(/notificarPedidoWebFallido/.test(ruta))
+})
+
+test('☠️ todo lo que va después de verificar la firma está en un try/catch propio (no solo el del JSON.parse)', () => {
+  const catches = ruta.match(/catch\s*[({]/g) || []
+  // Uno es el del JSON.parse (que sigue devolviendo 400, sin tocar). El otro
+  // es la red de seguridad nueva: si algo revienta después de la firma
+  // (p.ej. firmarSesion con SESSION_SECRET vacío), avisa y contesta 200 igual.
+  assert.ok(catches.length >= 2, `esperaba al menos 2 catch, hay ${catches.length}`)
+})
+
+test('los 400 de cuerpo inválido y pedido sin id se quedan como están', () => {
+  assert.ok(/Cuerpo inválido/.test(ruta))
+  assert.ok(/Pedido sin id/.test(ruta))
+  assert.ok(/status:\s*400/.test(ruta))
 })
