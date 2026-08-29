@@ -32,6 +32,14 @@ const RUTAS_PUBLICAS = [
   //   sesión o `Authorization: Bearer $CRM_API_TOKEN` como el resto de la API.
   '/api/shopify/sync',     // el cron de Vercel; valida su propio CRON_SECRET
   '/api/cron/pauta',       // el cron de Vercel; valida su propio CRON_SECRET
+  // '/api/shopify/pedidos' — el webhook de pedidos de Shopify (28-ago-2026).
+  //   Shopify no manda cookie ni Authorization: no puede tener sesión, igual
+  //   que /api/shopify/sync de arriba. Se defiende SOLA: verifica el HMAC del
+  //   cuerpo crudo contra el CLIENT_SECRET de la tienda del dominio ANTES de
+  //   tocar nada, y sin firma válida devuelve 401 (lib/shopifyWebhook.js). Que
+  //   el middleware la deje pasar no la abre, solo mueve la puerta al lugar
+  //   correcto — la puerta sigue puesta, la pone otro candado.
+  '/api/shopify/pedidos',
 ]
 
 function esPublica(pathname) {
