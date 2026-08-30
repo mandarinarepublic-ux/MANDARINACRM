@@ -1,9 +1,9 @@
-# HANDOFF · 26/28-ago-2026 · Bandejas: estado, cabecera, filtro de área y el pago en la hoja
+# HANDOFF · 26/29-ago-2026 · Bandejas, el pago en la hoja y el permiso de ventas
 
 Todo lo de este documento está **en producción y verificado en el navegador**,
 con datos reales. Lo que NO se verificó se dice explícitamente.
 
-Seis commits, de `9e60ee1e` a `5a0caa45`. Uno de ellos arregla una pantalla que
+Siete commits, de `9e60ee1e` a `32e9b9d1`. Uno de ellos arregla una pantalla que
 **yo mismo tumbé** durante ~8 minutos: leer la sección *"Lo que salió mal"* antes
 de tocar nada.
 
@@ -18,6 +18,7 @@ de tocar nada.
 | Aviso de filtros restaurados | `components/AvisoFiltros.js` |
 | Cabecera compartida y compacta | `components/BarraFiltros.js` |
 | Filtro por área en Historial | `lib/db/historial.js` + `lib/areas-filtrables.js` |
+| Permiso "ve las ventas de todos" | `lib/tiendasUsuario.js` + `lib/db/historial.js` |
 
 ---
 
@@ -216,6 +217,58 @@ Tablero y Calendario tienen otra estructura y **no** se tocaron.
 
 ---
 
+## 5. Permiso `VER_TODAS_LAS_VENTAS` (JACKELINE)
+
+**El diagnóstico cambió a mitad, y esa es la parte que hay que recordar.**
+
+Rodrigo pidió que JACKELINE viera los pedidos de MANDARINA e INDSTORE. Lo
+primero que se comprobó fue la base, no el código: **ya tenía
+`tiendas: ["MANDARINA","INDSTORE"]`**. Lo que la limitaba no era la tienda.
+
+Era el **rol VENDEDOR**, que en `aplicarAlcance` filtra por `vendedor_id`: cada
+quien ve lo suyo, venga de la tienda que venga. Sus 176 pedidos son todos de
+Mandarina; de Indstore tenía cero. Así que *"no ve nada de otros"* era el sistema
+funcionando como debía, no un fallo.
+
+> **Antes de tocar permisos, mirar `crm.usuarios` primero.** La mitad de la
+> petición ya estaba configurada; cambiar `tiendas` no habría hecho nada.
+
+Nuevo acceso **por persona**, en la misma línea que `VENTAS` e `INBOX_*`:
+
+```js
+if (rol === 'VENDEDOR' && !veTodasLasVentas(usuario)) {
+  const suyos = identidadesDe(usuario)
+  if (suyos.length) consulta = consulta.in('vendedor_id', suyos)
+}
+```
+
+### ☠️ Levanta el filtro por vendedor y SOLO ese
+
+- **NO levanta el filtro por tienda.** Si lo hiciera de paso, le abriría los 130
+  pedidos de YAW. Son dos restricciones distintas y hay una prueba dedicada a que
+  sigan separadas (`tests/ver-todas-las-ventas.test.js`).
+- **NO toca "Mis Pedidos".** Esa pantalla significa los MÍOS; si mostrara los de
+  todos, mentiría en su propio nombre. También con prueba.
+- Se marca desde la pantalla de Usuarios (**👁️ Ve las ventas de todos**): un
+  permiso que solo se pueda dar por SQL acaba sin darse.
+
+### Verificado en producción
+
+| | pedidos |
+|---|---|
+| Veía antes | 176 |
+| Ve ahora (confirmado por Rodrigo tras reentrar) | **678** |
+| YAW, que sigue sin ver | 130 |
+| Total de la base | 808 |
+
+⚠️ **El permiso viaja en la cookie firmada**: con la sesión vieja no surte
+efecto. Hay que cerrar sesión y volver a entrar.
+
+⚠️ Hoy lo tiene **solo JACKELINE**. Quien lo tenga pasa a ver nombre, cédula,
+celular y montos de clientes de otros vendedores — no es un permiso cosmético.
+
+---
+
 ## ☠️ Lo que salió mal: tumbé Historial 8 minutos
 
 Al desplegar la cabecera compartida, la pantalla quedó en blanco:
@@ -272,6 +325,7 @@ con el scroll **nunca**. La foto era el artefacto, no la página.
 | `tests/historial-filtro-area.test.js` | `ilike` y no `eq`; el embed que se pinta sin `!inner` |
 | `tests/hooks-orden.test.js` | **ampliada**: const del cuerpo usada antes de declararse |
 | `tests/bandeja-impresion.test.js` | **ampliada**: la cola trae `estado_pago` y `monto_abonado` |
+| `tests/ver-todas-las-ventas.test.js` | que el permiso NO levante el filtro por tienda ni toque Mis Pedidos |
 
 ---
 
