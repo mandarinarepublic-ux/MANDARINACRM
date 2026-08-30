@@ -1,0 +1,153 @@
+# ESTADO DEL CRM · al 30-ago-2026
+
+**Qué es esto:** el único documento que dice en qué punto está el CRM **hoy**.
+Los `HANDOFF-*.md` cuentan lo que pasó en una sesión y no se tocan más; este se
+**actualiza al cerrar cada sesión** y siempre habla en presente.
+
+**Cómo usarlo:** léelo antes de tocar el CRM, junto con la skill
+`/crm-mandarina`. Si algo de aquí contradice a otro documento, **gana lo que
+puedas comprobar contra el código o la base en 30 segundos** — y arregla el otro.
+
+> Todo lo de aquí está **medido el 30-ago-2026**, no copiado de documentos
+> anteriores. Varias cosas que se daban por ciertas ya no lo eran.
+
+---
+
+## Coordenadas
+
+| cosa | valor |
+|---|---|
+| Repo local | `C:\Users\RodrigoWork\Desktop\MANDARINACRM` (⚠️ la carpeta con espacio NO es) |
+| GitHub | `mandarinarepublic-ux/MANDARINACRM` — **público** |
+| Vercel | `mandarina-pro-sales`, región `gru1` |
+| Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
+| Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
+| Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
+| Pruebas | `npm test` → 465 pruebas |
+
+---
+
+## ☠️ El tope de 1000 de PostgREST: DÓNDE ESTÁ HOY
+
+Fue la causa raíz más cara del repo. **Ya no es un riesgo activo en ninguna de
+las rutas que lo tenían.** `docs/../skills/crm-mandarina/tope-1000.md` predice
+roturas que **ya no van a pasar**: se blindaron antes de la fecha prevista.
+
+| tabla | filas hoy | ¿expuesta? |
+|---|---|---|
+| `crm.detalle_pedido` | **1510** | ✅ no — `joinSupabase` pagina en tandas de 120 pedidos |
+| `crm.clientes` | **966** | ✅ no — todas las lecturas acotadas; `idsClientesQueCoinciden` avisa con el `count` si trunca |
+| `crm.pagos` | 834 | ✅ no — siempre por `pedido_id` |
+| `crm.pedidos` | 808 | ✅ no — `listPedidoIds()` **se borró**; el número sale de `siguienteNumeroPedido()`, que lee UNA fila |
+| `crm.pauta_dia` | 749 (375 por tienda) | ⚠️ **el único frente abierto**, ver abajo |
+
+### El único que queda: `pauta_dia`
+
+`lib/pauta/consultas.js:29` (`gastoPorAnuncio`) lee con `.eq(tienda)` +
+rango de fechas y **sin `.range()`**. Hoy son 375 filas por tienda, creciendo a
+**8/día**: una tienda cruzaría las 1000 hacia el **~16-nov-2026**, y solo si el
+tablero pide el rango completo.
+
+No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pauta
+**subestimado en silencio** — no un error.
+
+> **Cómo se comprueba, siempre:** `select count(*)` contra la tabla, no leer un
+> documento. Las cifras de arriba caducan solas.
+
+---
+
+## Qué está en producción
+
+**Pedidos y taller.** Colas propias por pantalla (`/api/produccion`, `/api/corte`,
+`/api/despacho`, `/api/impresion`, `/api/historial`), cada una con su repositorio
+en `lib/db/`. Ninguna pantalla usa ya la lista completa.
+
+**Las ocho bandejas** guardan filtros, paginación, tarjetas abiertas y scroll
+(`lib/useEstadoPantalla.js`). Caduca a las 12 h y **avisa** cuando restaura.
+Cabecera compartida en cinco de ellas (`components/BarraFiltros.js`): una fila,
+panel plegable, chips de lo que está filtrado.
+
+**Historial** filtra por área (`?area=`), pagina de a 30 en el servidor y admite
+el permiso `VER_TODAS_LAS_VENTAS`.
+
+**Facturación Dátil** emisión directa + botón manual de rescate.
+**Pauta** tablero, artes y CAPI `Purchase` con atribución.
+**Impresión** hoja de cliente + hoja de confección, con el pago correcto.
+
+---
+
+## Quién ve qué
+
+Tres cosas **distintas**, y se confunden todo el rato:
+
+| decide | de dónde sale | a quién aplica |
+|---|---|---|
+| Qué **pedidos** | el ROL (`VENDEDOR` → solo los suyos, por `vendedor_id`) | todos menos ADMIN |
+| De qué **tienda** | `usuarios.tiendas` | solo roles de venta |
+| De qué **área** | `usuarios.areas` | producción |
+
+Permisos por persona en `usuarios.accesos`, marcables en la pantalla de Usuarios:
+`VENTAS` · `INBOX_MANDARINA` · `INBOX_INDSTORE` · `VER_TODAS_LAS_VENTAS`
+(hoy **solo JACKELINE**: ve las ventas de todos en MANDARINA e INDSTORE, 678; YAW
+no). **Viajan en la cookie → hay que reentrar.**
+
+☠️ **Antes de tocar permisos, mira `crm.usuarios` PRIMERO.** El 29-ago se pidió
+que JACKELINE viera las dos tiendas y `tiendas` **ya tenía las dos**: lo que
+limitaba era el ROL. Cambiar `tiendas` no habría hecho nada.
+
+✅ Las APIs están blindadas (ago-2026): la identidad sale de la cookie firmada y
+`/api/pedidos` ignora `?rol`/`?vendedor`/`?scope`. `?all=1` ya no existe.
+
+---
+
+## Pendientes vivos
+
+| # | qué | cómo se cierra |
+|---|---|---|
+| 1 | **El refresco silencioso de Producción y Corte no se probó en vivo** | Abrir Producción, bajar, cambiar de pestaña, volver. Si no parpadea el spinner y sigues donde estabas, cerrado |
+| 2 | Corte (23%) e Impresión (19%) siguen con la cabecera alta | Decidir si los contadores encogen a píldoras. **No decidido** |
+| 3 | El desplegable de Área cae solo en una 2.ª fila del panel | Cosmético |
+| 4 | `AREAS` desincronizada entre `lib/pedidos.js` y `lib/pedidos-client.js` (`PREMIUM - SIN DISEÑO`) | Bomba, no incendio: hoy no rompe nada |
+| 5 | `lib/useNuevosPedidos.js` avisa mal | Compara `PEDIDO_ID` como texto: **96% de silencio** medido sobre 531 pedidos |
+| 6 | `pauta_dia` sin `.range()` | Ver arriba. ~16-nov-2026 |
+| 7 | `todosItemsListos` usa `.every()` | Un pedido **sin ítems** devuelve `true` y se auto-despacha. Mina armada, hoy no se dispara |
+
+---
+
+## Las reglas que más han costado
+
+1. **Build limpio + pruebas en verde + deploy `Ready` NO prueban que la pantalla
+   abra.** Después de desplegar una pantalla, ábrela. (Costó 8 min de Historial
+   caído el 26-ago, y media jornada de taller parado el 19-ago.)
+2. **Mira el BUNDLE, no el fuente.** El build se comió una coma en un `select` y
+   dio tres síntomas distintos. Los `select` se arman con `array.join(',')`.
+3. **Un endpoint acotado hereda traer TODO lo que su componente pinta.** Olvidar
+   dos columnas hizo que la hoja del cliente cobrara dos veces (82 de 83).
+4. **"Sin texto" nunca significa "no pasó nada"**, y una lista filtrada se ve
+   igual de sana que una completa. Por eso los avisos y los chips.
+5. **Las capturas de pantalla mienten en este entorno.** Medir con
+   `getBoundingClientRect()`, no con los ojos.
+6. **Siempre `main`.** Preview no sirve: Supabase solo está en Production.
+7. ⚠️ **NUNCA `git add -A` ni `git add .`** — hay trabajo sin commitear.
+8. Español ecuatoriano con **tuteo**, también en commits y comentarios.
+
+---
+
+## Dónde está cada cosa
+
+| documento | para qué |
+|---|---|
+| **este archivo** | en qué punto está el CRM hoy |
+| `/crm-mandarina` (skill) | arquitectura, roles, trampas, mapa del código y de la base |
+| `docs/HANDOFF-2026-08-28-...md` | bandejas, filtro de área, el pago en la hoja, permisos |
+| `docs/HANDOFF-2026-08-02-pauta.md` | pauta, atribución y señales a Meta |
+
+---
+
+## Al cerrar una sesión
+
+1. Actualizar **este archivo**: pendientes, lo que entró en producción, cifras que
+   hayan cambiado.
+2. Si la sesión dejó una lección reusable, a la **skill** (no aquí).
+3. Si fue una sesión larga con contexto que se pierde, un `HANDOFF-<fecha>-<tema>.md`.
+4. Volver a medir lo que este documento afirme con números. **Las cifras caducan.**
