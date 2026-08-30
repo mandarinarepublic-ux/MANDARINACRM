@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert'
-import { textoPedidoWebSinPagar, textoPedidoWebFallido } from '../lib/telegram.js'
+import { textoPedidoWebSinPagar, textoPedidoWebFallido, textoPedidoWebCreado } from '../lib/telegram.js'
 
 test('el aviso trae lo necesario para perseguir la venta', () => {
   const t = textoPedidoWebSinPagar({
@@ -17,4 +17,15 @@ test('☠️ si el pedido no pudo entrar, el aviso dice por qué', () => {
   const t = textoPedidoWebFallido({ tiendaId: 'MANDARINA', orderName: '#1184', motivo: '401 No autenticado' })
   assert.ok(t.includes('#1184'))
   assert.ok(t.includes('401'), 'sin el motivo nadie sabe qué arreglar')
+})
+
+test('el aviso de venta creada trae pedido, cliente y el monto con dos decimales', () => {
+  const t = textoPedidoWebCreado({
+    tiendaId: 'MANDARINA', pedidoId: 'MAN-WEB-5701', cliente: 'Jonathan Ríos',
+    monto: 52, prendas: 2,
+  })
+  assert.ok(t.includes('MAN-WEB-5701'), 'sin el pedido no se puede ubicar en el CRM')
+  assert.ok(t.includes('Jonathan Ríos'))
+  assert.ok(t.includes('52.00'), 'el monto va con dos decimales, como el resto de los avisos')
+  assert.ok(t.includes('2 prenda'))
 })

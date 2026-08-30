@@ -102,6 +102,15 @@ test('el payload sale listo para /api/pedidos', () => {
   assert.strictEqual(p.emitirFactura, false, 'estos pedidos NO se facturan en Dátil')
 })
 
+test('☠️ el pago va con `tipo`, no `metodo` — /api/pedidos lee tipo y descarta metodo en silencio', () => {
+  const p = mapearPedido(PEDIDO, 'MANDARINA', {})
+  assert.strictEqual(p.pagos[0].tipo, 'TRANSFERENCIA',
+    'TRANSFERENCIA da estado PAGADO; LINK_PAGO lo dejaría PENDIENTE y una etiqueta nueva no aparece en los selectores')
+  assert.ok(!('metodo' in p.pagos[0]), 'metodo no lo lee nadie, no hace falta mandarlo')
+  assert.ok(p.pagos[0].notas.includes('Shopify'), 'la verdad del origen queda escrita en las notas')
+  assert.ok(p.pagos[0].notas.includes(PEDIDO.name), 'las notas identifican el pedido de Shopify')
+})
+
 test('el teléfono sale del envío aunque el cliente no tenga', () => {
   const p = mapearPedido({ ...PEDIDO, customer: { phone: null } }, 'MANDARINA', {})
   assert.strictEqual(p.cliente.celular, '0980446364')

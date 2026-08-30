@@ -112,3 +112,18 @@ test('los 400 de cuerpo inválido y pedido sin id se quedan como están', () => 
   assert.ok(/Pedido sin id/.test(ruta))
   assert.ok(/status:\s*400/.test(ruta))
 })
+
+// ☠️ RONDA final: el aviso de /api/pedidos va sin await y se puede perder —
+// justo el problema que este proyecto vino a resolver. El webhook manda el
+// suyo propio, ESPERADO, después de crear con éxito.
+
+test('manda su propio aviso de venta creada, y lo ESPERA antes de responder', () => {
+  assert.ok(/await\s+notificarPedidoWebCreado/.test(ruta),
+    'sin await, en serverless este aviso también se puede perder')
+})
+
+test('NO le pone await al notificarVenta de /api/pedidos — decisión explícita, no se toca ese archivo', () => {
+  const apiPedidos = readFileSync(new URL('../app/api/pedidos/route.js', import.meta.url), 'utf8')
+  assert.ok(!/await\s+notificarVenta/.test(apiPedidos),
+    'ponerle await colgaría el alta de pedidos de las TRES tiendas si Telegram se cuelga')
+})

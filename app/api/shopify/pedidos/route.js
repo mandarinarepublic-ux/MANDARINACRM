@@ -3,7 +3,7 @@ export const maxDuration = 60
 
 import { tiendaPorDominio, firmaValida } from '@/lib/shopifyWebhook'
 import { mapearPedido, estaPagado, normalizarCelular } from '@/lib/shopifyPedido'
-import { notificarPedidoWebSinPagar, notificarPedidoWebFallido } from '@/lib/telegram'
+import { notificarPedidoWebSinPagar, notificarPedidoWebFallido, notificarPedidoWebCreado } from '@/lib/telegram'
 import { firmarSesion, secretoSesion, COOKIE_SESION } from '@/lib/sesion'
 import { getSupabase } from '@/lib/supabase'
 import { registrarEvento } from '@/lib/eventos'
@@ -129,10 +129,26 @@ export async function POST(req) {
         orderName: order.name,
         motivo: `pedido ${pedidoId} creado pero SIN marcar (shopify ${orderId}): ${errorMarcado.message}`,
       })
-      return ok({ creado: true, pedidoId, marcado: false })
     }
 
-    return ok({ creado: true, pedidoId, marcado: true })
+    // Aviso PROPIO de la venta, ESPERADO. `/api/pedidos` ya manda
+    // `notificarVenta()` en cada alta, pero sin `await` (fire-and-forget): en
+    // serverless la función se congela apenas responde y ese aviso se puede
+    // perder — justo el problema que este proyecto vino a resolver. No se
+    // toca `/api/pedidos` para ponerle `await` ahí: eso haría que CADA venta
+    // de las tres tiendas espere a Telegram sin timeout, y si Telegram se
+    // cuelga, se cuelga el alta de pedidos entera. El webhook manda este
+    // ADEMÁS, antes de responder. Puede llegar un mensaje doble por la misma
+    // venta — un aviso de más es infinitamente mejor que una venta invisible.
+    await notificarPedidoWebCreado({
+      tiendaId: tienda.id,
+      pedidoId,
+      cliente: payload.cliente?.nombre,
+      monto: payload.pagos?.[0]?.monto,
+      prendas: payload.items.reduce((s, i) => s + (i.cantidad || 1), 0),
+    })
+
+    return ok({ creado: true, pedidoId, marcado: !errorMarcado })
   } catch (e) {
     const motivo = String(e?.message || e).slice(0, 200)
     await notificarPedidoWebFallido({ tiendaId: tienda.id, orderName: order.name, motivo })
