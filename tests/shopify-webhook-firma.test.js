@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert'
 import { createHmac } from 'node:crypto'
-import { firmaValida, tiendaPorDominio } from '../lib/shopifyWebhook.js'
+import { firmaValida, tiendaPorDominio, secretoDeFirma } from '../lib/shopifyWebhook.js'
 
 const SECRETO = 'secreto-de-prueba'
 const CUERPO = '{"id":123,"financial_status":"paid"}'
@@ -31,4 +31,31 @@ test('un dominio desconocido no resuelve a ninguna tienda', () => {
   assert.strictEqual(tiendaPorDominio('tienda-falsa.myshopify.com'), null)
   assert.strictEqual(tiendaPorDominio(''), null)
   assert.strictEqual(tiendaPorDominio(null), null)
+})
+
+test('secretoDeFirma: con SHOPIFY_MANDARINA_WEBHOOK_SECRET definido, manda ese y no el client secret', () => {
+  const original = process.env.SHOPIFY_MANDARINA_WEBHOOK_SECRET
+  try {
+    process.env.SHOPIFY_MANDARINA_WEBHOOK_SECRET = 'secreto-del-panel'
+    assert.strictEqual(secretoDeFirma({ id: 'MANDARINA', clientSecret: 'cs' }), 'secreto-del-panel')
+  } finally {
+    if (original === undefined) delete process.env.SHOPIFY_MANDARINA_WEBHOOK_SECRET
+    else process.env.SHOPIFY_MANDARINA_WEBHOOK_SECRET = original
+  }
+})
+
+test('secretoDeFirma: sin la variable propia, el client secret queda de respaldo', () => {
+  const original = process.env.SHOPIFY_MANDARINA_WEBHOOK_SECRET
+  try {
+    delete process.env.SHOPIFY_MANDARINA_WEBHOOK_SECRET
+    assert.strictEqual(secretoDeFirma({ id: 'MANDARINA', clientSecret: 'cs' }), 'cs')
+  } finally {
+    if (original === undefined) delete process.env.SHOPIFY_MANDARINA_WEBHOOK_SECRET
+    else process.env.SHOPIFY_MANDARINA_WEBHOOK_SECRET = original
+  }
+})
+
+test('☠️ secretoDeFirma: sin tienda da vacío, y un secreto vacío nunca deja pasar nada', async () => {
+  assert.strictEqual(secretoDeFirma(null), '')
+  assert.ok(!await firmaValida(CUERPO, firmar(CUERPO, SECRETO), ''))
 })

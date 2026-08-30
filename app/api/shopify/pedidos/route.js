@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-import { tiendaPorDominio, firmaValida } from '@/lib/shopifyWebhook'
+import { tiendaPorDominio, firmaValida, secretoDeFirma } from '@/lib/shopifyWebhook'
 import { mapearPedido, estaPagado, normalizarCelular } from '@/lib/shopifyPedido'
 import { notificarPedidoWebSinPagar, notificarPedidoWebFallido, notificarPedidoWebCreado } from '@/lib/telegram'
 import { firmarSesion, secretoSesion, COOKIE_SESION } from '@/lib/sesion'
@@ -25,7 +25,7 @@ export async function POST(req) {
 
   const tienda = tiendaPorDominio(dominio)
   if (!tienda) return Response.json({ error: 'Tienda desconocida' }, { status: 401 })
-  if (!await firmaValida(crudo, firma, tienda.clientSecret)) {
+  if (!await firmaValida(crudo, firma, secretoDeFirma(tienda))) {
     return Response.json({ error: 'Firma inválida' }, { status: 401 })
   }
 
