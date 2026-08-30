@@ -127,3 +127,36 @@ test('NO le pone await al notificarVenta de /api/pedidos — decisión explícit
   assert.ok(!/await\s+notificarVenta/.test(apiPedidos),
     'ponerle await colgaría el alta de pedidos de las TRES tiendas si Telegram se cuelga')
 })
+
+// ☠️ RONDA: la foto del producto. Confirmado con un pedido real que el
+// webhook NO manda line_items[].image — sin ir al catálogo, la prenda entra
+// sin foto y el dueño pidió explícitamente que eso nunca pase.
+
+test('completa la foto que el webhook no manda yendo al catálogo por variant_id', () => {
+  assert.ok(/fetchFotosDeVariantes/.test(ruta), 'tiene que llamar a fetchFotosDeVariantes')
+})
+
+// ☠️ RONDA: un pedido descartado no puede quedar en silencio, o nadie se
+// entera si Shopify cambia cómo etiqueta los pagos.
+
+test('☠️ un orders/paid sin financial_status=paid registra el descarte, ESPERADO', () => {
+  const bloque = ruta.slice(ruta.indexOf("if (!estaPagado(order))"), ruta.indexOf('const fotosWebhook'))
+  assert.ok(/await\s+registrarEvento/.test(bloque), 'sin await el registro se puede perder en serverless')
+  assert.ok(/nivel:\s*'warn'/.test(bloque))
+})
+
+test('un tema no reconocido también deja rastro, ESPERADO', () => {
+  const bloque = ruta.slice(ruta.indexOf("if (topic !== 'orders/paid')"), ruta.indexOf("if (!estaPagado(order))"))
+  assert.ok(/await\s+registrarEvento/.test(bloque), 'sin await el registro se puede perder en serverless')
+  assert.ok(/nivel:\s*'info'/.test(bloque))
+})
+
+test('☠️ el duplicado NO registra evento — es el funcionamiento normal, no una falla', () => {
+  const bloque = ruta.slice(ruta.indexOf('yaEsta?.length'), ruta.indexOf("if (topic === 'orders/create')"))
+  assert.ok(!/registrarEvento/.test(bloque), 'un reintento normal de Shopify no debe ensuciar el tablero')
+})
+
+test('☠️ orders/create pagado tampoco registra evento — lo crea orders/paid, no es un descarte', () => {
+  const bloque = ruta.slice(ruta.indexOf("if (estaPagado(order)) {"), ruta.indexOf("return ok({ sinPagar: true })"))
+  assert.ok(!/registrarEvento/.test(bloque))
+})

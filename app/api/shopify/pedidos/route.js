@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 import { tiendaPorDominio, firmaValida, secretoDeFirma } from '@/lib/shopifyWebhook'
+import { fetchFotosDeVariantes } from '@/lib/shopify'
 import { mapearPedido, estaPagado, normalizarCelular } from '@/lib/shopifyPedido'
 import { notificarPedidoWebSinPagar, notificarPedidoWebFallido, notificarPedidoWebCreado } from '@/lib/telegram'
 import { firmarSesion, secretoSesion, COOKIE_SESION } from '@/lib/sesion'
@@ -69,7 +70,15 @@ export async function POST(req) {
     }
 
     if (topic !== 'orders/paid') {
-      // Cualquier otro tema (o ninguno): no hay nada que hacer acá.
+      // Cualquier otro tema (o ninguno): no hay nada que hacer acá. Se deja
+      // rastro (nivel 'info', no 'warn'): un tema nuevo que Shopify empiece a
+      // mandar no es una falla todavía, pero si nunca se registra nadie nota
+      // que existe.
+      await registrarEvento({
+        fuente: 'shopify',
+        nivel: 'info',
+        mensaje: `Webhook con tema no reconocido: '${topic || 'sin tema'}' (tienda ${tienda.id})`,
+      })
       return ok({ ignorado: true, tema: topic || 'sin tema' })
     }
 
@@ -77,10 +86,30 @@ export async function POST(req) {
     if (!estaPagado(order)) {
       // Defensivo: un orders/paid con financial_status distinto de 'paid'
       // sería un dato raro de Shopify. No se crea nada a ciegas.
+      // ☠️ Si Shopify algún día mandara los pedidos pagados con otra etiqueta,
+      // esto los descartaría a TODOS en silencio — nadie se enteraría de que
+      // dejaron de entrar. Por eso queda registrado, no solo devuelto en el 200.
+      await registrarEvento({
+        fuente: 'shopify',
+        nivel: 'warn',
+        mensaje: `orders/paid de ${order.name} descartado: financial_status='${order.financial_status}' (tienda ${tienda.id})`,
+      })
       return ok({ ignorado: true, motivo: 'orders/paid pero financial_status no es paid' })
     }
 
-    const payload = mapearPedido(order, tienda.id, fotosDeLineItems(order))
+    // La foto del producto por variante: primero la del webhook (por si algún
+    // día viniera), y se completa con el catálogo lo que falte. Verificado en
+    // producción con un pedido real (MAN-WEB-5812, 30-ago-2026): el webhook de
+    // Shopify NO manda line_items[].image, así que fotosWebhook siempre sale
+    // vacío y esto es lo que de verdad pone la foto.
+    const fotosWebhook = fotosDeLineItems(order)
+    const idsSinFoto = (order.line_items || [])
+      .map((li) => li.variant_id)
+      .filter((id) => id && !fotosWebhook[String(id)])
+    const fotosCatalogo = await fetchFotosDeVariantes(tienda, idsSinFoto)
+    const fotos = { ...fotosCatalogo, ...fotosWebhook }
+
+    const payload = mapearPedido(order, tienda.id, fotos)
 
     // Sin prendas, /api/pedidos igual crearía el pedido — y `todosItemsListos`
     // usa `.every()`, que sobre un arreglo vacío da `true`: el pedido se
