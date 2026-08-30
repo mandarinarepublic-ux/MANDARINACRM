@@ -71,12 +71,13 @@ export async function POST(req) {
 
     if (topic !== 'orders/paid') {
       // Cualquier otro tema (o ninguno): no hay nada que hacer acá. Se deja
-      // rastro (nivel 'info', no 'warn'): un tema nuevo que Shopify empiece a
-      // mandar no es una falla todavía, pero si nunca se registra nadie nota
-      // que existe.
+      // rastro (nivel 'ok': puramente informativo, no ensucia el filtro de
+      // errores ni de avisos del tablero): un tema nuevo que Shopify empiece
+      // a mandar no es una falla todavía, pero si nunca se registra nadie
+      // nota que existe.
       await registrarEvento({
         fuente: 'shopify',
-        nivel: 'info',
+        nivel: 'ok',
         mensaje: `Webhook con tema no reconocido: '${topic || 'sin tema'}' (tienda ${tienda.id})`,
       })
       return ok({ ignorado: true, tema: topic || 'sin tema' })
@@ -91,7 +92,7 @@ export async function POST(req) {
       // dejaron de entrar. Por eso queda registrado, no solo devuelto en el 200.
       await registrarEvento({
         fuente: 'shopify',
-        nivel: 'warn',
+        nivel: 'aviso',
         mensaje: `orders/paid de ${order.name} descartado: financial_status='${order.financial_status}' (tienda ${tienda.id})`,
       })
       return ok({ ignorado: true, motivo: 'orders/paid pero financial_status no es paid' })

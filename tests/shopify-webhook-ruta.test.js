@@ -142,13 +142,18 @@ test('completa la foto que el webhook no manda yendo al catálogo por variant_id
 test('☠️ un orders/paid sin financial_status=paid registra el descarte, ESPERADO', () => {
   const bloque = ruta.slice(ruta.indexOf("if (!estaPagado(order))"), ruta.indexOf('const fotosWebhook'))
   assert.ok(/await\s+registrarEvento/.test(bloque), 'sin await el registro se puede perder en serverless')
-  assert.ok(/nivel:\s*'warn'/.test(bloque))
+  // 'aviso', NUNCA 'warn': ese nivel no existe en este repo. lib/eventos.js
+  // documenta el enum como 'error'|'aviso'|'ok', y el tablero
+  // (app/dashboard/errores/page.js) solo sabe pintar y filtrar esos tres —
+  // un nivel inventado sale invisible: sin color y fuera de los filtros.
+  assert.ok(/nivel:\s*'aviso'/.test(bloque))
 })
 
 test('un tema no reconocido también deja rastro, ESPERADO', () => {
   const bloque = ruta.slice(ruta.indexOf("if (topic !== 'orders/paid')"), ruta.indexOf("if (!estaPagado(order))"))
   assert.ok(/await\s+registrarEvento/.test(bloque), 'sin await el registro se puede perder en serverless')
-  assert.ok(/nivel:\s*'info'/.test(bloque))
+  // 'ok', NUNCA 'info': mismo motivo que arriba.
+  assert.ok(/nivel:\s*'ok'/.test(bloque))
 })
 
 test('☠️ el duplicado NO registra evento — es el funcionamiento normal, no una falla', () => {
@@ -159,4 +164,20 @@ test('☠️ el duplicado NO registra evento — es el funcionamiento normal, no
 test('☠️ orders/create pagado tampoco registra evento — lo crea orders/paid, no es un descarte', () => {
   const bloque = ruta.slice(ruta.indexOf("if (estaPagado(order)) {"), ruta.indexOf("return ok({ sinPagar: true })"))
   assert.ok(!/registrarEvento/.test(bloque))
+})
+
+test('☠️ TODOS los registrarEvento de esta ruta usan un nivel de la lista válida', () => {
+  // El repo entero conoce solo 'error'|'aviso'|'ok' (lib/eventos.js, y el
+  // tablero de app/dashboard/errores/page.js que pinta y filtra por esos
+  // tres). Un nivel inventado (p.ej. 'warn' o 'info') queda guardado pero
+  // invisible: sin color en la fila y fuera del dropdown de filtros — el
+  // mismo defecto que este registro vino a evitar. Esta prueba caza
+  // cualquier nivel nuevo que alguien invente a futuro, en vez de dejarlo
+  // pasar en silencio.
+  const NIVELES_VALIDOS = ['error', 'aviso', 'ok']
+  const niveles = [...ruta.matchAll(/nivel:\s*'([^']+)'/g)].map((m) => m[1])
+  assert.ok(niveles.length > 0, 'tiene que haber al menos un registrarEvento con nivel')
+  for (const n of niveles) {
+    assert.ok(NIVELES_VALIDOS.includes(n), `nivel '${n}' no existe en este repo (válidos: ${NIVELES_VALIDOS.join(', ')})`)
+  }
 })
