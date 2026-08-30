@@ -218,6 +218,9 @@ export default function UsuariosPage() {
         // Se marca por persona a propósito: si dependiera del rol, un diseñador
         // nuevo podría vender sin que nadie lo decidiera.
         ['VENTAS',          '➕ Puede vender'],
+        // Levanta el filtro por vendedor del Historial: ve las ventas de todos,
+        // pero SOLO en las tiendas que tenga asignadas arriba. No toca Mis Pedidos.
+        ['VER_TODAS_LAS_VENTAS', '👁️ Ve las ventas de todos'],
       ].map(([clave, etiqueta]) => (
         <label key={clave} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all
           ${valor.includes(clave) ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 text-gray-500'}`}>
