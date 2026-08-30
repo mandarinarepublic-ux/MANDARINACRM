@@ -10,6 +10,10 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 
 > Todo lo de aquí está **medido el 30-ago-2026**, no copiado de documentos
 > anteriores. Varias cosas que se daban por ciertas ya no lo eran.
+>
+> ⚠️ **Este archivo nació incompleto y eso dice algo.** Se escribió el 30-ago sin
+> la integración de Shopify, que llevaba dos días en el repo desde otra sesión.
+> Si trabajas en paralelo, `git log --oneline -15` antes de darlo por bueno.
 
 ---
 
@@ -23,7 +27,7 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 | Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
 | Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
 | Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
-| Pruebas | `npm test` → 465 pruebas |
+| Pruebas | `npm test` → 468 pruebas |
 
 ---
 
@@ -70,6 +74,34 @@ panel plegable, chips de lo que está filtrado.
 **Historial** filtra por área (`?area=`), pagina de a 30 en el servidor y admite
 el permiso `VER_TODAS_LAS_VENTAS`.
 
+**Pedidos de Shopify → CRM (28/30-ago, RECIÉN DESPLEGADO).** Un webhook mete
+solos los pedidos pagados de la tienda web: `POST /api/shopify/pedidos`, con
+verificación **HMAC por tienda** (`lib/shopifyWebhook.js`) y mapeo puro en
+`lib/shopifyPedido.js`. Entra como el usuario **TIENDA WEB**, firmando una sesión
+con `SHOPIFY_VENDEDOR_USUARIO_ID`. Cuatro archivos de prueba.
+
+- La ruta está **abierta en el middleware** a propósito: se defiende sola con el
+  HMAC, no con la cookie.
+- A Shopify se le devuelve **200 siempre que ya se hizo lo que había que hacer**.
+  Si recibe un error reintenta 19 veces y acaba borrando la suscripción sola.
+- ☠️ Shopify manda `orders/create` **y** `orders/paid` del mismo pedido con
+  milisegundos de diferencia. Se ramifica por `x-shopify-topic`: sin eso los dos
+  pasaban el `select` a la vez y creaban dos pedidos — el índice único llega un
+  paso tarde.
+
+**Variables (comprobadas el 30-ago):** `SHOPIFY_VENDEDOR_USUARIO_ID` ✅ (puesta
+ese mismo día), `SESSION_SECRET` ✅, y los `CLIENT_SECRET`/`STORE`/`TOKEN` de las
+dos tiendas ✅.
+
+⚠️ **NO existe ningún `SHOPIFY_<TIENDA>_WEBHOOK_SECRET`.** No es un fallo por sí
+solo: `secretoDeFirma()` cae al `CLIENT_SECRET`, que es el correcto **si el
+webhook se creó desde la app**. Pero si se crea **a mano en el panel de Shopify**,
+Shopify genera un secreto propio y **todas las firmas fallarán con 401** hasta que
+se añada esa variable. Es exactamente para lo que existe el commit `792f6e70`.
+
+⚠️ **Cero pedidos web en la base al 30-ago.** Está desplegado pero **no ha pasado
+un solo pedido real todavía**: no está verificado de punta a punta. Ver pendientes.
+
 **Facturación Dátil** emisión directa + botón manual de rescate.
 **Pauta** tablero, artes y CAPI `Purchase` con atribución.
 **Impresión** hoja de cliente + hoja de confección, con el pago correcto.
@@ -111,6 +143,7 @@ limitaba era el ROL. Cambiar `tiendas` no habría hecho nada.
 | 5 | `lib/useNuevosPedidos.js` avisa mal | Compara `PEDIDO_ID` como texto: **96% de silencio** medido sobre 531 pedidos |
 | 6 | `pauta_dia` sin `.range()` | Ver arriba. ~16-nov-2026 |
 | 7 | `todosItemsListos` usa `.every()` | Un pedido **sin ítems** devuelve `true` y se auto-despacha. Mina armada, hoy no se dispara |
+| 8 | **El webhook de Shopify no ha procesado ni un pedido real** | Compra de prueba en la tienda web → tiene que aparecer en el CRM como TIENDA WEB. Si da **401**, es el secreto: añadir `SHOPIFY_<TIENDA>_WEBHOOK_SECRET` |
 
 ---
 
