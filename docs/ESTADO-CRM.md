@@ -1,4 +1,4 @@
-# ESTADO DEL CRM · al 30-ago-2026
+# ESTADO DEL CRM · al 31-ago-2026
 
 **Qué es esto:** el único documento que dice en qué punto está el CRM **hoy**.
 Los `HANDOFF-*.md` cuentan lo que pasó en una sesión y no se tocan más; este se
@@ -27,7 +27,7 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 | Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
 | Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
 | Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
-| Pruebas | `npm test` → 468 pruebas |
+| Pruebas | `npm test` → 501 pruebas |
 
 ---
 
@@ -73,6 +73,28 @@ panel plegable, chips de lo que está filtrado.
 
 **Historial** filtra por área (`?area=`), pagina de a 30 en el servidor y admite
 el permiso `VER_TODAS_LAS_VENTAS`.
+
+**Gráficos de ventas en Inicio (31-ago, RECIÉN DESPLEGADO).** Dos cuadros de
+barras: histórico por mes a la izquierda, día a día del mes en curso a la
+derecha (`components/GraficosVentas.js` + `GraficoBarras.js`, helpers puros y
+probados en `lib/grafico.js`). Los ve **ADMIN** con todo y cada **VENDEDOR** con
+lo suyo; **YAW queda fuera a propósito** y hay una prueba que lo sostiene.
+
+Las series las agrega la base: `crm.resumen_inicio` devuelve `ventasPorDia`,
+`ventasPorMes`, `primerPedido` y `hoyEcuador`. El recorte por vendedor lo hace
+**la función**, a partir de la cookie firmada — la pantalla no filtra nada.
+
+☠️ **Las barras suman EXACTAMENTE lo que dicen las tarjetas de arriba** (sin
+excluir CANCELADO, igual que ellas): medido, $15.025,14 contra $15.025,14. Si
+algún día se cambia el criterio en un lado, hay que cambiarlo en los dos o la
+diferencia se leerá como un bug del panel.
+
+☠️ Tres trampas de lectura ya cerradas, cada una con su prueba: un día sin
+ventas sale como **barra en cero** (marca gris al ras) y no desaparece · el
+**primer mes va marcado como parcial** —el CRM arrancó el **18-jun-2026**, así
+que junio son 13 días y no una caída— y a un vendedor la nota le habla de **su**
+primer pedido, no del CRM · el **mes en curso** también va marcado, y la
+advertencia se apaga sola el día que el mes cierra.
 
 **Pedidos de Shopify → CRM (28/30-ago, RECIÉN DESPLEGADO).** Un webhook mete
 solos los pedidos pagados de la tienda web: `POST /api/shopify/pedidos`, con
@@ -129,6 +151,10 @@ limitaba era el ROL. Cambiar `tiendas` no habría hecho nada.
 
 ✅ Las APIs están blindadas (ago-2026): la identidad sale de la cookie firmada y
 `/api/pedidos` ignora `?rol`/`?vendedor`/`?scope`. `?all=1` ya no existe.
+
+⚠️ `VER_TODAS_LAS_VENTAS` **no toca los gráficos de Inicio**: levanta el filtro
+por vendedor del Historial **y solo ese**. JACKELINE ve ahí sus propias ventas.
+Es lo documentado, no un descuido.
 
 ---
 
