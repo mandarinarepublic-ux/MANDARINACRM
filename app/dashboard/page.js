@@ -111,11 +111,18 @@ export default function DashboardPage() {
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
 function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
-  const hayFiltro = Boolean(filtro.vendedor || filtro.tienda)
+  // ⚠️ El mes ENTRA en el aviso y en «Ver todo». Al principio no: cuando solo
+  // tocaba el gráfico diario no escondía nada. Ahora acota el panel entero, así
+  // que callarlo sería exactamente el engaño que el aviso existe para evitar.
+  const mesElegido = Boolean(data.filtro?.mesElegido)
+  const claveHoy = String(data.hoyEcuador || '').slice(0, 7)
+  const mesVisto = etiquetaMesLarga(data.filtro?.mes || claveHoy)
+  // Un mes PASADO es el que no contiene a hoy: ahí «Ventas hoy» no dice nada.
+  const esMesEnCurso = (data.filtro?.mes || claveHoy) === claveHoy
+
+  const hayFiltro = Boolean(filtro.vendedor || filtro.tienda || mesElegido)
   const alcance = [filtro.vendedor, filtro.tienda].filter(Boolean).join(' en ')
-  // «Ver todo» limpia vendedor y tienda pero NO el mes: el mes no esconde nada
-  // del panel, solo elige que tramo pinta el gráfico diario.
-  const limpiar = () => setFiltro((f) => ({ ...f, vendedor: null, tienda: null }))
+  const limpiar = () => setFiltro({ vendedor: null, tienda: null, mes: null })
   // Volver a tocar lo ya marcado lo quita: el mismo botón pone y saca, así que
   // nunca hay un filtro sin forma evidente de deshacerlo.
   const alternar = (clave, valor) =>
@@ -126,11 +133,17 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
   // $2.779 y 53 pedidos de agosto que contaban en el total de arriba y en
   // ninguna barra. Si mañana nace una cuarta tienda, aparece sola con un color
   // gris en vez de esconderse. Una lista blanca siempre termina tapando algo.
-  // ⚠️ Las dos listas son del MES EN CURSO, así que el día 1 están vacías hasta
-  // la primera venta y no hay nada que clicar. No es una avería: el texto tiene
-  // que decir de qué mes habla para que no lo parezca.
-  const mesActual = etiquetaMesLarga(String(data.hoyEcuador || '').slice(0, 7))
-  const sinVentasAun = mesActual ? `Sin ventas todavía en ${mesActual}` : 'Sin ventas este mes'
+  // ⚠️ Las dos listas son del mes que se está mirando. El día 1 del mes en
+  // curso están vacías hasta la primera venta y no hay nada que clicar: no es
+  // una avería, y el texto tiene que decir de qué mes habla para no parecerlo.
+  const sinVentasAun = mesVisto ? `Sin ventas en ${mesVisto}` : 'Sin ventas este mes'
+
+  // El promedio sale de la serie diaria, que trae EXACTAMENTE los días del mes
+  // que se mira (del 1 al último, o hasta hoy si es el mes en curso). Así el
+  // divisor no se puede desalinear del numerador.
+  const diasDelMes = data.ventasPorDia?.length || 0
+  const promedioDia = diasDelMes > 0 ? data.ventasMes / diasDelMes : 0
+
   // Tocar el mes ya marcado devuelve al mes en curso.
   const elegirMes = (mes) =>
     setFiltro((f) => ({ ...f, mes: (f.mes || data.hoyEcuador?.slice(0, 7)) === mes ? null : mes }))
@@ -172,6 +185,12 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
                 🏪 {filtro.tienda} <span className="text-gray-500">×</span>
               </button>
             )}
+            {mesElegido && (
+              <button type="button" onClick={() => setFiltro((f) => ({ ...f, mes: null }))}
+                className="text-xs bg-gray-800 hover:bg-gray-700 text-white rounded-full px-3 py-1 flex items-center gap-1.5 transition-all">
+                📅 {mesVisto} <span className="text-gray-500">×</span>
+              </button>
+            )}
             <button type="button" onClick={limpiar} className="btn-secondary text-xs px-3 py-1.5 flex-shrink-0">
               Ver todo
             </button>
@@ -185,10 +204,26 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
       <div className={refrescando ? 'opacity-50 transition-opacity duration-150' : 'transition-opacity duration-150'}>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
-          { label:'Ventas hoy',    value:`$${data.ventasHoy.toFixed(0)}`,      sub:`${data.pedidosHoy} pedido(s)`,                          color:'text-mandarina-400' },
-          { label:'Ventas del mes',value:`$${data.ventasMes.toFixed(0)}`,      sub:`${data.totalPedidos} total`,                            color:'text-white' },
-          { label:'Cobrado mes',   value:`$${data.cobradoMes.toFixed(0)}`,     sub:`${Math.round(data.cobradoMes/(data.ventasMes||1)*100)}%`,color:'text-green-400' },
-          { label:'Por cobrar',    value:`$${data.pendienteTotal.toFixed(0)}`, sub:'saldo pendiente',                                       color:data.pendienteTotal>0?'text-yellow-400':'text-green-400' },
+          // ☠️ «Ventas hoy» NO se traduce a un mes pasado: hoy no está en agosto,
+          // así que valdría $0 y se leería como un día malo. Mirando un mes
+          // anterior pasa a ser el PROMEDIO POR DÍA, que además es lo que sirve
+          // para comparar meses.
+          (mesElegido && !esMesEnCurso)
+            ? { label:'Promedio por día', value:`$${promedioDia.toFixed(0)}`,    sub:`${diasDelMes} días`,           color:'text-mandarina-400' }
+            : { label:'Ventas hoy',       value:`$${data.ventasHoy.toFixed(0)}`, sub:`${data.pedidosHoy} pedido(s)`, color:'text-mandarina-400' },
+          { label: mesElegido ? `Ventas de ${mesVisto}` : 'Ventas del mes',
+            value:`$${data.ventasMes.toFixed(0)}`,
+            // Sin mes elegido el subtítulo sigue siendo el conteo de SIEMPRE
+            // (todos los pedidos). Con mes elegido, los de ese mes.
+            sub: mesElegido ? `${data.pedidosMes ?? 0} pedidos` : `${data.totalPedidos} total`,
+            color:'text-white' },
+          { label: mesElegido ? `Cobrado en ${mesVisto}` : 'Cobrado mes',
+            value:`$${data.cobradoMes.toFixed(0)}`,
+            sub:`${Math.round(data.cobradoMes/(data.ventasMes||1)*100)}%`, color:'text-green-400' },
+          { label: mesElegido ? `Por cobrar de ${mesVisto}` : 'Por cobrar',
+            value:`$${data.pendienteTotal.toFixed(0)}`,
+            sub: mesElegido ? 'de ese mes' : 'saldo pendiente',
+            color:data.pendienteTotal>0?'text-yellow-400':'text-green-400' },
         ].map(k => (
           <div key={k.label} className="card p-4">
             <div className={`text-2xl font-bold font-display ${k.color}`}>{k.value}</div>
@@ -225,7 +260,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           )}
         </div>
         <div className="card p-4">
-          <h3 className="font-semibold text-white mb-1 text-sm">🏪 Ventas por tienda (mes)</h3>
+          <h3 className="font-semibold text-white mb-1 text-sm">🏪 Ventas por tienda <span className="text-gray-500 font-normal">({mesVisto})</span></h3>
           {/* ⚠️ Esta lista IGNORA el filtro de tienda a propósito (así se puede
               saltar de una a otra), pero SÍ obedece al de vendedor. Sin decirlo,
               se lee como una contradicción: «Ventas del mes $0» arriba y
@@ -253,7 +288,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           })}
           {!tiendas.length && <div className="text-gray-600 text-xs mb-2">{sinVentasAun}</div>}
 
-          <h3 className="font-semibold text-white mt-4 mb-1 text-sm">👥 Top vendedores (mes)</h3>
+          <h3 className="font-semibold text-white mt-4 mb-1 text-sm">👥 Top vendedores <span className="text-gray-500 font-normal">({mesVisto})</span></h3>
           <p className="text-xs text-gray-600 mb-2">
             {filtro.tienda ? `En ${filtro.tienda} · toca uno para acotar` : 'Toca uno para ver solo lo suyo'}
           </p>
@@ -306,6 +341,16 @@ function DashboardVendedor({ data, user, filtro, setFiltro }) {
   const elegirMes = (mes) =>
     setFiltro((f) => ({ ...f, mes: (f.mes || data.hoyEcuador?.slice(0, 7)) === mes ? null : mes }))
 
+  // ☠️ Sus cuatro cajas TAMBIEN siguen al mes elegido, porque la base acota
+  // todo. Si se quedaran con las etiquetas fijas («Mes actual», «Mis ventas
+  // hoy») estarían poniéndole a los números de agosto el nombre de septiembre.
+  const mesElegido = Boolean(data.filtro?.mesElegido)
+  const claveHoy = String(data.hoyEcuador || '').slice(0, 7)
+  const mesVisto = etiquetaMesLarga(data.filtro?.mes || claveHoy)
+  const esMesEnCurso = (data.filtro?.mes || claveHoy) === claveHoy
+  const diasDelMes = data.ventasPorDia?.length || 0
+  const promedioDia = diasDelMes > 0 ? data.ventasMes / diasDelMes : 0
+
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <div className="mb-6 pt-2">
@@ -319,10 +364,15 @@ function DashboardVendedor({ data, user, filtro, setFiltro }) {
       </Link>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[
-          {label:'Mis ventas hoy',value:`$${data.ventasHoy.toFixed(0)}`,sub:`${data.pedidosHoy} pedidos`,      color:'text-mandarina-400'},
-          {label:'Mes actual',    value:`$${data.ventasMes.toFixed(0)}`,sub:`${data.totalPedidos} pedidos`,    color:'text-white'},
-          {label:'Cobrado',       value:`$${data.cobradoMes.toFixed(0)}`,sub:'este mes',                       color:'text-green-400'},
-          {label:'Por cobrar',    value:`$${data.pendienteTotal.toFixed(0)}`,sub:'saldo pendiente',            color:data.pendienteTotal>0?'text-yellow-400':'text-green-400'},
+          (mesElegido && !esMesEnCurso)
+            ? {label:'Promedio por día', value:`$${promedioDia.toFixed(0)}`,     sub:`${diasDelMes} días`,           color:'text-mandarina-400'}
+            : {label:'Mis ventas hoy',   value:`$${data.ventasHoy.toFixed(0)}`,  sub:`${data.pedidosHoy} pedidos`,   color:'text-mandarina-400'},
+          {label: mesElegido ? `Mis ventas de ${mesVisto}` : 'Mes actual', value:`$${data.ventasMes.toFixed(0)}`,
+           sub: mesElegido ? `${data.pedidosMes ?? 0} pedidos` : `${data.totalPedidos} pedidos`, color:'text-white'},
+          {label:'Cobrado', value:`$${data.cobradoMes.toFixed(0)}`,
+           sub: mesElegido ? `en ${mesVisto}` : 'este mes', color:'text-green-400'},
+          {label:'Por cobrar', value:`$${data.pendienteTotal.toFixed(0)}`,
+           sub: mesElegido ? 'de ese mes' : 'saldo pendiente', color:data.pendienteTotal>0?'text-yellow-400':'text-green-400'},
         ].map(k=>(
           <div key={k.label} className="card p-4">
             <div className={`text-xl font-bold font-display ${k.color}`}>{k.value}</div>

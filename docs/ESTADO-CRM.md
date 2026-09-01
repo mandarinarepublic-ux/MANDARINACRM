@@ -27,7 +27,7 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 | Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
 | Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
 | Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
-| Pruebas | `npm test` → 524 pruebas |
+| Pruebas | `npm test` → 526 pruebas |
 
 ---
 
@@ -130,15 +130,26 @@ firma vieja EN LA MISMA MIGRACIÓN** (una transacción): separar el `DROP` del
 comprobarlo, `pg_proc` tiene que devolver **una sola firma**.
 
 **El histórico manda sobre el diario (1-sep).** Tocar un mes en «Ventas por
-mes» hace que el gráfico de la derecha pinte **ese** mes día a día; volver a
-tocarlo devuelve al mes en curso. Los meses pasados salen completos (día 1 al
-último); el actual, del 1 a hoy.
+mes» acota **todo el panel** a ese mes: las cuatro tarjetas, las dos listas, el
+gráfico diario y los estados. Volver a tocarlo devuelve al mes en curso. Los
+meses pasados salen completos (día 1 al último); el actual, del 1 a hoy.
 
-⚠️ El mes **NO acota las tarjetas de arriba**, solo el gráfico diario — y la
-nota del gráfico lo dice cuando no es el mes en curso. La promesa de que «las
-barras suman lo mismo que la tarjeta» **solo vale para el mes en curso**, que es
-el único que esa tarjeta mide; afirmarlo mirando agosto desde septiembre sería
-mentira.
+☠️ **Sin mes elegido el panel se comporta EXACTAMENTE como siempre**: «Por
+cobrar» sigue siendo de toda la historia ($6.774 el 1-sep) y el subtítulo sigue
+diciendo «838 total». Solo al elegir un mes se acota todo. Es a propósito:
+cambiar en silencio cifras que se leen a diario es peor que no tener el filtro.
+
+☠️ **«Ventas hoy» no se traduce a un mes pasado** — hoy no está en agosto, así
+que valdría $0 y se leería como un día malo. Con un mes anterior elegido esa
+caja pasa a **«Promedio por día»** (agosto $485/día, julio $648/día), que además
+es lo que sirve para comparar meses. El divisor sale de `ventasPorDia`, que trae
+justo los días del mes mirado, para que no se pueda desalinear del numerador.
+
+⚠️ **Esta regla ya fue al revés una vez.** Al principio el mes solo movía el
+gráfico diario, y la nota de ese gráfico avisaba de que las tarjetas seguían en
+el mes en curso. Al pasar a acotarlo todo, esa frase quedó FALSA y hubo que
+cambiarla, igual que «Ver todo» pasó a limpiar también el mes. Si vuelve a
+cambiar, las dos cosas van juntas — hay pruebas que lo sujetan.
 
 ⚠️ El mes es la única de las tres selecciones que **no pasa por la guardia de
 ADMIN**, y es correcto: es una ventana de TIEMPO, no una identidad. Elegir
@@ -146,8 +157,8 @@ agosto no puede enseñar ni un pedido que el rol no dejara ver ya, así que un
 vendedor también puede mirar su propio agosto. La base valida la forma
 (`^\d{4}-(0[1-9]|1[0-2])$`) y cualquier otra cosa cae al mes en curso.
 
-⚠️ Por lo mismo, «Ver todo» limpia vendedor y tienda pero **conserva el mes**:
-esos dos esconden parte del panel, el mes solo elige qué tramo se dibuja.
+⚠️ El mes **cuenta para el aviso ámbar y «Ver todo» lo limpia**, como los otros
+dos: desde que acota el panel entero, esconde tanto como ellos.
 
 ☠️ Tres trampas de lectura ya cerradas, cada una con su prueba: un día sin
 ventas sale como **barra en cero** (marca gris al ras) y no desaparece · el

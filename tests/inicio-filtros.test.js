@@ -177,13 +177,13 @@ test('cada lista dice de qué alcance habla cuando hay un filtro cruzado', () =>
     'la lista de vendedores debe decir de qué tienda son')
 })
 
-test('el vacío del día 1 no se lee como avería', () => {
-  // Las dos listas son del MES EN CURSO: el día 1, hasta la primera venta,
-  // están vacías y no hay nada que clicar. Medido el 1-sep-2026: porTienda y
-  // porVendedor llegaron `{}`. Decir "Sin datos" suena a que algo se rompió.
-  assert.ok(/Sin ventas todavía en \$\{mesActual\}/.test(inicio),
+test('el vacío nombra el mes del que habla, no se lee como avería', () => {
+  // Las listas son del mes que se MIRA. El día 1 del mes en curso, hasta la
+  // primera venta, están vacías y no hay nada que clicar. Medido el 1-sep-2026:
+  // porTienda y porVendedor llegaron `{}`. Decir "Sin datos" suena a avería.
+  assert.ok(/Sin ventas en \$\{mesVisto\}/.test(inicio),
     'el vacío tiene que nombrar el mes del que habla')
-  assert.ok(/const mesActual = etiquetaMesLarga/.test(inicio))
+  assert.ok(/const mesVisto = etiquetaMesLarga/.test(inicio))
 })
 
 test('los gráficos se enteran del alcance para no mentir en la nota', () => {
@@ -216,12 +216,17 @@ test('volver a tocar el mes marcado devuelve al mes en curso', () => {
     'en los dos paneles: el mismo botón entra y sale')
 })
 
-test('«Ver todo» NO borra el mes elegido', () => {
-  // Vendedor y tienda ESCONDEN parte del panel; el mes solo elige qué tramo
-  // pinta un gráfico. Meterlo en «Ver todo» te sacaría del mes que estás
-  // mirando sin haberlo pedido.
-  assert.ok(/limpiar = \(\) => setFiltro\(\(f\) => \(\{ \.\.\.f, vendedor: null, tienda: null \}\)\)/.test(inicio),
-    '«Ver todo» conserva el mes')
+test('«Ver todo» borra TAMBIÉN el mes', () => {
+  // ⚠️ ESTA PRUEBA DECÍA LO CONTRARIO y es a propósito. Cuando el mes solo movía
+  // el gráfico diario, no escondía nada y dejarlo fuera de «Ver todo» era lo
+  // correcto. Desde que el mes acota el panel entero, sí esconde: dejarlo
+  // puesto tras pulsar «Ver todo» sería justo el engaño que el aviso evita.
+  // Si alguien vuelve a sacarlo de aquí, que sea decidiéndolo, no por inercia.
+  assert.ok(/limpiar = \(\) => setFiltro\(\{ vendedor: null, tienda: null, mes: null \}\)/.test(inicio),
+    '«Ver todo» tiene que limpiar los tres')
+  // Y por lo mismo el mes cuenta para que aparezca el aviso ámbar.
+  assert.ok(/const hayFiltro = Boolean\(filtro\.vendedor \|\| filtro\.tienda \|\| mesElegido\)/.test(inicio),
+    'un mes elegido también enciende el aviso')
 })
 
 test('el mes que se anuncia es el que la BASE entendió, no el de la pantalla', () => {
@@ -232,13 +237,38 @@ test('el mes que se anuncia es el que la BASE entendió, no el de la pantalla', 
   assert.ok(/descripcion=\{etiquetaDelDiario\}/.test(ventas))
 })
 
-test('la promesa de que las barras cuadran con la tarjeta solo vale para el mes en curso', () => {
-  // ☠️ «Suma lo mismo que la tarjeta Ventas del mes» es FALSO mirando agosto
-  // desde septiembre: esa tarjeta mide el mes en curso. Una nota que miente es
-  // peor que no tener nota.
+test('la nota del diario dice la verdad sobre las tarjetas de arriba', () => {
+  // ☠️ ESTA NOTA YA DIJO LO CONTRARIO. Cuando el mes solo movía este gráfico,
+  // avisaba de que las tarjetas seguían en el mes en curso. Ahora el mes acota
+  // el panel entero, así que esa frase pasó a ser FALSA. Una nota que miente es
+  // peor que no tener nota: si la regla vuelve a cambiar, esto también.
   assert.ok(/const notaDiaria = esMesEnCurso/.test(ventas))
-  assert.ok(/siguen siendo del mes en curso/.test(ventas),
-    'y cuando NO lo es, lo dice')
+  assert.ok(!/siguen siendo del mes en curso/.test(ventas),
+    'esa frase ya no es verdad: las tarjetas SÍ siguen al mes')
+  assert.ok(/que también pasó a \$\{etiquetaDelDiario\}/.test(ventas),
+    'y la nota dice que las tarjetas se movieron con él')
+})
+
+test('las cuatro cajas siguen al mes elegido, en los DOS paneles', () => {
+  // Si se quedaran con las etiquetas fijas estarían poniéndole a los números de
+  // agosto el nombre de septiembre.
+  assert.ok(/label: mesElegido \? `Ventas de \$\{mesVisto\}`/.test(inicio), 'ADMIN')
+  assert.ok(/label: mesElegido \? `Mis ventas de \$\{mesVisto\}`/.test(inicio), 'VENDEDOR')
+  assert.ok((inicio.match(/const mesElegido = Boolean\(data\.filtro\?\.mesElegido\)/g) || []).length === 2,
+    'los dos paneles leen si hay mes elegido')
+  // Y las dos listas dicen de qué mes hablan.
+  assert.ok((inicio.match(/\(\{mesVisto\}\)/g) || []).length >= 2, 'tiendas y vendedores rotulan el mes')
+})
+
+test('«Ventas hoy» no se pinta en un mes pasado', () => {
+  // ☠️ Hoy no está en agosto: esa caja valdría $0 y se leería como un día malo.
+  // Pasa a ser el promedio por día, que es lo que sirve para comparar meses.
+  assert.ok((inicio.match(/\(mesElegido && !esMesEnCurso\)/g) || []).length === 2,
+    'los dos paneles cambian esa caja')
+  assert.ok(/label:'Promedio por día'/.test(inicio))
+  // El divisor sale de la serie diaria, que trae justo los días del mes mirado.
+  assert.ok((inicio.match(/const diasDelMes = data\.ventasPorDia\?\.length \|\| 0/g) || []).length === 2,
+    'el divisor no se puede desalinear del numerador')
 })
 
 test('el mes no pasa por la guardia de ADMIN, y es correcto que no pase', () => {

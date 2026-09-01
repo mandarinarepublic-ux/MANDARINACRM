@@ -56,12 +56,13 @@ export default function GraficosVentas({ data, mias = false, alcance = null, onM
   // nombrar la que el lector TIENE delante, o el cotejo no se puede hacer.
   const tarjeta = mias ? '«Mes actual»' : '«Ventas del mes»'
 
-  // ⚠️ La promesa de que las barras cuadran con la tarjeta SOLO vale para el mes
-  // en curso: es el unico que esa tarjeta mide. Mirando agosto desde septiembre
-  // seria mentira, y una nota que miente es peor que no tener nota.
+  // ⚠️ Esta nota ya dijo lo contrario. Cuando el mes solo movia este grafico,
+  // avisaba de que las tarjetas seguian en el mes en curso. Ahora el mes acota
+  // el panel entero, asi que esa frase pasó a ser FALSA y hubo que cambiarla:
+  // una nota que miente es peor que no tener nota.
   const notaDiaria = esMesEnCurso
     ? `Del día 1 a hoy. Suma exactamente lo mismo que la tarjeta ${tarjeta}.`
-    : `Mes completo. Las tarjetas de arriba siguen siendo del mes en curso, no de ${etiquetaDelDiario}.`
+    : `Mes completo. Suma lo mismo que la tarjeta de ventas de arriba, que también pasó a ${etiquetaDelDiario}.`
 
   return (
     <div className="grid md:grid-cols-2 gap-4 mb-6">
