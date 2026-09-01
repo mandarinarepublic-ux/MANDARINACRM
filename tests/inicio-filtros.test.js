@@ -69,8 +69,8 @@ test('el filtro NO se guarda entre visitas', () => {
   // Devolverle a alguien un filtro que él no acaba de poner es fabricar el
   // engaño que este aviso existe para evitar. Inicio se abre siempre completo.
   const codigo = sinComentarios(inicio)
-  assert.ok(/useState\(\{ vendedor: null, tienda: null \}\)/.test(codigo),
-    'arranca sin filtro')
+  assert.ok(/useState\(\{ vendedor: null, tienda: null, mes: null \}\)/.test(codigo),
+    'arranca sin filtro y en el mes en curso')
   assert.ok(!/localStorage[^\n]*filtro|filtro[^\n]*localStorage/i.test(codigo),
     'el filtro de Inicio no se persiste')
 })
@@ -190,4 +190,70 @@ test('los gráficos se enteran del alcance para no mentir en la nota', () => {
   // Con filtro puesto, `primerPedido` es el del vendedor/tienda, no el del CRM.
   assert.ok(/<GraficosVentas data=\{data\} alcance=/.test(inicio))
   assert.ok(/const alcance = \[filtro\.vendedor, filtro\.tienda\]/.test(inicio))
+})
+
+// ─── El histórico manda sobre el diario ─────────────────────────────────────
+
+const ventas = readFileSync(new URL('../components/GraficosVentas.js', import.meta.url), 'utf8')
+const barras = readFileSync(new URL('../components/GraficoBarras.js', import.meta.url), 'utf8')
+
+test('tocar un mes del histórico cambia el gráfico diario', () => {
+  assert.ok(/onSeleccionar=\{onMes\}/.test(ventas), 'el histórico es el mando')
+  assert.ok(/seleccionada=\{onMes \? mesDelDiario/.test(ventas), 'y marca el mes elegido')
+  assert.ok(/qs\.set\('mes', f\.mes\)/.test(inicio), 'el mes viaja a la API')
+  assert.ok(/p_filtro_mes: mes/.test(api), 'y de ahí a la base')
+})
+
+test('el histórico NO se filtra a sí mismo: si no, no habría cómo cambiar de mes', () => {
+  // Solo el gráfico DIARIO obedece al mes. Si el histórico también lo hiciera,
+  // se quedaría con una barra sola y el mando desaparecería bajo su propio uso.
+  const conMes = ventas.split('\n').filter((l) => /serieMeses\(/.test(l)).join('\n')
+  assert.ok(!/filtro\.mes|mesDelDiario/.test(conMes), 'la serie mensual ignora el mes elegido')
+})
+
+test('volver a tocar el mes marcado devuelve al mes en curso', () => {
+  assert.ok((inicio.match(/\(f\.mes \|\| data\.hoyEcuador\?\.slice\(0, 7\)\) === mes \? null : mes/g) || []).length >= 2,
+    'en los dos paneles: el mismo botón entra y sale')
+})
+
+test('«Ver todo» NO borra el mes elegido', () => {
+  // Vendedor y tienda ESCONDEN parte del panel; el mes solo elige qué tramo
+  // pinta un gráfico. Meterlo en «Ver todo» te sacaría del mes que estás
+  // mirando sin haberlo pedido.
+  assert.ok(/limpiar = \(\) => setFiltro\(\(f\) => \(\{ \.\.\.f, vendedor: null, tienda: null \}\)\)/.test(inicio),
+    '«Ver todo» conserva el mes')
+})
+
+test('el mes que se anuncia es el que la BASE entendió, no el de la pantalla', () => {
+  // ☠️ Un `?mes=` con basura cae al mes en curso en la base. Si el título se
+  // pintara con el estado local, prometería «agosto» sobre barras de
+  // septiembre. La base devuelve lo que entendió y eso es lo que se rotula.
+  assert.ok(/const mesDelDiario = data\.filtro\?\.mes \|\| claveDeHoy/.test(ventas))
+  assert.ok(/descripcion=\{etiquetaDelDiario\}/.test(ventas))
+})
+
+test('la promesa de que las barras cuadran con la tarjeta solo vale para el mes en curso', () => {
+  // ☠️ «Suma lo mismo que la tarjeta Ventas del mes» es FALSO mirando agosto
+  // desde septiembre: esa tarjeta mide el mes en curso. Una nota que miente es
+  // peor que no tener nota.
+  assert.ok(/const notaDiaria = esMesEnCurso/.test(ventas))
+  assert.ok(/siguen siendo del mes en curso/.test(ventas),
+    'y cuando NO lo es, lo dice')
+})
+
+test('el mes no pasa por la guardia de ADMIN, y es correcto que no pase', () => {
+  // Es una ventana de TIEMPO, no una identidad: elegir agosto no puede enseñar
+  // ni un pedido que el rol no dejara ver ya. Un vendedor mira su propio agosto.
+  const codigo = sinComentarios(api)
+  assert.ok(/const mes = \(consulta\.get\('mes'\)/.test(codigo))
+  assert.ok(!/parametro\('mes'\)/.test(codigo), 'el mes no usa la guardia de ADMIN')
+  // Pero vendedor y tienda SÍ siguen detrás de ella.
+  assert.ok(/parametro\('vendedor'\)/.test(codigo) && /parametro\('tienda'\)/.test(codigo))
+})
+
+test('las barras solo son botones cuando sirven de mando', () => {
+  // Con 31 días, volver cada columna un botón metería 31 paradas de tabulador
+  // en un gráfico que no se puede clicar.
+  assert.ok(/const Columna = onSeleccionar \? 'button' : 'div'/.test(barras))
+  assert.ok(/aria-pressed': marcada/.test(barras), 'y se sabe cuál está marcado sin mirar el color')
 })

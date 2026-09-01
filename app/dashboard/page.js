@@ -25,7 +25,7 @@ export default function DashboardPage() {
   // pantalla que todos miran de reojo, y devolverle a alguien un filtro que él
   // no acaba de poner es fabricar el engaño de que $3.768 son las ventas de la
   // casa. Se limpia solo al recargar.
-  const [filtro, setFiltro] = useState({ vendedor: null, tienda: null })
+  const [filtro, setFiltro] = useState({ vendedor: null, tienda: null, mes: null })
   const [refrescando, setRefrescando] = useState(false)
 
   useEffect(() => {
@@ -57,6 +57,7 @@ export default function DashboardPage() {
       const qs = new URLSearchParams()
       if (f?.vendedor) qs.set('vendedor', f.vendedor)
       if (f?.tienda) qs.set('tienda', f.tienda)
+      if (f?.mes) qs.set('mes', f.mes)
       const cola = qs.toString()
       const res = await fetch(`/api/inicio${cola ? `?${cola}` : ''}`, { cache: 'no-store' })
       if (!res.ok) {
@@ -100,7 +101,7 @@ export default function DashboardPage() {
     return <DashboardDiseno data={data} user={user} />
   }
   if (rol === 'DESPACHO') return <DashboardDespacho data={data} user={user} />
-  if (rol === 'VENDEDOR') return <DashboardVendedor data={data} user={user} />
+  if (rol === 'VENDEDOR') return <DashboardVendedor data={data} user={user} filtro={filtro} setFiltro={setFiltro} />
   if (rol === 'VENDEDOR_YAW') return <DashboardYAW data={data} user={user} />
   // Solo ADMIN debería llegar hasta acá. Cualquier rol nuevo que se agregue sin
   // su caso NO debe caer en el panel financiero por descuido.
@@ -112,7 +113,9 @@ export default function DashboardPage() {
 function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
   const hayFiltro = Boolean(filtro.vendedor || filtro.tienda)
   const alcance = [filtro.vendedor, filtro.tienda].filter(Boolean).join(' en ')
-  const limpiar = () => setFiltro({ vendedor: null, tienda: null })
+  // «Ver todo» limpia vendedor y tienda pero NO el mes: el mes no esconde nada
+  // del panel, solo elige que tramo pinta el gráfico diario.
+  const limpiar = () => setFiltro((f) => ({ ...f, vendedor: null, tienda: null }))
   // Volver a tocar lo ya marcado lo quita: el mismo botón pone y saca, así que
   // nunca hay un filtro sin forma evidente de deshacerlo.
   const alternar = (clave, valor) =>
@@ -128,6 +131,9 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
   // que decir de qué mes habla para que no lo parezca.
   const mesActual = etiquetaMesLarga(String(data.hoyEcuador || '').slice(0, 7))
   const sinVentasAun = mesActual ? `Sin ventas todavía en ${mesActual}` : 'Sin ventas este mes'
+  // Tocar el mes ya marcado devuelve al mes en curso.
+  const elegirMes = (mes) =>
+    setFiltro((f) => ({ ...f, mes: (f.mes || data.hoyEcuador?.slice(0, 7)) === mes ? null : mes }))
   const tiendas = filasSeleccionables(data.porTienda, filtro.tienda)
   const totalTiendas = totalFilas(tiendas)
   const vendedores = filasSeleccionables(data.porVendedor, filtro.vendedor, 5)
@@ -193,7 +199,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
       </div>
       {/* ADMIN ve las ventas de TODOS, o de lo que haya marcado. `alcance` solo
           endereza el texto de la nota: los datos ya vienen acotados de la base. */}
-      <GraficosVentas data={data} alcance={alcance || null} />
+      <GraficosVentas data={data} alcance={alcance || null} onMes={elegirMes} />
 
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div className="card p-4">
@@ -294,7 +300,12 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
 }
 
 // ─── VENDEDOR ─────────────────────────────────────────────────────────────────
-function DashboardVendedor({ data, user }) {
+function DashboardVendedor({ data, user, filtro, setFiltro }) {
+  // Un vendedor también puede mirar su propio agosto: el mes es una ventana de
+  // tiempo dentro de LO SUYO, nunca una forma de ver lo de otro.
+  const elegirMes = (mes) =>
+    setFiltro((f) => ({ ...f, mes: (f.mes || data.hoyEcuador?.slice(0, 7)) === mes ? null : mes }))
+
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <div className="mb-6 pt-2">
@@ -324,7 +335,7 @@ function DashboardVendedor({ data, user }) {
           base filtra por `vendedor_id` a partir de la cookie firmada, igual que
           las cuatro tarjetas de arriba. Por eso las barras y las tarjetas
           cuentan siempre lo mismo. */}
-      <GraficosVentas data={data} mias />
+      <GraficosVentas data={data} mias onMes={elegirMes} />
 
       <div className="card">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">

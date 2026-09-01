@@ -29,6 +29,12 @@ export default function GraficoBarras({
   color = '#FF6B00',
   alto = 156,
   vacio = 'Sin ventas en este periodo',
+  // Cuando se pasa `onSeleccionar`, cada barra se vuelve un boton de verdad:
+  // sirve de MANDO (el historico por mes elige que mes pinta el diario). Sin
+  // ella las columnas siguen siendo divs, para no meter 31 paradas de tabulador
+  // en un grafico que no se puede clicar.
+  onSeleccionar = null,
+  seleccionada = null,
 }) {
   const [activo, setActivo] = useState(null)
   const [tabla, setTabla] = useState(false)
@@ -136,11 +142,21 @@ export default function GraficoBarras({
               {puntos.map((d, i) => {
                 const h = alturaBarra(d.monto, tope)
                 const apagada = activo != null && activo !== i
+                const marcada = seleccionada != null && d.clave === seleccionada
+                const Columna = onSeleccionar ? 'button' : 'div'
                 return (
-                  <div
+                  <Columna
                     key={d.clave}
+                    {...(onSeleccionar
+                      ? { type: 'button', onClick: () => onSeleccionar(d.clave), 'aria-pressed': marcada,
+                          title: `${d.etiquetaLarga}: ${formatoMonto(d.monto)}` }
+                      : {})}
                     onMouseEnter={() => setActivo(i)}
-                    className="flex-1 min-w-0 h-full flex items-end cursor-default"
+                    // ⚠️ La marca del elegido NO puede ser un fondo que suba
+                    // por toda la columna: se lee como una BARRA FANTASMA más
+                    // alta que la real (con septiembre en $0 era descarado).
+                    // Va abajo, bajo el eje, como una pestaña.
+                    className={`flex-1 min-w-0 h-full flex items-end rounded-t ${onSeleccionar ? 'cursor-pointer hover:bg-gray-800/40' : 'cursor-default'}`}
                   >
                     <div
                       className="w-full transition-opacity duration-100"
@@ -154,7 +170,7 @@ export default function GraficoBarras({
                         opacity: apagada ? 0.35 : d.parcial ? 0.55 : 1,
                       }}
                     />
-                  </div>
+                  </Columna>
                 )
               })}
             </div>
@@ -203,8 +219,14 @@ export default function GraficoBarras({
           <div className="flex gap-[2px] mt-1.5" aria-hidden="true">
             {puntos.map((d, i) => (
               <div key={d.clave} className="flex-1 min-w-0 text-center">
+                {/* El subrayado grueso marca el periodo ELEGIDO; el color solo,
+                    el periodo actual. Dos señales distintas para dos cosas
+                    distintas: en el histórico pueden coincidir o no. */}
+                <div className={`h-0.5 rounded-full mb-1 ${d.clave === seleccionada ? 'bg-mandarina-500' : 'bg-transparent'}`} />
                 {enEje.has(i) && (
-                  <span className={`text-[10px] tabular-nums ${d.actual ? 'text-mandarina-400 font-medium' : 'text-gray-600'}`}>
+                  <span className={`text-[10px] tabular-nums ${
+                    d.clave === seleccionada ? 'text-mandarina-400 font-bold'
+                      : d.actual ? 'text-mandarina-400 font-medium' : 'text-gray-600'}`}>
                     {d.etiqueta}
                   </span>
                 )}

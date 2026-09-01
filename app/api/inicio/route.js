@@ -40,18 +40,28 @@ export async function GET(request) {
     //
     // El rol NO puede seguir viniendo por query: eso ya se blindo en agosto.
     const esAdmin = rol === 'ADMIN'
+    const consulta = new URL(request.url).searchParams
     const parametro = (nombre) => {
       if (!esAdmin) return null
-      const valor = (new URL(request.url).searchParams.get(nombre) || '').trim()
+      const valor = (consulta.get(nombre) || '').trim()
       // Un tope de largo para que un query gigante no viaje hasta Postgres.
       return valor ? valor.slice(0, 120) : null
     }
+
+    // ⚠️ El MES es distinto de los otros dos y por eso no pasa por la guardia de
+    // ADMIN: no es una identidad, es una VENTANA DE TIEMPO. Elegir agosto no
+    // puede enseñarte un solo pedido que tu rol no te dejara ver ya — solo
+    // recorta `mios` mas todavia. Por eso un vendedor tambien puede mirar su
+    // propio agosto. La base ademas valida la forma: cualquier cosa que no sea
+    // YYYY-MM cae al mes en curso.
+    const mes = (consulta.get('mes') || '').trim().slice(0, 7) || null
 
     const { data, error } = await getSupabase().rpc('resumen_inicio', {
       p_vendedor: vendedor,
       p_rol: rol,
       p_filtro_vendedor: parametro('vendedor'),
       p_filtro_tienda: parametro('tienda'),
+      p_filtro_mes: mes,
     })
     if (error) throw error
 

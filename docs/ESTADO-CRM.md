@@ -27,7 +27,7 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 | Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
 | Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
 | Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
-| Pruebas | `npm test` → 516 pruebas |
+| Pruebas | `npm test` → 524 pruebas |
 
 ---
 
@@ -120,12 +120,34 @@ arriba y en ninguna barra. Ahora las filas salen de los DATOS y las tres suman
 exacto la tarjeta. La tabla de nombres/colores es solo el vestuario, con salida
 por defecto para una tienda nueva.
 
-☠️ **`crm.resumen_inicio` es UNA sola función de 4 parámetros.** `CREATE OR
+☠️ **`crm.resumen_inicio` es UNA sola función de 5 parámetros.** `CREATE OR
 REPLACE` con más parámetros **no reemplaza: crea una sobrecarga**, y con la
 nueva trayendo DEFAULTs la llamada de dos argumentos se volvió **ambigua**
 (`42725: is not unique`) — el panel de Inicio se rompe en producción sin que
 nadie toque nada. Si alguna vez se le agregan parámetros, hay que **borrar la
-firma vieja** en la misma migración.
+firma vieja EN LA MISMA MIGRACIÓN** (una transacción): separar el `DROP` del
+`CREATE` abre esa misma ventana. Así se hizo al añadir `p_filtro_mes`. Para
+comprobarlo, `pg_proc` tiene que devolver **una sola firma**.
+
+**El histórico manda sobre el diario (1-sep).** Tocar un mes en «Ventas por
+mes» hace que el gráfico de la derecha pinte **ese** mes día a día; volver a
+tocarlo devuelve al mes en curso. Los meses pasados salen completos (día 1 al
+último); el actual, del 1 a hoy.
+
+⚠️ El mes **NO acota las tarjetas de arriba**, solo el gráfico diario — y la
+nota del gráfico lo dice cuando no es el mes en curso. La promesa de que «las
+barras suman lo mismo que la tarjeta» **solo vale para el mes en curso**, que es
+el único que esa tarjeta mide; afirmarlo mirando agosto desde septiembre sería
+mentira.
+
+⚠️ El mes es la única de las tres selecciones que **no pasa por la guardia de
+ADMIN**, y es correcto: es una ventana de TIEMPO, no una identidad. Elegir
+agosto no puede enseñar ni un pedido que el rol no dejara ver ya, así que un
+vendedor también puede mirar su propio agosto. La base valida la forma
+(`^\d{4}-(0[1-9]|1[0-2])$`) y cualquier otra cosa cae al mes en curso.
+
+⚠️ Por lo mismo, «Ver todo» limpia vendedor y tienda pero **conserva el mes**:
+esos dos esconden parte del panel, el mes solo elige qué tramo se dibuja.
 
 ☠️ Tres trampas de lectura ya cerradas, cada una con su prueba: un día sin
 ventas sale como **barra en cero** (marca gris al ras) y no desaparece · el
