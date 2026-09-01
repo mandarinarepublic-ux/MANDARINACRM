@@ -1,4 +1,4 @@
-# ESTADO DEL CRM · al 31-ago-2026
+# ESTADO DEL CRM · al 1-sep-2026
 
 **Qué es esto:** el único documento que dice en qué punto está el CRM **hoy**.
 Los `HANDOFF-*.md` cuentan lo que pasó en una sesión y no se tocan más; este se
@@ -27,7 +27,7 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 | Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
 | Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
 | Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
-| Pruebas | `npm test` → 501 pruebas |
+| Pruebas | `npm test` → 516 pruebas |
 
 ---
 
@@ -88,6 +88,44 @@ Las series las agrega la base: `crm.resumen_inicio` devuelve `ventasPorDia`,
 excluir CANCELADO, igual que ellas): medido, $15.025,14 contra $15.025,14. Si
 algún día se cambia el criterio en un lado, hay que cambiarlo en los dos o la
 diferencia se leerá como un bug del panel.
+
+**Filtros en Inicio (1-sep).** Tocar un vendedor en «Top vendedores» o una
+tienda en «Ventas por tienda» acota **toda la hoja**: tarjetas, gráficos y
+estados. Se combinan (vendedor Y tienda) y cada uno se quita por separado.
+
+☠️ **El filtro solo puede ACOTAR, nunca ampliar.** El rol sigue saliendo de la
+cookie firmada y `resumen_inicio` aplica el filtro DENTRO de lo que ese rol ya
+permitía; además `/api/inicio` ni se lo pasa a quien no es ADMIN. Comprobado:
+GRACE pidiendo el filtro de JACKELINE recibe **$0 y cero vendedores**.
+
+☠️ **Un panel filtrado se ve igual de sano que uno completo.** Por eso el aviso
+ámbar «No estás viendo todo» es obligatorio, y por eso el filtro **NO se
+guarda** entre visitas: devolverle a alguien un filtro que no acaba de poner es
+fabricar el engaño de que $3.768 son las ventas de la casa.
+
+⚠️ **Las dos listas son selectores CRUZADOS**: la de vendedores obedece al
+filtro de tienda pero no al de vendedor, y al revés. Si cada una se filtrara a
+sí misma, al elegir un vendedor te quedarías sin forma de saltar a otro. Por lo
+mismo, la fila seleccionada **nunca desaparece** aunque no tenga ventas: si
+JACKELINE no vendió en INDSTORE, INDSTORE sigue en la lista en $0 — es el único
+botón capaz de quitar ese filtro.
+
+⚠️ Las dos listas son del **mes en curso**: el día 1, hasta la primera venta,
+están vacías y no hay nada que clicar. No es una avería (medido el 1-sep:
+`porTienda` y `porVendedor` llegaron `{}`), y el texto lo dice.
+
+✅ **YAW ya aparece en «Ventas por tienda».** Eran dos claves escritas a mano y
+YAW se caía: **$2.779 y 53 pedidos de agosto** que contaban en el total de
+arriba y en ninguna barra. Ahora las filas salen de los DATOS y las tres suman
+exacto la tarjeta. La tabla de nombres/colores es solo el vestuario, con salida
+por defecto para una tienda nueva.
+
+☠️ **`crm.resumen_inicio` es UNA sola función de 4 parámetros.** `CREATE OR
+REPLACE` con más parámetros **no reemplaza: crea una sobrecarga**, y con la
+nueva trayendo DEFAULTs la llamada de dos argumentos se volvió **ambigua**
+(`42725: is not unique`) — el panel de Inicio se rompe en producción sin que
+nadie toque nada. Si alguna vez se le agregan parámetros, hay que **borrar la
+firma vieja** en la misma migración.
 
 ☠️ Tres trampas de lectura ya cerradas, cada una con su prueba: un día sin
 ventas sale como **barra en cero** (marca gris al ras) y no desaparece · el
@@ -155,6 +193,10 @@ limitaba era el ROL. Cambiar `tiendas` no habría hecho nada.
 ⚠️ `VER_TODAS_LAS_VENTAS` **no toca los gráficos de Inicio**: levanta el filtro
 por vendedor del Historial **y solo ese**. JACKELINE ve ahí sus propias ventas.
 Es lo documentado, no un descuido.
+
+⚠️ Los **filtros de Inicio son solo de ADMIN**. Un vendedor que los mande a mano
+no consigue nada: se ignoran en el route y, aun pasando, caerían dentro de lo
+suyo.
 
 ---
 

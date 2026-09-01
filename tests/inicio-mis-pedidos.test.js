@@ -18,7 +18,9 @@ const sinComentarios = (t) => t.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.
 // ─── Inicio ─────────────────────────────────────────────────────────────────
 
 test('Inicio pide su endpoint, no la lista completa', () => {
-  assert.ok(/fetch\('\/api\/inicio'/.test(inicio), 'debe llamar a /api/inicio')
+  // La llamada pasó a ser una plantilla (`/api/inicio?vendedor=…`) cuando el
+  // panel de ADMIN gano sus filtros. Lo que importa sigue siendo el ENDPOINT.
+  assert.ok(/fetch\(\s*[`']\/api\/inicio/.test(inicio), 'debe llamar a /api/inicio')
   assert.ok(!/api\/pedidos\?vendedor=/.test(inicio), 'no debe traer los 690 pedidos')
   assert.ok(!/function buildStats/.test(inicio), 'los agregados los calcula la base')
 })

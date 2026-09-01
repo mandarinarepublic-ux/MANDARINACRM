@@ -16,8 +16,9 @@ import { serieDias, serieMeses, notaMeses, etiquetaMesLarga } from '@/lib/grafic
 //     componente pinta lo que le dan y no sabe filtrar: si algun dia hiciera
 //     falta acotar, se acota en la base, nunca aca.
 //
-// `mias` solo cambia los TEXTOS (el vendedor lee "Mis ventas"), jamas los datos.
-export default function GraficosVentas({ data, mias = false }) {
+// `mias` y `alcance` solo cambian los TEXTOS (el vendedor lee "Mis ventas"; el
+// admin filtrado lee de quien es el primer pedido), jamas los datos.
+export default function GraficosVentas({ data, mias = false, alcance = null }) {
   const meses = useMemo(
     () => serieMeses(data.ventasPorMes, data.primerPedido, data.hoyEcuador),
     [data.ventasPorMes, data.primerPedido, data.hoyEcuador],
@@ -26,11 +27,16 @@ export default function GraficosVentas({ data, mias = false }) {
     () => serieDias(data.ventasPorDia, data.hoyEcuador),
     [data.ventasPorDia, data.hoyEcuador],
   )
-  // `mias` entra aca porque la advertencia CAMBIA de significado: la serie de un
-  // vendedor arranca en SU primer pedido, no en el del CRM.
+  // ☠️ La advertencia CAMBIA de significado segun quien mire y que filtro haya
+  // puesto: la serie arranca en el primer pedido de LO QUE SE ESTA MIRANDO.
+  // Decir "primer pedido del CRM" cuando estas viendo a GRACE (que empezo el
+  // 22-jun, no el 18) es sencillamente falso.
+  const hito = mias
+    ? 'tu primer pedido'
+    : alcance ? `primer pedido de ${alcance}` : 'primer pedido del CRM'
   const avisoMeses = useMemo(
-    () => notaMeses(meses, data.primerPedido, mias),
-    [meses, data.primerPedido, mias],
+    () => notaMeses(meses, data.primerPedido, hito),
+    [meses, data.primerPedido, hito],
   )
 
   // `hoyEcuador` YA viene calculado en hora de Guayaquil por Postgres, asi que

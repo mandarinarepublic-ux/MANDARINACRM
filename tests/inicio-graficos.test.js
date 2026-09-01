@@ -101,12 +101,18 @@ test('al vendedor la nota le habla de SU primer pedido, no del CRM', () => {
     [{ mes: '2026-06', monto: 448.5, pedidos: 11 }, { mes: '2026-07', monto: 0, pedidos: 0 }],
     '2026-06-22', '2026-07-31',
   )
-  const paraElla = notaMeses(suya, '2026-06-22', true)
+  const paraElla = notaMeses(suya, '2026-06-22', 'tu primer pedido')
   assert.ok(paraElla.includes('tu primer pedido'), paraElla)
   assert.ok(!paraElla.includes('del CRM'), 'no es el primer pedido del CRM, es el suyo')
   assert.ok(paraElla.includes('22'), 'y dice desde que dia')
 
-  // Para ADMIN, en cambio, si es el hito del CRM.
+  // Un ADMIN que FILTRA por ella esta viendo lo mismo, y tampoco puede leer
+  // "primer pedido del CRM": el CRM arranco el 18, ella el 22.
+  const filtrado = notaMeses(suya, '2026-06-22', 'primer pedido de GRACE VEGA')
+  assert.ok(filtrado.includes('primer pedido de GRACE VEGA'), filtrado)
+  assert.ok(!filtrado.includes('del CRM'))
+
+  // Sin filtro y sin ser vendedor, SI es el hito del CRM. Es el valor por defecto.
   assert.ok(notaMeses(suya, '2026-06-22').includes('primer pedido del CRM'))
 })
 
@@ -273,7 +279,16 @@ test('el vendedor ve SOLO lo suyo, y eso lo decide la base', () => {
   // cambiarlo en el navegador para ver las ventas de otro.
   assert.ok(!/vendedor/i.test(ventas.replace(/^\s*\/\/.*$/gm, '')),
     'el componente no toca vendedores: no filtra, pinta lo que le dan')
-  assert.ok(!/\?vendedor=|vendedor:/.test(inicio), 'la pantalla no manda vendedor a la API')
+
+  // ⚠️ Desde el 1-sep la pantalla SÍ manda `?vendedor=`, pero es el filtro del
+  // panel de ADMIN: solo ACOTA, y el route lo tira si la cookie no dice ADMIN
+  // (ver tests/inicio-filtros.test.js). Lo que sigue prohibido es mandar la
+  // IDENTIDAD: el rol y el alcance salen de la cookie firmada, siempre.
+  // ⚠️ Sin quitar los comentarios esto se dispara con el comentario de la propia
+  // pantalla, que dice «NO se manda ?rol=». Un texto que EXPLICA la regla no es
+  // una violación de la regla.
+  const codigo = inicio.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
+  assert.ok(!/qs\.set\('rol'|\?rol=/.test(codigo), 'el rol no puede viajar por query')
 
   // `mias` cambia TEXTOS (titulos y como se nombra el hito de la nota), nunca
   // QUE datos se pintan. Si algun dia se colara en la serie, esto se cae.
