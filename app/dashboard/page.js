@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
 import { parseFecha, fechaISOEcuador, hoyEcuador, formatFechaDia } from '@/lib/parseFecha'
+import GraficosVentas from '@/components/GraficosVentas'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -102,6 +103,9 @@ function DashboardAdmin({ data, user }) {
           </div>
         ))}
       </div>
+      {/* ADMIN ve las ventas de TODOS: la base no le pone filtro de vendedor. */}
+      <GraficosVentas data={data} />
+
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div className="card p-4">
           <h3 className="font-semibold text-white mb-3 text-sm">📊 Estado de pedidos</h3>
@@ -201,6 +205,12 @@ function DashboardVendedor({ data, user }) {
           </div>
         ))}
       </div>
+      {/* Un VENDEDOR ve SOLO lo suyo. El recorte no lo hace esta pantalla: la
+          base filtra por `vendedor_id` a partir de la cookie firmada, igual que
+          las cuatro tarjetas de arriba. Por eso las barras y las tarjetas
+          cuentan siempre lo mismo. */}
+      <GraficosVentas data={data} mias />
+
       <div className="card">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
           <h2 className="font-semibold text-white text-sm">Mis pedidos recientes</h2>
