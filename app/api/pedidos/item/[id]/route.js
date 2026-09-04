@@ -13,6 +13,8 @@ import {
 } from '@/lib/db/detalle'
 import { setEstado, todosItemsListos, getPedidoById } from '@/lib/db/pedidos'
 import { recalcTotalesSeguro } from '@/lib/db/totales'
+import { eventosDelCambio, eventoDeCorte, debeAutoMarcarCorte } from '@/lib/prendaEventos'
+import { registrarEventosPrenda } from '@/lib/db/prendaEventos'
 
 export async function PATCH(req, { params }) {
   try {
@@ -38,6 +40,9 @@ export async function PATCH(req, { params }) {
     if (bodyKeys.length === 1 && bodyKeys[0] === 'SUBESTADO_CORTE') {
       await updateSubestadoCorte(id, body.SUBESTADO_CORTE)
       await logCambio(item.PEDIDO_ID, `CORTE ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO_CORTE || 'PENDIENTE', body.SUBESTADO_CORTE, usuarioId).catch(() => {})
+      // Registro por prenda (con item_id). El log de arriba se queda tal cual:
+      // esto es aditivo y nada de lo que ya existe cambia de comportamiento.
+      await registrarEventosPrenda(eventoDeCorte({ item, estadoNuevo: body.SUBESTADO_CORTE, usuario: usuarioId }))
       return Response.json({ ok: true })
     }
 
@@ -59,6 +64,27 @@ export async function PATCH(req, { params }) {
 
       await updateSubestado(id, nuevoEstado, areaRol)
       await logCambio(item.PEDIDO_ID, `SUBESTADO ${item.PRODUCTO_NOMBRE}${areaRol ? ` (${areaRol})` : ''}`, item.SUBESTADO, nuevoValor, usuarioId).catch(() => {})
+
+      // ── Pieza 4: la marca de corte que se pone sola ──────────────────────
+      // Si el área ya está trabajando la prenda (EN_PROCESO o LISTO), la tela
+      // está cortada. ☠️ ENVIADO_APROBACION NO cuenta: mandar el arte al cliente
+      // no exige tocar la tela, y marcarlo sacaría de la bandeja de Corte
+      // prendas que sí hay que cortar (42 vivas el 4-sep-2026).
+      //
+      // Va DESPUÉS de guardar el subestado y antes del auto-avance: si esto
+      // falla, el trabajo del área ya quedó guardado igual.
+      if (debeAutoMarcarCorte(item, nuevoEstado)) {
+        try {
+          await updateSubestadoCorte(id, 'CORTADO')
+          await logCambio(item.PEDIDO_ID, `CORTE ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO_CORTE || 'PENDIENTE', 'CORTADO', 'SISTEMA').catch(() => {})
+        } catch (corteErr) {
+          // No bloquea: el área ya movió su prenda y eso es lo que importa.
+          console.error('Auto-marcado de corte error:', corteErr)
+        }
+      }
+
+      // Registro por prenda: el evento del área y, si tocó, el del corte AUTO.
+      await registrarEventosPrenda(eventosDelCambio({ item, areaRol, estadoNuevo: nuevoEstado, usuario: usuarioId }))
 
       // ── Auto-avance a DESPACHO si TODOS los ítems del pedido están LISTO ──
       // updateSubestado ya escribió (dual-write); todosItemsListos relee del backend
