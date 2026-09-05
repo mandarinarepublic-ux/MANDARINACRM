@@ -32,6 +32,7 @@ export default function ErroresPage() {
   const [fFuente, setFFuente] = useState('')
   const [fNivel, setFNivel] = useState('error')
   const [reenviando, setReenviando] = useState(null)   // 'TODOS' = tanda completa
+  const [descartando, setDescartando] = useState(null) // pedidoId que se está sacando de la lista
   const [aviso, setAviso] = useState('')
   // Cola de reintentos: se puede aplastar varios botones sin esperar a que
   // termine el anterior. Se procesan de a UNO para no disparar varias llamadas a
@@ -164,6 +165,32 @@ export default function ErroresPage() {
     } finally { setReenviando(null) }
   }
 
+  /**
+   * Saca un pedido de la lista de facturas pendientes: se pidió y se decidió no
+   * emitirla.
+   *
+   * ☠️ NO apaga `factura_solicitada` ni anula nada en el SRI. Que el cliente la
+   * pidió es un hecho y queda registrado; esto guarda la DECISIÓN de no emitirla,
+   * con quién y cuándo, y se puede deshacer desde el pedido.
+   */
+  async function descartarFactura(pedidoId) {
+    setDescartando(pedidoId); setError(''); setAviso('')
+    try {
+      const res = await fetch('/api/factura/descartar', {
+        method: 'POST', headers: headers(),
+        body: JSON.stringify({ pedidoId, descartada: true }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
+      setAviso(`✅ ${pedidoId}: marcado como "no se factura". Queda en su Bitácora.`)
+      // Se recarga para que el contador baje de verdad y no solo en pantalla: si
+      // el guardado no cuajó, el número lo delata en el acto.
+      await cargar()
+    } catch (e) {
+      setError(`No se pudo descartar ${pedidoId}: ${e.message}`)
+    } finally { setDescartando(null) }
+  }
+
   async function marcarResuelto(id, resuelto) {
     // Optimista: lo tacho ya y confirmo contra el servidor.
     setEventos(evs => evs.map(e => e.id === id ? { ...e, resuelto } : e))
@@ -224,18 +251,40 @@ export default function ErroresPage() {
             El más viejo es de {formatFechaHumana(salud.datil.facturasPendientes.desde)}.
             Solo se cuentan los pedidos con factura solicitada: los que no la piden nunca aparecen acá.
           </div>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {salud.datil.facturasPendientes.pedidos.slice(0, 12).map(p => (
-              <a key={p.pedido_id} href={`/dashboard/pedido/${p.pedido_id}`}
-                 className="text-[11px] px-2 py-1 rounded-lg bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors">
-                {p.pedido_id}
-              </a>
+          {/* Lista accionable, no una tira de etiquetas: algunos de estos NO se
+              van a facturar nunca (el cliente ya no la quiere, se anuló, se
+              facturó por fuera). Sin forma de sacarlos, el contador se queda
+              clavado en un número que nadie va a bajar — y un contador que nunca
+              baja se deja de mirar. Ahí muere el detector. */}
+          <div className="mt-2 rounded-lg border border-red-500/20 overflow-hidden">
+            {salud.datil.facturasPendientes.pedidos.slice(0, 25).map(p => (
+              <div key={p.pedido_id}
+                className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-red-500/10 last:border-0 hover:bg-red-500/5">
+                <a href={`/dashboard/pedido/${p.pedido_id}`}
+                   className="text-[11px] font-mono text-red-300 hover:underline">
+                  {p.pedido_id}
+                </a>
+                <span className="text-[10px] text-gray-500 flex-1 truncate">
+                  {formatFechaHumana(p.fecha_pedido)}
+                </span>
+                <button
+                  onClick={() => descartarFactura(p.pedido_id)}
+                  disabled={descartando === p.pedido_id}
+                  className="text-[10px] px-2 py-1 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50 whitespace-nowrap">
+                  {descartando === p.pedido_id ? '⏳' : '✓ no facturar'}
+                </button>
+              </div>
             ))}
-            {salud.datil.facturasPendientes.total > 12 && (
-              <span className="text-[11px] px-2 py-1 text-gray-500">
-                +{salud.datil.facturasPendientes.total - 12} más
-              </span>
+            {salud.datil.facturasPendientes.total > 25 && (
+              <div className="text-[11px] px-2 py-1.5 text-gray-500">
+                +{salud.datil.facturasPendientes.total - 25} más
+              </div>
             )}
+          </div>
+          <div className="text-[10px] text-gray-500 mt-1.5">
+            «No facturar» solo lo saca de esta lista y queda en la Bitácora del pedido con tu
+            nombre. No anula nada en el SRI ni borra que el cliente la pidió, y se puede deshacer
+            desde el pedido.
           </div>
         </div>
       )}

@@ -67,9 +67,12 @@ export async function GET(req) {
     // decisión del negocio, no una falla.
     const { data: sinFactura } = await sb
       .from('pedidos')
-      .select('pedido_id, fecha_pedido, factura_solicitada, factura_id')
+      // `factura_descartada` viaja para que el helper puro aplique la regla, y
+      // además se filtra acá para no traer filas que se van a descartar igual.
+      .select('pedido_id, fecha_pedido, factura_solicitada, factura_id, factura_descartada')
       .eq('factura_solicitada', true)
       .is('factura_id', null)
+      .eq('factura_descartada', false)
       .gte('fecha_pedido', new Date(VIGILAR_FACTURAS_DESDE).toISOString())
       .order('fecha_pedido', { ascending: true })
       .limit(500)

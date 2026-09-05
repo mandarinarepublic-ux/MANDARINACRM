@@ -81,6 +81,27 @@ export default function PedidoDetailPage() {
   // Al desmontar la pantalla, soltar el observador de la barra.
   useEffect(() => () => observadorBarra.current?.disconnect(), [])
 
+  const [descartandoFactura, setDescartandoFactura] = useState(false)
+
+  /** Marca o desmarca "esta factura no se va a emitir". Solo ADMIN. */
+  async function cambiarDescarteFactura(descartada) {
+    setDescartandoFactura(true)
+    try {
+      const res = await fetch('/api/factura/descartar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-mp-usuario-id': user?.id || '' },
+        body: JSON.stringify({ pedidoId: pedido.PEDIDO_ID, descartada }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
+      // Se recarga del servidor en vez de tocar el estado a mano: así lo que se
+      // ve es lo que quedó guardado, no lo que creemos que quedó.
+      await loadPedido()
+    } catch (e) {
+      alert(`No se pudo guardar: ${e.message}`)
+    } finally { setDescartandoFactura(false) }
+  }
+
   async function loadPedido(u = user) {
     try {
       // La cabecera de sesión permite al servidor filtrar por propiedad: un
@@ -844,6 +865,26 @@ export default function PedidoDetailPage() {
                 : 'w-full py-2 rounded-xl text-sm font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all'}>
               {enviandoFactura ? '⏳ Emitiendo...' : '🧾 Generar FACTURA SRI'}
             </button>
+          </div>
+        )}
+
+        {/* Descartar la factura: el pedido la pidió y se decide no emitirla.
+            ☠️ No apaga que el cliente la pidió ni anula nada en el SRI: solo lo
+            saca de la lista de pendientes del cuadro de errores. Reversible a
+            propósito — no se pide motivo, así que equivocarse es fácil. */}
+        {user?.rol === 'ADMIN' && pedido?.FACTURA_SOLICITADA === 'TRUE' && !pedido?.FACTURA_ID && (
+          <div className="mt-2">
+            {pedido?.FACTURA_DESCARTADA === 'TRUE' ? (
+              <button onClick={() => cambiarDescarteFactura(false)} disabled={descartandoFactura}
+                className="w-full py-2 rounded-xl text-xs font-medium border border-gray-700 text-gray-500 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                {descartandoFactura ? '⏳...' : '↩︎ Volver a marcar esta factura como pendiente'}
+              </button>
+            ) : (
+              <button onClick={() => cambiarDescarteFactura(true)} disabled={descartandoFactura}
+                className="w-full py-2 rounded-xl text-xs font-medium border border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600 transition-all disabled:opacity-50">
+                {descartandoFactura ? '⏳...' : '✓ Esta factura no se va a emitir'}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -93,3 +93,40 @@ test('una lista nula no revienta', () => {
   const r = facturasPendientes(null, { desde: CORTE, ahora: AHORA })
   assert.equal(r.total, 0)
 })
+
+// ── Facturas descartadas a mano ──────────────────────────────────────────────
+//
+// Hay pedidos que pidieron factura y que NO se van a facturar: el cliente ya no
+// la quiere, se anuló, se facturó por fuera. Antes no había forma de sacarlos de
+// la lista, así que el contador quedaba clavado en un número que nadie iba a
+// bajar — y un contador que nunca baja se deja de mirar.
+//
+// ☠️ La marca es `factura_descartada`, NO apagar `factura_solicitada`. Apagarla
+// borraría que el cliente SÍ la pidió, y dentro de tres meses nadie sabría por
+// qué no se emitió. La petición es un hecho; no facturarla es una decisión.
+// Se guardan las dos.
+
+test('una factura descartada a mano sale de los pendientes', () => {
+  const r = facturasPendientes([
+    { pedido_id: 'A', fecha_pedido: '2026-08-01T10:00:00Z', factura_solicitada: true, factura_id: null },
+    { pedido_id: 'B', fecha_pedido: '2026-08-01T10:00:00Z', factura_solicitada: true, factura_id: null, factura_descartada: true },
+  ], { desde: '2026-07-01', ahora: new Date('2026-09-04T00:00:00Z') })
+  assert.equal(r.total, 1)
+  assert.equal(r.pedidos[0].pedido_id, 'A')
+})
+
+test('descartarla NO borra que el cliente la pidió', () => {
+  // El dato tiene que seguir ahí: es lo que permite explicar la decisión después.
+  const fila = { pedido_id: 'B', fecha_pedido: '2026-08-01T10:00:00Z', factura_solicitada: true, factura_id: null, factura_descartada: true }
+  const r = facturasPendientes([fila], { desde: '2026-07-01', ahora: new Date('2026-09-04T00:00:00Z') })
+  assert.equal(r.total, 0)
+  assert.equal(fila.factura_solicitada, true, 'la petición del cliente sigue registrada')
+})
+
+test('un descarte revertido vuelve a contar', () => {
+  // Sin motivo obligatorio, equivocarse es fácil: deshacer tiene que funcionar.
+  const r = facturasPendientes([
+    { pedido_id: 'C', fecha_pedido: '2026-08-01T10:00:00Z', factura_solicitada: true, factura_id: null, factura_descartada: false },
+  ], { desde: '2026-07-01', ahora: new Date('2026-09-04T00:00:00Z') })
+  assert.equal(r.total, 1)
+})
