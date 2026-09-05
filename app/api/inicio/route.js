@@ -4,6 +4,7 @@ import { sesionActual } from '@/lib/auth'
 import { getUsuarioById } from '@/lib/db/usuarios'
 import { getSupabase } from '@/lib/supabase'
 import { registrarEvento } from '@/lib/eventos'
+import { contextoDeError } from '@/lib/detalle-evento'
 
 // El panel de Inicio.
 //
@@ -15,11 +16,17 @@ import { registrarEvento } from '@/lib/eventos'
 // El alcance sale de la cookie firmada, no del `?rol=` que mandaba la pantalla:
 // un VENDEDOR ve lo suyo, VENDEDOR_YAW su tienda, el resto todo.
 export async function GET(request) {
+  // Contexto para el cuadro de errores. Antes un fallo aquí solo decía "falló
+  // al cargar" y reconstruir el caso costaba varias consultas a la base (el 416
+  // del Historial, 4-sep-2026). Ahora el evento lleva quién, con qué filtros y
+  // el código. Se declara FUERA del try para que el catch lo alcance.
+  let usuario = null
+  const params = Object.fromEntries(new URL(request.url).searchParams)
   try {
     const sesion = await sesionActual()
     if (!sesion?.id) return Response.json({ error: 'No autenticado' }, { status: 401 })
 
-    const usuario = await getUsuarioById(sesion.id)
+    usuario = await getUsuarioById(sesion.id)
     if (!usuario) return Response.json({ error: 'Sesion invalida, vuelve a entrar' }, { status: 401 })
     if (usuario.ACTIVO !== 'TRUE') return Response.json({ error: 'Usuario desactivado' }, { status: 403 })
 
@@ -71,6 +78,7 @@ export async function GET(request) {
     await registrarEvento({
       fuente: 'supabase', nivel: 'error',
       mensaje: `El panel de Inicio fallo al cargar: ${e.message}`,
+      detalle: contextoDeError({ error: e, ruta: '/api/inicio', usuario, params }),
     })
     return Response.json({ error: e.message }, { status: 500 })
   }

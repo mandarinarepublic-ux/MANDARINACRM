@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatFechaHumana } from '@/lib/parseFecha'
+import { filasDeDetalle, detalleComoTexto } from '@/lib/detalle-evento'
 
 const FUENTE_META = {
   meta:     { label: 'Meta CAPI', icon: '📊' },
@@ -333,9 +334,25 @@ export default function ErroresPage() {
                           💬 {ev.detalle.telefono}
                         </span>
                       )}
+                      {/* El código es lo ÚNICO buscable: "PGRST103" encuentra el
+                          caso, "falló al cargar" no encuentra nada. */}
+                      {ev.detalle?.codigo && (
+                        <span className="badge text-[10px] font-mono border border-gray-700 text-gray-400" title="código del error">
+                          {ev.detalle.codigo}
+                        </span>
+                      )}
+                      {ev.detalle?.usuario && (
+                        <span className="text-[10px] text-gray-500" title="a quién le pasó">👤 {ev.detalle.usuario}</span>
+                      )}
                       <span className="text-[10px] text-gray-600">{formatFechaHumana(ev.fecha)}</span>
                     </div>
                     <div className={`text-sm ${ev.resuelto ? 'text-gray-500 line-through' : 'text-gray-200'}`}>{ev.mensaje}</div>
+
+                    {/* ☠️ El detalle se pinta POR REGLA, no por lista blanca.
+                        Antes solo se mostraba `detalle.telefono` y solo si venía
+                        del inbox: de 745 eventos, 634 traían contexto guardado y
+                        era invisible. Una clave nueva aparece sola. */}
+                    <DetalleEvento evento={ev} />
                   </div>
                   <div className="flex-shrink-0 flex flex-col gap-1">
                     {ev.nivel === 'error' && (
@@ -362,6 +379,80 @@ export default function ErroresPage() {
               </div>
             )
           })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── El detalle de un evento ─────────────────────────────────────────────────
+//
+// ☠️ SE PINTA LO QUE HAY, NO LO QUE ALGUIEN PREVIÓ.
+//
+// Hasta el 4-sep-2026 esta pantalla mostraba UN campo del `detalle`, y solo si
+// el evento venía del inbox. De 745 eventos, 634 traían contexto guardado
+// (adAccountId, gasto, días caídos, parámetros de la consulta…) y NADA de eso
+// se veía. Es el mismo defecto de lista blanca que en el inbox escondió
+// clientes cuatro veces.
+//
+// `filasDeDetalle` recorre TODAS las claves y aplana lo anidado, así que un
+// campo nuevo aparece solo, sin tocar este archivo. Hay una prueba con una
+// clave inventada que se cae si alguien repone una lista.
+function DetalleEvento({ evento }) {
+  const [abierto, setAbierto] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+  const filas = useMemo(() => filasDeDetalle(evento?.detalle), [evento?.detalle])
+
+  // Sin contexto no se calla: se dice que no lo hay. "Llegó sin detalle" es un
+  // defecto a corregir en quien lo registró, no un misterio para quien lo lee.
+  if (filas.length === 0) {
+    return (
+      <div className="mt-1 text-[10px] text-gray-600 italic">
+        Sin detalle guardado — quien registró este evento no dejó contexto.
+      </div>
+    )
+  }
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(detalleComoTexto(evento))
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      // Si el navegador no deja copiar, el detalle sigue visible abajo: no se
+      // pierde nada, solo la comodidad.
+      setCopiado(false)
+    }
+  }
+
+  return (
+    <div className="mt-1.5">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setAbierto(v => !v)}
+          aria-expanded={abierto}
+          className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors">
+          {abierto ? '▾' : '▸'} {abierto ? 'Ocultar' : 'Ver'} detalle ({filas.length})
+        </button>
+        {abierto && (
+          <button onClick={copiar} className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors">
+            {copiado ? '✓ copiado' : '⧉ copiar'}
+          </button>
+        )}
+      </div>
+
+      {abierto && (
+        <div className="mt-1.5 rounded-lg border border-gray-800 bg-gray-900/50 overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <tbody>
+              {filas.map(f => (
+                <tr key={f.clave} className="border-b border-gray-800/60 last:border-0">
+                  <td className="py-1 px-2 font-mono text-gray-500 align-top whitespace-nowrap">{f.clave}</td>
+                  <td className="py-1 px-2 font-mono text-gray-300 break-all" title={f.completo}>{f.valor}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
