@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
@@ -33,6 +33,30 @@ export default function PedidoDetailPage() {
   const [showPdfPreview, setShowPdfPreview] = useState(false)
   const [logs, setLogs] = useState([])
   const [showBitacora, setShowBitacora] = useState(false)
+  // ☠️ El hueco que deja la barra fija del fondo se MIDE, no se adivina.
+  //
+  // Era `pb-32 md:pb-24` (128 / 96 px) contra una barra que cambia de alto según
+  // quién mira y cómo está el pedido: `esEmbed` suma la fila de "Enviar al
+  // cliente", ADMIN suma "Editar productos" y una factura pendiente suma
+  // "Generar FACTURA SRI". Con tres filas la barra pasa de 170 px y tapaba lo
+  // último de la página — la Bitácora, que es justo lo que queda al final.
+  //
+  // Un número fijo vuelve a quedarse corto en cuanto alguien agregue una fila, y
+  // el síntoma es contenido invisible: nadie reporta lo que no ve.
+  const [altoBarra, setAltoBarra] = useState(0)
+  const observadorBarra = useRef(null)
+  // Ref de CALLBACK, no un efecto sin dependencias: así el observador se engancha
+  // una sola vez cuando la barra entra al DOM, en vez de crearse y destruirse en
+  // cada pintado. Esta pantalla ya pagó una vez el precio de repintar de más.
+  const barraRef = useCallback((nodo) => {
+    observadorBarra.current?.disconnect()
+    if (!nodo) return
+    const medir = () => setAltoBarra(nodo.offsetHeight)
+    medir()
+    if (typeof ResizeObserver === 'undefined') return  // navegador viejo: queda la medida inicial
+    observadorBarra.current = new ResizeObserver(medir)
+    observadorBarra.current.observe(nodo)
+  }, [])
   const [fotoComprobanteAbierta, setFotoComprobanteAbierta] = useState(null)
   const [showConversacion, setShowConversacion] = useState(false)
   const [showModalAbono, setShowModalAbono] = useState(false)
@@ -53,6 +77,9 @@ export default function PedidoDetailPage() {
     setUser(u)
     loadPedido(u)
   }, [])
+
+  // Al desmontar la pantalla, soltar el observador de la barra.
+  useEffect(() => () => observadorBarra.current?.disconnect(), [])
 
   async function loadPedido(u = user) {
     try {
@@ -361,7 +388,10 @@ export default function PedidoDetailPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-32 md:pb-24">
+      {/* El pb-* queda de red por si la medición aún no corrió (primer pintado);
+          en cuanto mide, manda el alto real + un respiro de 16 px. */}
+      <div className="flex-1 overflow-y-auto pb-32 md:pb-24"
+        style={altoBarra ? { paddingBottom: altoBarra + 16 } : undefined}>
         <div className={`${anchoContenido} px-4 py-4 space-y-4`}>
 
           {isNew && (
@@ -749,7 +779,8 @@ export default function PedidoDetailPage() {
           embed ese menú no existe (lo quita el layout), así que ese hueco quedaba
           muerto y los botones no llegaban al borde izquierdo. Mismo arreglo que
           en nuevo-pedido. */}
-      <div className={`fixed bottom-0 left-0 right-0 ${esEmbed ? '' : 'md:left-60'} bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3`}>
+      <div ref={barraRef}
+        className={`fixed bottom-0 left-0 right-0 ${esEmbed ? '' : 'md:left-60'} bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3`}>
         {/* Mandarle la hoja al cliente por el chat. Solo dentro del inbox: suelto
             en el CRM no hay a quién pasársela y sería un botón que no hace nada. */}
         {esEmbed && (
