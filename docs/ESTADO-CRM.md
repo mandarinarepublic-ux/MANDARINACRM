@@ -199,6 +199,60 @@ un solo pedido real todavía**: no está verificado de punta a punta. Ver pendie
 **Pauta** tablero, artes y CAPI `Purchase` con atribución.
 **Impresión** hoja de cliente + hoja de confección, con el pago correcto.
 
+**Eventos por prenda (4-sep, RECIÉN DESPLEGADO).** `crm.prenda_eventos` guarda
+cada movimiento con **`item_id`** — la llave que faltaba. `logs_pedidos` guarda
+el `campo` como texto libre con el nombre del producto dentro (`"SUBESTADO HOODIE
+PREMIUM"`, con erratas reales como `HODIE`) y sin `item_id`: dos hoodies iguales
+en un pedido eran indistinguibles y por eso no se podía medir cuánto tarda un
+área. La tabla nueva es **aditiva**: `logs_pedidos` se sigue escribiendo igual.
+
+Se escribe desde UN solo sitio, `app/api/pedidos/item/[id]/route.js`, más el
+trigger de cierre. Reglas puras y probadas en `lib/prendaEventos.js`.
+
+**El corte se marca solo** cuando un área pasa la prenda a `EN_PROCESO` o
+`LISTO`. ☠️ **`ENVIADO_APROBACION` NO cuenta**: mandar el arte al cliente no
+exige tocar la tela. Medido el 4-sep: 42 de las 46 prendas vivas «en curso sin
+marca de corte» estaban ahí, y marcarlas las habría **borrado de la bandeja de
+Corte** teniendo que cortarse. El error barato es dejar una prenda de más en la
+bandeja; el caro es sacarla. Lo vigila una prueba que lee el **bundle**
+(`tests/corte-automatico-en-el-build.test.js`), no el fuente.
+
+✅ Verificado con tráfico real el mismo día: 17 movimientos de Estampado y sus
+17 marcas de corte automáticas, emparejadas al segundo.
+
+### ☠️ El trigger de cierre: lo que hay que saber
+
+`crm.pedidos` tiene `pedidos_marcar_cortado` (19-ago) que, al entrar el pedido a
+`COMPLETADO`/`ENTREGADO`/`DESPACHO`, marca sus prendas `CORTADO` y `LISTO`.
+**Escribe directo a la tabla, sin pasar por la app.** Tres consecuencias que ya
+hicieron sacar conclusiones falsas:
+
+- **`subestado_corte = CORTADO` no significa «alguien cortó esto»**, significa
+  «este pedido se cerró». Que 1.403 de 1.449 prendas completadas estén marcadas
+  **no prueba** disciplina de registro: lo hizo el trigger y dos backfills.
+- **El registro de CORTE en `logs_pedidos` no se apagó en agosto** (98 pedidos en
+  julio → 5 en agosto → 0 en septiembre). Se mudó a un sitio que no registra.
+- ⚠️ Los respaldos que prometen aquellas migraciones —`crm.respaldo_corte_20260818`
+  (759 prendas) y `crm.respaldo_corte_20260819` (22)— **NO EXISTEN en la base**.
+  Lo que se sobrescribió entonces no se puede reconstruir.
+
+**Arreglado el 4-sep** (`docs/sql/2026-09-04-cierre-no-aplana-y-deja-rastro.sql`):
+el trigger ya **no aplana** el subestado compuesto —`ESTAMPADO:X|BORDADO:Y` pasa a
+`ESTAMPADO:LISTO|BORDADO:LISTO`, no a `LISTO` a secas— y **deja rastro** en
+`prenda_eventos` con `origen = 'AUTO_CIERRE'`. Antes aplanaba **136 de 136**
+prendas multi-área cerradas, así que el desglose por área se borraba al cerrar
+aunque se midiera perfecto todo el camino.
+
+Cuántas prendas se cierran a medias, ahora se puede contar:
+
+```sql
+select count(*) from crm.prenda_eventos where origen = 'AUTO_CIERRE';
+```
+
+⚠️ **Sigue forzando `LISTO`** a prendas que no lo estaban (la migración de agosto
+volteó 475 así). Es a propósito —mantiene limpias las bandejas— pero ahora queda
+contado en vez de borrado.
+
 ---
 
 ## Quién ve qué
