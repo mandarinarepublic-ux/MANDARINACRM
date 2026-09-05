@@ -28,15 +28,33 @@ test('☠️ DESPACHO no cuenta como cerrado', () => {
   assert.ok(/COMPLETADO/.test(cerrados) && /ENTREGADO/.test(cerrados) && /CANCELADO/.test(cerrados))
 })
 
-test('☠️ un pedido sin prendas que fabricar NO desaparece', () => {
+test('☠️ un pedido sin prendas que fabricar NO desaparece', async () => {
   // `clasificarPedido` devolvia null y `.filter(x => x.clasif)` lo borraba del
   // tablero entero. Son los pedidos cuyas prendas van todas por ENTREGA EN
   // TIENDA: el 19-ago habia TRES vivos e invisibles, uno creado ese mismo dia.
-  const codigo = sinComentarios(src)
-  assert.ok(!/if \(activos\.length === 0\) return null/.test(codigo),
-    'sin prendas NO significa que no pase nada')
-  assert.ok(/if \(activos\.length === 0\) return \{ etapa: 'DESPACHO'/.test(codigo),
-    'no hay nada que cortar ni producir: lo pendiente es entregarlo')
+  //
+  // ⚠️ Esta prueba miraba el CODIGO por regex (`return { etapa: 'DESPACHO'`). Al
+  // pasar el tablero a tarjetas por sub-area ese codigo dejo de existir y la
+  // prueba fallo — correctamente, porque el pedido volvia a desaparecer.
+  // Ahora comprueba el COMPORTAMIENTO, que es lo que de verdad protege: da igual
+  // como se implemente mientras el pedido siga viendose.
+  const { construirPivot } = await import('../lib/pivot-areas.js')
+
+  const soloEntregaEnTienda = {
+    PEDIDO_ID: 'MAN-JAC-5681', TIENDA_ID: 'MANDARINA', CLIENTE_NOMBRE: 'Cliente',
+    FECHA_PEDIDO: '2026-09-01T10:00:00Z', FECHA_ENTREGA_PROMETIDA: '2026-09-05',
+    ESTADO_PEDIDO: 'EN_FABRICA',
+    items: [{ ITEM_ID: 'i1', PRODUCTO_NOMBRE: 'CAMISETA', CANTIDAD: '2', AREA: '', SUBESTADO: 'ENTREGADO_TIENDA', SUBESTADO_CORTE: '' }],
+  }
+  const pivot = construirPivot([soloEntregaEnTienda])
+  const donde = pivot.filter(s => s.lista.some(x => x.id === 'MAN-JAC-5681'))
+  assert.ok(donde.length > 0, 'sin prendas que fabricar NO significa que no pase nada: tiene que verse en alguna parte')
+  assert.equal(donde[0].sub, 'POR_ENTREGAR', 'no hay nada que cortar ni producir: lo pendiente es entregarlo')
+
+  // Y un pedido SIN NINGUNA prenda tampoco puede evaporarse.
+  const sinPrendas = { ...soloEntregaEnTienda, PEDIDO_ID: 'MAN-JAC-9999', items: [] }
+  const p2 = construirPivot([sinPrendas])
+  assert.ok(p2.some(s => s.lista.some(x => x.id === 'MAN-JAC-9999')), 'un pedido sin prendas sigue existiendo')
 })
 
 test('el interruptor de despachados cambia lo que se PIDE', () => {

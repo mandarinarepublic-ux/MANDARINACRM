@@ -44,7 +44,16 @@ export async function GET(req) {
       incluirCerrados: searchParams.get('cerrados') === '1',
     })
 
-    return Response.json(resultado)
+    // Las áreas viajan desde el SERVIDOR, sacadas del usuario de la cookie
+    // firmada, no del navegador. Deciden qué TARJETAS se pintan (relevancia, no
+    // permiso: los pedidos que se devuelven son los mismos para todos, porque el
+    // trabajo de fábrica es transversal). Aun así sale de acá para que no se
+    // pueda cambiar desde la url.
+    const areas = Array.isArray(usuario.AREAS)
+      ? usuario.AREAS
+      : String(usuario.AREAS ?? '').split(',').map((a) => a.trim()).filter(Boolean)
+
+    return Response.json({ ...resultado, areasUsuario: areas, rol: usuario.ROL ?? '' })
   } catch (e) {
     console.error('GET /api/tablero:', e)
     await registrarEvento({
