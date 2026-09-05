@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatFechaHumana } from '@/lib/parseFecha'
 import { filasDeDetalle, detalleComoTexto } from '@/lib/detalle-evento'
+import { MOTIVOS } from '@/lib/motivos-factura'
 
 const FUENTE_META = {
   meta:     { label: 'Meta CAPI', icon: '📊' },
@@ -33,6 +34,10 @@ export default function ErroresPage() {
   const [fNivel, setFNivel] = useState('error')
   const [reenviando, setReenviando] = useState(null)   // 'TODOS' = tanda completa
   const [descartando, setDescartando] = useState(null) // pedidoId que se está sacando de la lista
+  // Qué fila tiene desplegado el selector (guarda el pedido_id).
+  const [eligiendo, setEligiendo] = useState(null)
+  const [motivo, setMotivo] = useState('')
+  const [nota, setNota] = useState('')
   const [aviso, setAviso] = useState('')
   // Cola de reintentos: se puede aplastar varios botones sin esperar a que
   // termine el anterior. Se procesan de a UNO para no disparar varias llamadas a
@@ -178,11 +183,12 @@ export default function ErroresPage() {
     try {
       const res = await fetch('/api/factura/descartar', {
         method: 'POST', headers: headers(),
-        body: JSON.stringify({ pedidoId, descartada: true }),
+        body: JSON.stringify({ pedidoId, descartada: true, motivo, nota }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
-      setAviso(`✅ ${pedidoId}: marcado como "no se factura". Queda en su Bitácora.`)
+      setAviso(`✅ ${pedidoId}: marcado como "no se factura". El motivo queda en su Bitácora.`)
+      setEligiendo(null); setMotivo(''); setNota('')
       // Se recarga para que el contador baje de verdad y no solo en pantalla: si
       // el guardado no cuajó, el número lo delata en el acto.
       await cargar()
@@ -258,21 +264,42 @@ export default function ErroresPage() {
               baja se deja de mirar. Ahí muere el detector. */}
           <div className="mt-2 rounded-lg border border-red-500/20 overflow-hidden">
             {salud.datil.facturasPendientes.pedidos.slice(0, 25).map(p => (
-              <div key={p.pedido_id}
-                className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-red-500/10 last:border-0 hover:bg-red-500/5">
-                <a href={`/dashboard/pedido/${p.pedido_id}`}
-                   className="text-[11px] font-mono text-red-300 hover:underline">
-                  {p.pedido_id}
-                </a>
-                <span className="text-[10px] text-gray-500 flex-1 truncate">
-                  {formatFechaHumana(p.fecha_pedido)}
-                </span>
-                <button
-                  onClick={() => descartarFactura(p.pedido_id)}
-                  disabled={descartando === p.pedido_id}
-                  className="text-[10px] px-2 py-1 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50 whitespace-nowrap">
-                  {descartando === p.pedido_id ? '⏳' : '✓ no facturar'}
-                </button>
+              <div key={p.pedido_id} className="border-b border-red-500/10 last:border-0">
+                <div className="flex items-center justify-between gap-2 px-2 py-1.5 hover:bg-red-500/5">
+                  <a href={`/dashboard/pedido/${p.pedido_id}`}
+                     className="text-[11px] font-mono text-red-300 hover:underline">
+                    {p.pedido_id}
+                  </a>
+                  <span className="text-[10px] text-gray-500 flex-1 truncate">
+                    {formatFechaHumana(p.fecha_pedido)}
+                  </span>
+                  <button
+                    onClick={() => { setEligiendo(eligiendo === p.pedido_id ? null : p.pedido_id); setMotivo(''); setNota('') }}
+                    className="text-[10px] px-2 py-1 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all whitespace-nowrap">
+                    {eligiendo === p.pedido_id ? '✕ cancelar' : '✓ no facturar'}
+                  </button>
+                </div>
+
+                {/* El motivo se pide ANTES de guardar, no después: si se guardara
+                    primero, un "lo lleno luego" deja el registro mudo para siempre. */}
+                {eligiendo === p.pedido_id && (
+                  <div className="px-2 pb-2 flex flex-col gap-1.5 bg-gray-900/40">
+                    <select value={motivo} onChange={e => setMotivo(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-200 outline-none">
+                      <option value="">¿Por qué no se va a emitir?</option>
+                      {MOTIVOS.map(m => <option key={m.codigo} value={m.codigo}>{m.label}</option>)}
+                    </select>
+                    <input value={nota} onChange={e => setNota(e.target.value)} maxLength={300}
+                      placeholder={motivo === 'OTRO' ? 'Explica el caso (obligatorio)' : 'Nota (opcional)'}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-200 outline-none" />
+                    <button
+                      onClick={() => descartarFactura(p.pedido_id)}
+                      disabled={descartando === p.pedido_id || !motivo || (motivo === 'OTRO' && !nota.trim())}
+                      className="text-[11px] px-2 py-1.5 rounded-lg border border-yellow-500/40 text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                      {descartando === p.pedido_id ? '⏳ guardando...' : 'Confirmar que no se factura'}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
             {salud.datil.facturasPendientes.total > 25 && (

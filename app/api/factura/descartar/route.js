@@ -7,6 +7,7 @@ import { sesionActual } from '@/lib/auth'
 import { logCambio } from '@/lib/pedidos'
 import { registrarEvento } from '@/lib/eventos'
 import { contextoDeError } from '@/lib/detalle-evento'
+import { validarDescarte, etiquetaMotivo } from '@/lib/motivos-factura'
 
 // Marcar (o desmarcar) que una factura pedida NO se va a emitir.
 //
@@ -37,6 +38,16 @@ export async function POST(req) {
 
     if (!pedidoId) return Response.json({ error: 'Falta el pedido' }, { status: 400 })
 
+    // El motivo se exige SOLO al descartar. Al deshacer no hay nada que explicar:
+    // pedirlo ahí solo pondría una traba para volver atrás, y volver atrás es
+    // justamente lo que arregla un descarte equivocado.
+    let decision = { motivo: null, nota: null }
+    if (descartada) {
+      const v = validarDescarte({ motivo: body.motivo, nota: body.nota })
+      if (!v.ok) return Response.json({ error: v.error }, { status: 400 })
+      decision = { motivo: v.motivo, nota: v.nota }
+    }
+
     const sesion = await sesionActual()
     usuario = sesion?.id ? await getUsuarioById(sesion.id) : null
     const quien = usuario?.NOMBRE || usuario?.USUARIO_ID || 'ADMIN'
@@ -64,20 +75,29 @@ export async function POST(req) {
         factura_descartada: descartada,
         factura_descartada_por: descartada ? quien : null,
         factura_descartada_at: descartada ? new Date().toISOString() : null,
+        // Al deshacer se limpian: dejar el motivo viejo colgando haría que un
+        // pedido pendiente pareciera tener una decisión tomada.
+        factura_descartada_motivo: decision.motivo,
+        factura_descartada_nota: decision.nota || null,
       })
       .eq('pedido_id', pedidoId)
     if (error) throw error
 
     // Queda en la Bitácora del pedido: es una decisión de negocio, y dentro de
     // tres meses alguien va a preguntar por qué este pedido no se facturó.
+    // El motivo va DENTRO del log: la Bitácora es lo que alguien va a leer dentro
+    // de tres meses, y "DESCARTADA" a secas no responde la pregunta que traerá.
+    const despues = descartada
+      ? `DESCARTADA · ${etiquetaMotivo(decision.motivo)}${decision.nota ? ` · ${decision.nota}` : ''}`
+      : 'PENDIENTE'
     await logCambio(
       pedidoId, 'FACTURA_DESCARTADA',
       antes.factura_descartada ? 'DESCARTADA' : 'PENDIENTE',
-      descartada ? 'DESCARTADA' : 'PENDIENTE',
+      despues,
       quien,
     ).catch(() => {})
 
-    return Response.json({ ok: true, pedidoId, descartada })
+    return Response.json({ ok: true, pedidoId, descartada, motivo: decision.motivo })
   } catch (e) {
     console.error('POST /api/factura/descartar:', e)
     await registrarEvento({

@@ -12,6 +12,7 @@ import Origen from './Origen'
 import { capturarHojasComoJpg, pesoKbDataUrl, dejarPintar } from '@/lib/generarPdf'
 import { enviarHojaPedido } from '@/lib/aviso-padre'
 import { botonFactura } from '@/lib/facturas-visibilidad'
+import { MOTIVOS, etiquetaMotivo } from '@/lib/motivos-factura'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -82,6 +83,9 @@ export default function PedidoDetailPage() {
   useEffect(() => () => observadorBarra.current?.disconnect(), [])
 
   const [descartandoFactura, setDescartandoFactura] = useState(false)
+  const [eligiendoMotivo, setEligiendoMotivo] = useState(false)
+  const [motivoFactura, setMotivoFactura] = useState('')
+  const [notaFactura, setNotaFactura] = useState('')
 
   /** Marca o desmarca "esta factura no se va a emitir". Solo ADMIN. */
   async function cambiarDescarteFactura(descartada) {
@@ -90,10 +94,11 @@ export default function PedidoDetailPage() {
       const res = await fetch('/api/factura/descartar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-mp-usuario-id': user?.id || '' },
-        body: JSON.stringify({ pedidoId: pedido.PEDIDO_ID, descartada }),
+        body: JSON.stringify({ pedidoId: pedido.PEDIDO_ID, descartada, motivo: motivoFactura, nota: notaFactura }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d.error || `Error ${res.status}`)
+      setEligiendoMotivo(false); setMotivoFactura(''); setNotaFactura('')
       // Se recarga del servidor en vez de tocar el estado a mano: así lo que se
       // ve es lo que quedó guardado, no lo que creemos que quedó.
       await loadPedido()
@@ -875,14 +880,47 @@ export default function PedidoDetailPage() {
         {user?.rol === 'ADMIN' && pedido?.FACTURA_SOLICITADA === 'TRUE' && !pedido?.FACTURA_ID && (
           <div className="mt-2">
             {pedido?.FACTURA_DESCARTADA === 'TRUE' ? (
-              <button onClick={() => cambiarDescarteFactura(false)} disabled={descartandoFactura}
-                className="w-full py-2 rounded-xl text-xs font-medium border border-gray-700 text-gray-500 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
-                {descartandoFactura ? '⏳...' : '↩︎ Volver a marcar esta factura como pendiente'}
-              </button>
+              <>
+                {/* La decisión se MUESTRA, no solo se guarda: quien abra este
+                    pedido dentro de tres meses tiene que ver por qué no se
+                    facturó sin ir a buscarlo a la Bitácora. */}
+                <div className="mb-1.5 rounded-xl border border-gray-800 bg-gray-900/40 px-3 py-2 text-[11px] text-gray-400">
+                  🧾 <span className="text-gray-300">No se emite:</span>{' '}
+                  {etiquetaMotivo(pedido.FACTURA_DESCARTADA_MOTIVO) || 'sin motivo registrado'}
+                  {pedido.FACTURA_DESCARTADA_NOTA && <> · «{pedido.FACTURA_DESCARTADA_NOTA}»</>}
+                  {pedido.FACTURA_DESCARTADA_POR && <> · {pedido.FACTURA_DESCARTADA_POR}</>}
+                </div>
+                <button onClick={() => cambiarDescarteFactura(false)} disabled={descartandoFactura}
+                  className="w-full py-2 rounded-xl text-xs font-medium border border-gray-700 text-gray-500 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                  {descartandoFactura ? '⏳...' : '↩︎ Volver a marcarla como pendiente'}
+                </button>
+              </>
+            ) : eligiendoMotivo ? (
+              <div className="flex flex-col gap-1.5">
+                <select value={motivoFactura} onChange={e => setMotivoFactura(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none">
+                  <option value="">¿Por qué no se va a emitir?</option>
+                  {MOTIVOS.map(m => <option key={m.codigo} value={m.codigo}>{m.label}</option>)}
+                </select>
+                <input value={notaFactura} onChange={e => setNotaFactura(e.target.value)} maxLength={300}
+                  placeholder={motivoFactura === 'OTRO' ? 'Explica el caso (obligatorio)' : 'Nota (opcional)'}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none" />
+                <div className="flex gap-2">
+                  <button onClick={() => { setEligiendoMotivo(false); setMotivoFactura(''); setNotaFactura('') }}
+                    className="flex-1 py-2 rounded-xl text-xs border border-gray-800 text-gray-500 hover:text-gray-300">
+                    Cancelar
+                  </button>
+                  <button onClick={() => cambiarDescarteFactura(true)}
+                    disabled={descartandoFactura || !motivoFactura || (motivoFactura === 'OTRO' && !notaFactura.trim())}
+                    className="flex-1 py-2 rounded-xl text-xs font-medium border border-yellow-500/40 text-yellow-400 bg-yellow-500/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                    {descartandoFactura ? '⏳...' : 'Confirmar'}
+                  </button>
+                </div>
+              </div>
             ) : (
-              <button onClick={() => cambiarDescarteFactura(true)} disabled={descartandoFactura}
-                className="w-full py-2 rounded-xl text-xs font-medium border border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600 transition-all disabled:opacity-50">
-                {descartandoFactura ? '⏳...' : '✓ Esta factura no se va a emitir'}
+              <button onClick={() => setEligiendoMotivo(true)}
+                className="w-full py-2 rounded-xl text-xs font-medium border border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600 transition-all">
+                ✓ Esta factura no se va a emitir
               </button>
             )}
           </div>
