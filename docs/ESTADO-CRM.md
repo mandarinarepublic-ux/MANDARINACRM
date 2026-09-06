@@ -220,6 +220,44 @@ bandeja; el caro es sacarla. Lo vigila una prueba que lee el **bundle**
 ✅ Verificado con tráfico real el mismo día: 17 movimientos de Estampado y sus
 17 marcas de corte automáticas, emparejadas al segundo.
 
+**Tablero por SUB-ÁREA (4-sep, RECIÉN DESPLEGADO).** Reemplaza las tres columnas
+CORTE → PRODUCCIÓN → DESPACHO, que metían **69 de 74 pedidos vivos en la
+primera**: con el 93% en una columna no repartía trabajo, solo repetía que todo
+seguía atascado. Ahora seis tarjetas —Corte, Estampado, Sublimación, Bordado, Sin
+área, Por entregar— y clic para ver los pedidos, con orden y filtros de fecha.
+Regla pura y probada en `lib/pivot-areas.js`; la pantalla solo pinta.
+
+☠️ **El corte NO es una puerta.** La primera versión solo dejaba ver a un área lo
+ya marcado `CORTADO` y **BORDADO salía en CERO teniendo 23 prendas suyas**. Estar
+cortada o no es un **dato de la fila** (`✂ n sin marcar`), nunca un filtro. Una
+prenda sin cortar sale a la vez en Corte y en su área: son dos pendientes
+distintos sobre la misma prenda.
+
+☠️ **Un pedido sin prendas que fabricar no desaparece**: va a «Por entregar». La
+prueba `bandeja-tablero.test.js` cazó justo eso al reescribir, y de paso pasó de
+mirar el código con una regex a comprobar el **comportamiento**.
+
+**Tres columnas de tiempo**: `Venta→taller`, `En taller` y **`Quieto`** (días
+desde el último evento). Cuando «Quieto» se acerca a «En taller», nadie tocó ese
+pedido desde que entró. Sale de la vista `crm.pedido_ultimo_movimiento`, que
+**agrupa en la base**: leer `logs_pedidos` en crudo cruzaría el tope de 1000 filas
+en silencio. ⚠️ **NO usar `detalle_pedido.fecha_modificacion`** para esto: nunca
+se actualiza (ver la tabla de más abajo).
+
+⚠️ Las áreas salen del **servidor**, no de la url. Con áreas asignadas se ven las
+suyas + Corte; **un rol transversal sin áreas (CORTE, DESPACHO, ADMIN) ve TODO** —
+recortarlo a «sus áreas» lo dejaría con la pantalla vacía.
+
+**Cuadro de errores (4-sep).** Cada error de bandeja guarda ahora `detalle` con
+código, ruta, usuario y parámetros (`lib/detalle-evento.js`), y la pantalla pinta
+**todas** las claves por regla. ☠️ Antes mostraba UNA (`detalle.telefono`, y solo
+del inbox): de 745 eventos, **634 traían contexto invisible**.
+
+**Facturas que no se van a emitir (4-sep).** Botón «no facturar» en el cuadro de
+errores y en el pedido, con **motivo de lista corta + nota** (`lib/motivos-factura.js`)
+y reversible. ☠️ No apaga `factura_solicitada`: que el cliente la pidió es un
+HECHO y no emitirla una DECISIÓN; se guardan las dos.
+
 ### ☠️ El trigger de cierre: lo que hay que saber
 
 `crm.pedidos` tiene `pedidos_marcar_cortado` (19-ago) que, al entrar el pedido a
