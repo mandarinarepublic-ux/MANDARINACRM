@@ -19,7 +19,13 @@ function fechaLarga(iso) {
 // lo firma la gerencia (ver FIRMA_COTIZACION en lib/cotizacion.js). El vendedor
 // se sigue guardando en la fila (`created_by`, `created_by_nombre`) para saber
 // de quién es puertas adentro.
-export default function CotizacionPreview({ cotizacion: c, totales }) {
+//
+// `id` es un prop porque el documento vive DOS veces en la pantalla: el que se
+// ve («Vista previa», `cot-doc`, con el CSS de impresión colgado de ese id) y
+// una copia fuera de pantalla a ancho fijo de la que sale el PDF
+// (`cot-doc-pdf`, ver CotizacionForm). Mismo componente, mismos datos: lo que
+// se manda es lo que se ve.
+export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-doc' }) {
   const th = themeFor(c.tienda)
   const posiciones = (p) => [
     ['Pecho', p.diseno_pecho], ['Espalda', p.diseno_espalda],
@@ -27,7 +33,7 @@ export default function CotizacionPreview({ cotizacion: c, totales }) {
   ].filter(([, v]) => v && String(v).trim())
 
   return (
-    <div id="cot-doc" className="mx-auto bg-white text-gray-900 shadow-xl" style={{ maxWidth: ANCHO_DOC_COTIZACION, fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
+    <div id={id} className="mx-auto bg-white text-gray-900 shadow-xl" style={{ maxWidth: ANCHO_DOC_COTIZACION, fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
       {/* Header con gradiente de la tienda */}
       <div style={{ background: th.gradient, color: '#fff', padding: '26px 40px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>

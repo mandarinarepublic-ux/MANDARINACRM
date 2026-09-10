@@ -1,6 +1,6 @@
 'use client'
 import { useCotizacion } from './useCotizacion'
-import { ESTADOS, ESTADO_COT_LABEL, ESTADO_COT_CLASES, NUMERO_PENDIENTE } from '@/lib/cotizacion'
+import { ESTADOS, ESTADO_COT_LABEL, ESTADO_COT_CLASES, NUMERO_PENDIENTE, ANCHO_DOC_COTIZACION } from '@/lib/cotizacion'
 import TiendaToggle from './TiendaToggle'
 import ProductoCard from './ProductoCard'
 import ResumenPanel from './ResumenPanel'
@@ -164,6 +164,31 @@ export default function CotizacionForm({ initial, user, onCreated }) {
           </div>
         )}
       </div>
+
+      {/* ── La copia de la que sale el PDF ─────────────────────────────────
+          Fuera de pantalla y a ANCHO FIJO, igual que las hojas del pedido
+          (app/dashboard/pedido/[id]: `pdf-gracias-N`).
+
+          ⚠️ NO se captura el documento visible. html2canvas clona la página
+          ENTERA en un iframe del ancho que se le pide (820 px) y a ese ancho
+          se cruza el breakpoint `md`: aparece la barra lateral (`hidden
+          md:flex w-56`), `main` recibe `md:ml-56`, y el documento queda con
+          el ancho que sobre — 596 px o menos — pegado a la izquierda de un
+          lienzo de 820. Resultado real, 10-sep-2026 desde el celular de
+          Rodrigo: la cotización ocupaba el 58% de la hoja A4, chica y con un
+          tercio en blanco a la derecha.
+
+          Esta copia tiene su propio ancho y vive en `position: fixed`, así
+          que le da igual qué haga la barra lateral o cuánto mida la
+          pantalla: desde un celular y desde un escritorio sale el MISMO PDF.
+          Solo se monta mientras se genera; el resto del tiempo no hay dos
+          documentos cargando las mismas fotos. */}
+      {h.pdfOcupado && (
+        <div aria-hidden="true" className="no-print"
+          style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: ANCHO_DOC_COTIZACION, background: '#fff' }}>
+          <CotizacionPreview id="cot-doc-pdf" cotizacion={c} totales={totales} />
+        </div>
+      )}
 
       {/* Toast */}
       {h.toast && (

@@ -194,11 +194,14 @@ export function useCotizacion(initial, user, onCreated) {
       const saved = await save()
       if (!saved) throw new Error('Primero hay que poder guardar la cotización')
     }
-    // El documento solo existe en el DOM en modo vista: en edición no hay nada
-    // que capturar.
-    setMode('vista')
+    // Se captura la copia OCULTA a ancho fijo (`cot-doc-pdf`, ver
+    // CotizacionForm), no el documento visible: el visible mide lo que le
+    // deje la pantalla y la barra lateral, y desde un celular salía al 58%
+    // de la hoja. La copia se monta mientras `pdfOcupado` está puesto —quien
+    // llama lo puso antes de llegar acá— y `dejarPintar` espera a que React
+    // la pinte. Ya no hace falta saltar a «Vista previa» para generar.
     await dejarPintar()
-    return pdfDeDocumento('cot-doc', { anchoPx: ANCHO_DOC_COTIZACION })
+    return pdfDeDocumento('cot-doc-pdf', { anchoPx: ANCHO_DOC_COTIZACION })
   }, [cotizacion.id, save])
 
   const nombreArchivo = useCallback(

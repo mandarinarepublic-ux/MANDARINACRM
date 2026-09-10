@@ -151,7 +151,8 @@ test('☠️ la salida ya no depende de que el navegador pagine', () => {
   const sinComentarios = hook.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
   assert.ok(!/window\.print\(\)/.test(sinComentarios), 'volvio el window.print()')
   assert.ok(!/setTimeout\(\(\) => window\.print/.test(sinComentarios))
-  assert.ok(/pdfDeDocumento\('cot-doc'/.test(sinComentarios), 'el PDF se arma con jsPDF')
+  assert.ok(/pdfDeDocumento\('cot-doc-pdf'/.test(sinComentarios), 'el PDF se arma con jsPDF, de la copia oculta')
+  assert.ok(!/pdfDeDocumento\('cot-doc'/.test(sinComentarios), '☠️ volvio a capturar el documento VISIBLE')
   // Al ancho de DISEÑO: sin esto, el mismo boton da un PDF distinto desde un
   // celular que desde un escritorio, y H2C_OPTS le recortaria el borde derecho.
   assert.ok(/anchoPx: ANCHO_DOC_COTIZACION/.test(sinComentarios), 'se captura al ancho de diseño')
@@ -165,4 +166,19 @@ test('los dos botones sacan el MISMO pdf', () => {
   // algo distinto de lo que el vendedor reviso.
   assert.equal((sinComentarios.match(/await armarPdf\(\)/g) || []).length, 2)
   assert.equal((sinComentarios.match(/pdfDeDocumento\(/g) || []).length, 1)
+})
+
+test('☠️ el PDF sale de una copia oculta a ANCHO FIJO, no del documento visible', () => {
+  // html2canvas clona la pagina entera en un iframe de 820 px; a ese ancho
+  // aparece la barra lateral (md:flex w-56) y el documento visible queda con
+  // lo que sobre. Desde el celular salia al 58% de la hoja, con un tercio en
+  // blanco a la derecha.
+  const form = readFileSync(new URL('../components/cotizaciones/CotizacionForm.js', import.meta.url), 'utf8')
+  const sinComentarios = form.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(l)).join('\n')
+  assert.ok(/id="cot-doc-pdf"/.test(sinComentarios), 'existe la copia para el PDF')
+  const zona = sinComentarios.slice(sinComentarios.indexOf('h.pdfOcupado && ('), sinComentarios.indexOf('id="cot-doc-pdf"'))
+  assert.ok(/position: 'fixed'/.test(zona), 'fuera del flujo: la barra lateral no la toca')
+  assert.ok(/width: ANCHO_DOC_COTIZACION/.test(zona), 'ancho FIJO, el mismo que se le pasa a html2canvas')
+  // Las dos copias son el MISMO componente con los MISMOS datos.
+  assert.equal((sinComentarios.match(/<CotizacionPreview /g) || []).length, 2)
 })
