@@ -45,6 +45,9 @@ export async function GET() {
 /**
  * POST /api/cotizaciones — crea una cotización. Body = objeto cotización.
  *
+ * El NÚMERO también lo pone el servidor —`createCotizacion` pisa el que venga
+ * en el body—, secuencial por día y único (ver lib/db/cotizaciones.js).
+ *
  * ⚠️ El DUEÑO lo pone el servidor, no el body. Antes `created_by` y
  * `created_by_nombre` viajaban en el cuerpo y se guardaban tal cual: se podía
  * crear una cotización a nombre de otro vendedor. Y como el dueño es lo único

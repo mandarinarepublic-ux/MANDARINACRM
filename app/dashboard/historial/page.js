@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { ESTADO_COT_LABEL, ESTADO_COT_CLASES } from '@/lib/cotizacion'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
@@ -380,6 +381,11 @@ export default function HistorialPage() {
                               <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-mandarina-500/15 text-mandarina-400">📄 COTIZACIÓN</span>
                               <span className="font-mono text-sm font-medium text-white truncate">{c.numero}</span>
                               <span className="text-gray-600 text-xs">{c.tienda === 'indstore' ? '🏪' : '🍊'}</span>
+                              {/* El estado se ve desde la lista: sin esto había que abrir
+                                  cada una para saber cuál se mandó y cuál se aprobó. */}
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COT_CLASES[c.estado] || ESTADO_COT_CLASES.borrador}`}>
+                                {ESTADO_COT_LABEL[c.estado] || ESTADO_COT_LABEL.borrador}
+                              </span>
                             </div>
                             <div className="text-xs text-gray-500 truncate">
                               {c.cliente_nombre || 'Sin cliente'} · {formatFechaCorta(c.fecha)}

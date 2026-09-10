@@ -1,5 +1,6 @@
 import { getCotizacion, updateCotizacion } from '@/lib/db/cotizaciones'
 import { usuarioDeSesion } from '@/lib/auth'
+import { esEstadoValido } from '@/lib/cotizacion'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +54,15 @@ export async function GET(_req, { params }) {
  * PATCH podría reasignar la cotización a otra persona — y el dueño es lo único
  * que decide quién la ve. Se pisa con el de la fila, que ya se leyó para
  * comprobar el permiso.
+ *
+ * ⚠️ El NÚMERO tampoco. Lo asigna el servidor al crear, secuencial y único
+ * (ver createCotizacion); si el PATCH lo dejara pasar, un vendedor podría
+ * ponerle a mano el de otra cotización y el índice único respondería con un
+ * error críptico —o peor, con el índice caído, dos iguales otra vez—. Se pisa
+ * con el de la fila.
+ *
+ * El ESTADO se valida acá y no solo en el CHECK de la base, para responder un
+ * 400 que se entienda en vez de un 500 con el texto del constraint.
  */
 export async function PATCH(req, { params }) {
   const permiso = await cotizacionPermitida(params.id)
@@ -60,8 +70,12 @@ export async function PATCH(req, { params }) {
 
   try {
     const patch = await req.json()
+    if (patch.estado !== undefined && !esEstadoValido(patch.estado)) {
+      return Response.json({ error: `estado inválido: ${patch.estado}` }, { status: 400 })
+    }
     const row = await updateCotizacion(params.id, {
       ...patch,
+      numero: permiso.row.numero,
       created_by: permiso.row.created_by,
       created_by_nombre: permiso.row.created_by_nombre,
     })

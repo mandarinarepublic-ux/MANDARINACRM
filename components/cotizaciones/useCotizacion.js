@@ -125,18 +125,51 @@ export function useCotizacion(initial, user, onCreated) {
       data = await res.json()
       if (!res.ok) throw new Error(data?.error || 'Error al guardar')
       const saved = data.cotizacion
-      if (saved) {
-        const eraNueva = !cotizacion.id
-        setCotizacion((c) => ({ ...c, id: saved.id, updated_at: saved.updated_at }))
-        showToast('✅ Cotización guardada')
-        if (eraNueva && onCreated) onCreated(saved.id)
-      }
+      if (!saved) throw new Error('El servidor no devolvió la cotización')
+      const eraNueva = !cotizacion.id
+      // Número y estado vienen del SERVIDOR: el número lo asigna él al crear
+      // (secuencial, único) y el estado puede haberlo pisado el CHECK.
+      setCotizacion((c) => ({ ...c, id: saved.id, numero: saved.numero, estado: saved.estado, updated_at: saved.updated_at }))
+      showToast(eraNueva ? `✅ Cotización ${saved.numero} creada` : '✅ Cotización guardada')
+      if (eraNueva && onCreated) onCreated(saved.id)
+      return saved
     } catch (e) {
       showToast('❌ ' + (e.message || 'Error al guardar'))
+      return null
     } finally {
       setSaving(false)
     }
   }, [cotizacion, totales, user, onCreated])
+
+  /**
+   * Cambia el estado (borrador / enviada / aprobada / rechazada).
+   *
+   * Si la cotización ya existe se guarda AL INSTANTE, solo ese campo: marcar
+   * una como aprobada es una decisión puntual y no puede depender de que
+   * después alguien se acuerde de apretar «Guardar». Si todavía no existe, se
+   * queda en el estado local y viaja con el POST.
+   */
+  const cambiarEstado = useCallback(async (estado) => {
+    const anterior = cotizacion.estado
+    setCotizacion((c) => ({ ...c, estado }))
+    if (!cotizacion.id) return true
+    try {
+      const res = await fetch(`/api/cotizaciones/${cotizacion.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'No se pudo cambiar el estado')
+      return true
+    } catch (e) {
+      // Se vuelve al estado anterior: dejar «Aprobada» en pantalla cuando la
+      // base dice «Borrador» es una mentira que se descubre en el historial.
+      setCotizacion((c) => ({ ...c, estado: anterior }))
+      showToast('❌ ' + (e.message || 'No se pudo cambiar el estado'))
+      return false
+    }
+  }, [cotizacion.id, cotizacion.estado])
 
   /**
    * Arma el PDF de la cotización tal como se ve en «Vista previa».
@@ -153,12 +186,20 @@ export function useCotizacion(initial, user, onCreated) {
    * a las fotos.
    */
   const armarPdf = useCallback(async () => {
+    // ⚠️ Una cotización NUEVA se guarda antes de generar nada: el número lo
+    // asigna el servidor al crear, y un PDF sin número —o con «Se asigna al
+    // guardar» impreso— no se le puede mandar a nadie. Si guardar falla, el
+    // toast ya lo dijo y acá no hay PDF que hacer.
+    if (!cotizacion.id) {
+      const saved = await save()
+      if (!saved) throw new Error('Primero hay que poder guardar la cotización')
+    }
     // El documento solo existe en el DOM en modo vista: en edición no hay nada
     // que capturar.
     setMode('vista')
     await dejarPintar()
     return pdfDeDocumento('cot-doc', { anchoPx: ANCHO_DOC_COTIZACION })
-  }, [])
+  }, [cotizacion.id, save])
 
   const nombreArchivo = useCallback(
     () => `${String(cotizacion.numero || 'cotizacion').trim()}.pdf`,
@@ -207,7 +248,11 @@ export function useCotizacion(initial, user, onCreated) {
       if (navigator.canShare?.({ files: [archivo] })) {
         try {
           await navigator.share({ files: [archivo], title: `Cotización ${cotizacion.numero || ''}`.trim(), text: texto })
-          showToast('✅ Cotización compartida')
+          // Se compartió DE VERDAD (la hoja del sistema resolvió): pasa a
+          // «enviada» sola. Solo desde borrador — una aprobada que se reenvía
+          // no vuelve atrás.
+          if (cotizacion.estado === 'borrador') await cambiarEstado('enviada')
+          showToast('✅ Cotización compartida y marcada como enviada')
           return
         } catch (e) {
           // Cerrar la hoja de compartir NO es un fallo: no hay nada que avisar
@@ -223,19 +268,23 @@ export function useCotizacion(initial, user, onCreated) {
       // Sin número, `wa.me` abre WhatsApp para elegir el contacto a mano. Es
       // mejor que no abrir nada: el vendedor ya tiene el PDF descargado.
       window.open(`https://wa.me/${num}?text=${encodeURIComponent(texto)}`, '_blank')
-      showToast(`📎 PDF descargado (${nombre}). Adjúntalo en el chat que se abrió.`, 9000)
+      // Acá NO se marca como enviada: el vendedor todavía tiene que adjuntar el
+      // archivo a mano, y puede no hacerlo. Un estado que dice «enviada» cuando
+      // solo se descargó es una mentira, y las mentiras del sistema se aprenden
+      // a ignorar. Se le recuerda, que es lo honesto.
+      showToast(`📎 PDF descargado (${nombre}). Adjúntalo en el chat que se abrió y, cuando lo mandes, marca la cotización como Enviada.`, 12000)
     } catch (e) {
       showToast('❌ ' + (e?.message || 'No se pudo compartir la cotización'))
     } finally {
       setPdfOcupado(null)
     }
-  }, [pdfOcupado, armarPdf, nombreArchivo, cotizacion, totales.total])
+  }, [pdfOcupado, armarPdf, nombreArchivo, cotizacion, totales.total, cambiarEstado])
 
   return {
     cotizacion, setCotizacion, updCot, setTienda,
     updProducto, updTalla, toggleTallas,
     addProducto, removeProducto, duplicateProducto,
     totales, mode, setMode, saving, toast, pdfOcupado,
-    save, exportPDF, compartirWhatsApp,
+    save, cambiarEstado, exportPDF, compartirWhatsApp,
   }
 }

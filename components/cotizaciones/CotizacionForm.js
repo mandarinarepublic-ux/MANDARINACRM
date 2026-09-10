@@ -1,5 +1,6 @@
 'use client'
 import { useCotizacion } from './useCotizacion'
+import { ESTADOS, ESTADO_COT_LABEL, ESTADO_COT_CLASES, NUMERO_PENDIENTE } from '@/lib/cotizacion'
 import TiendaToggle from './TiendaToggle'
 import ProductoCard from './ProductoCard'
 import ResumenPanel from './ResumenPanel'
@@ -31,7 +32,7 @@ export default function CotizacionForm({ initial, user, onCreated }) {
         <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 mr-auto min-w-0">
             <span className="font-display font-bold text-white text-sm truncate">Cotización</span>
-            <span className="text-xs text-gray-500 font-mono truncate">{c.numero}</span>
+            <span className="text-xs text-gray-500 font-mono truncate">{c.numero || NUMERO_PENDIENTE}</span>
           </div>
           <TiendaToggle tienda={c.tienda} onChange={h.setTienda} />
           <div className="inline-flex bg-gray-800 rounded-lg p-0.5 gap-0.5">
@@ -71,16 +72,38 @@ export default function CotizacionForm({ initial, user, onCreated }) {
             <div className="card p-4 mb-6 flex items-end gap-4 flex-wrap">
               <div className="flex-1 min-w-[180px]">
                 <div className="label">Número de cotización</div>
-                <input className="input font-mono" value={c.numero} onChange={(e) => h.updCot('numero', e.target.value)} />
+                {/* Solo lectura: lo asigna el servidor al crear, secuencial por
+                    día y único. Antes se editaba a mano y era la otra puerta
+                    por la que entraban dos iguales. */}
+                <div className="input font-mono text-gray-300 bg-gray-800/60 cursor-default select-all" title="Lo asigna el sistema al guardar">
+                  {c.numero || <span className="text-gray-500 font-sans">{NUMERO_PENDIENTE}</span>}
+                </div>
               </div>
               <div className="min-w-[150px]">
                 <div className="label">Fecha</div>
                 <input className="input" type="date" value={c.fecha} onChange={(e) => h.updCot('fecha', e.target.value)} />
               </div>
               <div className="flex items-center gap-2 pb-1">
-                <span className="badge bg-yellow-500/20 text-yellow-400">⏳ Borrador</span>
                 <span className="text-xs text-gray-500">{completos}/4 secciones</span>
               </div>
+            </div>
+
+            {/* Estado. Antes era un badge FIJO «⏳ Borrador»: la columna existía y
+                se guardaba, pero no había forma de cambiarla, así que ninguna
+                cotización pasó nunca de borrador. Cambiarlo guarda al instante
+                (ver cambiarEstado). «Enviada» se marca sola al compartir por
+                WhatsApp desde el celular. */}
+            <div className="card p-4 mb-6 flex items-center gap-3 flex-wrap">
+              <div className="label mb-0 mr-1">Estado</div>
+              <div className="inline-flex bg-gray-800 rounded-lg p-0.5 gap-0.5 flex-wrap">
+                {ESTADOS.map((e) => (
+                  <button key={e} type="button" onClick={() => h.cambiarEstado(e)}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${c.estado === e ? ESTADO_COT_CLASES[e] + ' ring-1 ring-current' : 'text-gray-400 hover:text-white'}`}>
+                    {ESTADO_COT_LABEL[e]}
+                  </button>
+                ))}
+              </div>
+              {!c.id && <span className="text-[11px] text-gray-500">Se guarda con la cotización.</span>}
             </div>
 
             {/* 01 Cliente */}
