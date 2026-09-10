@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react'
 import {
   nuevaCotizacion, nuevoProducto, calcTotales, sumaTallas, shortId,
-  numeroWhatsApp, textoWhatsAppCotizacion, ANCHO_DOC_COTIZACION,
+  numeroWhatsApp, textoWhatsAppCotizacion, ANCHO_DOC_COTIZACION, faltantesCotizacion,
 } from '@/lib/cotizacion'
 import { pdfDeDocumento, dejarPintar } from '@/lib/generarPdf'
 
@@ -98,6 +98,13 @@ export function useCotizacion(initial, user, onCreated) {
   const totales = calcTotales(cotizacion.productos, cotizacion.descuento)
 
   const save = useCallback(async () => {
+    // Antes de pedir: el servidor lo rechaza igual, pero un aviso claro acá
+    // le ahorra al vendedor el viaje y le dice QUÉ falta.
+    const faltan = faltantesCotizacion(cotizacion)
+    if (faltan.length) {
+      showToast(`⚠️ Para guardar falta ${faltan.join(' y ')}.`, 7000)
+      return null
+    }
     setSaving(true)
     try {
       const payload = {

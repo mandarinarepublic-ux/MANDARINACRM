@@ -1,6 +1,6 @@
 import { getCotizacion, updateCotizacion } from '@/lib/db/cotizaciones'
 import { usuarioDeSesion } from '@/lib/auth'
-import { esEstadoValido } from '@/lib/cotizacion'
+import { esEstadoValido, faltantesCotizacion } from '@/lib/cotizacion'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,6 +72,13 @@ export async function PATCH(req, { params }) {
     const patch = await req.json()
     if (patch.estado !== undefined && !esEstadoValido(patch.estado)) {
       return Response.json({ error: `estado inválido: ${patch.estado}` }, { status: 400 })
+    }
+    // Solo si el patch toca cliente o prendas: un cambio de estado solo
+    // (`{ estado }`) no puede quedar bloqueado por cómo esté el resto de la
+    // fila. Se valida lo que QUEDARÍA guardado, no el patch suelto.
+    if ('cliente_nombre' in patch || 'productos' in patch) {
+      const faltan = faltantesCotizacion({ ...permiso.row, ...patch })
+      if (faltan.length) return Response.json({ error: `Faltan datos: ${faltan.join(' y ')}` }, { status: 400 })
     }
     const row = await updateCotizacion(params.id, {
       ...patch,

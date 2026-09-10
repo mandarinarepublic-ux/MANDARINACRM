@@ -1,5 +1,6 @@
 import { listCotizaciones, createCotizacion } from '@/lib/db/cotizaciones'
 import { usuarioDeSesion } from '@/lib/auth'
+import { faltantesCotizacion } from '@/lib/cotizacion'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,9 @@ export async function POST(req) {
 
   try {
     const body = await req.json()
+    // La validación vive acá y no solo en el formulario: la API es la puerta.
+    const faltan = faltantesCotizacion(body)
+    if (faltan.length) return Response.json({ error: `Faltan datos: ${faltan.join(' y ')}` }, { status: 400 })
     const row = await createCotizacion({
       ...body,
       created_by: quien.usuario.USUARIO_ID,

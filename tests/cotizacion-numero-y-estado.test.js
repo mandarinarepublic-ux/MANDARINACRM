@@ -14,7 +14,7 @@ import assert from 'node:assert'
 import { readFileSync } from 'node:fs'
 import {
   prefijoNumero, numeroSiguiente, nuevaCotizacion, esEstadoValido,
-  ESTADOS, ESTADO_COT_LABEL, ESTADO_COT_CLASES, NUMERO_PENDIENTE,
+  ESTADOS, ESTADO_COT_LABEL, ESTADO_COT_CLASES, NUMERO_PENDIENTE, faltantesCotizacion,
 } from '../lib/cotizacion.js'
 
 const fuente = (ruta) => readFileSync(new URL(ruta, import.meta.url), 'utf8')
@@ -161,4 +161,49 @@ test('☠️ crear no navega con router.replace: mataria el PDF en curso', () =>
   const page = sinComentarios(fuente('../app/dashboard/cotizacion/page.js'))
   assert.ok(!/onCreated=\{\(id\) => router\.replace/.test(page), 'volvio el router.replace')
   assert.ok(/history\.replaceState/.test(page), 'la URL cambia sin desmontar')
+})
+
+// ── No se guarda una cotizacion vacia ───────────────────────────────────────
+
+const prenda = (extra = {}) => ({ nombre: 'Camiseta', precio: '12.5', cantidad: 10, ...extra })
+
+test('☠️ una cotizacion vacia no se puede guardar', () => {
+  assert.ok(faltantesCotizacion(nuevaCotizacion()).length >= 2, 'sin cliente y sin prenda: faltan las dos cosas')
+  assert.ok(faltantesCotizacion({}).length >= 2)
+  assert.ok(faltantesCotizacion(null).length >= 2)
+})
+
+test('con cliente y una prenda completa, se guarda', () => {
+  assert.deepEqual(faltantesCotizacion({ cliente_nombre: 'Ana', productos: [prenda()] }), [])
+})
+
+test('el nombre del cliente no puede ser solo espacios', () => {
+  const f = faltantesCotizacion({ cliente_nombre: '   ', productos: [prenda()] })
+  assert.deepEqual(f, ['el nombre del cliente'])
+})
+
+test('una prenda cuenta solo si tiene nombre, precio y cantidad', () => {
+  for (const rota of [{ nombre: '' }, { precio: '' }, { precio: '0' }, { precio: 'abc' }, { cantidad: 0 }, { cantidad: '' }]) {
+    const f = faltantesCotizacion({ cliente_nombre: 'Ana', productos: [prenda(rota)] })
+    assert.equal(f.length, 1, `deberia faltar la prenda con ${JSON.stringify(rota)}`)
+    assert.ok(/prenda/.test(f[0]))
+  }
+  // Basta UNA valida entre varias vacias (el formulario arranca con una vacia).
+  assert.deepEqual(faltantesCotizacion({ cliente_nombre: 'Ana', productos: [{ nombre: '' }, prenda()] }), [])
+})
+
+test('el telefono NO bloquea: hay cotizaciones que van por correo', () => {
+  assert.deepEqual(faltantesCotizacion({ cliente_nombre: 'Ana', cliente_tel: '', productos: [prenda()] }), [])
+})
+
+test('☠️ la API es la puerta: POST y PATCH validan, el formulario solo avisa', () => {
+  const post = sinComentarios(fuente('../app/api/cotizaciones/route.js'))
+  assert.ok(/faltantesCotizacion\(body\)/.test(post) && /status: 400/.test(post), 'el POST rechaza con 400')
+  const ruta = sinComentarios(fuente('../app/api/cotizaciones/[id]/route.js'))
+  const patch = ruta.slice(ruta.indexOf('export async function PATCH'))
+  assert.ok(/faltantesCotizacion\(\{ \.\.\.permiso\.row, \.\.\.patch \}\)/.test(patch), 'el PATCH valida lo que QUEDARIA guardado')
+  assert.ok(/'cliente_nombre' in patch \|\| 'productos' in patch/.test(patch), 'y solo si toca esos campos: cambiar el estado no se bloquea')
+  const hook = sinComentarios(fuente('../components/cotizaciones/useCotizacion.js'))
+  const save = hook.slice(hook.indexOf('const save = useCallback'), hook.indexOf('const cambiarEstado'))
+  assert.ok(/faltantesCotizacion\(cotizacion\)/.test(save) && /return null/.test(save), 'el formulario avisa antes de pedir')
 })
