@@ -107,15 +107,24 @@ export default function CotizacionPreview({ cotizacion: c, totales }) {
           </div>
         </div>
 
-        {/* Beneficios */}
-        {c.beneficios?.trim() && (
+        {/* Beneficios y notas.
+            ⚠️ Las notas van en su PROPIA condición, no anidadas en la de los
+            beneficios. Lo estaban: si el vendedor vaciaba «Beneficios», las
+            notas —que es donde se escriben los acuerdos del pedido— se caían
+            del documento con ellas, sin aviso ni hueco, y del lado del
+            formulario seguían escritas y llenas. */}
+        {(c.beneficios?.trim() || c.notas?.trim()) && (
           <div style={{ marginTop: 24, background: th.accentLight, border: `1px solid ${th.accentBorder}`, borderRadius: 12, padding: '14px 18px' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: th.accentText, marginBottom: 6 }}>🎁 BENEFICIOS EXCLUSIVOS</div>
-            {c.beneficios.split('\n').filter((l) => l.trim()).map((l, i) => (
-              <div key={i} style={{ fontSize: 12.5, color: '#374151', padding: '1px 0' }}>✓ {l}</div>
-            ))}
+            {c.beneficios?.trim() && (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 800, color: th.accentText, marginBottom: 6 }}>🎁 BENEFICIOS EXCLUSIVOS</div>
+                {c.beneficios.split('\n').filter((l) => l.trim()).map((l, i) => (
+                  <div key={i} style={{ fontSize: 12.5, color: '#374151', padding: '1px 0' }}>✓ {l}</div>
+                ))}
+              </>
+            )}
             {c.notas?.trim() && (
-              <div style={{ marginTop: 8, fontSize: 12.5, color: '#374151' }}><b>Detalles del pedido:</b> {c.notas}</div>
+              <div style={{ marginTop: c.beneficios?.trim() ? 8 : 0, fontSize: 12.5, color: '#374151' }}><b>Detalles del pedido:</b> {c.notas}</div>
             )}
           </div>
         )}

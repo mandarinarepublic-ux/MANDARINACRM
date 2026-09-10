@@ -124,7 +124,11 @@ export default function HistorialPage() {
   // VENDEDOR/VENDEDOR_YAW → solo las suyas; ADMIN → todas.
   async function loadCotizaciones(u) {
     try {
-      const res = await fetch(`/api/cotizaciones?createdBy=${encodeURIComponent(u.id || '')}&rol=${encodeURIComponent(u.rol || '')}&_t=${Date.now()}`, { cache: 'no-store' })
+      // Sin `createdBy` ni `rol` en la url: quién es y qué puede ver lo decide el
+      // servidor con la cookie firmada. Mandarlos era el agujero (ver el ⚠️ de
+      // app/api/cotizaciones/route.js); hoy los ignora, y pedirlos igual haría
+      // creer que todavía sirven de algo.
+      const res = await fetch(`/api/cotizaciones?_t=${Date.now()}`, { cache: 'no-store' })
       const data = await res.json()
       setCotizaciones(data.cotizaciones || [])
     } catch (_) { /* best-effort: si falla, el historial de pedidos sigue igual */ }
