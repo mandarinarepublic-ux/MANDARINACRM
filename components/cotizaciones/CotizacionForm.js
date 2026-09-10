@@ -43,7 +43,17 @@ export default function CotizacionForm({ initial, user, onCreated }) {
           <button type="button" onClick={h.save} disabled={h.saving} className="btn-secondary text-sm py-1.5 px-4">
             {h.saving ? 'Guardando…' : '💾 Guardar'}
           </button>
-          <button type="button" onClick={h.exportPDF} className="btn-primary text-sm py-1.5 px-4">📄 Exportar PDF</button>
+          <button type="button" onClick={h.exportPDF} disabled={!!h.pdfOcupado} className="btn-primary text-sm py-1.5 px-4">
+            {h.pdfOcupado === 'guardar' ? '⏳ Generando…' : '📄 Exportar PDF'}
+          </button>
+          {/* Verde de WhatsApp y no la paleta del CRM: es el único botón que
+              saca la cotización HACIA EL CLIENTE, y conviene que no se confunda
+              con los que solo mueven papeles adentro. */}
+          <button type="button" onClick={h.compartirWhatsApp} disabled={!!h.pdfOcupado}
+            className="text-sm py-1.5 px-4 rounded-xl font-semibold text-white transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: '#25D366' }}>
+            {h.pdfOcupado === 'whatsapp' ? '⏳ Preparando…' : '📲 Enviar por WhatsApp'}
+          </button>
         </div>
         <div className="h-[3px] bg-gray-800">
           <div className="h-[3px] bg-mandarina-500 transition-all duration-500" style={{ width: `${pct}%` }} />

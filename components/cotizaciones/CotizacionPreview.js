@@ -1,6 +1,6 @@
 'use client'
 import { themeFor } from '@/lib/tiendaTheme'
-import { TALLAS, tecnicaLabel, calcSubtotalProducto, fmtUSD, IVA_RATE, FIRMA_COTIZACION } from '@/lib/cotizacion'
+import { TALLAS, tecnicaLabel, calcSubtotalProducto, fmtUSD, IVA_RATE, FIRMA_COTIZACION, ANCHO_DOC_COTIZACION } from '@/lib/cotizacion'
 
 const TALLA_LABEL = { XS: 'XS', S: 'S', M: 'M', L: 'L', XL: 'XL', XXL: '2XL', XXXL: '3XL' }
 
@@ -27,7 +27,7 @@ export default function CotizacionPreview({ cotizacion: c, totales }) {
   ].filter(([, v]) => v && String(v).trim())
 
   return (
-    <div id="cot-doc" className="mx-auto bg-white text-gray-900 shadow-xl" style={{ maxWidth: 820, fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
+    <div id="cot-doc" className="mx-auto bg-white text-gray-900 shadow-xl" style={{ maxWidth: ANCHO_DOC_COTIZACION, fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
       {/* Header con gradiente de la tienda */}
       <div style={{ background: th.gradient, color: '#fff', padding: '26px 40px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>

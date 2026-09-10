@@ -2,7 +2,9 @@
 import { useState, useCallback } from 'react'
 import {
   nuevaCotizacion, nuevoProducto, calcTotales, sumaTallas, shortId,
+  numeroWhatsApp, textoWhatsAppCotizacion, ANCHO_DOC_COTIZACION,
 } from '@/lib/cotizacion'
+import { pdfDeDocumento, dejarPintar } from '@/lib/generarPdf'
 
 // Hook con TODA la lógica de estado de una cotización.
 // Guarda vía fetch a /api/cotizaciones (el navegador NUNCA toca Supabase directo;
@@ -20,11 +22,17 @@ export function useCotizacion(initial, user, onCreated) {
   }))
   const [mode, setMode] = useState('edicion') // 'edicion' | 'vista'
   const [saving, setSaving] = useState(false)
+  // Cuál de los dos botones de salida está trabajando: null | 'guardar' |
+  // 'whatsapp'. Es un nombre y no un booleano para que la espera se muestre en
+  // el botón que se apretó y no en los dos a la vez. Los DOS se apagan mientras
+  // tanto: armar el PDF tarda un par de segundos y dos clics seguidos disparan
+  // dos capturas de ~14 MB cada una.
+  const [pdfOcupado, setPdfOcupado] = useState(null)
   const [toast, setToast] = useState(null)
 
-  const showToast = (msg) => {
+  const showToast = (msg, ms = 4000) => {
     setToast(msg)
-    setTimeout(() => setToast(null), 4000)
+    setTimeout(() => setToast(null), ms)
   }
 
   const updCot = useCallback((field, value) => {
@@ -130,16 +138,104 @@ export function useCotizacion(initial, user, onCreated) {
     }
   }, [cotizacion, totales, user, onCreated])
 
-  const exportPDF = useCallback(() => {
+  /**
+   * Arma el PDF de la cotización tal como se ve en «Vista previa».
+   *
+   * ⚠️ Antes esto era `setMode('vista')` + `setTimeout(400)` + `window.print()`.
+   * O sea que no generaba ningún PDF: le pasaba el documento al navegador y
+   * dejaba que él paginara, con sus márgenes, su cabecera y su pie. Por eso una
+   * cotización de UNA prenda salía en dos hojas, con la segunda casi vacía.
+   *
+   * ⚠️ Y los 400 ms eran una apuesta a que React hubiera pintado y las fotos de
+   * Cloudinary hubieran bajado. Cuando no, se imprimía la pantalla de EDICIÓN, o
+   * el documento sin las fotos de las prendas. Ahora se espera a las dos cosas:
+   * `dejarPintar()` al render y `esperarImagenes()` (dentro de `pdfDeDocumento`)
+   * a las fotos.
+   */
+  const armarPdf = useCallback(async () => {
+    // El documento solo existe en el DOM en modo vista: en edición no hay nada
+    // que capturar.
     setMode('vista')
-    setTimeout(() => window.print(), 400)
+    await dejarPintar()
+    return pdfDeDocumento('cot-doc', { anchoPx: ANCHO_DOC_COTIZACION })
   }, [])
+
+  const nombreArchivo = useCallback(
+    () => `${String(cotizacion.numero || 'cotizacion').trim()}.pdf`,
+    [cotizacion.numero],
+  )
+
+  const exportPDF = useCallback(async () => {
+    if (pdfOcupado) return
+    setPdfOcupado('guardar')
+    try {
+      const { pdf, encaje } = await armarPdf()
+      pdf.save(nombreArchivo())
+      showToast(`✅ PDF guardado · ${encaje.hojas === 1 ? '1 hoja' : `${encaje.hojas} hojas`}`)
+    } catch (e) {
+      showToast('❌ ' + (e?.message || 'No se pudo generar el PDF'))
+    } finally {
+      setPdfOcupado(null)
+    }
+  }, [pdfOcupado, armarPdf, nombreArchivo])
+
+  /**
+   * Compartir la cotización por WhatsApp.
+   *
+   * Son DOS caminos porque el navegador no siempre puede mandar un archivo:
+   *
+   *  1. En el celular existe la hoja de compartir del sistema
+   *     (`navigator.share` con archivos) y WhatsApp aparece ahí: el PDF va
+   *     adjunto de verdad, en un toque.
+   *  2. En el escritorio no existe. WhatsApp Web NO acepta archivos por enlace
+   *     —`wa.me` solo lleva texto—, así que lo honesto es descargar el PDF y
+   *     abrir el chat con el mensaje escrito, para que el vendedor lo adjunte.
+   *     Prometer más que eso sería un botón que no hace lo que dice.
+   *
+   * ⚠️ El PDF sale del MISMO `armarPdf` que el botón de guardar: lo que se
+   * comparte es exactamente lo que el vendedor acaba de revisar.
+   */
+  const compartirWhatsApp = useCallback(async () => {
+    if (pdfOcupado) return
+    setPdfOcupado('whatsapp')
+    try {
+      const { pdf } = await armarPdf()
+      const nombre = nombreArchivo()
+      const texto = textoWhatsAppCotizacion(cotizacion, totales.total)
+      const archivo = new File([pdf.output('blob')], nombre, { type: 'application/pdf' })
+
+      if (navigator.canShare?.({ files: [archivo] })) {
+        try {
+          await navigator.share({ files: [archivo], title: `Cotización ${cotizacion.numero || ''}`.trim(), text: texto })
+          showToast('✅ Cotización compartida')
+          return
+        } catch (e) {
+          // Cerrar la hoja de compartir NO es un fallo: no hay nada que avisar
+          // y menos que arreglar.
+          if (e?.name === 'AbortError') return
+          // Cualquier otro fallo (permisos, activación vencida en iOS) cae al
+          // camino de abajo en vez de dejar al vendedor sin cotización.
+        }
+      }
+
+      pdf.save(nombre)
+      const num = numeroWhatsApp(cotizacion.cliente_tel)
+      // Sin número, `wa.me` abre WhatsApp para elegir el contacto a mano. Es
+      // mejor que no abrir nada: el vendedor ya tiene el PDF descargado.
+      window.open(`https://wa.me/${num}?text=${encodeURIComponent(texto)}`, '_blank')
+      showToast(`📎 PDF descargado (${nombre}). Adjúntalo en el chat que se abrió.`, 9000)
+    } catch (e) {
+      showToast('❌ ' + (e?.message || 'No se pudo compartir la cotización'))
+    } finally {
+      setPdfOcupado(null)
+    }
+  }, [pdfOcupado, armarPdf, nombreArchivo, cotizacion, totales.total])
 
   return {
     cotizacion, setCotizacion, updCot, setTienda,
     updProducto, updTalla, toggleTallas,
     addProducto, removeProducto, duplicateProducto,
-    totales, mode, setMode, saving, toast,
-    save, exportPDF,
+    totales, mode, setMode, saving, toast, pdfOcupado,
+    save, exportPDF, compartirWhatsApp,
   }
 }
