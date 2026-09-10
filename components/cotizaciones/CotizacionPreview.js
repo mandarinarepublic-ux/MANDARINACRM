@@ -32,8 +32,15 @@ export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-do
     ['Manga der.', p.manga_derecha], ['Manga izq.', p.manga_izquierda],
   ].filter(([, v]) => v && String(v).trim())
 
+  // Con la PROPORCIÓN de una hoja A4 (210 × 297, ver A4_MM en
+  // lib/generarPdf.js) y el pie pegado abajo. Antes el documento medía lo que
+  // midiera su contenido: una cotización de una prenda era una tira que
+  // terminaba a los dos tercios de la hoja, con el resto en blanco. Con
+  // `aspect-ratio` la hoja tiene SIEMPRE su forma; si el contenido es más alto
+  // que eso, crece (min-height:auto no lo recorta) y ahí sí se pagina.
   return (
-    <div id={id} className="mx-auto bg-white text-gray-900 shadow-xl" style={{ maxWidth: ANCHO_DOC_COTIZACION, fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
+    <div id={id} className="mx-auto bg-white text-gray-900 shadow-xl"
+      style={{ maxWidth: ANCHO_DOC_COTIZACION, fontFamily: 'var(--font-inter), system-ui, sans-serif', display: 'flex', flexDirection: 'column', aspectRatio: '210 / 297' }}>
       {/* Header con gradiente de la tienda */}
       <div style={{ background: th.gradient, color: '#fff', padding: '26px 40px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -161,8 +168,9 @@ export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-do
         </div>
       </div>
 
-      {/* Footer */}
-      <div style={{ background: th.gradient, color: '#fff', textAlign: 'center', padding: '10px', fontSize: 11.5, fontWeight: 600 }}>
+      {/* Footer. `marginTop: auto` lo lleva al borde inferior de la hoja: el
+          aire que sobre queda entre las firmas y el pie, como en un membrete. */}
+      <div style={{ marginTop: 'auto', background: th.gradient, color: '#fff', textAlign: 'center', padding: '10px', fontSize: 11.5, fontWeight: 600 }}>
         {th.nombre} · {th.web}
       </div>
     </div>

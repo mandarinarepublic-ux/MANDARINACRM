@@ -182,3 +182,20 @@ test('☠️ el PDF sale de una copia oculta a ANCHO FIJO, no del documento visi
   // Las dos copias son el MISMO componente con los MISMOS datos.
   assert.equal((sinComentarios.match(/<CotizacionPreview /g) || []).length, 2)
 })
+
+test('una hoja EXACTA, con el redondeo de subpixel, sigue siendo una hoja a tamaño natural', () => {
+  // El documento se dibuja con proporcion A4 exacta; el redondeo lo deja en
+  // 297.02 mm. Eso no puede caer en «encogida» al 99.99%.
+  const e = encajeEnA4(ANCHO, UNA_HOJA_PX + 0.4)
+  assert.equal(e.modo, 'una-hoja')
+  assert.equal(e.x, 0)
+  assert.ok(e.alto <= A4_MM.alto)
+})
+
+test('☠️ el documento tiene forma de hoja A4 y el pie va abajo', () => {
+  const prev = readFileSync(new URL('../components/cotizaciones/CotizacionPreview.js', import.meta.url), 'utf8')
+  const sinComentarios = prev.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(l)).join('\n')
+  assert.ok(new RegExp(`aspectRatio: '${A4_MM.ancho} / ${A4_MM.alto}'`).test(sinComentarios), 'la proporcion es la de A4_MM')
+  assert.ok(/flexDirection: 'column'/.test(sinComentarios))
+  assert.ok(/marginTop: 'auto', background: th\.gradient/.test(sinComentarios), 'el pie se va al borde inferior')
+})
