@@ -53,7 +53,7 @@ export default function CotizacionForm({ initial, user, onCreated }) {
       <div className="flex-1 overflow-y-auto">
         {h.mode === 'vista' ? (
           <div className="py-6 px-4">
-            <CotizacionPreview cotizacion={c} totales={totales} asesor={c.created_by_nombre || user?.nombre} />
+            <CotizacionPreview cotizacion={c} totales={totales} />
           </div>
         ) : (
           <div className="max-w-4xl mx-auto px-4 py-5 pb-24">

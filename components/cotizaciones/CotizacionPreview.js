@@ -1,6 +1,6 @@
 'use client'
 import { themeFor } from '@/lib/tiendaTheme'
-import { TALLAS, tecnicaLabel, calcSubtotalProducto, fmtUSD, IVA_RATE } from '@/lib/cotizacion'
+import { TALLAS, tecnicaLabel, calcSubtotalProducto, fmtUSD, IVA_RATE, FIRMA_COTIZACION } from '@/lib/cotizacion'
 
 const TALLA_LABEL = { XS: 'XS', S: 'S', M: 'M', L: 'L', XL: 'XL', XXL: '2XL', XXXL: '3XL' }
 
@@ -13,7 +13,13 @@ function fechaLarga(iso) {
 }
 
 // Documento blanco que se envía al cliente (y se imprime como PDF).
-export default function CotizacionPreview({ cotizacion: c, totales, asesor }) {
+//
+// ⚠️ Ya NO recibe quién lo armó. Lo recibía y lo imprimía como firma, pero ese
+// era el nombre de la CUENTA del CRM que creó la cotización; ahora el documento
+// lo firma la gerencia (ver FIRMA_COTIZACION en lib/cotizacion.js). El vendedor
+// se sigue guardando en la fila (`created_by`, `created_by_nombre`) para saber
+// de quién es puertas adentro.
+export default function CotizacionPreview({ cotizacion: c, totales }) {
   const th = themeFor(c.tienda)
   const posiciones = (p) => [
     ['Pecho', p.diseno_pecho], ['Espalda', p.diseno_espalda],
@@ -126,8 +132,9 @@ export default function CotizacionPreview({ cotizacion: c, totales, asesor }) {
           Quedamos atentos a cualquier consulta y con gusto ajustamos la propuesta a su medida.
         </p>
         <p style={{ fontSize: 13, margin: '10px 0 0' }}>Atentamente,</p>
-        <p style={{ fontSize: 13, fontWeight: 700, margin: '2px 0 0' }}>{asesor || 'Equipo comercial'}</p>
-        <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>{th.telefono} · {th.web}</p>
+        <p style={{ fontSize: 13, fontWeight: 700, margin: '2px 0 0' }}>{FIRMA_COTIZACION.nombre}</p>
+        <p style={{ fontSize: 12, color: '#374151', margin: 0 }}>{FIRMA_COTIZACION.cargo}</p>
+        <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>{FIRMA_COTIZACION.telefono} · {th.web}</p>
 
         {/* Firmas */}
         <div style={{ marginTop: 34, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40 }}>
