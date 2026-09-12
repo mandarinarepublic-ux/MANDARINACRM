@@ -18,6 +18,7 @@ const NAV_ALL = [
   { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'], oAcceso:'VENTAS' },
   { href:'/dashboard/historial',    label:'Historial',    icon:'📋', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/catalogo',     label:'Catálogo',     icon:'🛍️', roles:['ADMIN','VENDEDOR'] },
+  { href:'/dashboard/producto-nuevo', label:'Subir producto', icon:'🏷️', roles:['ADMIN'] },
   { href:'/dashboard/cotizacion',   label:'Cotización',   icon:'📄', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'] },
   { href:'/dashboard/corte',       label:'Corte',        icon:'✂️', roles:['ADMIN','CORTE'] },
   { href:'/dashboard/produccion',   label:'Producción',   icon:'🏭', roles:['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','CORTE'] },
