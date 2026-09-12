@@ -27,9 +27,9 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
   // El dominio depende de la tienda: mostrar siempre el de Mandarina engaña al
   // revisar un producto de INDSTORE, y esta vista previa existe justo para que
   // se vea como lo vera el cliente.
-  // ⚠️ El dominio público real de INDSTORE está SIN CONFIRMAR: mientras tanto
-  // se muestra solo la ruta, sin inventar un dominio que podría estar mal.
-  const dominio = tienda === 'INDSTORE' ? '' : 'mandarinaec.com'
+  // Confirmados el 12-sep-2026 leyendo cada tienda en su propio admin de Shopify,
+  // no de memoria: Mandarina Republic → mandarinaec.com, Ind Store → indlovers.com.
+  const dominio = tienda === 'INDSTORE' ? 'indlovers.com' : 'mandarinaec.com'
   const rutaProducto = `products/${ficha.handle || '…'}`
 
   async function buscarCategoria() {
