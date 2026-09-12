@@ -96,8 +96,33 @@ test('☠️ se reintenta mientras las fotos siguen procesandose', () => {
   // Shopify procesa las imagenes async. Sin reintento, verificar una sola vez
   // dejaria en borrador casi toda publicacion legitima.
   assert.ok(/for \(let intento/.test(publicar), 'falta el bucle de reintento')
-  assert.ok(/soloFaltanFotos/.test(publicar),
-    'el reintento tiene que ser SOLO por fotos: si esta roto por otra cosa, no se insiste')
+  assert.ok(/fotosEnProceso/.test(publicar),
+    'el reintento tiene que decidirse por fotosEnProceso: si esta roto por otra cosa, no se insiste')
+})
+
+test('☠️ el reintento NO se decide leyendo el texto de los fallos', () => {
+  // Atar un reintento a la redaccion de un mensaje es atarlo a algo que cambia:
+  // basta que alguien reescriba un aviso para que deje de dispararse, en
+  // silencio y justo en el caso para el que existe. La decision sale de los
+  // ESTADOS de la media, que calcula verificarProducto.
+  assert.ok(!/\/imagen\/i|\/foto\/i|\/imagen\|foto\/i/.test(publicar),
+    'el reintento esta mirando el texto de los fallos en vez de fotosEnProceso')
+})
+
+test('☠️ un fallo despues de crear NO se reporta como si no hubiera pasado nada', () => {
+  // Desde que el producto existe en Shopify, cualquier excepcion tiene que
+  // contarse como fallo PERO dejar llegar la respuesta con el productoId. Si
+  // sube al catch de afuera, el usuario ve un 500 sin enlace y con un producto
+  // vivo en la tienda que no sabe que existe.
+  const iActive = publicar.indexOf("'ACTIVE'")
+  const tramo = publicar.slice(iActive)
+  assert.ok(/catch/.test(tramo), 'el bloque de activar/publicar no atrapa lo suyo')
+  assert.ok(/El producto se creó/.test(publicar), 'no se avisa que el producto SI existe')
+})
+
+test('el sync tiene timeout: no puede matar la respuesta de una publicacion buena', () => {
+  assert.ok(/AbortSignal\.timeout/.test(publicar),
+    'sin timeout, un sync lento agota maxDuration y un producto publicado se reporta como fallo')
 })
 
 test('☠️ ACTIVE no basta: tambien se publica al canal Tienda Online', () => {

@@ -74,15 +74,18 @@ export async function POST(req) {
       fotos: (body.fotos || []).length,
     }
     const espera = (ms) => new Promise((r) => setTimeout(r, ms))
-    const soloFaltanFotos = (f) => f.length > 0 && f.every((x) => /imagen/i.test(x))
 
+    // ⚠️ Se reintenta segun `fotosEnProceso`, que verificarProducto calcula con
+    // los ESTADOS de la media — nunca leyendo el texto de los fallos.
+    const INTENTOS = 6
     let ok = false
     let fallos = []
-    for (let intento = 0; intento < 6; intento++) {
+    for (let intento = 0; intento < INTENTOS; intento++) {
       const leido = await shopifyGraphQLPorTienda(tienda, LEER, { id: producto.id })
-      ;({ ok, fallos } = verificarProducto(leido?.product, esperado))
-      if (ok || !soloFaltanFotos(fallos)) break   // listo, o roto por otra cosa
-      await espera(2000)                          // hasta ~12 s de procesado
+      let enProceso
+      ;({ ok, fallos, fotosEnProceso: enProceso } = verificarProducto(leido?.product, esperado))
+      if (ok || !enProceso) break                        // listo, o roto por otra cosa
+      if (intento < INTENTOS - 1) await espera(2000)     // hasta ~10 s de procesado
     }
 
     // 3) Solo si esta sano, se activa Y se publica al canal Tienda Online.
@@ -90,34 +93,68 @@ export async function POST(req) {
     let activado = false
     let urlTienda = null
     if (ok && !body.soloBorrador) {
-      const act = await shopifyGraphQLPorTienda(tienda, SET, {
-        input: { id: producto.id, status: 'ACTIVE' },
-      })
-      activado = act?.productSet?.product?.status === 'ACTIVE'
-
-      // ☠️ ACTIVE no basta: hay que publicarlo al canal o nadie lo ve en la web.
-      const canales = await shopifyGraphQLPorTienda(tienda, CANALES)
-      const online = (canales?.publications?.nodes || [])
-        .find((c) => /online store|tienda online/i.test(c.name || ''))
-      if (online) {
-        const pub = await shopifyGraphQLPorTienda(tienda, PUBLICAR_CANAL, {
-          id: producto.id, input: [{ publicationId: online.id }],
+      // ☠️ Desde aqui el producto YA EXISTE en Shopify. Si algo revienta y la
+      // excepcion sube al catch de afuera, el usuario ve un 500 generico sin
+      // productoId ni enlace, creyendo que no se publico nada — y hay un
+      // producto vivo en la tienda. Por eso este bloque atrapa lo suyo y SIEMPRE
+      // deja llegar la respuesta final con el id: un fallo aqui se cuenta, no se
+      // convierte en "no pasó nada".
+      try {
+        const act = await shopifyGraphQLPorTienda(tienda, SET, {
+          input: { id: producto.id, status: 'ACTIVE' },
         })
-        urlTienda = pub?.publishablePublish?.publishable?.onlineStoreUrl || null
+        const errAct = act?.productSet?.userErrors || []
+        activado = act?.productSet?.product?.status === 'ACTIVE'
+        if (!activado) {
+          fallos.push(errAct.length
+            ? `Shopify no pudo activar el producto: ${errAct.map((e) => e.message).join(' · ')}`
+            : 'Shopify no pudo activar el producto')
+        }
+
+        // ☠️ ACTIVE no basta: hay que publicarlo al canal o nadie lo ve en la web.
+        if (activado) {
+          const canales = await shopifyGraphQLPorTienda(tienda, CANALES)
+          const online = (canales?.publications?.nodes || [])
+            .find((c) => /online store|tienda online/i.test(c.name || ''))
+
+          if (!online) {
+            // Distinto de "el canal lo rechazo": aqui ni se intento.
+            fallos.push('No se encontró el canal Tienda Online en esta tienda de Shopify')
+          } else {
+            const pub = await shopifyGraphQLPorTienda(tienda, PUBLICAR_CANAL, {
+              id: producto.id, input: [{ publicationId: online.id }],
+            })
+            const errPub = pub?.publishablePublish?.userErrors || []
+            urlTienda = pub?.publishablePublish?.publishable?.onlineStoreUrl || null
+            if (!urlTienda) {
+              fallos.push(errPub.length
+                ? `El canal Tienda Online rechazó la publicación: ${errPub.map((e) => e.message).join(' · ')}`
+                : 'El producto está activo pero no quedó visible en la tienda online')
+            }
+          }
+        }
+      } catch (e) {
+        fallos.push(`El producto se creó, pero falló al activarlo o publicarlo: ${e.message}`)
       }
-      // Si no hay URL publica, el producto NO se ve aunque diga ACTIVO.
-      if (!urlTienda) {
-        ok = false
-        fallos.push('El producto está activo pero no quedó visible en la tienda online')
-      }
+
+      // La prueba de que se ve es la URL real, no que ninguna mutation fallara.
+      if (!urlTienda) ok = false
     }
 
     // 4) Refrescar el catalogo para que aparezca en los DOS inbox. Si falla, el
     //    producto SIGUE publicado: son dos estados distintos y se informan aparte.
+    // ⚠️ Con TIMEOUT a proposito. El sync pagina las DOS tiendas de Shopify, lee
+    // la hoja de Google y escribe en Sheets + Supabase: no es barato. Para cuando
+    // se lo llama, esta ruta ya gastó el productSet, hasta ~10 s de reintentos y
+    // tres mutaciones más. Si el total pasa de `maxDuration = 60`, el runtime
+    // corta la funcion y el usuario ve un fallo de PUBLICACION por un producto
+    // que sí quedó publicado y activo — justo lo que este bloque promete evitar.
+    // Un catch no salva de que te maten la funcion; un timeout sí.
     let sync = 'ok'
     try {
       const r = await fetch(new URL('/api/shopify/sync', req.url), {
         headers: { authorization: `Bearer ${process.env.CRON_SECRET || ''}` },
+        signal: AbortSignal.timeout(8000),
       })
       if (!r.ok) sync = 'falló'
     } catch { sync = 'falló' }
@@ -133,7 +170,11 @@ export async function POST(req) {
     const msg = String(e.message || e)
     // ⚠️ El token se cachea ~24 h en memoria (lib/shopify.js). Tras cambiar los
     // permisos en Shopify, una instancia tibia sigue con el token VIEJO.
-    if (/403/.test(msg)) {
+    // Anclado a `HTTP 403` (el formato que lanza lib/shopify.js) y no a `403` a
+    // secas: el mensaje trae hasta 200 caracteres del cuerpo de Shopify, y un
+    // "403" incrustado en un id daria el aviso del token cacheado por error —
+    // mandando a diagnosticar mal justo lo que este aviso quiere evitar.
+    if (/HTTP 403/.test(msg)) {
       return Response.json({
         error: 'Shopify rechazó la escritura (403). Puede ser el token cacheado de hasta 24 h: espera un momento y vuelve a intentar. Si sigue, revisa que la app tenga write_products.',
       }, { status: 403 })

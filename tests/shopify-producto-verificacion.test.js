@@ -95,3 +95,23 @@ test('no revienta si Shopify devuelve un producto vacio o nulo', () => {
     assert.ok(Array.isArray(r.fallos) && r.fallos.length > 0)
   }
 })
+
+test('☠️ `fotosEnProceso` distingue lo que se arregla SOLO con esperar', () => {
+  // De esto depende si la ruta reintenta o se rinde. Se calcula con los ESTADOS
+  // de la media, nunca leyendo el texto de los fallos.
+  const con = (nodes) => verificarProducto({ ...SANO, media: { nodes } }, ESPERADO)
+
+  // Todavia procesando: SI vale la pena volver a preguntar.
+  assert.equal(con([{ alt: 'x', status: 'PROCESSING' }]).fotosEnProceso, true)
+  assert.equal(con([{ alt: 'x', status: 'UPLOADED' }]).fotosEnProceso, true)
+
+  // Shopify aun no materializo el nodo: tambien es cuestion de tiempo.
+  assert.equal(con([]).fotosEnProceso, true, 'faltan medios: puede aparecer solo')
+
+  // FAILED es TERMINAL y un alt vacio no se llena solo: reintentar es regalar segundos.
+  assert.equal(con([{ alt: 'x', status: 'FAILED' }]).fotosEnProceso, false)
+  assert.equal(con([{ alt: '', status: 'READY' }]).fotosEnProceso, false)
+
+  // Todo bien: nada que esperar.
+  assert.equal(verificarProducto(SANO, ESPERADO).fotosEnProceso, false)
+})
