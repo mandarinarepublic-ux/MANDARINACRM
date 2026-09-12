@@ -324,12 +324,24 @@ test('sin SEO titulo o descripcion no pasa', () => {
   }
 })
 
-test('☠️ una foto en FAILED no cuenta aunque el numero cuadre', () => {
-  // Shopify descarga la imagen desde Cloudinary DESPUES de responder. Si la
-  // descarga falla, la media existe pero queda en FAILED: contar no alcanza.
-  const roto = { ...SANO, media: { nodes: [{ alt: 'x', status: 'FAILED' }] } }
+test('☠️ una foto que no esta READY no cuenta aunque el numero cuadre', () => {
+  // Shopify descarga y procesa la imagen DESPUES de responder. Mientras tanto
+  // la media existe pero NO esta lista: contar no alcanza.
+  for (const status of ['FAILED', 'PROCESSING', 'UPLOADED']) {
+    const roto = { ...SANO, media: { nodes: [{ alt: 'x', status }] } }
+    const r = verificarProducto(roto, ESPERADO)
+    assert.equal(r.ok, false, `dejo pasar una foto en ${status}`)
+    assert.ok(r.fallos.some((f) => /imagen|foto/i.test(f)))
+  }
+})
+
+test('☠️ una foto SIN campo status tampoco pasa: se falla cerrado', () => {
+  // MediaImage.status es NON_NULL en el esquema de Shopify: si no viene, algo
+  // anda mal. Tratar "no se si esta lista" como "esta lista" es fallar ABIERTO
+  // en la unica funcion que separa un producto roto de la tienda publica.
+  const roto = { ...SANO, media: { nodes: [{ alt: 'Chaqueta de Goku, frente' }] } }
   const r = verificarProducto(roto, ESPERADO)
-  assert.equal(r.ok, false)
+  assert.equal(r.ok, false, 'una foto sin status se colo como buena')
   assert.ok(r.fallos.some((f) => /imagen|foto/i.test(f)))
 })
 
@@ -400,9 +412,15 @@ export function verificarProducto(producto, esperado) {
   if (medios.length !== fotosPedidas) {
     fallos.push(`Se subieron ${fotosPedidas} fotos y Shopify dejó ${medios.length}`)
   }
-  // Shopify descarga la imagen DESPUES de responder: contar no alcanza.
-  const rotas = medios.filter((m) => m?.status && m.status !== 'READY')
-  if (rotas.length) fallos.push(`${rotas.length} imagen(es) no se pudieron procesar (estado ${rotas.map((m) => m.status).join(', ')})`)
+  // Shopify descarga y procesa la imagen DESPUES de responder: contar no alcanza.
+  //
+  // ☠️ Se exige READY, no "distinto de FAILED". `MediaImage.status` es NON_NULL
+  // en el esquema, asi que un status ausente significa que algo anda mal — y esta
+  // funcion tiene que fallar CERRADA: ante la duda, no se publica.
+  // La ESPERA de que el procesamiento termine no es problema de aqui: esta
+  // funcion es pura. La resuelve la ruta de publicar, releyendo con reintentos.
+  const rotas = medios.filter((m) => m?.status !== 'READY')
+  if (rotas.length) fallos.push(`${rotas.length} imagen(es) todavía no están listas (estado ${rotas.map((m) => m?.status || 'desconocido').join(', ')})`)
   const sinAlt = medios.filter((m) => !String(m?.alt || '').trim())
   if (sinAlt.length) fallos.push(`${sinAlt.length} imagen(es) quedaron sin alt text`)
 
@@ -807,6 +825,14 @@ test('un 403 avisa que puede ser el token cacheado', () => {
     'sin ese aviso se diagnostica mal un permiso que ya esta puesto')
 })
 
+test('☠️ se reintenta mientras las fotos siguen procesandose', () => {
+  // Shopify procesa las imagenes async. Sin reintento, verificar una sola vez
+  // dejaria en borrador casi toda publicacion legitima.
+  assert.ok(/for \(let intento/.test(publicar), 'falta el bucle de reintento')
+  assert.ok(/soloFaltanFotos/.test(publicar),
+    'el reintento tiene que ser SOLO por fotos: si esta roto por otra cosa, no se insiste')
+})
+
 test('☠️ ACTIVE no basta: tambien se publica al canal Tienda Online', () => {
   // La doc del esquema de Shopify lo dice: "Products with an active status
   // aren't automatically published to sales channels". Sin este paso el
@@ -890,13 +916,27 @@ export async function POST(req) {
     if (!producto?.id) return Response.json({ error: 'Shopify no devolvió el producto' }, { status: 502 })
 
     // 2) Releer de Shopify y verificar. NO se confia en la respuesta de arriba.
-    const leido = await shopifyGraphQLPorTienda(tienda, LEER, { id: producto.id })
+    //
+    // ☠️ Shopify procesa las imagenes de forma ASINCRONA: "images might not be
+    // immediately available after upload". Recien creado el producto, las fotos
+    // estan en UPLOADED o PROCESSING, no en READY — verificar una sola vez
+    // dejaria en borrador casi toda publicacion legitima. Por eso se reintenta
+    // mientras lo UNICO que falta sea que las fotos terminen de procesarse.
     const esperado = {
       tallas: body.tallas || [],
       fotos: (body.fotos || []).length,
     }
-    // eslint-disable-next-line prefer-const
-    let { ok, fallos } = verificarProducto(leido?.product, esperado)
+    const espera = (ms) => new Promise((r) => setTimeout(r, ms))
+    const soloFaltanFotos = (f) => f.length > 0 && f.every((x) => /imagen/i.test(x))
+
+    let ok = false
+    let fallos = []
+    for (let intento = 0; intento < 6; intento++) {
+      const leido = await shopifyGraphQLPorTienda(tienda, LEER, { id: producto.id })
+      ;({ ok, fallos } = verificarProducto(leido?.product, esperado))
+      if (ok || !soloFaltanFotos(fallos)) break   // listo, o roto por otra cosa
+      await espera(2000)                          // hasta ~12 s de procesado
+    }
 
     // 3) Solo si esta sano, se activa Y se publica al canal Tienda Online.
     //    `soloBorrador` es el boton Despublicar: se salta este paso entero.
