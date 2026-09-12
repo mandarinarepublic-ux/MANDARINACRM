@@ -15,6 +15,11 @@ export default function ProductoNuevoPage() {
   const [precioTachado, setPrecioTachado] = useState('')
   const [ficha, setFicha] = useState(null)
   const [res, setRes] = useState(null)
+  // ☠️ El id vive APARTE de `res` a proposito. Al volver a corregir se limpia
+  // `res` para que reaparezca la pantalla de revision, y si el id viviera solo
+  // ahi se perderia: el reintento mandaria `id: undefined` y Shopify CREARIA UN
+  // PRODUCTO DUPLICADO en vez de actualizar el que ya existe.
+  const [productoId, setProductoId] = useState(null)
   const [cargando, setCargando] = useState('')
   const [error, setError] = useState('')
 
@@ -53,11 +58,12 @@ export default function ProductoNuevoPage() {
         body: JSON.stringify({
           ...ficha, tienda, precio, precioTachado,
           // Si ya hubo un intento, se ACTUALIZA ese producto en vez de duplicar.
-          id: res?.productoId,
+          id: productoId,
         }),
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
+      if (d.productoId) setProductoId(d.productoId)
       setRes(d)
     } catch (e) { setError(e.message) } finally { setCargando('') }
   }
@@ -103,13 +109,33 @@ export default function ProductoNuevoPage() {
 
       {res && <ResultadoPublicacion res={res}
         onDespublicar={async () => {
-          await fetch('/api/productos-shopify/publicar', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...ficha, tienda, precio, id: res.productoId, soloBorrador: true }),
-          })
-          setRes({ ...res, activado: false })
+          // ☠️ Antes esta respuesta se ignoraba por completo: la pantalla decia
+          // «desactivado» aunque el POST hubiera fallado, y el producto seguia
+          // ACTIVO y visible en la tienda. Decirle al usuario lo contrario de lo
+          // que paso es peor que no tener el boton.
+          setCargando('despublicando'); setError('')
+          try {
+            const r = await fetch('/api/productos-shopify/publicar', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...ficha, tienda, precio, precioTachado,
+                id: productoId, soloBorrador: true,
+              }),
+            })
+            const d = await r.json().catch(() => ({}))
+            if (!r.ok) throw new Error(d.error || 'No se pudo despublicar')
+            setRes({ ...res, activado: false, urlTienda: null })
+          } catch (e) {
+            setError(`${e.message}. ⚠️ El producto puede seguir visible en la tienda.`)
+          } finally { setCargando('') }
         }}
-        onOtro={() => { setFotos([]); setPrecio(''); setPrecioTachado(''); setFicha(null); setRes(null) }} />}
+        // Vuelve a la pantalla de revision SIN perder el productoId, para que el
+        // reintento actualice el producto que ya existe en vez de duplicarlo.
+        onCorregir={() => setRes(null)}
+        onOtro={() => {
+          setFotos([]); setPrecio(''); setPrecioTachado('')
+          setFicha(null); setRes(null); setProductoId(null); setError('')
+        }} />}
 
       {error && <p style={{ color: '#c00' }}>{error}</p>}
     </main>
