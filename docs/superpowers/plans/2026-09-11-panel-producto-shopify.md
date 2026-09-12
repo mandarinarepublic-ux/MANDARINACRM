@@ -839,7 +839,10 @@ test('☠️ se publica con productSet, NUNCA con productCreate', () => {
 
 test('☠️ nace en DRAFT y solo se activa despues de verificar', () => {
   const iDraft = publicar.indexOf("'DRAFT'")
-  const iVerif = publicar.indexOf('verificarProducto')
+  // 'verificarProducto(' con paréntesis: así se agarra la LLAMADA, no el import
+  // de arriba del archivo (que también dice "verificarProducto" y adelantaría
+  // el índice de forma artificial, haciendo fallar la prueba con codigo CORRECTO).
+  const iVerif = publicar.indexOf('verificarProducto(')
   const iActive = publicar.indexOf("'ACTIVE'")
   assert.ok(iDraft > -1 && iVerif > -1 && iActive > -1, 'faltan DRAFT, verificarProducto o ACTIVE')
   assert.ok(iDraft < iVerif && iVerif < iActive,
