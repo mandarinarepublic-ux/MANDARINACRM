@@ -1,8 +1,9 @@
 'use client'
 import { useState, useCallback } from 'react'
 import {
-  nuevaCotizacion, nuevoProducto, calcTotales, sumaTallas, shortId,
+  nuevaCotizacion, nuevoProducto, sumaTallas, shortId,
   numeroWhatsApp, textoWhatsAppCotizacion, ANCHO_DOC_COTIZACION,
+  opcionesDe, nuevaOpcion, rangoTotales,
 } from '@/lib/cotizacion'
 import { pdfDeDocumento, dejarPintar } from '@/lib/generarPdf'
 
@@ -14,12 +15,13 @@ import { pdfDeDocumento, dejarPintar } from '@/lib/generarPdf'
 // @param user     sesión { id, nombre, rol } de localStorage
 // @param onCreated callback(id) tras crear una nueva (para navegar a /[id])
 export function useCotizacion(initial, user, onCreated) {
-  const [cotizacion, setCotizacion] = useState(() => ({
-    ...nuevaCotizacion(),
-    ...(initial || {}),
-    // productos siempre array con al menos uno
-    productos: (initial?.productos?.length ? initial.productos : nuevaCotizacion().productos),
-  }))
+  const [cotizacion, setCotizacion] = useState(() => {
+    const base = { ...nuevaCotizacion(), ...(initial || {}) }
+    // Se normaliza UNA vez, al cargar. De aquí en adelante el estado SIEMPRE
+    // tiene `opciones` y ninguna otra parte del hook pregunta por la forma vieja.
+    return { ...base, opciones: opcionesDe(base) }
+  })
+  const [opcionActiva, setOpcionActiva] = useState(0)
   const [mode, setMode] = useState('edicion') // 'edicion' | 'vista'
   const [saving, setSaving] = useState(false)
   // Cuál de los dos botones de salida está trabajando: null | 'guardar' |
@@ -43,68 +45,118 @@ export function useCotizacion(initial, user, onCreated) {
     setCotizacion((c) => ({ ...c, tienda }))
   }, [])
 
+  /**
+   * Cambia los productos de la opción activa.
+   *
+   * ☠️ Existe para que las seis operaciones de producto no repitan el mismo
+   * recorrido: repetirlo es como una de ellas termina escribiendo en la opción
+   * equivocada sin que nadie lo note.
+   */
+  const setProductosActiva = useCallback((fn) => {
+    setCotizacion((c) => {
+      const opciones = c.opciones.map((o, i) =>
+        i === opcionActiva ? { ...o, productos: fn(o.productos) } : o)
+      return { ...c, opciones }
+    })
+  }, [opcionActiva])
+
   const updProducto = useCallback((id, field, value) => {
-    setCotizacion((c) => ({
-      ...c,
-      productos: c.productos.map((p) => (p.id === id ? { ...p, [field]: value } : p)),
-    }))
-  }, [])
+    setProductosActiva((ps) => ps.map((p) => (p.id === id ? { ...p, [field]: value } : p)))
+  }, [setProductosActiva])
 
   const updTalla = useCallback((id, talla, qty) => {
-    setCotizacion((c) => ({
-      ...c,
-      productos: c.productos.map((p) => {
-        if (p.id !== id) return p
-        const tallas = { ...p.tallas, [talla]: Math.max(0, Number(qty) || 0) }
-        return { ...p, tallas, cantidad: sumaTallas(tallas) }
-      }),
+    setProductosActiva((ps) => ps.map((p) => {
+      if (p.id !== id) return p
+      const tallas = { ...p.tallas, [talla]: Math.max(0, Number(qty) || 0) }
+      return { ...p, tallas, cantidad: sumaTallas(tallas) }
     }))
-  }, [])
+  }, [setProductosActiva])
 
   const toggleTallas = useCallback((id, on) => {
-    setCotizacion((c) => ({
-      ...c,
-      productos: c.productos.map((p) => {
-        if (p.id !== id) return p
-        if (on) return { ...p, conTallas: true, cantidad: sumaTallas(p.tallas) }
-        return { ...p, conTallas: false }
-      }),
+    setProductosActiva((ps) => ps.map((p) => {
+      if (p.id !== id) return p
+      if (on) return { ...p, conTallas: true, cantidad: sumaTallas(p.tallas) }
+      return { ...p, conTallas: false }
     }))
-  }, [])
+  }, [setProductosActiva])
 
   const addProducto = useCallback(() => {
-    setCotizacion((c) => ({ ...c, productos: [...c.productos, nuevoProducto()] }))
-  }, [])
+    setProductosActiva((ps) => [...ps, nuevoProducto()])
+  }, [setProductosActiva])
 
   const removeProducto = useCallback((id) => {
-    setCotizacion((c) => ({
-      ...c,
-      productos: c.productos.length > 1 ? c.productos.filter((p) => p.id !== id) : c.productos,
-    }))
-  }, [])
+    setProductosActiva((ps) => (ps.length > 1 ? ps.filter((p) => p.id !== id) : ps))
+  }, [setProductosActiva])
 
   const duplicateProducto = useCallback((id) => {
+    setProductosActiva((ps) => {
+      const idx = ps.findIndex((p) => p.id === id)
+      if (idx < 0) return ps
+      const copia = { ...ps[idx], tallas: { ...ps[idx].tallas }, id: shortId() }
+      const out = [...ps]
+      out.splice(idx + 1, 0, copia)
+      return out
+    })
+  }, [setProductosActiva])
+
+  const addOpcion = useCallback(() => {
     setCotizacion((c) => {
-      const orig = c.productos.find((p) => p.id === id)
-      if (!orig) return c
-      const idx = c.productos.findIndex((p) => p.id === id)
-      const copia = { ...orig, tallas: { ...orig.tallas }, id: shortId() }
-      const productos = [...c.productos]
-      productos.splice(idx + 1, 0, copia)
-      return { ...c, productos }
+      const letra = String.fromCharCode(65 + c.opciones.length) // A, B, C…
+      const opciones = [...c.opciones, nuevaOpcion(`Opción ${letra}`, c.entrega_dias)]
+      // La primera vez que se agrega una segunda, la que ya estaba también
+      // necesita nombre: si no, el documento pintaría «Opción B» junto a un
+      // bloque sin título.
+      if (opciones[0] && !opciones[0].nombre) opciones[0] = { ...opciones[0], nombre: 'Opción A' }
+      setOpcionActiva(opciones.length - 1)
+      return { ...c, opciones }
     })
   }, [])
 
-  const totales = calcTotales(cotizacion.productos, cotizacion.descuento)
+  const removeOpcion = useCallback((id) => {
+    setCotizacion((c) => {
+      if (c.opciones.length <= 1) return c // siempre queda al menos una
+      const opciones = c.opciones.filter((o) => o.id !== id)
+      setOpcionActiva((i) => Math.min(i, opciones.length - 1))
+      return { ...c, opciones }
+    })
+  }, [])
+
+  const updOpcion = useCallback((id, campo, valor) => {
+    setCotizacion((c) => ({
+      ...c,
+      opciones: c.opciones.map((o) => (o.id === id ? { ...o, [campo]: valor } : o)),
+    }))
+  }, [])
+
+  const rango = rangoTotales(cotizacion)
+  // `totales` sigue existiendo: es lo que mira el panel lateral mientras editas,
+  // y ahí lo que importa es la opción en la que estás parado.
+  const totales = rango.porOpcion[opcionActiva]?.totales || rango.min
+  // Los productos de la opción activa: el formulario los pinta directo, sin
+  // volver a preguntar por `cotizacion.productos` (esa raíz queda ignorada en
+  // cuanto hay `opciones`, ver `opcionesDe` en lib/cotizacion.js).
+  const productos = cotizacion.opciones[opcionActiva]?.productos || []
 
   const save = useCallback(async () => {
+    // Una opción sin productos con cantidad y precio saldría en el documento
+    // como un bloque de $0. Mejor no dejar guardar que mandarle eso al cliente.
+    // ⚠️ Solo aplica cuando hay más de una opción: con una sola, la cotización
+    // a medio llenar se tiene que poder guardar como borrador, que es como se
+    // trabaja hoy.
+    const vacias = cotizacion.opciones
+      .map((o, i) => ({ nombre: o.nombre || `Opción ${String.fromCharCode(65 + i)}`, o }))
+      .filter(({ o }) => !o.productos.some((p) =>
+        (Number(p.cantidad) || 0) > 0 && (parseFloat(String(p.precio)) || 0) > 0))
+    if (cotizacion.opciones.length > 1 && vacias.length) {
+      showToast(`Sin guardar: ${vacias.map((v) => v.nombre).join(', ')} no tiene productos con cantidad y precio.`)
+      setSaving(false)
+      return null
+    }
     setSaving(true)
     try {
       const payload = {
         ...cotizacion,
-        subtotal: +totales.subtotal.toFixed(2),
-        iva_monto: +totales.iva.toFixed(2),
-        total: +totales.total.toFixed(2),
+        ...rango.guardar,
         created_by: cotizacion.created_by || user?.id || null,
         created_by_nombre: cotizacion.created_by_nombre || user?.nombre || null,
       }
@@ -139,7 +191,7 @@ export function useCotizacion(initial, user, onCreated) {
     } finally {
       setSaving(false)
     }
-  }, [cotizacion, totales, user, onCreated])
+  }, [cotizacion, rango, user, onCreated])
 
   /**
    * Cambia el estado (borrador / enviada / aprobada / rechazada).
@@ -245,7 +297,7 @@ export function useCotizacion(initial, user, onCreated) {
     try {
       const { pdf } = await armarPdf()
       const nombre = nombreArchivo()
-      const texto = textoWhatsAppCotizacion(cotizacion, totales.total)
+      const texto = textoWhatsAppCotizacion(cotizacion, rango.min.total, rango.max.total)
       const archivo = new File([pdf.output('blob')], nombre, { type: 'application/pdf' })
 
       if (navigator.canShare?.({ files: [archivo] })) {
@@ -281,13 +333,16 @@ export function useCotizacion(initial, user, onCreated) {
     } finally {
       setPdfOcupado(null)
     }
-  }, [pdfOcupado, armarPdf, nombreArchivo, cotizacion, totales.total, cambiarEstado])
+  }, [pdfOcupado, armarPdf, nombreArchivo, cotizacion, rango, cambiarEstado])
 
   return {
     cotizacion, setCotizacion, updCot, setTienda,
+    productos,
+    opciones: cotizacion.opciones, opcionActiva, setOpcionActiva,
+    addOpcion, removeOpcion, updOpcion,
     updProducto, updTalla, toggleTallas,
     addProducto, removeProducto, duplicateProducto,
-    totales, mode, setMode, saving, toast, pdfOcupado,
+    totales, rango, mode, setMode, saving, toast, pdfOcupado,
     save, cambiarEstado, exportPDF, compartirWhatsApp,
   }
 }
