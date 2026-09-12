@@ -1489,12 +1489,21 @@ git commit -m "Formulario de revision del producto antes de publicar"
 ```jsx
 'use client'
 // components/producto-nuevo/ResultadoPublicacion.js
-export default function ResultadoPublicacion({ res, onDespublicar, onOtro }) {
+export default function ResultadoPublicacion({ res, onDespublicar, onCorregir, onOtro }) {
+  // ☠️ Son TRES estados, no dos. La ruta puede devolver `activado: true` con
+  // `ok: false` cuando el producto se activo pero no se pudo publicar al canal:
+  // esta ACTIVO por API y aun asi INVISIBLE para los clientes. Con solo dos
+  // titulos, ese caso salia en verde «Publicado y activo» encima de una lista
+  // roja de fallos — un mensaje que se contradice a si mismo.
+  const titulo = !res.activado
+    ? { color: '#c60', texto: '⚠️ Quedó en BORRADOR: la verificación encontró problemas' }
+    : res.urlTienda
+      ? { color: '#060', texto: '✓ Publicado y visible en la tienda' }
+      : { color: '#c60', texto: '⚠️ Activo, pero NO visible para los clientes' }
+
   return (
     <div>
-      {res.activado
-        ? <h3 style={{ color: '#060' }}>✓ Publicado y activo en la tienda</h3>
-        : <h3 style={{ color: '#c60' }}>⚠️ Quedó en BORRADOR: la verificación encontró problemas</h3>}
+      <h3 style={{ color: titulo.color }}>{titulo.texto}</h3>
 
       {!res.ok && (
         <ul style={{ color: '#c00' }}>{res.fallos.map((f) => <li key={f}>{f}</li>)}</ul>
@@ -1509,6 +1518,13 @@ export default function ResultadoPublicacion({ res, onDespublicar, onOtro }) {
       {res.urlTienda
         ? <p><a href={res.urlTienda} target="_blank" rel="noreferrer">Ver en la tienda →</a></p>
         : <p><small>Todavía no tiene página pública en la tienda.</small></p>}
+      {/* ☠️ Sin esta salida, un fallo dejaba al usuario sin forma de reintentar
+          ESTE producto: el bloque de revision ya no se ve, y «Cargar otro» borra
+          el id. Volver a subir las mismas fotos mandaria `id: undefined` y
+          Shopify CREARIA UN DUPLICADO, dejando huerfano el anterior. */}
+      {!res.ok && (
+        <button type="button" onClick={onCorregir}>Corregir y reintentar este producto</button>
+      )}
       <button type="button" onClick={onDespublicar}>Despublicar</button>
       <button type="button" onClick={onOtro}>Cargar otro producto</button>
     </div>
@@ -1535,6 +1551,11 @@ export default function ProductoNuevoPage() {
   const [precioTachado, setPrecioTachado] = useState('')
   const [ficha, setFicha] = useState(null)
   const [res, setRes] = useState(null)
+  // ☠️ El id vive APARTE de `res` a proposito. Al volver a corregir se limpia
+  // `res` para que reaparezca la pantalla de revision, y si el id viviera solo
+  // ahi se perderia: el reintento mandaria `id: undefined` y Shopify CREARIA UN
+  // PRODUCTO DUPLICADO en vez de actualizar el que ya existe.
+  const [productoId, setProductoId] = useState(null)
   const [cargando, setCargando] = useState('')
   const [error, setError] = useState('')
 
@@ -1573,11 +1594,12 @@ export default function ProductoNuevoPage() {
         body: JSON.stringify({
           ...ficha, tienda, precio, precioTachado,
           // Si ya hubo un intento, se ACTUALIZA ese producto en vez de duplicar.
-          id: res?.productoId,
+          id: productoId,
         }),
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
+      if (d.productoId) setProductoId(d.productoId)
       setRes(d)
     } catch (e) { setError(e.message) } finally { setCargando('') }
   }
@@ -1623,13 +1645,33 @@ export default function ProductoNuevoPage() {
 
       {res && <ResultadoPublicacion res={res}
         onDespublicar={async () => {
-          await fetch('/api/productos-shopify/publicar', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...ficha, tienda, precio, id: res.productoId, soloBorrador: true }),
-          })
-          setRes({ ...res, activado: false })
+          // ☠️ Antes esta respuesta se ignoraba por completo: la pantalla decia
+          // «desactivado» aunque el POST hubiera fallado, y el producto seguia
+          // ACTIVO y visible en la tienda. Decirle al usuario lo contrario de lo
+          // que paso es peor que no tener el boton.
+          setCargando('despublicando'); setError('')
+          try {
+            const r = await fetch('/api/productos-shopify/publicar', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...ficha, tienda, precio, precioTachado,
+                id: productoId, soloBorrador: true,
+              }),
+            })
+            const d = await r.json().catch(() => ({}))
+            if (!r.ok) throw new Error(d.error || 'No se pudo despublicar')
+            setRes({ ...res, activado: false, urlTienda: null })
+          } catch (e) {
+            setError(`${e.message}. ⚠️ El producto puede seguir visible en la tienda.`)
+          } finally { setCargando('') }
         }}
-        onOtro={() => { setFotos([]); setPrecio(''); setPrecioTachado(''); setFicha(null); setRes(null) }} />}
+        // Vuelve a la pantalla de revision SIN perder el productoId, para que el
+        // reintento actualice el producto que ya existe en vez de duplicarlo.
+        onCorregir={() => setRes(null)}
+        onOtro={() => {
+          setFotos([]); setPrecio(''); setPrecioTachado('')
+          setFicha(null); setRes(null); setProductoId(null); setError('')
+        }} />}
 
       {error && <p style={{ color: '#c00' }}>{error}</p>}
     </main>
