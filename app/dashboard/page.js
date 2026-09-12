@@ -322,6 +322,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           {href:'/dashboard/impresion',   icon:'🖨️',label:'Imprimir'},
           {href:'/dashboard/despacho',    icon:'🚚',label:'Despachos'},
           {href:'/dashboard/usuarios',    icon:'👥',label:'Usuarios'},
+          {href:'/dashboard/producto-nuevo',icon:'🏷️',label:'Subir producto'},
         ].map(a=>(
           <Link key={a.href} href={a.href} className="card p-4 flex flex-col items-center gap-2 hover:border-gray-600 transition-all">
             <span className="text-2xl">{a.icon}</span>
