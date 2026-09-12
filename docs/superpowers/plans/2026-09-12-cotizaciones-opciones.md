@@ -2,7 +2,7 @@
 
 > **Para quien ejecute esto:** SUB-SKILL OBLIGATORIA: usa `superpowers:subagent-driven-development` (recomendado) o `superpowers:executing-plans` para implementar tarea por tarea. Los pasos usan casillas (`- [ ]`).
 
-**Goal:** Que una cotización pueda ofrecer varios escenarios completos ("Opción A: $920 · Opción B: $1.380") y que el precio por unidad muestre cuánto cuesta de verdad con IVA.
+**Goal:** Que una cotización pueda ofrecer varios escenarios completos ("Opción A: $920 · Opción B: $1.380"), que el precio por unidad muestre cuánto cuesta de verdad con IVA, y que la descripción del producto acepte varias líneas sin deformar el documento.
 
 **Architecture:** Las opciones son una capa nueva y **opcional**. Una función pura, `opcionesDe()`, normaliza al leer y devuelve siempre una lista de opciones; las cotizaciones que ya existen producen una sola opción implícita. De ahí en adelante ningún otro archivo pregunta si la cotización es vieja o nueva.
 
@@ -34,13 +34,14 @@
 | `components/cotizaciones/useCotizacion.js` | **Modificar.** El estado pasa a trabajar por opción activa |
 | `components/cotizaciones/OpcionesTabs.js` | **Nuevo.** Las pestañas |
 | `components/cotizaciones/CotizacionForm.js` | **Modificar.** Montar las pestañas |
-| `components/cotizaciones/CotizacionPreview.js` | **Modificar.** Un bloque por opción + el precio con IVA |
+| `components/cotizaciones/CotizacionPreview.js` | **Modificar.** Un bloque por opción, el precio con IVA y las descripciones largas legibles |
+| `components/cotizaciones/ProductoCard.js` | **Modificar.** Descripción multilínea y el precio unitario en la caja del subtotal |
 | `components/cotizaciones/ResumenPanel.js` | **Modificar.** Mostrar el rango |
 | `app/dashboard/historial/page.js` | **Modificar.** El badge con el rango |
 
 ---
 
-### Task 1: El precio por unidad con IVA
+### Task 1: El precio por unidad con IVA y la forma de la descripción
 
 **Files:**
 - Modify: `lib/cotizacion.js` (agregar junto a `calcSubtotalProducto`)
@@ -48,7 +49,9 @@
 
 **Interfaces:**
 - Consumes: `IVA_RATE` (ya existe)
-- Produces: `precioUnitarioConIva(p, ivaRate = IVA_RATE) -> number`
+- Produces: `precioUnitarioConIva(p, ivaRate = IVA_RATE) -> number` y `descripcionEsBloque(texto) -> boolean`
+
+Las dos son funciones puras del mismo archivo y las usan las mismas pantallas (Tareas 8 y 10), así que van juntas: separarlas en dos tareas duplicaría el ciclo de pruebas sin que un revisor pudiera aprobar una y rechazar la otra.
 
 - [ ] **Paso 1: Escribir las pruebas que fallan**
 
@@ -89,6 +92,33 @@ test('acepta otra tasa de IVA sin tocar la constante', () => {
 })
 ```
 
+Y en el mismo archivo, las pruebas del ayudante de la descripción:
+
+```js
+import { descripcionEsBloque } from '../lib/cotizacion.js'
+
+test('una descripcion corta de una linea sigue siendo pastilla', () => {
+  // La pastilla redondeada se diseño para esto y se ve bien.
+  assert.equal(descripcionEsBloque('Azul marino'), false)
+  assert.equal(descripcionEsBloque('Negro, logo pecho izq.'), false)
+})
+
+test('☠️ con saltos de linea SIEMPRE es bloque, por corto que sea', () => {
+  // Si se pintara como pastilla, los saltos se perderian y el texto saldria
+  // de corrido — que es justo lo que se esta arreglando.
+  assert.equal(descripcionEsBloque('Azul\nRojo'), true)
+})
+
+test('un texto largo es bloque aunque no tenga saltos', () => {
+  assert.equal(descripcionEsBloque('x'.repeat(41)), true)
+  assert.equal(descripcionEsBloque('x'.repeat(40)), false)
+})
+
+test('vacio o nulo no es bloque y no revienta', () => {
+  for (const t of ['', '   ', null, undefined]) assert.equal(descripcionEsBloque(t), false)
+})
+```
+
 - [ ] **Paso 2: Correr y verificar que fallan**
 
 Run: `node --test tests/cotizacion-precio-unitario.test.js`
@@ -109,6 +139,21 @@ Agregar en `lib/cotizacion.js`, justo debajo de `calcSubtotalProducto`:
  */
 export function precioUnitarioConIva(p, ivaRate = IVA_RATE) {
   return (parseFloat(String(p?.precio)) || 0) * (1 + ivaRate)
+}
+
+/**
+ * ¿La descripcion del producto se pinta como BLOQUE de texto o como pastilla?
+ *
+ * La pastilla redondeada del documento se diseño para «Azul marino»: con un
+ * parrafo se deforma y queda horrible. La forma sigue al contenido.
+ *
+ * ☠️ Con saltos de linea es bloque SIEMPRE, por corto que sea: en una pastilla
+ * los saltos se pierden y el texto sale de corrido, que es justo el problema
+ * que se esta arreglando.
+ */
+export function descripcionEsBloque(texto) {
+  const t = String(texto ?? '')
+  return t.includes('\n') || t.trim().length > 40
 }
 ```
 
@@ -912,16 +957,34 @@ Por cada opción, si `rango.varias`, pintar un encabezado con el nombre y sus d�
 
 ⚠️ El encabezado de la cotización (línea ~58) muestra hoy `totales.total`. Con varias opciones tiene que mostrar el rango: `{fmtUSD(rango.min.total)} – {fmtUSD(rango.max.total)}`.
 
-- [ ] **Paso 3: Verificar**
+- [ ] **Paso 3: La descripción larga deja de ser una pastilla**
+
+Hoy el color/descripción se pinta **siempre** como una pastilla redondeada (línea ~87). Esa forma se diseñó para «Azul marino»; con un párrafo se deforma. Y ahora que el campo acepta saltos de línea (Tarea 10), en una pastilla se perderían.
+
+Reemplazar ese `<span>` por:
+
+```jsx
+                {p.color && (descripcionEsBloque(p.color) ? (
+                  <div style={{ marginTop: 5, fontSize: 11, color: '#475569', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>
+                    {p.color}
+                  </div>
+                ) : (
+                  <span style={{ display: 'inline-block', marginTop: 5, fontSize: 11, padding: '2px 9px', borderRadius: 999, background: th.accentLight, color: th.accentText, border: `1px solid ${th.accentBorder}` }}>{p.color}</span>
+                ))}
+```
+
+⚠️ **`whiteSpace: 'pre-wrap'` es lo que hace que los saltos de línea se vean.** Sin eso el texto sale de corrido igual que ahora, aunque el campo los guarde.
+
+- [ ] **Paso 4: Verificar**
 
 Run: `npm run build`
 Expected: compila limpio.
 
-- [ ] **Paso 4: Commit**
+- [ ] **Paso 5: Commit**
 
 ```bash
 git add components/cotizaciones/CotizacionPreview.js
-git commit -m "El documento muestra un bloque por opcion y el precio con IVA"
+git commit -m "El documento: un bloque por opcion, precio con IVA y descripciones largas legibles"
 ```
 
 ---
@@ -980,6 +1043,69 @@ Expected: PASS (salvo `pivot-areas`) y build limpio.
 ```bash
 git add components/cotizaciones/ResumenPanel.js app/dashboard/historial/page.js
 git commit -m "El rango de la cotizacion en el panel y en el Historial"
+```
+
+---
+
+### Task 10: La tarjeta del producto — descripción multilínea y precio unitario
+
+**Files:**
+- Modify: `components/cotizaciones/ProductoCard.js`
+
+**Interfaces:**
+- Consumes: `precioUnitarioConIva()` (Task 1)
+
+**Esta tarea es independiente de las opciones**: solo necesita la Tarea 1 y se puede hacer en cualquier momento después de ella.
+
+- [ ] **Paso 1: Que la descripción acepte saltos de línea**
+
+☠️ Hoy es un `<input>` (línea ~85), y **un `input` no puede tener saltos de línea**: no es configuración, es el elemento equivocado. Por eso todo se escribe de corrido.
+
+Reemplazarlo por:
+
+```jsx
+            <div className="label">Color / descripción</div>
+            <textarea
+              className="input resize-y min-h-[46px]"
+              rows={3}
+              value={p.color}
+              onChange={set('color')}
+              placeholder={'Azul marino, logo pecho izq.\nPuedes usar varias líneas.'}
+            />
+```
+
+⚠️ `resize-y` deja estirarlo arrastrando la esquina cuando el texto es largo, que es la otra mitad de la queja: con mucho texto la caja se veía mal.
+
+- [ ] **Paso 2: El precio unitario sin IVA y con IVA**
+
+La caja que hoy dice `Subtotal` (línea ~92) muestra solo el subtotal. Pasa a mostrar también los dos precios unitarios, que es lo que hace falta para negociar:
+
+```jsx
+          <div>
+            <div className="label">Subtotal y precio unitario</div>
+            <div className="h-[46px] flex flex-col justify-center leading-tight">
+              <span className="font-display text-xl font-bold text-mandarina-400">{fmtUSD(sub)}</span>
+              {/* El precio de lista es el que negocias; el de al lado es el que
+                  el cliente paga de verdad. Tenerlos juntos evita la cuenta mental. */}
+              <span className="text-[11px] text-gray-400">
+                {fmtUSD(parseFloat(String(p.precio)) || 0)} sin IVA · {fmtUSD(precioUnitarioConIva(p))} c/u con IVA
+              </span>
+            </div>
+          </div>
+```
+
+⚠️ Importar `precioUnitarioConIva` desde `@/lib/cotizacion` en ese archivo.
+
+- [ ] **Paso 3: Verificar**
+
+Run: `npm run build`
+Expected: compila limpio. ⚠️ **No levantes un servidor de desarrollo**: la comprobación visual se hace al final, con una persona.
+
+- [ ] **Paso 4: Commit**
+
+```bash
+git add components/cotizaciones/ProductoCard.js
+git commit -m "Descripcion multilinea y precio unitario con IVA en la tarjeta del producto"
 ```
 
 ---
