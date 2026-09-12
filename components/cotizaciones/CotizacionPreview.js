@@ -28,7 +28,7 @@ function fechaLarga(iso) {
 // una copia fuera de pantalla a ancho fijo de la que sale el PDF
 // (`cot-doc-pdf`, ver CotizacionForm). Mismo componente, mismos datos: lo que
 // se manda es lo que se ve.
-export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-doc' }) {
+export default function CotizacionPreview({ cotizacion: c, id = 'cot-doc' }) {
   const th = themeFor(c.tienda)
   // Los totales YA NO son un bloque único: cada opción tiene el suyo. Con una
   // sola opción `rango.porOpcion` tiene un solo elemento y el documento se ve

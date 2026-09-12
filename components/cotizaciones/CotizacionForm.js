@@ -65,7 +65,7 @@ export default function CotizacionForm({ initial, user, onCreated }) {
       <div className="flex-1 overflow-y-auto">
         {h.mode === 'vista' ? (
           <div className="py-6 px-4">
-            <CotizacionPreview cotizacion={c} totales={totales} />
+            <CotizacionPreview cotizacion={c} />
           </div>
         ) : (
           <div className="max-w-4xl mx-auto px-4 py-5 pb-24">
@@ -146,7 +146,15 @@ export default function CotizacionForm({ initial, user, onCreated }) {
             <Section n="04" ok={hitos[3]} step={step} title="Condiciones" sub="Entrega, validez, anticipo y forma de pago">
               <div className="card p-5 space-y-4">
                 <div className="grid grid-cols-3 gap-4">
-                  <div><div className="label">Entrega (días)</div><input className="input" type="number" min={0} value={c.entrega_dias} onChange={(e) => h.updCot('entrega_dias', parseInt(e.target.value) || 0)} /></div>
+                  <div><div className="label">Entrega (días)</div><input className="input" type="number" min={0} value={c.entrega_dias} onChange={(e) => {
+                    const v = parseInt(e.target.value) || 0
+                    h.updCot('entrega_dias', v)
+                    // Hallazgo 1.1: con exactamente UNA opción, la raíz y esa
+                    // opción tienen que decir lo mismo — si no, al agregar una
+                    // segunda opción (`addOpcion`), la que ya estaba se queda
+                    // con el valor viejo, congelado desde antes de este tecleo.
+                    if (h.opciones.length === 1) h.updOpcion(h.opciones[0].id, 'entrega_dias', v)
+                  }} /></div>
                   <div><div className="label">Validez (días)</div><input className="input" type="number" min={0} value={c.validez_dias} onChange={(e) => h.updCot('validez_dias', parseInt(e.target.value) || 0)} /></div>
                   <div><div className="label">Anticipo (%)</div><input className="input" type="number" min={0} max={100} value={c.anticipo_pct} onChange={(e) => h.updCot('anticipo_pct', parseInt(e.target.value) || 0)} /></div>
                 </div>
@@ -191,7 +199,7 @@ export default function CotizacionForm({ initial, user, onCreated }) {
       {h.pdfOcupado && (
         <div aria-hidden="true" className="no-print"
           style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: ANCHO_DOC_COTIZACION, background: '#fff' }}>
-          <CotizacionPreview id="cot-doc-pdf" cotizacion={c} totales={totales} />
+          <CotizacionPreview id="cot-doc-pdf" cotizacion={c} />
         </div>
       )}
 

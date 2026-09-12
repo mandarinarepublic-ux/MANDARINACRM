@@ -109,9 +109,15 @@ export function useCotizacion(initial, user, onCreated) {
       let opciones = c.opciones
       // La primera vez que se agrega una segunda, la que ya estaba también
       // necesita nombre: si no, el documento pintaría «Opción B» junto a un
-      // bloque sin título.
-      if (opciones[0] && !opciones[0].nombre) {
-        opciones = [{ ...opciones[0], nombre: 'Opción A' }, ...opciones.slice(1)]
+      // bloque sin título. De paso (hallazgo 1.3) se le pasa el `entrega_dias`
+      // de LA RAÍZ —el que el vendedor ve en la sección 04—, no el que quedó
+      // congelado al montar el formulario: si no, «Entrega: 30» recién
+      // escrito se pierde en la opción A justo al agregar la B.
+      if (opciones[0]) {
+        opciones = [
+          { ...opciones[0], nombre: opciones[0].nombre || 'Opción A', entrega_dias: c.entrega_dias },
+          ...opciones.slice(1),
+        ]
       }
       // La letra sale de la primera libre, NO del largo: si se borró «Opción
       // A» y solo queda «Opción B», el largo (1) volvería a dar «Opción B» —
@@ -123,16 +129,31 @@ export function useCotizacion(initial, user, onCreated) {
         if (!usadas.has(`Opción ${candidata}`)) { letra = candidata; break }
       }
       opciones = [...opciones, nuevaOpcion(`Opción ${letra}`, c.entrega_dias)]
-      setOpcionActiva(opciones.length - 1)
       return { ...c, opciones }
     })
-  }, [])
+    // Hallazgo 5: el efecto (mover la pestaña activa) sale del updater de
+    // `setCotizacion` — `removeOpcion` ya se arregló así en una ronda
+    // anterior. Bajo StrictMode ese updater se invoca dos veces, y adentro
+    // dispararía el `setOpcionActiva` dos veces. Como siempre se agrega UNA
+    // sola opción al final, el índice nuevo es el largo ACTUAL (antes de
+    // agregar), que ya se conoce sin esperar al resultado del updater.
+    setOpcionActiva(cotizacion.opciones.length)
+  }, [cotizacion.opciones])
 
   const removeOpcion = useCallback((id) => {
     if (cotizacion.opciones.length <= 1) return // siempre queda al menos una
     const idx = cotizacion.opciones.findIndex((o) => o.id === id)
     if (idx < 0) return
-    setCotizacion((c) => ({ ...c, opciones: c.opciones.filter((o) => o.id !== id) }))
+    setCotizacion((c) => {
+      const opciones = c.opciones.filter((o) => o.id !== id)
+      // Hallazgo 1.2: si al borrar queda una sola, esa opción vuelve a ser la
+      // que manda (`!rango.varias`) — el documento y la sección 04 leen la
+      // RAÍZ. Sin este espejo, el `entrega_dias` de la superviviente queda
+      // guardado en el JSON pero invisible e ineditable, y al cliente le
+      // llega el plazo viejo que tenía la raíz.
+      const entrega_dias = opciones.length === 1 ? opciones[0].entrega_dias : c.entrega_dias
+      return { ...c, opciones, entrega_dias }
+    })
     // ☠️ `opcionActiva` es un ÍNDICE y el borrado es por id: si se borra una
     // opción ANTERIOR a la activa, todos los índices se corren y el vendedor
     // termina escribiendo en la opción de al lado sin darse cuenta. Por eso se
@@ -180,6 +201,14 @@ export function useCotizacion(initial, user, onCreated) {
       const payload = {
         ...cotizacion,
         ...rango.guardar,
+        // ⚠️ Sombra de SOLO ESCRITURA (hallazgo 2). El código nuevo nunca lee
+        // estas dos de la raíz (`opcionesDe` decide), así que no reabre el
+        // problema de «dos fuentes que se contradicen»: no hay empate posible
+        // porque nadie las consulta. Existen para que un rollback del
+        // despliegue no muestre las cotizaciones como estaban ANTES de
+        // editarlas, sin error ni aviso.
+        productos: cotizacion.opciones[0]?.productos || cotizacion.productos,
+        entrega_dias: cotizacion.opciones[0]?.entrega_dias ?? cotizacion.entrega_dias,
         created_by: cotizacion.created_by || user?.id || null,
         created_by_nombre: cotizacion.created_by_nombre || user?.nombre || null,
       }
