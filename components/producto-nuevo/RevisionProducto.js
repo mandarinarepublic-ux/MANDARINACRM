@@ -178,8 +178,8 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
             const activa = ficha.tallas?.includes(t) || false
             return (
               <label key={t}
-                className={`badge cursor-pointer select-none ${activa ? 'bg-mandarina-500/20 text-mandarina-400 border border-mandarina-500/40' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>
-                <input type="checkbox" checked={activa} onChange={() => alternarTalla(t)} className="hidden" />
+                className={`badge cursor-pointer select-none focus-within:ring-1 focus-within:ring-mandarina-500 ${activa ? 'bg-mandarina-500/20 text-mandarina-400 border border-mandarina-500/40' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>
+                <input type="checkbox" checked={activa} onChange={() => alternarTalla(t)} className="sr-only" />
                 {t}
               </label>
             )
