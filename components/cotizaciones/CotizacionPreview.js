@@ -1,6 +1,9 @@
 'use client'
 import { themeFor } from '@/lib/tiendaTheme'
-import { TALLAS, tecnicaLabel, calcSubtotalProducto, fmtUSD, IVA_RATE, FIRMA_COTIZACION, ANCHO_DOC_COTIZACION } from '@/lib/cotizacion'
+import {
+  TALLAS, tecnicaLabel, calcSubtotalProducto, fmtUSD, IVA_RATE, FIRMA_COTIZACION, ANCHO_DOC_COTIZACION,
+  rangoTotales, precioUnitarioConIva, descripcionEsBloque,
+} from '@/lib/cotizacion'
 
 const TALLA_LABEL = { XS: 'XS', S: 'S', M: 'M', L: 'L', XL: 'XL', XXL: '2XL', XXXL: '3XL' }
 
@@ -27,6 +30,10 @@ function fechaLarga(iso) {
 // se manda es lo que se ve.
 export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-doc' }) {
   const th = themeFor(c.tienda)
+  // Los totales YA NO son un bloque único: cada opción tiene el suyo. Con una
+  // sola opción `rango.porOpcion` tiene un solo elemento y el documento se ve
+  // exactamente como antes — lo único nuevo es el precio con IVA.
+  const rango = rangoTotales(c)
   const posiciones = (p) => [
     ['Pecho', p.diseno_pecho], ['Espalda', p.diseno_espalda],
     ['Manga der.', p.manga_derecha], ['Manga izq.', p.manga_izquierda],
@@ -55,7 +62,9 @@ export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-do
           <span><b>Cliente:</b> {c.cliente_nombre || '—'}</span>
           <span><b>Fecha:</b> {fechaLarga(c.fecha)}</span>
           <span><b>Validez:</b> {c.validez_dias} días</span>
-          <span style={{ marginLeft: 'auto' }}><b>Total:</b> {fmtUSD(totales.total)}</span>
+          <span style={{ marginLeft: 'auto' }}>
+            <b>Total:</b> {rango.varias ? `${fmtUSD(rango.min.total)} – ${fmtUSD(rango.max.total)}` : fmtUSD(rango.min.total)}
+          </span>
         </div>
       </div>
 
@@ -72,53 +81,76 @@ export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-do
         <div style={{ marginTop: 22, fontSize: 12, fontWeight: 800, letterSpacing: '.05em', color: th.accentText }}>
           DETALLE DE LOS PRODUCTOS SOLICITADOS
         </div>
-        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {c.productos.map((p) => (
-            <div key={p.id} style={{ display: 'flex', gap: 14, border: '1px solid #eee', borderLeft: `3px solid ${th.accent}`, borderRadius: 10, overflow: 'hidden', background: '#fff', breakInside: 'avoid' }}>
-              {p.foto
-                ? <img src={p.foto} alt="" style={{ width: 140, height: 140, objectFit: 'cover', background: '#f3f4f6', flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = 'none' }} />
-                : <div style={{ width: 140, height: 140, background: '#f3f4f6', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34, color: '#cbd5e1' }}>👕</div>}
-              <div style={{ flex: 1, minWidth: 0, padding: '12px 14px 12px 0' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>{p.nombre || 'Prenda'}</span>
-                  <span style={{ fontSize: 11, color: '#6b7280' }}>· {tecnicaLabel(p.tecnica)}</span>
-                </div>
-                {p.color && (
-                  <span style={{ display: 'inline-block', marginTop: 5, fontSize: 11, padding: '2px 9px', borderRadius: 999, background: th.accentLight, color: th.accentText, border: `1px solid ${th.accentBorder}` }}>{p.color}</span>
-                )}
-                {posiciones(p).length > 0 && (
-                  <div style={{ marginTop: 7, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {posiciones(p).map(([lbl, v]) => (
-                      <span key={lbl} style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e5e7eb', color: '#475569' }}><b>{lbl}:</b> {v}</span>
+        {rango.porOpcion.map(({ opcion, totales }) => (
+          <div key={opcion.id}>
+            {/* Encabezado de la opción: solo si hay varias. Con una sola,
+                el documento se ve EXACTAMENTE como antes de este cambio. */}
+            {rango.varias && (
+              <div style={{ marginTop: 18, marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '2px solid #111', paddingBottom: 4 }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800 }}>
+                  {opcion.nombre || 'Opción'}
+                </span>
+                <span style={{ fontSize: 11, color: '#6b7280' }}>entrega {opcion.entrega_dias} días</span>
+              </div>
+            )}
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {opcion.productos.map((p) => (
+                <div key={p.id} style={{ display: 'flex', gap: 14, border: '1px solid #eee', borderLeft: `3px solid ${th.accent}`, borderRadius: 10, overflow: 'hidden', background: '#fff', breakInside: 'avoid' }}>
+                  {p.foto
+                    ? <img src={p.foto} alt="" style={{ width: 140, height: 140, objectFit: 'cover', background: '#f3f4f6', flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                    : <div style={{ width: 140, height: 140, background: '#f3f4f6', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34, color: '#cbd5e1' }}>👕</div>}
+                  <div style={{ flex: 1, minWidth: 0, padding: '12px 14px 12px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 15, fontWeight: 700 }}>{p.nombre || 'Prenda'}</span>
+                      <span style={{ fontSize: 11, color: '#6b7280' }}>· {tecnicaLabel(p.tecnica)}</span>
+                    </div>
+                    {p.color && (descripcionEsBloque(p.color) ? (
+                      <div style={{ marginTop: 5, fontSize: 11, color: '#475569', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>
+                        {p.color}
+                      </div>
+                    ) : (
+                      <span style={{ display: 'inline-block', marginTop: 5, fontSize: 11, padding: '2px 9px', borderRadius: 999, background: th.accentLight, color: th.accentText, border: `1px solid ${th.accentBorder}` }}>{p.color}</span>
                     ))}
+                    {posiciones(p).length > 0 && (
+                      <div style={{ marginTop: 7, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {posiciones(p).map(([lbl, v]) => (
+                          <span key={lbl} style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e5e7eb', color: '#475569' }}><b>{lbl}:</b> {v}</span>
+                        ))}
+                      </div>
+                    )}
+                    {p.conTallas && (
+                      <div style={{ marginTop: 7, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                        {TALLAS.filter((t) => (p.tallas?.[t] || 0) > 0).map((t) => (
+                          <span key={t} style={{ fontSize: 10.5, fontFamily: 'monospace', padding: '2px 8px', borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46' }}>{TALLA_LABEL[t]}: {p.tallas[t]}</span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 12, color: '#6b7280' }}>
+                        {p.cantidad || 0} uds × {fmtUSD(parseFloat(String(p.precio)) || 0)} + IVA
+                        {'  ·  '}
+                        <b style={{ color: '#111' }}>{fmtUSD(precioUnitarioConIva(p))} c/u con IVA</b>
+                        {totales.desc > 0 && ' (antes del descuento)'}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: th.accent }}>{fmtUSD(calcSubtotalProducto(p))}</span>
+                    </div>
                   </div>
-                )}
-                {p.conTallas && (
-                  <div style={{ marginTop: 7, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                    {TALLAS.filter((t) => (p.tallas?.[t] || 0) > 0).map((t) => (
-                      <span key={t} style={{ fontSize: 10.5, fontFamily: 'monospace', padding: '2px 8px', borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46' }}>{TALLA_LABEL[t]}: {p.tallas[t]}</span>
-                    ))}
-                  </div>
-                )}
-                <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 12, color: '#6b7280' }}>{p.cantidad || 0} uds × {fmtUSD(parseFloat(String(p.precio)) || 0)}</span>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: th.accent }}>{fmtUSD(calcSubtotalProducto(p))}</span>
                 </div>
+              ))}
+            </div>
+
+            {/* Totales de esta opción */}
+            <div style={{ marginTop: 16, marginLeft: 'auto', width: 280, fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}><span style={{ color: '#6b7280' }}>Subtotal</span><span>{fmtUSD(totales.subtotal)}</span></div>
+              {totales.desc > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}><span style={{ color: '#6b7280' }}>Descuento</span><span>-{fmtUSD(totales.desc)}</span></div>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}><span style={{ color: '#6b7280' }}>IVA ({Math.round(IVA_RATE * 100)}%)</span><span>{fmtUSD(totales.iva)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #111', marginTop: 5, paddingTop: 7 }}>
+                <span style={{ fontWeight: 700 }}>TOTAL</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: th.accent }}>{fmtUSD(totales.total)}</span>
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Totales */}
-        <div style={{ marginTop: 16, marginLeft: 'auto', width: 280, fontSize: 13 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}><span style={{ color: '#6b7280' }}>Subtotal</span><span>{fmtUSD(totales.subtotal)}</span></div>
-          {totales.desc > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}><span style={{ color: '#6b7280' }}>Descuento</span><span>-{fmtUSD(totales.desc)}</span></div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}><span style={{ color: '#6b7280' }}>IVA ({Math.round(IVA_RATE * 100)}%)</span><span>{fmtUSD(totales.iva)}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #111', marginTop: 5, paddingTop: 7 }}>
-            <span style={{ fontWeight: 700 }}>TOTAL</span>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: th.accent }}>{fmtUSD(totales.total)}</span>
           </div>
-        </div>
+        ))}
 
         {/* Beneficios y notas.
             ⚠️ Las notas van en su PROPIA condición, no anidadas en la de los
