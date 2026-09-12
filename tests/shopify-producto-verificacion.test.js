@@ -54,12 +54,24 @@ test('sin SEO titulo o descripcion no pasa', () => {
   }
 })
 
-test('☠️ una foto en FAILED no cuenta aunque el numero cuadre', () => {
-  // Shopify descarga la imagen desde Cloudinary DESPUES de responder. Si la
-  // descarga falla, la media existe pero queda en FAILED: contar no alcanza.
-  const roto = { ...SANO, media: { nodes: [{ alt: 'x', status: 'FAILED' }] } }
+test('☠️ una foto que no esta READY no cuenta aunque el numero cuadre', () => {
+  // Shopify descarga y procesa la imagen DESPUES de responder. Mientras tanto
+  // la media existe pero NO esta lista: contar no alcanza.
+  for (const status of ['FAILED', 'PROCESSING', 'UPLOADED']) {
+    const roto = { ...SANO, media: { nodes: [{ alt: 'x', status }] } }
+    const r = verificarProducto(roto, ESPERADO)
+    assert.equal(r.ok, false, `dejo pasar una foto en ${status}`)
+    assert.ok(r.fallos.some((f) => /imagen|foto/i.test(f)))
+  }
+})
+
+test('☠️ una foto SIN campo status tampoco pasa: se falla cerrado', () => {
+  // MediaImage.status es NON_NULL en el esquema de Shopify: si no viene, algo
+  // anda mal. Tratar "no se si esta lista" como "esta lista" es fallar ABIERTO
+  // en la unica funcion que separa un producto roto de la tienda publica.
+  const roto = { ...SANO, media: { nodes: [{ alt: 'Chaqueta de Goku, frente' }] } }
   const r = verificarProducto(roto, ESPERADO)
-  assert.equal(r.ok, false)
+  assert.equal(r.ok, false, 'una foto sin status se colo como buena')
   assert.ok(r.fallos.some((f) => /imagen|foto/i.test(f)))
 })
 
