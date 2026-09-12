@@ -1,6 +1,6 @@
 'use client'
 import { useRef, useState } from 'react'
-import { TECNICAS, tecnicaLabel, calcSubtotalProducto, fmtUSD } from '@/lib/cotizacion'
+import { TECNICAS, tecnicaLabel, calcSubtotalProducto, fmtUSD, precioUnitarioConIva } from '@/lib/cotizacion'
 import { subirFoto } from '@/lib/subirImagen'
 import TallasGrid from './TallasGrid'
 
@@ -82,15 +82,28 @@ export default function ProductoCard({ index, producto: p, onUpd, onTalla, onTog
           </div>
           <div>
             <div className="label">Color / descripción</div>
-            <input className="input" value={p.color} onChange={set('color')} placeholder="Azul marino, logo pecho izq." />
+            <textarea
+              className="input resize-y min-h-[46px]"
+              rows={3}
+              value={p.color}
+              onChange={set('color')}
+              placeholder={'Azul marino, logo pecho izq.\nPuedes usar varias líneas.'}
+            />
           </div>
           <div>
             <div className="label">Precio unitario</div>
             <input className="input font-mono" type="number" min={0} step="0.01" value={p.precio} onChange={set('precio')} placeholder="0.00" />
           </div>
           <div>
-            <div className="label">Subtotal</div>
-            <div className="h-[46px] flex items-center font-display text-xl font-bold text-mandarina-400">{fmtUSD(sub)}</div>
+            <div className="label">Subtotal y precio unitario</div>
+            <div className="h-[46px] flex flex-col justify-center leading-tight">
+              <span className="font-display text-xl font-bold text-mandarina-400">{fmtUSD(sub)}</span>
+              {/* El precio de lista es el que negocias; el de al lado es el que
+                  el cliente paga de verdad. Tenerlos juntos evita la cuenta mental. */}
+              <span className="text-[11px] text-gray-400">
+                {fmtUSD(parseFloat(String(p.precio)) || 0)} sin IVA · {fmtUSD(precioUnitarioConIva(p))} c/u con IVA
+              </span>
+            </div>
           </div>
         </div>
       </div>
