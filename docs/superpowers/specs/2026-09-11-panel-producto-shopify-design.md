@@ -82,6 +82,12 @@ Shopify (`lib/auth.js`, `getTiendaConfig`).
 **El precio es UNO solo y se aplica igual a todas las tallas.** No hay precio por
 talla (se descartó al decidir el alcance).
 
+**Una tienda por carga.** El selector es excluyente, no casillas: el producto va a
+Mandarina **o** a INDSTORE, nunca a las dos de un tirón. Publicar en ambas a la vez
+obligaría a decidir qué hacer cuando una sale bien y la otra falla, y además el
+precio y el texto rara vez son iguales entre las dos marcas. Para tener el mismo
+producto en las dos webs se carga dos veces.
+
 **Inventario: sin seguimiento** (`inventoryItem.tracked: false`). Es lo correcto
 para prendas que se fabrican bajo pedido: con seguimiento activado y stock en 0,
 Shopify **bloquea la compra** y el producto quedaría publicado pero no vendible —
