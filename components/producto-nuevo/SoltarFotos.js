@@ -38,16 +38,28 @@ export default function SoltarFotos({ fotos, onCambio }) {
   async function agregar(lista) {
     const imagenes = Array.from(lista).filter((f) => f.type.startsWith('image/'))
     if (!imagenes.length) return
+    if (subiendo) return          // una tanda a la vez: soltar encima no encima
+
     setSubiendo(true); setError('')
-    try {
-      const nuevas = []
-      for (const f of imagenes) nuevas.push(await subirUna(f))
-      onCambio([...fotos, ...nuevas])
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setSubiendo(false)
+
+    // ☠️ Cada foto se guarda por su cuenta. Antes un `throw` a media tanda se
+    // llevaba puestas TODAS: si soltabas 3 y fallaba la segunda, la primera ya
+    // estaba subida a Cloudinary pero la pantalla quedaba vacía y tocaba
+    // arrastrar todo de nuevo (dejando la foto huérfana allá). Lo que se subió
+    // bien se queda; de lo que falló se avisa con su nombre.
+    const nuevas = []
+    const fallaron = []
+    for (const f of imagenes) {
+      try {
+        nuevas.push(await subirUna(f))
+      } catch (e) {
+        fallaron.push(`${f.name} (${e.message})`)
+      }
     }
+
+    if (nuevas.length) onCambio([...fotos, ...nuevas])
+    setError(fallaron.length ? `No se pudieron subir: ${fallaron.join(' · ')}` : '')
+    setSubiendo(false)
   }
 
   const mover = (i, salto) => {
@@ -60,10 +72,16 @@ export default function SoltarFotos({ fotos, onCambio }) {
 
   return (
     <div>
+      {/* Mientras sube, la zona no acepta nada: el <input> se deshabilita solo,
+          pero soltar encima del div se le escapaba y disparaba una segunda tanda
+          en paralelo sobre el mismo estado. */}
       <div
         onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => { e.preventDefault(); agregar(e.dataTransfer.files) }}
-        style={{ border: '2px dashed #ccc', borderRadius: 8, padding: 32, textAlign: 'center' }}
+        onDrop={(e) => { e.preventDefault(); if (!subiendo) agregar(e.dataTransfer.files) }}
+        style={{
+          border: '2px dashed #ccc', borderRadius: 8, padding: 32, textAlign: 'center',
+          opacity: subiendo ? 0.5 : 1,
+        }}
       >
         <p>{subiendo ? 'Subiendo…' : 'Arrastra aquí las fotos de un producto'}</p>
         <input type="file" accept="image/*" multiple disabled={subiendo}
