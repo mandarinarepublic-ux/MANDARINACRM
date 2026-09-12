@@ -64,10 +64,20 @@ export async function POST(req) {
       return Response.json({ error: 'La IA no devolvió un JSON válido, vuelve a intentar' }, { status: 502 })
     }
 
+    // ⚠️ Lo que devuelve la IA es texto libre, no un contrato: CUALQUIER campo
+    // puede llegar con el tipo equivocado, y `|| []` no protege de eso.
+    //   · si `tallasSugeridas` viene como string, `.filter` no existe y la ruta
+    //     muere con un 500 mudo en vez de un aviso que se entienda;
+    //   · si `altTextos` viene como string, `altTextos?.[i]` devuelve LETRAS
+    //     SUELTAS, y el alt de cada foto acabaría siendo una letra.
+    // Por eso se comprueba el tipo antes de tocarlos.
+    const alts = Array.isArray(ficha.altTextos) ? ficha.altTextos : []
+    const tallas = Array.isArray(ficha.tallasSugeridas) ? ficha.tallasSugeridas : []
+
     // Un alt por foto, sí o sí: construirProductSetInput rechaza los vacíos y
     // es mejor que el hueco se vea en pantalla que reventar al publicar.
-    ficha.altTextos = fotos.map((_, i) => ficha.altTextos?.[i] || '')
-    ficha.tallasSugeridas = (ficha.tallasSugeridas || []).filter((t) => TALLAS.includes(t))
+    ficha.altTextos = fotos.map((_, i) => String(alts[i] || ''))
+    ficha.tallasSugeridas = tallas.filter((t) => TALLAS.includes(t))
 
     return Response.json(ficha)
   } catch (e) {

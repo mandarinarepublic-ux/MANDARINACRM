@@ -36,9 +36,25 @@ test('🔒 la clave de Anthropic no sale del servidor', () => {
 })
 
 test('☠️ el prompt prohibe inventar lo que no se ve en la foto', () => {
+  // Vigila DOS cosas: que la lista de prohibidos siga ahi, y que siga siendo
+  // una PROHIBICION y no una sugerencia.
+  //
+  // Lo que esta prueba NO puede hacer, y conviene saberlo: si alguien reescribe
+  // el prompt invirtiendo el sentido pero conservando el vocabulario ("si puedes
+  // mencionar la composicion..."), una comparacion de texto no lo detecta.
+  // Contra eso no hay prueba automatica, hay revision humana.
+  assert.ok(/PROHIBIDO INVENTAR/.test(redactar), 'se perdio la prohibicion explicita')
+  assert.ok(/Nunca menciones/.test(redactar), 'se perdio la forma imperativa de la regla')
   for (const palabra of ['composición', 'lavado', 'medidas']) {
     assert.ok(redactar.includes(palabra), `el prompt no menciona ${palabra} en la lista de prohibidos`)
   }
+})
+
+test('☠️ lo que devuelve la IA se comprueba de TIPO, no solo de existencia', () => {
+  // `|| []` no protege de un string: `.filter` no existiria (500 mudo) y
+  // `altTextos?.[i]` sobre un string devuelve letras sueltas.
+  assert.ok(/Array\.isArray\(ficha\.altTextos\)/.test(redactar), 'altTextos no se comprueba de tipo')
+  assert.ok(/Array\.isArray\(ficha\.tallasSugeridas\)/.test(redactar), 'tallasSugeridas no se comprueba de tipo')
 })
 
 test('☠️ la IA no devuelve el id de categoria, devuelve un termino de busqueda', () => {
