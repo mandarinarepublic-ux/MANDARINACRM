@@ -164,10 +164,22 @@ el usuario; por dentro:
 
 1. `productSet` con `status: DRAFT`
 2. **Se relee el producto de Shopify** y se comprueba campo por campo
-3. Si todo cuadra, pasa a `ACTIVE`. Si no, **se queda en borrador** y la pantalla
-   dice qué falló
+3. Si todo cuadra, pasa a `ACTIVE` **y se publica al canal Tienda Online**. Si no,
+   **se queda en borrador** y la pantalla dice qué falló
 
 Así nunca existe un instante en que un producto a medio armar esté comprable.
+
+### ☠️ `ACTIVE` no hace visible el producto
+
+La documentación del esquema de Shopify lo dice textual: *"Products with an active
+status aren't automatically published to sales channels, such as the online
+store"*. Poner el producto en `ACTIVE` lo deja comprable por API pero **invisible
+en mandarinaec.com**: ningún cliente lo ve.
+
+Por eso después de activar hay un paso más, `publishablePublish` al canal Tienda
+Online, y la confirmación no es que la mutation no falle sino que el producto
+devuelva un **`onlineStoreUrl` real**. Si no lo devuelve, cuenta como fallo y el
+producto no se da por publicado.
 
 Lo que se verifica:
 
