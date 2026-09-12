@@ -358,6 +358,26 @@ test('acumula TODOS los fallos, no solo el primero', () => {
   assert.ok(r.fallos.length >= 4, `deberia listar todo lo roto, listo: ${r.fallos.length}`)
 })
 
+test('☠️ `fotosEnProceso` distingue lo que se arregla SOLO con esperar', () => {
+  // De esto depende si la ruta reintenta o se rinde. Se calcula con los ESTADOS
+  // de la media, nunca leyendo el texto de los fallos.
+  const con = (nodes) => verificarProducto({ ...SANO, media: { nodes } }, ESPERADO)
+
+  // Todavia procesando: SI vale la pena volver a preguntar.
+  assert.equal(con([{ alt: 'x', status: 'PROCESSING' }]).fotosEnProceso, true)
+  assert.equal(con([{ alt: 'x', status: 'UPLOADED' }]).fotosEnProceso, true)
+
+  // Shopify aun no materializo el nodo: tambien es cuestion de tiempo.
+  assert.equal(con([]).fotosEnProceso, true, 'faltan medios: puede aparecer solo')
+
+  // FAILED es TERMINAL y un alt vacio no se llena solo: reintentar es regalar segundos.
+  assert.equal(con([{ alt: 'x', status: 'FAILED' }]).fotosEnProceso, false)
+  assert.equal(con([{ alt: '', status: 'READY' }]).fotosEnProceso, false)
+
+  // Todo bien: nada que esperar.
+  assert.equal(verificarProducto(SANO, ESPERADO).fotosEnProceso, false)
+})
+
 test('no revienta si Shopify devuelve un producto vacio o nulo', () => {
   for (const p of [null, undefined, {}]) {
     const r = verificarProducto(p, ESPERADO)
@@ -409,6 +429,7 @@ export function verificarProducto(producto, esperado) {
   if (!String(p.seo?.description || '').trim()) fallos.push('El producto quedó sin descripción SEO')
 
   const medios = p.media?.nodes || []
+  const faltanMedios = medios.length < fotosPedidas
   if (medios.length !== fotosPedidas) {
     fallos.push(`Se subieron ${fotosPedidas} fotos y Shopify dejó ${medios.length}`)
   }
@@ -424,7 +445,19 @@ export function verificarProducto(producto, esperado) {
   const sinAlt = medios.filter((m) => !String(m?.alt || '').trim())
   if (sinAlt.length) fallos.push(`${sinAlt.length} imagen(es) quedaron sin alt text`)
 
-  return { ok: fallos.length === 0, fallos }
+  // ¿Vale la pena volver a preguntarle a Shopify? Solo si lo que falta se puede
+  // arreglar SOLO con el tiempo: que todavia este materializando o procesando la
+  // media. FAILED es terminal y un alt vacio no se llena solo, asi que ninguno
+  // de los dos cuenta como "en proceso" — reintentar ahi es regalar segundos.
+  //
+  // ⚠️ Se calcula con los ESTADOS, NUNCA leyendo el texto de los fallos. Atar un
+  // reintento a la redaccion de un mensaje es atarlo a algo que cambia: basta que
+  // alguien reescriba un aviso para que el reintento deje de dispararse, en
+  // silencio y justo en el caso para el que existe.
+  const enProceso = medios.filter((m) => m?.status === 'UPLOADED' || m?.status === 'PROCESSING')
+  const fotosEnProceso = enProceso.length > 0 || faltanMedios
+
+  return { ok: fallos.length === 0, fallos, fotosEnProceso }
 }
 ```
 
@@ -858,8 +891,33 @@ test('☠️ se reintenta mientras las fotos siguen procesandose', () => {
   // Shopify procesa las imagenes async. Sin reintento, verificar una sola vez
   // dejaria en borrador casi toda publicacion legitima.
   assert.ok(/for \(let intento/.test(publicar), 'falta el bucle de reintento')
-  assert.ok(/soloFaltanFotos/.test(publicar),
-    'el reintento tiene que ser SOLO por fotos: si esta roto por otra cosa, no se insiste')
+  assert.ok(/fotosEnProceso/.test(publicar),
+    'el reintento tiene que decidirse por fotosEnProceso: si esta roto por otra cosa, no se insiste')
+})
+
+test('☠️ el reintento NO se decide leyendo el texto de los fallos', () => {
+  // Atar un reintento a la redaccion de un mensaje es atarlo a algo que cambia:
+  // basta que alguien reescriba un aviso para que deje de dispararse, en
+  // silencio y justo en el caso para el que existe. La decision sale de los
+  // ESTADOS de la media, que calcula verificarProducto.
+  assert.ok(!/\/imagen\/i|\/foto\/i|\/imagen\|foto\/i/.test(publicar),
+    'el reintento esta mirando el texto de los fallos en vez de fotosEnProceso')
+})
+
+test('☠️ un fallo despues de crear NO se reporta como si no hubiera pasado nada', () => {
+  // Desde que el producto existe en Shopify, cualquier excepcion tiene que
+  // contarse como fallo PERO dejar llegar la respuesta con el productoId. Si
+  // sube al catch de afuera, el usuario ve un 500 sin enlace y con un producto
+  // vivo en la tienda que no sabe que existe.
+  const iActive = publicar.indexOf("'ACTIVE'")
+  const tramo = publicar.slice(iActive)
+  assert.ok(/catch/.test(tramo), 'el bloque de activar/publicar no atrapa lo suyo')
+  assert.ok(/El producto se creó/.test(publicar), 'no se avisa que el producto SI existe')
+})
+
+test('el sync tiene timeout: no puede matar la respuesta de una publicacion buena', () => {
+  assert.ok(/AbortSignal\.timeout/.test(publicar),
+    'sin timeout, un sync lento agota maxDuration y un producto publicado se reporta como fallo')
 })
 
 test('☠️ ACTIVE no basta: tambien se publica al canal Tienda Online', () => {
@@ -956,15 +1014,18 @@ export async function POST(req) {
       fotos: (body.fotos || []).length,
     }
     const espera = (ms) => new Promise((r) => setTimeout(r, ms))
-    const soloFaltanFotos = (f) => f.length > 0 && f.every((x) => /imagen/i.test(x))
 
+    // ⚠️ Se reintenta segun `fotosEnProceso`, que verificarProducto calcula con
+    // los ESTADOS de la media — nunca leyendo el texto de los fallos.
+    const INTENTOS = 6
     let ok = false
     let fallos = []
-    for (let intento = 0; intento < 6; intento++) {
+    for (let intento = 0; intento < INTENTOS; intento++) {
       const leido = await shopifyGraphQLPorTienda(tienda, LEER, { id: producto.id })
-      ;({ ok, fallos } = verificarProducto(leido?.product, esperado))
-      if (ok || !soloFaltanFotos(fallos)) break   // listo, o roto por otra cosa
-      await espera(2000)                          // hasta ~12 s de procesado
+      let enProceso
+      ;({ ok, fallos, fotosEnProceso: enProceso } = verificarProducto(leido?.product, esperado))
+      if (ok || !enProceso) break                        // listo, o roto por otra cosa
+      if (intento < INTENTOS - 1) await espera(2000)     // hasta ~10 s de procesado
     }
 
     // 3) Solo si esta sano, se activa Y se publica al canal Tienda Online.
@@ -972,34 +1033,68 @@ export async function POST(req) {
     let activado = false
     let urlTienda = null
     if (ok && !body.soloBorrador) {
-      const act = await shopifyGraphQLPorTienda(tienda, SET, {
-        input: { id: producto.id, status: 'ACTIVE' },
-      })
-      activado = act?.productSet?.product?.status === 'ACTIVE'
-
-      // ☠️ ACTIVE no basta: hay que publicarlo al canal o nadie lo ve en la web.
-      const canales = await shopifyGraphQLPorTienda(tienda, CANALES)
-      const online = (canales?.publications?.nodes || [])
-        .find((c) => /online store|tienda online/i.test(c.name || ''))
-      if (online) {
-        const pub = await shopifyGraphQLPorTienda(tienda, PUBLICAR_CANAL, {
-          id: producto.id, input: [{ publicationId: online.id }],
+      // ☠️ Desde aqui el producto YA EXISTE en Shopify. Si algo revienta y la
+      // excepcion sube al catch de afuera, el usuario ve un 500 generico sin
+      // productoId ni enlace, creyendo que no se publico nada — y hay un
+      // producto vivo en la tienda. Por eso este bloque atrapa lo suyo y SIEMPRE
+      // deja llegar la respuesta final con el id: un fallo aqui se cuenta, no se
+      // convierte en "no pasó nada".
+      try {
+        const act = await shopifyGraphQLPorTienda(tienda, SET, {
+          input: { id: producto.id, status: 'ACTIVE' },
         })
-        urlTienda = pub?.publishablePublish?.publishable?.onlineStoreUrl || null
+        const errAct = act?.productSet?.userErrors || []
+        activado = act?.productSet?.product?.status === 'ACTIVE'
+        if (!activado) {
+          fallos.push(errAct.length
+            ? `Shopify no pudo activar el producto: ${errAct.map((e) => e.message).join(' · ')}`
+            : 'Shopify no pudo activar el producto')
+        }
+
+        // ☠️ ACTIVE no basta: hay que publicarlo al canal o nadie lo ve en la web.
+        if (activado) {
+          const canales = await shopifyGraphQLPorTienda(tienda, CANALES)
+          const online = (canales?.publications?.nodes || [])
+            .find((c) => /online store|tienda online/i.test(c.name || ''))
+
+          if (!online) {
+            // Distinto de "el canal lo rechazo": aqui ni se intento.
+            fallos.push('No se encontró el canal Tienda Online en esta tienda de Shopify')
+          } else {
+            const pub = await shopifyGraphQLPorTienda(tienda, PUBLICAR_CANAL, {
+              id: producto.id, input: [{ publicationId: online.id }],
+            })
+            const errPub = pub?.publishablePublish?.userErrors || []
+            urlTienda = pub?.publishablePublish?.publishable?.onlineStoreUrl || null
+            if (!urlTienda) {
+              fallos.push(errPub.length
+                ? `El canal Tienda Online rechazó la publicación: ${errPub.map((e) => e.message).join(' · ')}`
+                : 'El producto está activo pero no quedó visible en la tienda online')
+            }
+          }
+        }
+      } catch (e) {
+        fallos.push(`El producto se creó, pero falló al activarlo o publicarlo: ${e.message}`)
       }
-      // Si no hay URL publica, el producto NO se ve aunque diga ACTIVO.
-      if (!urlTienda) {
-        ok = false
-        fallos.push('El producto está activo pero no quedó visible en la tienda online')
-      }
+
+      // La prueba de que se ve es la URL real, no que ninguna mutation fallara.
+      if (!urlTienda) ok = false
     }
 
     // 4) Refrescar el catalogo para que aparezca en los DOS inbox. Si falla, el
     //    producto SIGUE publicado: son dos estados distintos y se informan aparte.
+    // ⚠️ Con TIMEOUT a proposito. El sync pagina las DOS tiendas de Shopify, lee
+    // la hoja de Google y escribe en Sheets + Supabase: no es barato. Para cuando
+    // se lo llama, esta ruta ya gastó el productSet, hasta ~10 s de reintentos y
+    // tres mutaciones más. Si el total pasa de `maxDuration = 60`, el runtime
+    // corta la funcion y el usuario ve un fallo de PUBLICACION por un producto
+    // que sí quedó publicado y activo — justo lo que este bloque promete evitar.
+    // Un catch no salva de que te maten la funcion; un timeout sí.
     let sync = 'ok'
     try {
       const r = await fetch(new URL('/api/shopify/sync', req.url), {
         headers: { authorization: `Bearer ${process.env.CRON_SECRET || ''}` },
+        signal: AbortSignal.timeout(8000),
       })
       if (!r.ok) sync = 'falló'
     } catch { sync = 'falló' }
@@ -1015,7 +1110,11 @@ export async function POST(req) {
     const msg = String(e.message || e)
     // ⚠️ El token se cachea ~24 h en memoria (lib/shopify.js). Tras cambiar los
     // permisos en Shopify, una instancia tibia sigue con el token VIEJO.
-    if (/403/.test(msg)) {
+    // Anclado a `HTTP 403` (el formato que lanza lib/shopify.js) y no a `403` a
+    // secas: el mensaje trae hasta 200 caracteres del cuerpo de Shopify, y un
+    // "403" incrustado en un id daria el aviso del token cacheado por error —
+    // mandando a diagnosticar mal justo lo que este aviso quiere evitar.
+    if (/HTTP 403/.test(msg)) {
       return Response.json({
         error: 'Shopify rechazó la escritura (403). Puede ser el token cacheado de hasta 24 h: espera un momento y vuelve a intentar. Si sigue, revisa que la app tenga write_products.',
       }, { status: 403 })
