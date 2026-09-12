@@ -1303,6 +1303,12 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
   const [buscando, setBuscando] = useState(false)
   const [candidatas, setCandidatas] = useState([])
   const [termino, setTermino] = useState(ficha.categoriaBusqueda || '')
+  // ☠️ Sin esto, el aviso de "sin resultados" se ve AL ABRIR la pantalla: el
+  // termino viene precargado por la IA y `candidatas` arranca vacia. Un aviso
+  // que grita cuando no ha pasado nada es un aviso que se aprende a ignorar —
+  // y este es justo el que evita publicar sin categoria.
+  const [buscado, setBuscado] = useState(false)
+  const [nuevoTag, setNuevoTag] = useState('')
 
   const set = (campo, valor) => onCambio({ ...ficha, [campo]: valor })
 
@@ -1312,6 +1318,7 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
       const r = await fetch(`/api/productos-shopify/categorias?q=${encodeURIComponent(termino)}&tienda=${tienda}`)
       const { categorias } = await r.json()
       setCandidatas(categorias || [])
+      setBuscado(true)
     } finally { setBuscando(false) }
   }
 
@@ -1350,6 +1357,43 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
         <div style={{ color: '#545454', fontSize: 13 }}>{ficha.seoDescripcion}</div>
       </div>
 
+      {/* ☠️ Estos tres se mandan a Shopify tal cual: si no se pueden corregir
+          aqui, quedan mal en la tienda y toca entrar a Shopify a mano. El
+          `tipoProducto` ademas alimenta el feed de anuncios. */}
+      <label>Tipo de producto
+        <input value={ficha.tipoProducto || ''} onChange={(e) => set('tipoProducto', e.target.value)} />
+      </label>
+
+      <label>Marca (vendor)
+        <input value={ficha.vendor || ''} onChange={(e) => set('vendor', e.target.value)} />
+      </label>
+
+      <div>
+        <strong>Tags</strong>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
+          {(ficha.tags || []).map((t) => (
+            <span key={t} style={{ background: '#eee', borderRadius: 12, padding: '2px 10px' }}>
+              {t}{' '}
+              <button type="button" aria-label={`Quitar ${t}`}
+                onClick={() => set('tags', ficha.tags.filter((x) => x !== t))}>✕</button>
+            </span>
+          ))}
+        </div>
+        <input
+          value={nuevoTag}
+          placeholder="Agregar tag y Enter"
+          onChange={(e) => setNuevoTag(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            const t = nuevoTag.trim().toLowerCase()
+            // Sin repetidos: Shopify los aceptaria pero ensucian el filtrado.
+            if (t && !(ficha.tags || []).includes(t)) set('tags', [...(ficha.tags || []), t])
+            setNuevoTag('')
+          }}
+        />
+      </div>
+
       <div>
         <strong>Categoría</strong>
         {ficha.categoriaRuta
@@ -1359,7 +1403,7 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
         <button type="button" onClick={buscarCategoria} disabled={buscando}>
           {buscando ? 'Buscando…' : 'Buscar'}
         </button>
-        {!buscando && candidatas.length === 0 && termino && (
+        {buscado && !buscando && candidatas.length === 0 && (
           <p><small>Sin resultados. ⚠️ La taxonomía de Shopify está en español: prueba con &quot;Chaquetas&quot; en vez de &quot;jacket&quot;.</small></p>
         )}
         <ul>
