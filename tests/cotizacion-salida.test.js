@@ -199,3 +199,18 @@ test('☠️ el documento tiene forma de hoja A4 y el pie va abajo', () => {
   assert.ok(/flexDirection: 'column'/.test(sinComentarios))
   assert.ok(/marginTop: 'auto', background: th\.gradient/.test(sinComentarios), 'el pie se va al borde inferior')
 })
+
+test('con varias opciones el mensaje manda un RANGO', () => {
+  // Si el chat dijera un solo total y el PDF adjunto mostrara tres, el cliente
+  // no sabria a cual hacerle caso.
+  const t = textoWhatsAppCotizacion({ numero: 'MAN-COT-0042', validez_dias: 15 }, 920, 1380)
+  assert.ok(t.includes('$920.00'), `falta el minimo: ${t}`)
+  assert.ok(t.includes('$1380.00'), `falta el maximo: ${t}`)
+})
+
+test('con una sola opcion el mensaje NO cambia', () => {
+  const dos = textoWhatsAppCotizacion({ numero: 'X', validez_dias: 15 }, 920)
+  const tres = textoWhatsAppCotizacion({ numero: 'X', validez_dias: 15 }, 920, 920)
+  assert.equal(dos, tres, 'un maximo igual al minimo no es un rango')
+  assert.ok(dos.includes('Total: $920.00'))
+})
