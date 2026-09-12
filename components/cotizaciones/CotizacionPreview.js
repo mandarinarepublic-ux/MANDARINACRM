@@ -63,7 +63,7 @@ export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-do
           <span><b>Fecha:</b> {fechaLarga(c.fecha)}</span>
           <span><b>Validez:</b> {c.validez_dias} días</span>
           <span style={{ marginLeft: 'auto' }}>
-            <b>Total:</b> {rango.varias ? `${fmtUSD(rango.min.total)} – ${fmtUSD(rango.max.total)}` : fmtUSD(rango.min.total)}
+            <b>Total:</b> {rango.max.total > rango.min.total ? `${fmtUSD(rango.min.total)} – ${fmtUSD(rango.max.total)}` : fmtUSD(rango.min.total)}
           </span>
         </div>
       </div>
@@ -94,7 +94,7 @@ export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-do
               </div>
             )}
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {opcion.productos.map((p) => (
+              {(opcion.productos || []).map((p) => (
                 <div key={p.id} style={{ display: 'flex', gap: 14, border: '1px solid #eee', borderLeft: `3px solid ${th.accent}`, borderRadius: 10, overflow: 'hidden', background: '#fff', breakInside: 'avoid' }}>
                   {p.foto
                     ? <img src={p.foto} alt="" style={{ width: 140, height: 140, objectFit: 'cover', background: '#f3f4f6', flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = 'none' }} />
@@ -177,7 +177,15 @@ export default function CotizacionPreview({ cotizacion: c, totales, id = 'cot-do
         {/* Condiciones */}
         <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, fontSize: 12 }}>
           <div><div style={{ fontWeight: 700, color: th.accentText, marginBottom: 3 }}>Forma de pago</div><div style={{ color: '#374151', whiteSpace: 'pre-wrap' }}>{c.condiciones_pago}</div></div>
-          <div><div style={{ fontWeight: 700, color: th.accentText, marginBottom: 3 }}>Tiempo de producción</div><div style={{ color: '#374151' }}>{c.entrega_dias} {c.tiempo_produccion}</div></div>
+          <div><div style={{ fontWeight: 700, color: th.accentText, marginBottom: 3 }}>Tiempo de producción</div><div style={{ color: '#374151' }}>
+            {/* Con varias opciones, el número de días YA está en el encabezado
+                de cada una («Opción B · entrega 25 días»); ponerlo aquí de
+                nuevo, suelto y sin decir de cuál opción, contradice esa
+                cifra. Con una sola, esto se ve EXACTAMENTE como antes. */}
+            {rango.varias
+              ? `Según la opción elegida, contados en ${c.tiempo_produccion}`
+              : `${c.entrega_dias} ${c.tiempo_produccion}`}
+          </div></div>
           <div><div style={{ fontWeight: 700, color: th.accentText, marginBottom: 3 }}>Validez</div><div style={{ color: '#374151' }}>{c.validez_dias} días desde la fecha de emisión</div></div>
         </div>
 
