@@ -5,6 +5,34 @@ import SoltarFotos from '@/components/producto-nuevo/SoltarFotos'
 import RevisionProducto from '@/components/producto-nuevo/RevisionProducto'
 import ResultadoPublicacion from '@/components/producto-nuevo/ResultadoPublicacion'
 
+// Color del número de paso: mismo patrón que components/cotizaciones/CotizacionForm.js
+// (líneas 216-235). Se queda con estilo en línea porque el sistema de diseño no
+// tiene una utilidad de Tailwind para este degradado puntual naranja/gris.
+const step = (ok) => ok
+  ? { background: 'rgba(255,107,0,.15)', border: '1px solid rgba(255,107,0,.4)', color: '#fb923c' }
+  : { background: '#1f2937', border: '1px solid #374151', color: '#9ca3af' }
+
+function StepHead({ n, ok, title, sub }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center font-display text-xs font-bold transition-all" style={step(ok)}>{ok ? '✓' : n}</div>
+      <div>
+        <div className="text-[13px] font-semibold text-white">{title}</div>
+        <div className="text-[11px] text-gray-500">{sub}</div>
+      </div>
+    </div>
+  )
+}
+
+function Section({ n, ok, title, sub, children }) {
+  return (
+    <div className="mb-6">
+      <div className="mb-3.5"><StepHead n={n} ok={ok} title={title} sub={sub} /></div>
+      {children}
+    </div>
+  )
+}
+
 // Pantalla que junta todo: fotos + precio -> IA redacta -> revision -> publicar.
 export default function ProductoNuevoPage() {
   const router = useRouter()
@@ -71,75 +99,96 @@ export default function ProductoNuevoPage() {
   if (!user) return null
 
   return (
-    <main style={{ maxWidth: 760, margin: '0 auto', padding: 24 }}>
-      <h1>Cargar producto a Shopify</h1>
+    <div className="max-w-4xl mx-auto px-4 py-5 pb-24">
+      <h1 className="text-xl font-display font-bold text-white mb-5">🛍️ Cargar producto a Shopify</h1>
 
       {!ficha && !res && (
-        <>
-          <div>
-            <strong>Tienda</strong>
-            {['MANDARINA', 'INDSTORE'].map((t) => (
-              <label key={t} style={{ marginLeft: 12 }}>
-                <input type="radio" name="tienda" checked={tienda === t} onChange={() => setTienda(t)} /> {t}
-              </label>
-            ))}
+        <Section n="01" ok={!!fotos.length && Number(precio) > 0}
+          title="Fotos y precio" sub="Arrastra las fotos del producto y dinos cuánto cuesta">
+          <div className="card p-5 space-y-5">
+            <div>
+              <div className="label">Tienda</div>
+              <div className="inline-flex bg-gray-800 rounded-lg p-0.5 gap-0.5">
+                {['MANDARINA', 'INDSTORE'].map((t) => (
+                  <button key={t} type="button" onClick={() => setTienda(t)}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${tienda === t ? 'bg-mandarina-500 text-white' : 'text-gray-400 hover:text-white'}`}>
+                    {t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <SoltarFotos fotos={fotos} onCambio={setFotos} />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <div className="label">Precio $</div>
+                <input className="input" type="number" min="0.01" step="0.01" value={precio}
+                  onChange={(e) => setPrecio(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <div className="label">Precio tachado $ (opcional)</div>
+                <input className="input" type="number" min="0" step="0.01" value={precioTachado}
+                  onChange={(e) => setPrecioTachado(e.target.value)} placeholder="0.00" />
+              </div>
+            </div>
+
+            <button type="button" onClick={redactar} disabled={!fotos.length || !(Number(precio) > 0) || !!cargando}
+              className="btn-primary w-full sm:w-auto">
+              {cargando === 'redactando' ? 'Redactando…' : '✨ Redactar con IA'}
+            </button>
           </div>
-          <SoltarFotos fotos={fotos} onCambio={setFotos} />
-          <label>Precio $
-            <input type="number" min="0.01" step="0.01" value={precio} onChange={(e) => setPrecio(e.target.value)} />
-          </label>
-          <label>Precio tachado $ (opcional)
-            <input type="number" min="0" step="0.01" value={precioTachado} onChange={(e) => setPrecioTachado(e.target.value)} />
-          </label>
-          <button type="button" onClick={redactar} disabled={!fotos.length || !(Number(precio) > 0) || !!cargando}>
-            {cargando === 'redactando' ? 'Redactando…' : 'Redactar con IA'}
-          </button>
-        </>
+        </Section>
       )}
 
       {ficha && !res && (
-        <>
+        <Section n="02" ok title="Revisar" sub="Corrige lo que escribió la IA antes de publicar">
           <RevisionProducto ficha={ficha} onCambio={setFicha} tienda={tienda} />
           <button type="button" onClick={publicar}
-            disabled={!!cargando || !ficha.categoriaId || (ficha.fotos || []).some((f) => !f.alt?.trim())}>
+            disabled={!!cargando || !ficha.categoriaId || (ficha.fotos || []).some((f) => !f.alt?.trim())}
+            className="btn-primary w-full sm:w-auto mt-5">
             {cargando === 'publicando' ? 'Publicando…' : 'Publicar en Shopify'}
           </button>
-        </>
+        </Section>
       )}
 
-      {res && <ResultadoPublicacion res={res}
-        onDespublicar={async () => {
-          // ☠️ Antes esta respuesta se ignoraba por completo: la pantalla decia
-          // «desactivado» aunque el POST hubiera fallado, y el producto seguia
-          // ACTIVO y visible en la tienda. Decirle al usuario lo contrario de lo
-          // que paso es peor que no tener el boton.
-          setCargando('despublicando'); setError('')
-          try {
-            const r = await fetch('/api/productos-shopify/publicar', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                ...ficha, tienda, precio, precioTachado,
-                id: productoId, soloBorrador: true,
-              }),
-            })
-            const d = await r.json().catch(() => ({}))
-            if (!r.ok) throw new Error(d.error || 'No se pudo despublicar')
-            // `despublicado: true` distingue esto de un fallo de verificación:
-            // son cuatro estados, no tres (ver ResultadoPublicacion.js).
-            setRes({ ...res, activado: false, urlTienda: null, despublicado: true })
-          } catch (e) {
-            setError(`${e.message}. ⚠️ El producto puede seguir visible en la tienda.`)
-          } finally { setCargando('') }
-        }}
-        // Vuelve a la pantalla de revision SIN perder el productoId, para que el
-        // reintento actualice el producto que ya existe en vez de duplicarlo.
-        onCorregir={() => setRes(null)}
-        onOtro={() => {
-          setFotos([]); setPrecio(''); setPrecioTachado('')
-          setFicha(null); setRes(null); setProductoId(null); setError('')
-        }} />}
+      {res && (
+        <Section n="03" ok title="Publicar" sub="Dónde quedó y qué se verificó">
+          <ResultadoPublicacion res={res}
+            onDespublicar={async () => {
+              // ☠️ Antes esta respuesta se ignoraba por completo: la pantalla decia
+              // «desactivado» aunque el POST hubiera fallado, y el producto seguia
+              // ACTIVO y visible en la tienda. Decirle al usuario lo contrario de lo
+              // que paso es peor que no tener el boton.
+              setCargando('despublicando'); setError('')
+              try {
+                const r = await fetch('/api/productos-shopify/publicar', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    ...ficha, tienda, precio, precioTachado,
+                    id: productoId, soloBorrador: true,
+                  }),
+                })
+                const d = await r.json().catch(() => ({}))
+                if (!r.ok) throw new Error(d.error || 'No se pudo despublicar')
+                // `despublicado: true` distingue esto de un fallo de verificación:
+                // son cuatro estados, no tres (ver ResultadoPublicacion.js).
+                setRes({ ...res, activado: false, urlTienda: null, despublicado: true })
+              } catch (e) {
+                setError(`${e.message}. ⚠️ El producto puede seguir visible en la tienda.`)
+              } finally { setCargando('') }
+            }}
+            // Vuelve a la pantalla de revision SIN perder el productoId, para que el
+            // reintento actualice el producto que ya existe en vez de duplicarlo.
+            onCorregir={() => setRes(null)}
+            onOtro={() => {
+              setFotos([]); setPrecio(''); setPrecioTachado('')
+              setFicha(null); setRes(null); setProductoId(null); setError('')
+            }} />
+        </Section>
+      )}
 
-      {error && <p style={{ color: '#c00' }}>{error}</p>}
-    </main>
+      {error && <p className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl">{error}</p>}
+    </div>
   )
 }

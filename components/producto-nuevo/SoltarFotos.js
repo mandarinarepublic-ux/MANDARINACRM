@@ -9,6 +9,9 @@ import { useState } from 'react'
 export default function SoltarFotos({ fotos, onCambio }) {
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState('')
+  // Solo pinta la zona de naranja mientras algo la sobrevuela: no toca ninguna
+  // decisión de subida, es puramente el aviso visual que pedía la tarea.
+  const [arrastrando, setArrastrando] = useState(false)
 
   async function subirUna(file) {
     const firmaRes = await fetch('/api/upload-sign', {
@@ -76,33 +79,45 @@ export default function SoltarFotos({ fotos, onCambio }) {
           pero soltar encima del div se le escapaba y disparaba una segunda tanda
           en paralelo sobre el mismo estado. */}
       <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => { e.preventDefault(); if (!subiendo) agregar(e.dataTransfer.files) }}
-        style={{
-          border: '2px dashed #ccc', borderRadius: 8, padding: 32, textAlign: 'center',
-          opacity: subiendo ? 0.5 : 1,
-        }}
+        onDragOver={(e) => { e.preventDefault(); if (!subiendo) setArrastrando(true) }}
+        onDragLeave={() => setArrastrando(false)}
+        onDrop={(e) => { e.preventDefault(); setArrastrando(false); if (!subiendo) agregar(e.dataTransfer.files) }}
+        className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
+          arrastrando ? 'border-mandarina-500 bg-mandarina-500/10' : 'border-gray-700 bg-gray-800/40'
+        } ${subiendo ? 'opacity-50' : ''}`}
       >
-        <p>{subiendo ? 'Subiendo…' : 'Arrastra aquí las fotos de un producto'}</p>
+        <p className="text-sm text-gray-300 mb-3">
+          {subiendo ? 'Subiendo…' : 'Arrastra aquí las fotos del producto'}
+        </p>
         <input type="file" accept="image/*" multiple disabled={subiendo}
-          onChange={(e) => agregar(e.target.files)} />
+          onChange={(e) => agregar(e.target.files)}
+          className="text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600 file:cursor-pointer" />
       </div>
 
-      {error && <p style={{ color: '#c00' }}>{error}</p>}
+      {error && <p className="text-red-400 text-xs mt-2">⚠️ {error}</p>}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        {fotos.map((f, i) => (
-          <div key={f.url} style={{ width: 110 }}>
-            <img src={f.url} alt="" style={{ width: '100%', borderRadius: 6 }} />
-            <small>{i === 0 ? '★ principal' : `#${i + 1}`}</small>
-            <div>
-              <button type="button" onClick={() => mover(i, -1)} disabled={i === 0}>←</button>
-              <button type="button" onClick={() => mover(i, 1)} disabled={i === fotos.length - 1}>→</button>
-              <button type="button" onClick={() => onCambio(fotos.filter((_, j) => j !== i))}>✕</button>
+      {!!fotos.length && (
+        <div className="flex gap-3 mt-4 flex-wrap">
+          {fotos.map((f, i) => (
+            <div key={f.url} className={`w-28 rounded-xl p-1.5 ${i === 0 ? 'ring-2 ring-mandarina-500' : ''}`}>
+              <img src={f.url} alt="" className="w-full rounded-lg" />
+              <div className="mt-1 text-center">
+                {i === 0
+                  ? <span className="badge bg-mandarina-500/20 text-mandarina-400 text-[10px]">Principal</span>
+                  : <span className="text-[10px] text-gray-500">#{i + 1}</span>}
+              </div>
+              <div className="flex justify-center gap-1 mt-1">
+                <button type="button" onClick={() => mover(i, -1)} disabled={i === 0}
+                  className="btn-ghost text-xs py-0.5 px-2 disabled:opacity-30">←</button>
+                <button type="button" onClick={() => mover(i, 1)} disabled={i === fotos.length - 1}
+                  className="btn-ghost text-xs py-0.5 px-2 disabled:opacity-30">→</button>
+                <button type="button" onClick={() => onCambio(fotos.filter((_, j) => j !== i))}
+                  className="btn-ghost text-xs py-0.5 px-2 text-red-400 hover:text-red-300">✕</button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
