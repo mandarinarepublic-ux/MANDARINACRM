@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { ESTADO_COT_LABEL, ESTADO_COT_CLASES } from '@/lib/cotizacion'
+import { ESTADO_COT_LABEL, ESTADO_COT_CLASES, rangoTotales, fmtUSD } from '@/lib/cotizacion'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
@@ -392,7 +392,18 @@ export default function HistorialPage() {
                             </div>
                           </div>
                           <div className="flex flex-col items-end flex-shrink-0">
-                            <span className="text-xs px-2 py-0.5 rounded-full text-gray-300 bg-gray-800">${parseFloat(c.total||0).toFixed(2)}</span>
+                            {(() => {
+                              // El rango se calcula AQUI, no se guarda: tenerlo en dos sitios es como esos
+                              // dos numeros terminan diciendo cosas distintas. El JSON ya viene en la fila.
+                              const r = rangoTotales(c)
+                              return (
+                                <span className="text-xs px-2 py-0.5 rounded-full text-gray-300 bg-gray-800">
+                                  {r.varias
+                                    ? `${fmtUSD(r.min.total)} – ${fmtUSD(r.max.total)}`
+                                    : fmtUSD(parseFloat(c.total || 0))}
+                                </span>
+                              )
+                            })()}
                             <span className="text-[10px] text-gray-600 mt-1">solo consulta</span>
                           </div>
                           <span className="text-gray-600 text-xs flex-shrink-0">→</span>

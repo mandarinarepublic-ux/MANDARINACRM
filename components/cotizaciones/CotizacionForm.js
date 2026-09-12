@@ -139,7 +139,7 @@ export default function CotizacionForm({ initial, user, onCreated }) {
 
             {/* 03 Resumen */}
             <Section n="03" ok={totales.total > 0} step={step} title="Resumen económico" sub="Subtotal, descuento e IVA">
-              <ResumenPanel productos={h.productos} descuento={c.descuento} onDescuento={(v) => h.updCot('descuento', v)} totales={totales} />
+              <ResumenPanel productos={h.productos} descuento={c.descuento} onDescuento={(v) => h.updCot('descuento', v)} totales={totales} rango={h.rango} />
             </Section>
 
             {/* 04 Condiciones */}

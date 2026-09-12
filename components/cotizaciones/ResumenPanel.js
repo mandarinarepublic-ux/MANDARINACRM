@@ -2,7 +2,7 @@
 import { calcSubtotalProducto, fmtUSD, IVA_RATE } from '@/lib/cotizacion'
 
 // Panel de resumen económico (modo edición): lista de prendas + totales.
-export default function ResumenPanel({ productos, descuento, onDescuento, totales }) {
+export default function ResumenPanel({ productos, descuento, onDescuento, totales, rango }) {
   return (
     <div className="card p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
       {/* Izquierda: prendas */}
@@ -51,6 +51,13 @@ export default function ResumenPanel({ productos, descuento, onDescuento, totale
           <span className="text-gray-300 font-semibold">TOTAL</span>
           <span className="font-display text-3xl font-extrabold text-mandarina-400">{fmtUSD(totales.total)}</span>
         </div>
+        {/* Con varias opciones, `totales` es solo de la opcion activa. Este
+            aviso es lo que va a recibir el cliente en el documento completo. */}
+        {rango?.varias && (
+          <div className="text-xs text-gray-400 mt-1">
+            Toda la cotización: {fmtUSD(rango.min.total)} – {fmtUSD(rango.max.total)}
+          </div>
+        )}
       </div>
     </div>
   )
