@@ -107,15 +107,27 @@ export function useCotizacion(initial, user, onCreated) {
   const addOpcion = useCallback(() => {
     setCotizacion((c) => {
       let opciones = c.opciones
-      // La primera vez que se agrega una segunda, la que ya estaba también
-      // necesita nombre: si no, el documento pintaría «Opción B» junto a un
-      // bloque sin título. De paso (hallazgo 1.3) se le pasa el `entrega_dias`
-      // de LA RAÍZ —el que el vendedor ve en la sección 04—, no el que quedó
-      // congelado al montar el formulario: si no, «Entrega: 30» recién
-      // escrito se pierde en la opción A justo al agregar la B.
       if (opciones[0]) {
+        // La primera vez que se agrega una segunda, la que ya estaba también
+        // necesita nombre: si no, el documento pintaría «Opción B» junto a un
+        // bloque sin título.
+        //
+        // ☠️ Regresión de la ronda 2: el `entrega_dias` de la raíz SOLO se le
+        // pasa a `opciones[0]` en la transición de UNA opción a DOS (`eraUnica`).
+        // Ahí la raíz es la verdad y toca propagarla (hallazgo 1.3): si no,
+        // «Entrega: 30» recién escrito en la sección 04 se pierde en la opción
+        // A justo al agregar la B. Pero con DOS o más ya en pie, cada opción
+        // vive su propio `entrega_dias` (se edita en `OpcionesTabs`) y nadie
+        // sincroniza la raíz mientras tanto: pisar acá el de una opción
+        // existente borraría en silencio lo que el vendedor acaba de escribir
+        // ahí (p.ej. cambiar la A a 20 días y perderlo al agregar la C).
+        const eraUnica = opciones.length === 1
         opciones = [
-          { ...opciones[0], nombre: opciones[0].nombre || 'Opción A', entrega_dias: c.entrega_dias },
+          {
+            ...opciones[0],
+            nombre: opciones[0].nombre || 'Opción A',
+            entrega_dias: eraUnica ? c.entrega_dias : opciones[0].entrega_dias,
+          },
           ...opciones.slice(1),
         ]
       }

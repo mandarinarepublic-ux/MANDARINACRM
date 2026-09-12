@@ -68,3 +68,22 @@ test('una cotizacion nueva NO trae `opciones`: la forma vieja sigue siendo el de
   assert.equal(nuevaCotizacion().opciones, undefined)
   assert.equal(opcionesDe(nuevaCotizacion()).length, 1)
 })
+
+test('☠️ entrega_dias de la raiz: "sin valor" da 15, un 0 real se queda en 0', () => {
+  // Regresion de la ronda 2: el primer arreglo (Number.isFinite a secas)
+  // cambio un bug por otro. Number(null) es 0 y Number.isFinite(0) es true,
+  // asi que una fila real de la base con entrega_dias en NULL pasaba a
+  // mostrarle al cliente "entrega 0 dias". Las seis filas de la tabla:
+  const casos = [
+    { valor: null, esperado: 15 },
+    { valor: '', esperado: 15 },
+    { valor: false, esperado: 15 },
+    { valor: undefined, esperado: 15 },
+    { valor: 'abc', esperado: 15 },
+    { valor: 0, esperado: 0 },
+  ]
+  for (const { valor, esperado } of casos) {
+    const ops = opcionesDe({ productos: [], entrega_dias: valor })
+    assert.equal(ops[0].entrega_dias, esperado, `entrega_dias=${JSON.stringify(valor)} deberia dar ${esperado}`)
+  }
+})
