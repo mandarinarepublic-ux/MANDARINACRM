@@ -61,3 +61,49 @@ test('☠️ la IA no devuelve el id de categoria, devuelve un termino de busque
   assert.ok(/categoriaBusqueda/.test(redactar), 'falta el campo de termino de busqueda')
   assert.ok(!/TaxonomyCategory/.test(redactar), 'si el prompt conoce el formato del id, se lo inventa')
 })
+
+const publicar = leer('../app/api/productos-shopify/publicar/route.js')
+
+test('publicar exige ser ADMIN', () => {
+  assert.ok(/requireAdmin\(req\)/.test(publicar))
+  assert.ok(/auth\.ok/.test(publicar))
+})
+
+test('☠️ se publica con productSet, NUNCA con productCreate', () => {
+  assert.ok(/productSet/.test(publicar), 'falta productSet')
+  assert.ok(!/productCreate/.test(publicar),
+    'productCreate deja el producto a medio hacer devolviendo userErrors: []')
+})
+
+test('☠️ nace en DRAFT y solo se activa despues de verificar', () => {
+  const iDraft = publicar.indexOf("'DRAFT'")
+  // 'verificarProducto(' con paréntesis: así se agarra la LLAMADA, no el import
+  // de arriba del archivo (que también dice "verificarProducto" y adelantaría
+  // el índice de forma artificial).
+  const iVerif = publicar.indexOf('verificarProducto(')
+  const iActive = publicar.indexOf("'ACTIVE'")
+  assert.ok(iDraft > -1 && iVerif > -1 && iActive > -1, 'faltan DRAFT, verificarProducto o ACTIVE')
+  assert.ok(iDraft < iVerif && iVerif < iActive,
+    'el orden tiene que ser DRAFT -> verificar -> ACTIVE, o hay una ventana con el producto roto a la venta')
+})
+
+test('un 403 avisa que puede ser el token cacheado', () => {
+  assert.ok(/cacheado|caché|cache/i.test(publicar),
+    'sin ese aviso se diagnostica mal un permiso que ya esta puesto')
+})
+
+test('☠️ se reintenta mientras las fotos siguen procesandose', () => {
+  // Shopify procesa las imagenes async. Sin reintento, verificar una sola vez
+  // dejaria en borrador casi toda publicacion legitima.
+  assert.ok(/for \(let intento/.test(publicar), 'falta el bucle de reintento')
+  assert.ok(/soloFaltanFotos/.test(publicar),
+    'el reintento tiene que ser SOLO por fotos: si esta roto por otra cosa, no se insiste')
+})
+
+test('☠️ ACTIVE no basta: tambien se publica al canal Tienda Online', () => {
+  // La doc del esquema de Shopify lo dice: "Products with an active status
+  // aren't automatically published to sales channels". Sin este paso el
+  // producto queda ACTIVO y NINGUN cliente lo ve en la web.
+  assert.ok(/publishablePublish/.test(publicar), 'falta publicar al canal de venta')
+  assert.ok(/onlineStoreUrl/.test(publicar), 'sin onlineStoreUrl no hay como comprobar que se ve')
+})
