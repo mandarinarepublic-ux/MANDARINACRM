@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { TALLAS } from '@/lib/cotizacion'
+import { handleDesdeTitulo } from '@/lib/shopifyProducto'
 
 const Contador = ({ texto, tope }) => (
   <span className={`text-[11px] ${(texto || '').length > tope ? 'text-red-400' : 'text-gray-500'}`}>
@@ -20,6 +21,10 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
   // y este es justo el que evita publicar sin categoria.
   const [buscado, setBuscado] = useState(false)
   const [nuevoTag, setNuevoTag] = useState('')
+  // ☠️ Arranca en `true` cuando ya viene un handle (o sea, cuando lo escribio la
+  // IA): si arrancara en `false`, tocar el titulo pisaria ese handle. En el
+  // camino manual llega vacio, asi que el handle se arma solo.
+  const [handleTocado, setHandleTocado] = useState(!!ficha.handle)
   const [errorCat, setErrorCat] = useState('')
 
   const set = (campo, valor) => onCambio({ ...ficha, [campo]: valor })
@@ -57,12 +62,22 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
       <div className="card p-5 space-y-4">
         <div>
           <div className="label">Título</div>
-          <input className="input" value={ficha.titulo || ''} onChange={(e) => set('titulo', e.target.value)} />
+          <input className="input" value={ficha.titulo || ''}
+            onChange={(e) => {
+              const t = e.target.value
+              // El handle sigue al titulo mientras nadie lo haya editado. Sin
+              // esto, en el camino manual habria que escribir el slug a pulso
+              // en cada producto.
+              onCambio(handleTocado
+                ? { ...ficha, titulo: t }
+                : { ...ficha, titulo: t, handle: handleDesdeTitulo(t) })
+            }} />
         </div>
 
         <div>
           <div className="label">URL del producto</div>
-          <input className="input font-mono text-sm" value={ficha.handle || ''} onChange={(e) => set('handle', e.target.value)} />
+          <input className="input font-mono text-sm" value={ficha.handle || ''}
+            onChange={(e) => { setHandleTocado(true); set('handle', e.target.value) }} />
           <p className="text-[11px] text-gray-500 mt-1">{dominio}/{rutaProducto}</p>
         </div>
 

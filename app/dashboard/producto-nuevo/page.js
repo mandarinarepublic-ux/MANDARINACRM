@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { TALLAS } from '@/lib/cotizacion'
+import { fichaEnBlanco, MARCA_POR_TIENDA } from '@/lib/shopifyProducto'
 import SoltarFotos from '@/components/producto-nuevo/SoltarFotos'
 import RevisionProducto from '@/components/producto-nuevo/RevisionProducto'
 import ResultadoPublicacion from '@/components/producto-nuevo/ResultadoPublicacion'
@@ -42,6 +44,9 @@ export default function ProductoNuevoPage() {
   const [precio, setPrecio] = useState('')
   const [precioTachado, setPrecioTachado] = useState('')
   const [ficha, setFicha] = useState(null)
+  // Solo cambia los textos de la pantalla: en manual no hay nada «que corrigio
+  // la IA», y decirlo seria mentirle al que la esta llenando.
+  const [modo, setModo] = useState('ia')
   const [res, setRes] = useState(null)
   // ☠️ El id vive APARTE de `res` a proposito. Al volver a corregir se limpia
   // `res` para que reaparezca la pantalla de revision, y si el id viviera solo
@@ -72,10 +77,24 @@ export default function ProductoNuevoPage() {
       setFicha({
         ...d,
         fotos: fotos.map((f, i) => ({ ...f, alt: d.altTextos?.[i] || '' })),
-        tallas: d.tallasSugeridas || [],
-        vendor: d.vendor || (tienda === 'MANDARINA' ? 'Mandarina Republic' : 'Indstore'),
+        // ☠️ Las tallas NO salen de `tallasSugeridas`. La marca las tiene todas
+        // siempre, y cuando la IA se quedaba corta el producto salia a la venta
+        // sin variantes que si hay en bodega. Se marcan todas y se destilda lo
+        // que no aplique (una gorra, un llavero).
+        tallas: [...TALLAS],
+        vendor: d.vendor || MARCA_POR_TIENDA[tienda] || MARCA_POR_TIENDA.MANDARINA,
       })
+      setModo('ia')
     } catch (e) { setError(e.message) } finally { setCargando('') }
+  }
+
+  // El camino sin IA: se arma la ficha aqui mismo y se salta la redaccion. No
+  // toca ninguna API, asi que sirve tambien cuando la cuenta de Anthropic no
+  // tiene saldo.
+  function llenarAMano() {
+    setError('')
+    setFicha(fichaEnBlanco({ fotos, tienda }))
+    setModo('manual')
   }
 
   async function publicar() {
@@ -98,12 +117,16 @@ export default function ProductoNuevoPage() {
 
   if (!user) return null
 
+  // La misma condicion para los dos caminos: sin foto no hay producto y sin
+  // precio Shopify lo publicaria en 0.00.
+  const listo = !!fotos.length && Number(precio) > 0
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-5 pb-24">
       <h1 className="text-xl font-display font-bold text-white mb-5">🛍️ Cargar producto a Shopify</h1>
 
       {!ficha && !res && (
-        <Section n="01" ok={!!fotos.length && Number(precio) > 0}
+        <Section n="01" ok={listo}
           title="Fotos y precio" sub="Arrastra las fotos del producto y dinos cuánto cuesta">
           <div className="card p-5 space-y-5">
             <div>
@@ -133,16 +156,29 @@ export default function ProductoNuevoPage() {
               </div>
             </div>
 
-            <button type="button" onClick={redactar} disabled={!fotos.length || !(Number(precio) > 0) || !!cargando}
-              className="btn-primary w-full sm:w-auto">
-              {cargando === 'redactando' ? 'Redactando…' : '✨ Redactar con IA'}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button type="button" onClick={redactar} disabled={!listo || !!cargando}
+                className="btn-primary">
+                {cargando === 'redactando' ? 'Redactando…' : '✨ Redactar con IA'}
+              </button>
+              <button type="button" onClick={llenarAMano} disabled={!listo || !!cargando}
+                className="btn-secondary">
+                ✍️ Llenar a mano
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Con IA se redacta todo desde las fotos. A mano escribes tú la ficha, con las tallas ya marcadas.
+            </p>
           </div>
         </Section>
       )}
 
       {ficha && !res && (
-        <Section n="02" ok title="Revisar" sub="Corrige lo que escribió la IA antes de publicar">
+        <Section n="02" ok
+          title={modo === 'manual' ? 'Llenar la ficha' : 'Revisar'}
+          sub={modo === 'manual'
+            ? 'Escribe los datos del producto. Hace falta la categoría y el texto de cada foto'
+            : 'Corrige lo que escribió la IA antes de publicar'}>
           <RevisionProducto ficha={ficha} onCambio={setFicha} tienda={tienda} />
           <button type="button" onClick={publicar}
             disabled={!!cargando || !ficha.categoriaId || (ficha.fotos || []).some((f) => !f.alt?.trim())}
@@ -183,7 +219,7 @@ export default function ProductoNuevoPage() {
             onCorregir={() => setRes(null)}
             onOtro={() => {
               setFotos([]); setPrecio(''); setPrecioTachado('')
-              setFicha(null); setRes(null); setProductoId(null); setError('')
+              setFicha(null); setRes(null); setProductoId(null); setError(''); setModo('ia')
             }} />
         </Section>
       )}
