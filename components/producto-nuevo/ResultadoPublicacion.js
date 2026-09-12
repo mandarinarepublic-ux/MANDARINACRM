@@ -1,16 +1,19 @@
 'use client'
 // components/producto-nuevo/ResultadoPublicacion.js
 export default function ResultadoPublicacion({ res, onDespublicar, onCorregir, onOtro }) {
-  // ☠️ Son TRES estados, no dos. La ruta puede devolver `activado: true` con
+  // ☠️ Son CUATRO estados, no tres. La ruta puede devolver `activado: true` con
   // `ok: false` cuando el producto se activo pero no se pudo publicar al canal:
-  // esta ACTIVO por API y aun asi INVISIBLE para los clientes. Con solo dos
-  // titulos, ese caso salia en verde «Publicado y activo» encima de una lista
-  // roja de fallos — un mensaje que se contradice a si mismo.
-  const titulo = !res.activado
-    ? { color: '#c60', texto: '⚠️ Quedó en BORRADOR: la verificación encontró problemas' }
-    : res.urlTienda
-      ? { color: '#060', texto: '✓ Publicado y visible en la tienda' }
-      : { color: '#c60', texto: '⚠️ Activo, pero NO visible para los clientes' }
+  // esta ACTIVO por API y aun asi INVISIBLE para los clientes. Y un despublicado
+  // EXITOSO (lo pidio el usuario) pone `activado: false` igual que un fallo de
+  // verificacion — sin distinguirlos, un despublicado bueno se veia como
+  // «⚠️ encontró problemas», que es justo lo contrario de lo que paso.
+  const titulo = res.despublicado
+    ? { color: '#666', texto: '◻️ Despublicado: el producto volvió a borrador' }
+    : !res.activado
+      ? { color: '#c60', texto: '⚠️ Quedó en BORRADOR: la verificación encontró problemas' }
+      : res.urlTienda
+        ? { color: '#060', texto: '✓ Publicado y visible en la tienda' }
+        : { color: '#c60', texto: '⚠️ Activo, pero NO visible para los clientes' }
 
   return (
     <div>
@@ -25,7 +28,7 @@ export default function ResultadoPublicacion({ res, onDespublicar, onCorregir, o
           todavía no aparece en los inbox. Se corrige solo en el próximo sync.</p>
       )}
 
-      <p><a href={res.urlAdmin} target="_blank" rel="noreferrer">Abrir en Shopify</a></p>
+      {res.urlAdmin && <p><a href={res.urlAdmin} target="_blank" rel="noreferrer">Abrir en Shopify</a></p>}
       {res.urlTienda
         ? <p><a href={res.urlTienda} target="_blank" rel="noreferrer">Ver en la tienda →</a></p>
         : <p><small>Todavía no tiene página pública en la tienda.</small></p>}
@@ -36,7 +39,11 @@ export default function ResultadoPublicacion({ res, onDespublicar, onCorregir, o
       {!res.ok && (
         <button type="button" onClick={onCorregir}>Corregir y reintentar este producto</button>
       )}
-      <button type="button" onClick={onDespublicar}>Despublicar</button>
+      {/* Despublicar solo tiene sentido si el producto llegó a estar activo: si
+          nunca salió de borrador no hay nada que despublicar. */}
+      {res.activado && (
+        <button type="button" onClick={onDespublicar}>Despublicar</button>
+      )}
       <button type="button" onClick={onOtro}>Cargar otro producto</button>
     </div>
   )

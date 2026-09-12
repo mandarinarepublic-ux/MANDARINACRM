@@ -124,7 +124,9 @@ export default function ProductoNuevoPage() {
             })
             const d = await r.json().catch(() => ({}))
             if (!r.ok) throw new Error(d.error || 'No se pudo despublicar')
-            setRes({ ...res, activado: false, urlTienda: null })
+            // `despublicado: true` distingue esto de un fallo de verificación:
+            // son cuatro estados, no tres (ver ResultadoPublicacion.js).
+            setRes({ ...res, activado: false, urlTienda: null, despublicado: true })
           } catch (e) {
             setError(`${e.message}. ⚠️ El producto puede seguir visible en la tienda.`)
           } finally { setCargando('') }

@@ -47,7 +47,13 @@ export async function POST(req) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-opus-5', max_tokens: 2000, messages: [{ role: 'user', content: contenido }] }),
+      body: JSON.stringify({
+        model: 'claude-opus-5',
+        // ⚠️ No lo bajes. En claude-opus-5 el thinking esta ENCENDIDO por defecto y
+        // sus tokens salen de aqui: con 2000 el JSON se trunca y no se puede parsear.
+        max_tokens: 16000,
+        messages: [{ role: 'user', content: contenido }],
+      }),
     })
     const data = await res.json()
     if (!res.ok) {
@@ -55,7 +61,18 @@ export async function POST(req) {
       return Response.json({ error: data?.error?.message || 'Error de Anthropic' }, { status: 502 })
     }
 
-    const texto = data?.content?.[0]?.text || ''
+    // ☠️ Hay que BUSCAR el bloque de texto, no asumir que es el primero. En
+    // claude-opus-5 el thinking viene encendido por defecto, asi que content[0]
+    // es un bloque `thinking` (vacio, porque el display por defecto lo omite) y
+    // leer content[0].text daba '' → JSON.parse fallaba en TODAS las llamadas.
+    const texto = (data?.content || []).find((b) => b?.type === 'text')?.text || ''
+
+    // Si se corto por el tope de tokens, el JSON esta incompleto: mejor decirlo
+    // que dejar que JSON.parse falle con un mensaje que despista.
+    if (data?.stop_reason === 'max_tokens') {
+      return Response.json({ error: 'La respuesta de la IA se cortó por longitud. Vuelve a intentar.' }, { status: 502 })
+    }
+
     const crudo = texto.slice(texto.indexOf('{'), texto.lastIndexOf('}') + 1)
     let ficha
     try {
@@ -78,6 +95,13 @@ export async function POST(req) {
     // es mejor que el hueco se vea en pantalla que reventar al publicar.
     ficha.altTextos = fotos.map((_, i) => String(alts[i] || ''))
     ficha.tallasSugeridas = tallas.filter((t) => TALLAS.includes(t))
+
+    // Mismo riesgo que altTextos/tallasSugeridas: si la IA devuelve `tags` como
+    // string en vez de array, (ficha.tags || []).map(...) revienta la pantalla
+    // de revision entera y se pierde la redaccion ya pagada.
+    ficha.tags = (Array.isArray(ficha.tags) ? ficha.tags : [])
+      .filter((t) => typeof t === 'string' && t.trim())
+      .map((t) => t.trim().toLowerCase())
 
     return Response.json(ficha)
   } catch (e) {

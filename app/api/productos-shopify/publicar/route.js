@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 import { requireAdmin } from '@/lib/auth'
-import { shopifyGraphQLPorTienda } from '@/lib/shopify'
+import { shopifyGraphQLPorTienda, getTiendasConfig } from '@/lib/shopify'
 import { construirProductSetInput, verificarProducto } from '@/lib/shopifyProducto'
 
 // Publica el producto en Shopify — SOLO ADMIN.
@@ -28,6 +28,18 @@ mutation FijarProducto($input: ProductSetInput!) {
 }`
 
 const LEER = `query LeerProducto($id: ID!) { product(id: $id) { ${CAMPOS} } }`
+
+// ☠️ Para cambiar SOLO el estado se usa productUpdate, NUNCA productSet.
+// productSet es declarativo: en los campos de lista (variantes, opciones,
+// metafields) BORRA lo que no venga en el input. Un productSet con solo
+// {id, status} puede dejar el producto ACTIVO y sin una sola variante.
+const ACTIVAR = `
+mutation ActivarProducto($product: ProductUpdateInput!) {
+  productUpdate(product: $product) {
+    product { ${CAMPOS} }
+    userErrors { field message }
+  }
+}`
 
 // ☠️ Poner el producto en ACTIVE **no** lo hace visible en la web. Lo dice la
 // documentacion del propio esquema: "Products with an active status aren't
@@ -62,49 +74,52 @@ export async function POST(req) {
     const producto = creado?.productSet?.product
     if (!producto?.id) return Response.json({ error: 'Shopify no devolvió el producto' }, { status: 502 })
 
-    // 2) Releer de Shopify y verificar. NO se confia en la respuesta de arriba.
-    //
-    // ☠️ Shopify procesa las imagenes de forma ASINCRONA: "images might not be
-    // immediately available after upload". Recien creado el producto, las fotos
-    // estan en UPLOADED o PROCESSING, no en READY — verificar una sola vez
-    // dejaria en borrador casi toda publicacion legitima. Por eso se reintenta
-    // mientras lo UNICO que falta sea que las fotos terminen de procesarse.
-    const esperado = {
-      tallas: body.tallas || [],
-      fotos: (body.fotos || []).length,
-    }
-    const espera = (ms) => new Promise((r) => setTimeout(r, ms))
-
-    // ⚠️ Se reintenta segun `fotosEnProceso`, que verificarProducto calcula con
-    // los ESTADOS de la media — nunca leyendo el texto de los fallos.
-    const INTENTOS = 6
+    // ☠️ Desde aqui el producto YA EXISTE en Shopify (tiene id). Si algo revienta
+    // -incluido un corte de red durante la RELECTURA de abajo- y la excepcion
+    // sube al catch de afuera, el usuario ve un 500 generico SIN productoId ni
+    // enlace, cree que no se publico nada, reintenta, y como el reintento no
+    // manda `id` Shopify CREA UN PRODUCTO DUPLICADO dejando huerfano el primero.
+    // Por eso el try arranca AQUI -antes empezaba un paso tarde, dejando el
+    // bucle de relectura FUERA de la guardia- y este bloque SIEMPRE deja llegar
+    // la respuesta final con el id: un fallo aqui se cuenta, no se convierte en
+    // "no pasó nada".
     let ok = false
     let fallos = []
-    for (let intento = 0; intento < INTENTOS; intento++) {
-      const leido = await shopifyGraphQLPorTienda(tienda, LEER, { id: producto.id })
-      let enProceso
-      ;({ ok, fallos, fotosEnProceso: enProceso } = verificarProducto(leido?.product, esperado))
-      if (ok || !enProceso) break                        // listo, o roto por otra cosa
-      if (intento < INTENTOS - 1) await espera(2000)     // hasta ~10 s de procesado
-    }
-
-    // 3) Solo si esta sano, se activa Y se publica al canal Tienda Online.
-    //    `soloBorrador` es el boton Despublicar: se salta este paso entero.
     let activado = false
     let urlTienda = null
-    if (ok && !body.soloBorrador) {
-      // ☠️ Desde aqui el producto YA EXISTE en Shopify. Si algo revienta y la
-      // excepcion sube al catch de afuera, el usuario ve un 500 generico sin
-      // productoId ni enlace, creyendo que no se publico nada — y hay un
-      // producto vivo en la tienda. Por eso este bloque atrapa lo suyo y SIEMPRE
-      // deja llegar la respuesta final con el id: un fallo aqui se cuenta, no se
-      // convierte en "no pasó nada".
-      try {
-        const act = await shopifyGraphQLPorTienda(tienda, SET, {
-          input: { id: producto.id, status: 'ACTIVE' },
+    try {
+      // 2) Releer de Shopify y verificar. NO se confia en la respuesta de arriba.
+      //
+      // ☠️ Shopify procesa las imagenes de forma ASINCRONA: "images might not be
+      // immediately available after upload". Recien creado el producto, las fotos
+      // estan en UPLOADED o PROCESSING, no en READY — verificar una sola vez
+      // dejaria en borrador casi toda publicacion legitima. Por eso se reintenta
+      // mientras lo UNICO que falta sea que las fotos terminen de procesarse.
+      const esperado = {
+        tallas: body.tallas || [],
+        fotos: (body.fotos || []).length,
+      }
+      const espera = (ms) => new Promise((r) => setTimeout(r, ms))
+
+      // ⚠️ Se reintenta segun `fotosEnProceso`, que verificarProducto calcula con
+      // los ESTADOS de la media — nunca leyendo el texto de los fallos.
+      const INTENTOS = 6
+      for (let intento = 0; intento < INTENTOS; intento++) {
+        const leido = await shopifyGraphQLPorTienda(tienda, LEER, { id: producto.id })
+        let enProceso
+        ;({ ok, fallos, fotosEnProceso: enProceso } = verificarProducto(leido?.product, esperado))
+        if (ok || !enProceso) break                        // listo, o roto por otra cosa
+        if (intento < INTENTOS - 1) await espera(2000)     // hasta ~10 s de procesado
+      }
+
+      // 3) Solo si esta sano, se activa Y se publica al canal Tienda Online.
+      //    `soloBorrador` es el boton Despublicar: se salta este paso entero.
+      if (ok && !body.soloBorrador) {
+        const act = await shopifyGraphQLPorTienda(tienda, ACTIVAR, {
+          product: { id: producto.id, status: 'ACTIVE' },
         })
-        const errAct = act?.productSet?.userErrors || []
-        activado = act?.productSet?.product?.status === 'ACTIVE'
+        const errAct = act?.productUpdate?.userErrors || []
+        activado = act?.productUpdate?.product?.status === 'ACTIVE'
         if (!activado) {
           fallos.push(errAct.length
             ? `Shopify no pudo activar el producto: ${errAct.map((e) => e.message).join(' · ')}`
@@ -133,13 +148,22 @@ export async function POST(req) {
             }
           }
         }
-      } catch (e) {
-        fallos.push(`El producto se creó, pero falló al activarlo o publicarlo: ${e.message}`)
       }
-
-      // La prueba de que se ve es la URL real, no que ninguna mutation fallara.
-      if (!urlTienda) ok = false
+    } catch (e) {
+      const m = String(e.message || e)
+      // ⚠️ Con los permisos de hoy (solo read_inventory, write_products) este
+      // paso falla SIEMPRE: publishablePublish exige write_publications y la
+      // consulta de canales exige read_publications. Sin este aviso especifico
+      // se manda a diagnosticar el problema donde no esta.
+      fallos.push(/403|ACCESS_DENIED/i.test(m)
+        ? `El producto se creó y quedó activo, pero falta permiso para publicarlo al canal. La app de Shopify necesita read_publications y write_publications. Detalle: ${m}`
+        : `El producto se creó, pero falló al verificarlo, activarlo o publicarlo: ${m}`)
     }
+
+    // La prueba de que se ve es la URL real, no que ninguna mutation fallara.
+    // Solo aplica si de verdad se intento activar (si `soloBorrador`, `ok` ya
+    // trae lo que dijo verificarProducto y no hay nada que corregir aqui).
+    if (ok && !body.soloBorrador && !urlTienda) ok = false
 
     // 4) Refrescar el catalogo para que aparezca en los DOS inbox. Si falla, el
     //    producto SIGUE publicado: son dos estados distintos y se informan aparte.
@@ -159,12 +183,21 @@ export async function POST(req) {
       if (!r.ok) sync = 'falló'
     } catch { sync = 'falló' }
 
+    // El handle de la tienda sale de la config real (`xxx.myshopify.com`), NUNCA
+    // del id interno del CRM (MANDARINA/INDSTORE): son cosas distintas y armar
+    // el enlace desde el id daba siempre 404.
+    const store = getTiendasConfig().find((t) => t.id === tienda)?.store || ''
+    const handleTienda = store.replace(/\.myshopify\.com$/, '')
     const numerico = String(producto.id).split('/').pop()
+    const urlAdmin = handleTienda
+      ? `https://admin.shopify.com/store/${handleTienda}/products/${numerico}`
+      : null
+
     return Response.json({
       ok, activado, fallos, sync, urlTienda,
       productoId: producto.id,
       handle: producto.handle,
-      urlAdmin: `https://admin.shopify.com/store/${tienda.toLowerCase()}/products/${numerico}`,
+      urlAdmin,
     })
   } catch (e) {
     const msg = String(e.message || e)

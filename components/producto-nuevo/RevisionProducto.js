@@ -20,16 +20,32 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
   // y este es justo el que evita publicar sin categoria.
   const [buscado, setBuscado] = useState(false)
   const [nuevoTag, setNuevoTag] = useState('')
+  const [errorCat, setErrorCat] = useState('')
 
   const set = (campo, valor) => onCambio({ ...ficha, [campo]: valor })
 
+  // El dominio depende de la tienda: mostrar siempre el de Mandarina engaña al
+  // revisar un producto de INDSTORE, y esta vista previa existe justo para que
+  // se vea como lo vera el cliente.
+  // ⚠️ El dominio público real de INDSTORE está SIN CONFIRMAR: mientras tanto
+  // se muestra solo la ruta, sin inventar un dominio que podría estar mal.
+  const dominio = tienda === 'INDSTORE' ? '' : 'mandarinaec.com'
+  const rutaProducto = `products/${ficha.handle || '…'}`
+
   async function buscarCategoria() {
-    setBuscando(true)
+    setBuscando(true); setErrorCat('')
     try {
       const r = await fetch(`/api/productos-shopify/categorias?q=${encodeURIComponent(termino)}&tienda=${tienda}`)
-      const { categorias } = await r.json()
-      setCandidatas(categorias || [])
+      const d = await r.json().catch(() => ({}))
+      // ☠️ Sin esto, un 500 o un 403 se le presentaba al usuario como «sin
+      // resultados, busca en español» — mandandolo a arreglar lo que no era.
+      if (!r.ok) throw new Error(d.error || `El servidor respondió ${r.status}`)
+      setCandidatas(d.categorias || [])
       setBuscado(true)
+    } catch (e) {
+      setErrorCat(`No se pudo buscar la categoría: ${e.message}`)
+      setCandidatas([])
+      setBuscado(false)   // no es «sin resultados», es que la busqueda fallo
     } finally { setBuscando(false) }
   }
 
@@ -44,7 +60,7 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
 
       <label>URL del producto
         <input value={ficha.handle || ''} onChange={(e) => set('handle', e.target.value)} style={{ width: '100%' }} />
-        <small>mandarinaec.com/products/{ficha.handle || '…'}</small>
+        <small>{dominio ? `${dominio}/${rutaProducto}` : `/${rutaProducto}`}</small>
       </label>
 
       <label>Descripción
@@ -64,7 +80,9 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
       {/* Vista previa de Google: se juzga el SEO de un vistazo, no campo por campo */}
       <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 12 }}>
         <div style={{ color: '#1a0dab', fontSize: 18 }}>{ficha.seoTitulo || ficha.titulo}</div>
-        <div style={{ color: '#006621', fontSize: 13 }}>mandarinaec.com › products › {ficha.handle}</div>
+        <div style={{ color: '#006621', fontSize: 13 }}>
+          {dominio ? `${dominio} › products › ${ficha.handle}` : `products › ${ficha.handle}`}
+        </div>
         <div style={{ color: '#545454', fontSize: 13 }}>{ficha.seoDescripcion}</div>
       </div>
 
@@ -86,7 +104,7 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
             <span key={t} style={{ background: '#eee', borderRadius: 12, padding: '2px 10px' }}>
               {t}{' '}
               <button type="button" aria-label={`Quitar ${t}`}
-                onClick={() => set('tags', ficha.tags.filter((x) => x !== t))}>✕</button>
+                onClick={() => set('tags', (ficha.tags || []).filter((x) => x !== t))}>✕</button>
             </span>
           ))}
         </div>
@@ -114,6 +132,7 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
         <button type="button" onClick={buscarCategoria} disabled={buscando}>
           {buscando ? 'Buscando…' : 'Buscar'}
         </button>
+        {errorCat && <p style={{ color: '#c00' }}><small>{errorCat}</small></p>}
         {buscado && !buscando && candidatas.length === 0 && (
           <p><small>Sin resultados. ⚠️ La taxonomía de Shopify está en español: prueba con &quot;Chaquetas&quot; en vez de &quot;jacket&quot;.</small></p>
         )}
