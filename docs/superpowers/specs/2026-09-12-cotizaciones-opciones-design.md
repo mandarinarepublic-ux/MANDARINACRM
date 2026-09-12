@@ -36,8 +36,7 @@ muestra cantidad, precio unitario y subtotal de cada producto.
 Se descartaron dos alternativas:
 
 - **Migrar todas las cotizaciones a tener opciones.** Más limpio de leer, pero
-  exige transformar datos vivos de clientes reales, y el módulo acaba de ser
-  reescrito (commits del 10-sep). Es el peor momento para moverle los cimientos.
+  deja el sistema con un solo camino y sin red si algo llega con la forma vieja.
 - **Una fila por opción, enlazadas por un padre.** Rompe la numeración, obliga al
   documento a unir filas y llena el Historial de entradas duplicadas.
 
@@ -45,8 +44,25 @@ Se descartaron dos alternativas:
 única normaliza al leer, y de ahí en adelante todo el código ve siempre una lista
 de opciones — nunca vuelve a preguntar si la cotización es vieja o nueva.
 
-⚠️ **`productos` es una columna JSON**, así que esto **no necesita ninguna
-migración de base de datos**.
+### Correcciones a este spec (12-sep, verificadas contra la base real)
+
+Dos cosas que afirmé antes de mirar y que resultaron falsas:
+
+1. ☠️ **Esto SÍ necesita una migración.** Dije que no porque `productos` ya es
+   `jsonb`, pero `opciones` es un campo nuevo y necesita **su propia columna**.
+   Es una migración **aditiva** (`ALTER TABLE ... ADD COLUMN opciones jsonb`),
+   sin transformar ni una fila — el riesgo es otro, pero no es cero como dije.
+
+2. **`crm.cotizaciones` tiene 5 filas**, no cientos. El módulo es nuevo y casi no
+   se ha usado. Eso debilita el argumento que di contra migrar todo: con 5 filas
+   habría sido barato. Se mantiene el enfoque elegido igual, pero por otra razón:
+   `opcionesDe()` son seis líneas y además protege de cualquier fila que llegue
+   sin `opciones`, hoy o dentro de un año.
+
+⚠️ **`lib/db/cotizaciones.js` tiene una lista blanca de columnas (`COLS`) y hay
+que agregarle `'opciones'`.** Sin eso el campo se descarta al guardar **en
+silencio**: la pantalla mostraría las opciones, el guardado diría que salió bien,
+y al recargar no habría nada.
 
 ## Diseño
 
