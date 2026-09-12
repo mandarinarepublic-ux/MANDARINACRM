@@ -5,6 +5,7 @@ import TiendaToggle from './TiendaToggle'
 import ProductoCard from './ProductoCard'
 import ResumenPanel from './ResumenPanel'
 import CotizacionPreview from './CotizacionPreview'
+import OpcionesTabs from './OpcionesTabs'
 
 // Formulario completo del módulo. `initial` = cotización existente o undefined (nueva).
 export default function CotizacionForm({ initial, user, onCreated }) {
@@ -15,7 +16,7 @@ export default function CotizacionForm({ initial, user, onCreated }) {
   const hitos = [
     !!c.cliente_nombre?.trim(),
     !!c.cliente_tel?.trim(),
-    c.productos.some((p) => p.nombre?.trim() && (parseFloat(String(p.precio)) || 0) > 0),
+    h.productos.some((p) => p.nombre?.trim() && (parseFloat(String(p.precio)) || 0) > 0),
     !!c.condiciones_pago?.trim(),
   ]
   const completos = hitos.filter(Boolean).length
@@ -125,16 +126,20 @@ export default function CotizacionForm({ initial, user, onCreated }) {
                 <StepHead n="02" ok={hitos[2]} step={step} title="Productos / Prendas" sub="Detalle de prendas, técnica y diseño por posición" />
                 <button type="button" onClick={h.addProducto} className="btn-ghost text-sm">➕ Agregar prenda</button>
               </div>
-              {c.productos.map((p, i) => (
+              <OpcionesTabs
+                opciones={h.opciones} activa={h.opcionActiva} onActiva={h.setOpcionActiva}
+                onAdd={h.addOpcion} onRemove={h.removeOpcion} onUpd={h.updOpcion}
+              />
+              {h.productos.map((p, i) => (
                 <ProductoCard key={p.id} index={i} producto={p}
                   onUpd={h.updProducto} onTalla={h.updTalla} onToggleTallas={h.toggleTallas}
-                  onDup={h.duplicateProducto} onRemove={h.removeProducto} canRemove={c.productos.length > 1} />
+                  onDup={h.duplicateProducto} onRemove={h.removeProducto} canRemove={h.productos.length > 1} />
               ))}
             </div>
 
             {/* 03 Resumen */}
             <Section n="03" ok={totales.total > 0} step={step} title="Resumen económico" sub="Subtotal, descuento e IVA">
-              <ResumenPanel productos={c.productos} descuento={c.descuento} onDescuento={(v) => h.updCot('descuento', v)} totales={totales} />
+              <ResumenPanel productos={h.productos} descuento={c.descuento} onDescuento={(v) => h.updCot('descuento', v)} totales={totales} />
             </Section>
 
             {/* 04 Condiciones */}
