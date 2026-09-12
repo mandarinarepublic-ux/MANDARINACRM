@@ -672,9 +672,25 @@ test('🔒 la clave de Anthropic no sale del servidor', () => {
 })
 
 test('☠️ el prompt prohibe inventar lo que no se ve en la foto', () => {
+  // Vigila DOS cosas: que la lista de prohibidos siga ahi, y que siga siendo
+  // una PROHIBICION y no una sugerencia.
+  //
+  // Lo que esta prueba NO puede hacer, y conviene saberlo: si alguien reescribe
+  // el prompt invirtiendo el sentido pero conservando el vocabulario ("si puedes
+  // mencionar la composicion..."), una comparacion de texto no lo detecta.
+  // Contra eso no hay prueba automatica, hay revision humana.
+  assert.ok(/PROHIBIDO INVENTAR/.test(redactar), 'se perdio la prohibicion explicita')
+  assert.ok(/Nunca menciones/.test(redactar), 'se perdio la forma imperativa de la regla')
   for (const palabra of ['composición', 'lavado', 'medidas']) {
     assert.ok(redactar.includes(palabra), `el prompt no menciona ${palabra} en la lista de prohibidos`)
   }
+})
+
+test('☠️ lo que devuelve la IA se comprueba de TIPO, no solo de existencia', () => {
+  // `|| []` no protege de un string: `.filter` no existiria (500 mudo) y
+  // `altTextos?.[i]` sobre un string devuelve letras sueltas.
+  assert.ok(/Array\.isArray\(ficha\.altTextos\)/.test(redactar), 'altTextos no se comprueba de tipo')
+  assert.ok(/Array\.isArray\(ficha\.tallasSugeridas\)/.test(redactar), 'tallasSugeridas no se comprueba de tipo')
 })
 
 test('☠️ la IA no devuelve el id de categoria, devuelve un termino de busqueda', () => {
@@ -758,10 +774,20 @@ export async function POST(req) {
       return Response.json({ error: 'La IA no devolvió un JSON válido, vuelve a intentar' }, { status: 502 })
     }
 
+    // ⚠️ Lo que devuelve la IA es texto libre, no un contrato: CUALQUIER campo
+    // puede llegar con el tipo equivocado, y `|| []` no protege de eso.
+    //   · si `tallasSugeridas` viene como string, `.filter` no existe y la ruta
+    //     muere con un 500 mudo en vez de un aviso que se entienda;
+    //   · si `altTextos` viene como string, `altTextos?.[i]` devuelve LETRAS
+    //     SUELTAS, y el alt de cada foto acabaría siendo una letra.
+    // Por eso se comprueba el tipo antes de tocarlos.
+    const alts = Array.isArray(ficha.altTextos) ? ficha.altTextos : []
+    const tallas = Array.isArray(ficha.tallasSugeridas) ? ficha.tallasSugeridas : []
+
     // Un alt por foto, sí o sí: construirProductSetInput rechaza los vacíos y
     // es mejor que el hueco se vea en pantalla que reventar al publicar.
-    ficha.altTextos = fotos.map((_, i) => ficha.altTextos?.[i] || '')
-    ficha.tallasSugeridas = (ficha.tallasSugeridas || []).filter((t) => TALLAS.includes(t))
+    ficha.altTextos = fotos.map((_, i) => String(alts[i] || ''))
+    ficha.tallasSugeridas = tallas.filter((t) => TALLAS.includes(t))
 
     return Response.json(ficha)
   } catch (e) {
