@@ -33,9 +33,20 @@ DRIVE_ROOT_FOLDER_ID=ID_CARPETA_RAIZ_DRIVE
 Para cada tienda en Shopify Admin:
 ```
 Settings → Apps → Develop apps → Create app
-→ Admin API scopes: read_products, read_inventory
+→ Admin API scopes: read_products, read_inventory, write_products
 → Install app → Copiar Admin API access token
 ```
+
+`write_products` lo necesita el panel de **Cargar producto a Shopify**
+(`/dashboard/producto-nuevo`). Sin ese permiso el resto del CRM funciona
+igual, pero publicar un producto devuelve 403.
+
+⚠️ El permiso es **por tienda**: son apps distintas con sus propios scopes.
+Dárselo a Mandarina no se lo da a INDSTORE.
+
+⚠️ Al cambiar los scopes, `lib/shopify.js` puede seguir usando hasta ~24 h el
+token viejo que tiene cacheado en memoria. Un 403 justo después de dar el
+permiso suele ser eso, no el permiso.
 
 ### 3. Google Maps API Key
 
