@@ -17,6 +17,11 @@ import { pdfDeDocumento, dejarPintar } from '@/lib/generarPdf'
 export function useCotizacion(initial, user, onCreated) {
   const [cotizacion, setCotizacion] = useState(() => {
     const base = { ...nuevaCotizacion(), ...(initial || {}) }
+    // Sin esto, una cotización cuyo `productos` llega `null` o `[]` desde la
+    // base (una vieja, sin `opciones`) abriría el formulario sin una sola fila
+    // que editar: `opcionesDe` arma la opción implícita con lo que haya en la
+    // raíz, y si ahí no hay nada, no inventa nada.
+    if (!base.productos?.length) base.productos = nuevaCotizacion().productos
     // Se normaliza UNA vez, al cargar. De aquí en adelante el estado SIEMPRE
     // tiene `opciones` y ninguna otra parte del hook pregunta por la forma vieja.
     return { ...base, opciones: opcionesDe(base) }
@@ -101,25 +106,43 @@ export function useCotizacion(initial, user, onCreated) {
 
   const addOpcion = useCallback(() => {
     setCotizacion((c) => {
-      const letra = String.fromCharCode(65 + c.opciones.length) // A, B, C…
-      const opciones = [...c.opciones, nuevaOpcion(`Opción ${letra}`, c.entrega_dias)]
+      let opciones = c.opciones
       // La primera vez que se agrega una segunda, la que ya estaba también
       // necesita nombre: si no, el documento pintaría «Opción B» junto a un
       // bloque sin título.
-      if (opciones[0] && !opciones[0].nombre) opciones[0] = { ...opciones[0], nombre: 'Opción A' }
+      if (opciones[0] && !opciones[0].nombre) {
+        opciones = [{ ...opciones[0], nombre: 'Opción A' }, ...opciones.slice(1)]
+      }
+      // La letra sale de la primera libre, NO del largo: si se borró «Opción
+      // A» y solo queda «Opción B», el largo (1) volvería a dar «Opción B» —
+      // dos bloques con el mismo título en el documento del cliente.
+      const usadas = new Set(opciones.map((o) => o.nombre))
+      let letra = 'A'
+      for (let i = 0; i < 26; i++) {
+        const candidata = String.fromCharCode(65 + i)
+        if (!usadas.has(`Opción ${candidata}`)) { letra = candidata; break }
+      }
+      opciones = [...opciones, nuevaOpcion(`Opción ${letra}`, c.entrega_dias)]
       setOpcionActiva(opciones.length - 1)
       return { ...c, opciones }
     })
   }, [])
 
   const removeOpcion = useCallback((id) => {
-    setCotizacion((c) => {
-      if (c.opciones.length <= 1) return c // siempre queda al menos una
-      const opciones = c.opciones.filter((o) => o.id !== id)
-      setOpcionActiva((i) => Math.min(i, opciones.length - 1))
-      return { ...c, opciones }
+    if (cotizacion.opciones.length <= 1) return // siempre queda al menos una
+    const idx = cotizacion.opciones.findIndex((o) => o.id === id)
+    if (idx < 0) return
+    setCotizacion((c) => ({ ...c, opciones: c.opciones.filter((o) => o.id !== id) }))
+    // ☠️ `opcionActiva` es un ÍNDICE y el borrado es por id: si se borra una
+    // opción ANTERIOR a la activa, todos los índices se corren y el vendedor
+    // termina escribiendo en la opción de al lado sin darse cuenta. Por eso se
+    // decide con la POSICIÓN de la borrada (`idx`, calculado ANTES de tocar el
+    // estado), no con el largo nuevo.
+    setOpcionActiva((i) => {
+      if (idx < i) return i - 1 // se borró una de antes: todo se corrió
+      return Math.min(i, cotizacion.opciones.length - 2) // -2: ya se va una
     })
-  }, [])
+  }, [cotizacion.opciones])
 
   const updOpcion = useCallback((id, campo, valor) => {
     setCotizacion((c) => ({
@@ -148,8 +171,8 @@ export function useCotizacion(initial, user, onCreated) {
       .filter(({ o }) => !o.productos.some((p) =>
         (Number(p.cantidad) || 0) > 0 && (parseFloat(String(p.precio)) || 0) > 0))
     if (cotizacion.opciones.length > 1 && vacias.length) {
-      showToast(`Sin guardar: ${vacias.map((v) => v.nombre).join(', ')} no tiene productos con cantidad y precio.`)
-      setSaving(false)
+      const verbo = vacias.length > 1 ? 'no tienen' : 'no tiene'
+      showToast(`Sin guardar: ${vacias.map((v) => v.nombre).join(', ')} ${verbo} productos con cantidad y precio.`)
       return null
     }
     setSaving(true)
@@ -244,7 +267,15 @@ export function useCotizacion(initial, user, onCreated) {
     // toast ya lo dijo y acá no hay PDF que hacer.
     if (!cotizacion.id) {
       const saved = await save()
-      if (!saved) throw new Error('Primero hay que poder guardar la cotización')
+      if (!saved) {
+        // `save()` YA mostró su propio toast (la validación de opción vacía o
+        // el error del servidor): si este error mostrara otro, el segundo
+        // pisa al primero y el vendedor nunca se entera de CUÁL opción quedó
+        // vacía, justo cuando está a punto de mandarle el documento al cliente.
+        const err = new Error('Primero hay que poder guardar la cotización')
+        err.silencioso = true
+        throw err
+      }
     }
     // Se captura la copia OCULTA a ancho fijo (`cot-doc-pdf`, ver
     // CotizacionForm), no el documento visible: el visible mide lo que le
@@ -269,7 +300,9 @@ export function useCotizacion(initial, user, onCreated) {
       pdf.save(nombreArchivo())
       showToast(`✅ PDF guardado · ${encaje.hojas === 1 ? '1 hoja' : `${encaje.hojas} hojas`}`)
     } catch (e) {
-      showToast('❌ ' + (e?.message || 'No se pudo generar el PDF'))
+      // Si el error es `silencioso`, `save()` ya avisó por su cuenta (ver
+      // `armarPdf`): un segundo toast acá pisaría a ese primero.
+      if (!e?.silencioso) showToast('❌ ' + (e?.message || 'No se pudo generar el PDF'))
     } finally {
       setPdfOcupado(null)
     }
@@ -329,7 +362,9 @@ export function useCotizacion(initial, user, onCreated) {
       // a ignorar. Se le recuerda, que es lo honesto.
       showToast(`📎 PDF descargado (${nombre}). Adjúntalo en el chat que se abrió y, cuando lo mandes, marca la cotización como Enviada.`, 12000)
     } catch (e) {
-      showToast('❌ ' + (e?.message || 'No se pudo compartir la cotización'))
+      // Mismo caso que en `exportPDF`: si ya se avisó desde `save()`, no se
+      // repite el aviso.
+      if (!e?.silencioso) showToast('❌ ' + (e?.message || 'No se pudo compartir la cotización'))
     } finally {
       setPdfOcupado(null)
     }
