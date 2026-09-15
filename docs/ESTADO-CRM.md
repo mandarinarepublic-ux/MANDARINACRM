@@ -1,4 +1,4 @@
-# ESTADO DEL CRM · al 1-sep-2026
+# ESTADO DEL CRM · al 14-sep-2026
 
 **Qué es esto:** el único documento que dice en qué punto está el CRM **hoy**.
 Los `HANDOFF-*.md` cuentan lo que pasó en una sesión y no se tocan más; este se
@@ -27,7 +27,7 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 | Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
 | Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
 | Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
-| Pruebas | `npm test` → 526 pruebas |
+| Pruebas | `npm test` → **734** (733 pasan; `pivot-areas` falla por fecha fija, ajeno) |
 
 ---
 
@@ -61,6 +61,36 @@ No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pa
 ---
 
 ## Qué está en producción
+
+**Cargar productos a Shopify (12 al 14-sep).** `/dashboard/producto-nuevo`, **solo
+ADMIN**: fotos + precio → la IA redacta la ficha → se publica. Una tienda por
+carga, un producto a la vez, sale **ACTIVO**.
+
+- Dos caminos desde el paso 01: **`Redactar con IA`** y **`Llenar a mano`**. El
+  segundo no toca ninguna API, así que sirve con la cuenta de Anthropic sin saldo.
+- Las **siete tallas (XS a 3XL) arrancan marcadas** en los dos caminos. Ya no las
+  elige la IA: cuando se quedaba corta, el producto salía a la venta sin
+  variantes que sí hay en bodega.
+- Publicar está **bloqueado sin categoría y sin el texto alternativo de cada
+  foto**. Es el único control que queda, porque el producto sale ACTIVO.
+- ⛔ **MANDARINA sí publica; INDSTORE no**: le faltan `write_products`,
+  `read_publications` y `write_publications` en su app de Shopify.
+- ⚠️ Necesita `ANTHROPIC_API_KEY` y **hoy la cuenta está sin saldo**.
+
+Lo puro vive en `lib/shopifyProducto.js` (arma el input y verifica lo devuelto).
+Las trampas de Shopify y de la API de Claude están en la skill.
+
+**Opciones en las cotizaciones (12-sep).** Una cotización puede ofrecer
+escenarios completos —`Opción A: $920 · Opción B: $1.380`—, cada uno con sus
+productos y su tiempo de entrega; el descuento, el anticipo y las condiciones son
+de toda la cotización. **Si no agregas una segunda opción, todo se ve como
+antes.** El Historial muestra un rango cuando hay varias.
+
+`opcionesDe()` en `lib/cotizacion.js` es **el único sitio que conoce las dos
+formas**. Migración aplicada: `crm.cotizaciones.opciones jsonb`.
+
+El documento también muestra el **precio por unidad con IVA** en el mismo
+renglón, que es lo que el cliente paga de verdad.
 
 **Pedidos y taller.** Colas propias por pantalla (`/api/produccion`, `/api/corte`,
 `/api/despacho`, `/api/impresion`, `/api/historial`), cada una con su repositorio
@@ -323,6 +353,31 @@ Es lo documentado, no un descuido.
 no consigue nada: se ignoran en el route y, aun pasando, caerían dentro de lo
 suyo.
 
+### Cotizaciones: los vendedores SÍ emiten
+
+`POST /api/cotizaciones` **no pide ADMIN**: basta una sesión válida. El menú y la
+pantalla dejan pasar a `ADMIN`, `VENDEDOR` y `VENDEDOR_YAW`, y la API tampoco
+filtra por rol.
+
+Lo que sí depende del rol es **qué cotizaciones ve cada quien**: un vendedor solo
+las suyas, ADMIN todas.
+
+☠️ **Sin permiso responde 404 «no encontrada», no 403.** Un 403 confirmaría que
+ese id existe, y probar ids hasta que uno deje de dar 404 es justo el mapa que no
+hay que regalar.
+
+El **dueño** y el **número** los pone el servidor, nunca el cuerpo: no se puede
+crear una cotización a nombre de otro ni reasignarla con un PATCH.
+
+⚠️ Los **tokens de máquina (`CRM_API_TOKEN`) reciben 401 aquí.** Cotizaciones es
+un módulo de personas: `created_by` es un usuario y una máquina no tiene «lo
+suyo». Los agentes de WhatsApp crean **pedidos**, no cotizaciones.
+
+### Panel de productos: ese sí es solo ADMIN
+
+`/dashboard/producto-nuevo` y las tres rutas de `/api/productos-shopify/*` exigen
+`requireAdmin`. Publica en la tienda real y en ACTIVO.
+
 ---
 
 ## Pendientes vivos
@@ -337,6 +392,12 @@ suyo.
 | 6 | `pauta_dia` sin `.range()` | Ver arriba. ~16-nov-2026 |
 | 7 | `todosItemsListos` usa `.every()` | Un pedido **sin ítems** devuelve `true` y se auto-despacha. Mina armada, hoy no se dispara |
 | 8 | **El webhook de Shopify no ha procesado ni un pedido real** | Compra de prueba en la tienda web → tiene que aparecer en el CRM como TIENDA WEB. Si da **401**, es el secreto: añadir `SHOPIFY_<TIENDA>_WEBHOOK_SECRET` |
+| 9 | **El panel de productos no se ha probado con un producto real** | Subir uno a MANDARINA y mirarlo en la tienda |
+| 10 | **Anthropic sin saldo** | Recargar. Rompe `Redactar con IA` y `/api/analyze-image`; «Llenar a mano» funciona igual |
+| 11 | INDSTORE sin permisos de escritura en Shopify | `write_products`, `read_publications`, `write_publications` en su app |
+| 12 | Las opciones de cotización no se han probado con una real de dos opciones | Crear una, mirar el PDF (pasa de una hoja), mandarla por WhatsApp, y abrir una **vieja** para confirmar que se ve igual |
+| 13 | `tests/pivot-areas.test.js` falla | Preexistente y ajeno: fecha fija `HOY = 2026-09-04` |
+| 14 | Cotizaciones ya enviadas llevan el dominio viejo en el PDF | No se arregla solo. Si hay alguna activa esperando respuesta, el cliente tiene una dirección muerta |
 
 ---
 
@@ -365,6 +426,7 @@ suyo.
 |---|---|
 | **este archivo** | en qué punto está el CRM hoy |
 | `/crm-mandarina` (skill) | arquitectura, roles, trampas, mapa del código y de la base |
+| `docs/HANDOFF-2026-09-14-shopify-y-cotizaciones.md` | el panel de Shopify, las opciones de cotización y los dos dominios mal |
 | `docs/HANDOFF-2026-08-28-...md` | bandejas, filtro de área, el pago en la hoja, permisos |
 | `docs/HANDOFF-2026-08-02-pauta.md` | pauta, atribución y señales a Meta |
 
