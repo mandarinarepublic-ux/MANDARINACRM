@@ -27,7 +27,7 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 | Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
 | Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
 | Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
-| Pruebas | `npm test` → **734** (733 pasan; `pivot-areas` falla por fecha fija, ajeno) |
+| Pruebas | `npm test` → **761** (760 pasan; `pivot-areas` falla por fecha fija, ajeno) |
 
 ---
 
@@ -61,6 +61,33 @@ No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pa
 ---
 
 ## Qué está en producción
+
+**Corte por PEDIDO (22-sep).** La bandeja de Corte actúa sobre el pedido entero
+desde su cabecera, sin expandir: `✅ Cortar las N` y `✂️ Falta algo`.
+
+- **Por qué:** se marcaba prenda por prenda. Medido el 22-sep sobre los 67
+  pedidos en fábrica: **233 clics** para marcarlo todo, y el pedido más grande
+  del taller tiene **28 prendas**. Con el botón son 66 clics.
+- **La traba.** `Falta algo` pide un texto libre, devuelve el pedido **entero** a
+  `PENDIENTE` y lo deja **trabado**: se ve en la bandeja en cualquier filtro y
+  arriba del todo, hasta que el cortador dé `Cortar las N`. Se confía **solo en
+  ese texto** — no se sabe qué prenda falta, y es decisión de producto.
+- ☠️ **Mientras está trabado, el corte automático queda bloqueado.** Sin eso, el
+  pedido recién trabado se iba de la bandeja en cuanto el área tocara la prenda,
+  y el contador decía «6/6 cortados» sin que nadie cortara.
+- **Las fechas viven en dos sitios a propósito:** la bitácora del pedido (campo
+  `CORTE PEDIDO`, que `crm.pedido_ultimo_movimiento` ya cuenta como trabajo) y
+  las columnas `corte_pendiente_*` / `corte_terminado_*` de `crm.pedidos`.
+  `logCambio` es **no-throw**: si fuera la única fuente, la fecha se perdería en
+  silencio.
+- **UNA petición por pedido** (`PATCH /api/corte/pedido/{id}`, roles ADMIN y
+  CORTE, identidad por cookie). Seis PATCH desde el navegador dejan el pedido a
+  medio marcar si el cuarto falla, con los seis botones ya pintados en verde.
+- Regla pura y probada en `lib/cortePedido.js`; 27 pruebas en
+  `tests/corte-por-pedido.test.js`.
+- ⚠️ **Falta la prueba con tráfico real**: al cerrar la sesión nadie había
+  marcado todavía un pedido de verdad. Se comprueba con `crm.logs_pedidos` donde
+  `campo = 'CORTE PEDIDO'` y las columnas del pedido.
 
 **Cargar productos a Shopify (12 al 14-sep).** `/dashboard/producto-nuevo`, **solo
 ADMIN**: fotos + precio → la IA redacta la ficha → se publica. Una tienda por
@@ -249,6 +276,10 @@ bandeja; el caro es sacarla. Lo vigila una prueba que lee el **bundle**
 
 ✅ Verificado con tráfico real el mismo día: 17 movimientos de Estampado y sus
 17 marcas de corte automáticas, emparejadas al segundo.
+
+⚠️ **Desde el 22-sep el corte automático NO corre si el pedido está trabado**
+(ver abajo). Es la única excepción, y existe porque el automatismo era justo lo
+que le desaparecía de la bandeja al cortador el pedido que acababa de trabar.
 
 **Tablero por SUB-ÁREA (4-sep, RECIÉN DESPLEGADO).** Reemplaza las tres columnas
 CORTE → PRODUCCIÓN → DESPACHO, que metían **69 de 74 pedidos vivos en la
