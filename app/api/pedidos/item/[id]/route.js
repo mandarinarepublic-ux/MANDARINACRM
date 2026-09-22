@@ -11,7 +11,7 @@ import {
   softDeleteItem,
   getItemById,
 } from '@/lib/db/detalle'
-import { setEstado, todosItemsListos, getPedidoById } from '@/lib/db/pedidos'
+import { setEstado, todosItemsListos, getPedidoById, tieneTrabaDeCorte } from '@/lib/db/pedidos'
 import { recalcTotalesSeguro } from '@/lib/db/totales'
 import { eventosDelCambio, eventoDeCorte, debeAutoMarcarCorte } from '@/lib/prendaEventos'
 import { registrarEventosPrenda } from '@/lib/db/prendaEventos'
@@ -73,7 +73,13 @@ export async function PATCH(req, { params }) {
       //
       // Va DESPUÉS de guardar el subestado y antes del auto-avance: si esto
       // falla, el trabajo del área ya quedó guardado igual.
-      if (debeAutoMarcarCorte(item, nuevoEstado)) {
+      //
+      // ☠️ Y NO corre si el cortador dejó el pedido trabado («falta algo», ver
+      // lib/cortePedido.js). Sin esto, el pedido que acaba de trabar se le iría
+      // de la bandeja en cuanto el área tocara la prenda — que es justo el
+      // defecto que la traba viene a cerrar.
+      const trabado = await tieneTrabaDeCorte(item.PEDIDO_ID)
+      if (debeAutoMarcarCorte(item, nuevoEstado, { trabado })) {
         try {
           await updateSubestadoCorte(id, 'CORTADO')
           await logCambio(item.PEDIDO_ID, `CORTE ${item.PRODUCTO_NOMBRE}`, item.SUBESTADO_CORTE || 'PENDIENTE', 'CORTADO', 'SISTEMA').catch(() => {})
@@ -84,7 +90,7 @@ export async function PATCH(req, { params }) {
       }
 
       // Registro por prenda: el evento del área y, si tocó, el del corte AUTO.
-      await registrarEventosPrenda(eventosDelCambio({ item, areaRol, estadoNuevo: nuevoEstado, usuario: usuarioId }))
+      await registrarEventosPrenda(eventosDelCambio({ item, areaRol, estadoNuevo: nuevoEstado, usuario: usuarioId, trabado }))
 
       // ── Auto-avance a DESPACHO si TODOS los ítems del pedido están LISTO ──
       // updateSubestado ya escribió (dual-write); todosItemsListos relee del backend

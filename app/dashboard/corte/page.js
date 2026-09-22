@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha, diasHastaEntrega, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
+import { parseFecha, diasHastaEntrega, formatFechaDia, formatFechaHumana, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
+import { estaTrabado, notaDeTraba, TOPE_NOTA } from '@/lib/cortePedido'
 import { imagenAncho } from '@/lib/imagenes'
 import { estadoBandeja } from '@/lib/bandeja-estado'
 import { comparadorCorte, ORDENES, ORDEN_POR_DEFECTO } from '@/lib/orden-corte'
@@ -18,6 +19,98 @@ const CORTE_CONFIG = {
 }
 const CORTE_ORDEN = ['PENDIENTE', 'SOLICITADO', 'CORTADO']
 
+
+/**
+ * Las dos acciones sobre el PEDIDO entero, en su propia fila bajo la cabecera.
+ *
+ * ⚠️ FUERA del <button> que expande el pedido, a propósito: un botón dentro de
+ * otro botón es HTML inválido, y acá además son los dos controles que más se
+ * pulsan — desde el celular, con las manos en el taller, necesitan su sitio y
+ * su tamaño.
+ *
+ * ☠️ Mientras se guarda, los dos quedan deshabilitados: dos toques seguidos a
+ * «Cortar» mandarían dos peticiones y la segunda escribiría sobre una traba que
+ * la primera ya soltó.
+ */
+function AccionesCortePedido({ pedido, onAccion }) {
+  const [abierto, setAbierto] = useState(false)
+  const [nota, setNota] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+
+  const trabado = estaTrabado(pedido)
+  const total = pedido.PRENDAS_LLEGARON ?? pedido.itemsFiltrados.length
+
+  async function ejecutar(accion, texto) {
+    setGuardando(true); setError('')
+    const res = await onAccion(pedido.PEDIDO_ID, accion, texto)
+    setGuardando(false)
+    if (res?.ok) { setAbierto(false); setNota('') }
+    else setError(res?.error || 'No se pudo guardar')
+  }
+
+  return (
+    <div className="px-4 pb-3 pt-0 space-y-2">
+      {/* La traba, con quién la puso y cuándo. La fecha se enseña: es la señal de
+          cuánto lleva ese pedido esperando. */}
+      {trabado && !abierto && (
+        <button
+          onClick={() => { setNota(notaDeTraba(pedido)); setAbierto(true) }}
+          className="w-full text-left bg-red-500/15 border border-red-500/40 rounded-xl px-3 py-2">
+          <div className="text-sm text-red-300 font-semibold break-words">⏸ Falta: {notaDeTraba(pedido)}</div>
+          <div className="text-xs text-red-400/70 mt-0.5">
+            {pedido.CORTE_PENDIENTE_USUARIO || 'alguien'}
+            {pedido.CORTE_PENDIENTE_FECHA ? ` · ${formatFechaHumana(pedido.CORTE_PENDIENTE_FECHA)}` : ''}
+            {' · toca para corregir'}
+          </div>
+        </button>
+      )}
+
+      {abierto ? (
+        <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-3 space-y-2">
+          <label className="block text-xs text-gray-400 uppercase tracking-wide">¿Qué falta?</label>
+          {/* ⚠️ `className="input"`: sin él el navegador lo pinta blanco sobre una
+              página de texto blanco y el cortador escribe a ciegas. */}
+          <textarea
+            className="input w-full text-base" rows={2} autoFocus
+            maxLength={TOPE_NOTA} value={nota} onChange={(e) => setNota(e.target.value)}
+            placeholder="Ej: no hay tela roja, falta la talla M..." />
+          <div className="flex gap-2">
+            <button
+              onClick={() => ejecutar('FALTA', nota)}
+              disabled={guardando || !nota.trim()}
+              className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-bold disabled:opacity-40">
+              {guardando ? 'Guardando...' : '⏸ Dejar pendiente'}
+            </button>
+            <button
+              onClick={() => { setAbierto(false); setNota(''); setError('') }}
+              disabled={guardando}
+              className="px-4 py-3 rounded-xl bg-gray-700 text-gray-300 text-sm font-bold">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => ejecutar('CORTADO')}
+            disabled={guardando || total === 0}
+            className="py-3 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-500 transition-all disabled:opacity-40">
+            {guardando ? '...' : `✅ Cortar ${total === 1 ? 'la prenda' : `las ${total}`}`}
+          </button>
+          <button
+            onClick={() => { setNota(notaDeTraba(pedido)); setAbierto(true) }}
+            disabled={guardando}
+            className="py-3 rounded-xl bg-gray-800 text-gray-300 text-sm font-bold hover:text-white hover:bg-gray-700 transition-all disabled:opacity-40">
+            ✂️ Falta algo
+          </button>
+        </div>
+      )}
+
+      {error && <div className="text-xs text-red-400">{error}</div>}
+    </div>
+  )
+}
 
 function CorteCard({ item, userId, onCorteChange }) {
   const [subestadoCorte, setSubestadoCorte] = useState(item.SUBESTADO_CORTE || 'PENDIENTE')
@@ -242,6 +335,36 @@ export default function CortePage() {
     })))
   }
 
+  /**
+   * Las dos acciones sobre el pedido entero. UNA petición, no una por prenda.
+   *
+   * ☠️ El estado local se actualiza con lo que respondió el SERVIDOR, no con lo
+   * que se pidió: si el servidor rechazó (pedido fuera de fábrica, sesión
+   * caída), pintar el verde igual sería decirle al cortador que quedó marcado
+   * algo que no se guardó.
+   */
+  async function accionPedido(pedidoId, accion, nota) {
+    try {
+      const res = await fetch(`/api/corte/pedido/${pedidoId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion, nota }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return { ok: false, error: data.error || `Error ${res.status}` }
+
+      setPedidos(prev => prev.map(p => p.PEDIDO_ID !== pedidoId ? p : {
+        ...p,
+        CORTE_PENDIENTE_NOTA: data.nota || '',
+        CORTE_PENDIENTE_USUARIO: data.nota ? data.usuario : '',
+        CORTE_PENDIENTE_FECHA: data.nota ? data.fecha : '',
+        itemsFiltrados: p.itemsFiltrados.map(i => ({ ...i, SUBESTADO_CORTE: data.subestado })),
+      }))
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e?.message || 'Error de conexión' }
+    }
+  }
+
   const hayFecha = Boolean(fechaDesde || fechaHasta)
   const hayFiltroQueEsconde = hayFecha || Boolean(busqueda)
 
@@ -276,6 +399,9 @@ export default function CortePage() {
   // trabajara, así que la bandeja no podía llegar a cero y no informaba de nada.
   const porCortar = (contadores.PENDIENTE || 0) + (contadores.SOLICITADO || 0)
   const yaCortados = contadores.CORTADO || 0
+  // Pedidos parados esperando algo (tela, una talla). Se cuenta sobre `enVista`,
+  // igual que los contadores: respeta fecha y búsqueda, no el estado de corte.
+  const trabados = enVista.filter(estaTrabado).length
 
   const filtered = pedidos.filter(dentroDeFechas).map(p => ({
     ...p,
@@ -289,8 +415,19 @@ export default function CortePage() {
     // Un pedido sin ítems en este filtro no interesa — PERO uno al que le
     // faltaron prendas por cargar sí, aunque llegue vacío: es justo el que no
     // hay que esconder. Esa es la diferencia entre "no aplica" y "no se leyó".
-  })).filter(p => p.itemsFiltrados.length > 0 || p.COMPLETO === false)
-    .sort(comparadorCorte(orden))
+    //
+    // ☠️ Y un pedido TRABADO no lo esconde ningún filtro de estado: eso es la
+    // traba. Se le prometió al cortador que no se mueve de su bandeja hasta que
+    // él lo suelte, y un filtro que se lo esconda rompe justo esa promesa.
+    // La FECHA sí lo esconde, a propósito: ese filtro lo puso él, se ve en los
+    // chips y el aviso lo dice.
+  })).filter(p => p.itemsFiltrados.length > 0 || p.COMPLETO === false || estaTrabado(p))
+    // Los trabados primero: son los que necesitan que alguien haga algo.
+    .sort((a, b) => {
+      const ta = estaTrabado(a) ? 0 : 1
+      const tb = estaTrabado(b) ? 0 : 1
+      return ta !== tb ? ta - tb : comparadorCorte(orden)(a, b)
+    })
 
   const totalItems = filtered.reduce((s, p) => s + p.itemsFiltrados.length, 0)
   const ordenActual = ORDENES[orden] || ORDENES[ORDEN_POR_DEFECTO]
@@ -307,6 +444,9 @@ export default function CortePage() {
           <span className="text-xs text-gray-500 truncate">
             {porCortar} por cortar
             {yaCortados > 0 && ` · ${yaCortados} ya cortada(s)`}
+            {/* Los trabados van en la MISMA línea del número: son pedidos parados
+                esperando a alguien, y escondidos no los reclama nadie. */}
+            {trabados > 0 && <span className="text-red-400"> · {trabados} esperando algo</span>}
             {hayFiltroQueEsconde && <span className="text-mandarina-400"> · con filtro puesto</span>}
           </span>
         )}
@@ -456,8 +596,10 @@ export default function CortePage() {
                 const urgente = diasR !== null && diasR <= 2
                 const isExpanded = expandedPedido === pedido.PEDIDO_ID
 
+                const trabado = estaTrabado(pedido)
+
                 return (
-                  <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${urgente ? 'border-red-500/40' : ''}`}>
+                  <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${trabado ? 'border-red-500/60' : urgente ? 'border-red-500/40' : ''}`}>
                     <button onClick={() => setExpandedPedido(isExpanded ? null : pedido.PEDIDO_ID)}
                       className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left">
                       <div className="flex-1">
@@ -467,6 +609,8 @@ export default function CortePage() {
                             {pedido.PEDIDO_ID}
                           </Link>
                           {urgente && <span className="badge bg-red-500/20 text-red-400 text-xs">🚨 Urgente</span>}
+                          {/* Para leer la lista de un vistazo sin bajar al chip. */}
+                          {trabado && <span className="badge bg-red-500/20 text-red-400 text-xs">⏸ Falta algo</span>}
                           <span className="text-xs text-gray-600">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
                           {/* A este pedido le faltaron prendas por cargar. Antes se
                               escondía el pedido entero; ahora se enseña con la
@@ -517,6 +661,10 @@ export default function CortePage() {
                       </div>
                       <span className="text-gray-600 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
                     </button>
+
+                    {/* Las dos acciones del pedido entero: siempre a la vista, sin
+                        tener que expandir. Ese era el trabajo de más. */}
+                    <AccionesCortePedido pedido={pedido} onAccion={accionPedido} />
 
                     {isExpanded && (
                       <div className="border-t border-gray-800 divide-y divide-gray-800">
