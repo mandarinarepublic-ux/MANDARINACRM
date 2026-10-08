@@ -492,6 +492,7 @@ suyo». Los agentes de WhatsApp crean **pedidos**, no cotizaciones.
 |---|---|
 | **este archivo** | en qué punto está el CRM hoy |
 | `/crm-mandarina` (skill) | arquitectura, roles, trampas, mapa del código y de la base |
+| `docs/HANDOFF-2026-10-07-errores-abonos-catalogo-borrador.md` | errores del Historial, abonos, limpieza de tipos de prenda y el borrador del pedido |
 | `docs/HANDOFF-2026-09-14-shopify-y-cotizaciones.md` | el panel de Shopify, las opciones de cotización y los dos dominios mal |
 | `docs/HANDOFF-2026-08-28-...md` | bandejas, filtro de área, el pago en la hoja, permisos |
 | `docs/HANDOFF-2026-08-02-pauta.md` | pauta, atribución y señales a Meta |
