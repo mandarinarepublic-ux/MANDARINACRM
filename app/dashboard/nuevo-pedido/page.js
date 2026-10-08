@@ -13,6 +13,7 @@ import { puedeVerTienda, tiendasDisponibles } from '@/lib/tiendasUsuario'
 import { parseFechaCalendario, diasHastaEntrega, hoyEcuador } from '@/lib/parseFecha'
 import { avisarPedidoCreado } from '@/lib/aviso-padre'
 import { emailPareceValido, limpiarEmail } from '@/lib/email-cliente'
+import { llaveBorrador, armarBorrador, borradorVigente, hayTrabajo, resumenBorrador, haceCuanto } from '@/lib/borradorPedido'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
 
@@ -163,6 +164,13 @@ function NuevoPedidoContenido() {
   const [loadingSucursal, setLoadingSucursal] = useState(false)
   const [sucursalIdVendido, setSucursalIdVendido] = useState(null)
 
+  // Borrador (ver "Borrador: que refrescar no borre el pedido", más abajo)
+  const [borradorOfrecido, setBorradorOfrecido] = useState(null)
+  const [listoParaGuardar, setListoParaGuardar] = useState(false)
+  const [avisoComprobante, setAvisoComprobante] = useState(false)
+  const saltarFechaRef = useRef(false)
+  const creadoRef = useRef(false)
+
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
     if (!stored) { router.push('/'); return }
@@ -303,9 +311,113 @@ function NuevoPedidoContenido() {
     }
     const dias = combos[areas.join(',')] || 4
     setDiasCalculado(dias)
+    // Al recuperar un borrador, la fecha que el vendedor ya había elegido manda:
+    // recalcularla aquí la pisaría con la mínima.
+    if (saltarFechaRef.current) { saltarFechaRef.current = false; return }
     const fecha = getMinFechaConDias(dias)
     setFechaEntrega(fecha)
   }, [items])
+
+  // ─── Borrador: que refrescar no borre el pedido ────────────────────────────
+  //
+  // ☠️ En el celular, bajar con el dedo desde arriba RECARGA la página, y el
+  // vendedor perdía el pedido a medio llenar. Tres capas, de la más barata a
+  // la que de verdad salva el trabajo:
+  //   1. Se bloquea el gesto de "bajar para refrescar" en esta pantalla.
+  //   2. Si igual se intenta salir con trabajo, el navegador pregunta (su texto
+  //      es fijo: no se puede personalizar).
+  //   3. El pedido se guarda mientras se llena y, al volver, se pregunta
+  //      "¿Deseas volver a llenar el pedido?". Regla en lib/borradorPedido.js.
+  const llave = user ? llaveBorrador(user.id, { embed: esEmbed, celular: searchParams?.get('celular') || '' }) : null
+  const estadoBorrador = {
+    tienda, clienteId, cliente, tipoId, emitirFactura, usarMapa, items, pagos,
+    direccionTexto, latitud, longitud, fechaEntrega, notasVendedor, step, sucursalIdVendido,
+  }
+  const conTrabajo = hayTrabajo(estadoBorrador)
+
+  // 1. Sin "bajar para refrescar" mientras se está en esta pantalla.
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const antes = [html.style.overscrollBehaviorY, body.style.overscrollBehaviorY]
+    html.style.overscrollBehaviorY = 'contain'
+    body.style.overscrollBehaviorY = 'contain'
+    return () => {
+      html.style.overscrollBehaviorY = antes[0]
+      body.style.overscrollBehaviorY = antes[1]
+    }
+  }, [])
+
+  // 2. El aviso del navegador si se intenta recargar o cerrar con trabajo.
+  useEffect(() => {
+    if (!conTrabajo || loading) return
+    const avisar = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', avisar)
+    return () => window.removeEventListener('beforeunload', avisar)
+  }, [conTrabajo, loading])
+
+  // 3a. Al entrar: ¿hay un pedido a medio llenar?
+  useEffect(() => {
+    if (!llave) return
+    let b = null
+    try { b = borradorVigente(localStorage.getItem(llave)) } catch {}
+    if (b) setBorradorOfrecido(b)
+    else setListoParaGuardar(true)
+  }, [llave])
+
+  // 3b. Guardar mientras se llena. NO antes de que el vendedor conteste la
+  // pregunta: si no, el formulario vacío pisaría el borrador que se le ofrece.
+  useEffect(() => {
+    if (!llave || !listoParaGuardar || creadoRef.current) return
+    const t = setTimeout(() => {
+      if (creadoRef.current) return
+      try {
+        if (conTrabajo) localStorage.setItem(llave, JSON.stringify(armarBorrador(estadoBorrador)))
+        else localStorage.removeItem(llave)
+      } catch (e) {
+        // Lleno o bloqueado (modo privado): no se puede guardar, pero el
+        // pedido sigue funcionando igual.
+        console.warn('No se pudo guardar el borrador del pedido:', e?.message || e)
+      }
+    }, 500)
+    return () => clearTimeout(t)
+  }, [llave, listoParaGuardar, JSON.stringify(estadoBorrador)])
+
+  function recuperarBorrador() {
+    const d = borradorOfrecido?.datos
+    if (!d) return
+    if ((d.items || []).length > 0) saltarFechaRef.current = true
+    if (d.tienda) setTienda(d.tienda)
+    setClienteId(d.clienteId ?? null)
+    if (d.cliente) setCliente(d.cliente)
+    if (d.tipoId) setTipoId(d.tipoId)
+    if (typeof d.emitirFactura === 'boolean') setEmitirFactura(d.emitirFactura)
+    setUsarMapa(!!d.usarMapa)
+    setItems(d.items || [])
+    if (Array.isArray(d.pagos) && d.pagos.length) setPagos(d.pagos)
+    setDireccionTexto(d.direccionTexto || '')
+    setLatitud(d.latitud ?? null)
+    setLongitud(d.longitud ?? null)
+    if (d.fechaEntrega) setFechaEntrega(d.fechaEntrega)
+    setNotasVendedor(d.notasVendedor || '')
+    setSucursalIdVendido(d.sucursalIdVendido ?? null)
+    if (d.step) setStep(d.step)
+    // Los campos del cliente se vuelven a montar con los datos recuperados.
+    setClienteKey(k => k + 1)
+    setAvisoComprobante(!!borradorOfrecido.sinComprobante)
+    setBorradorOfrecido(null)
+    setListoParaGuardar(true)
+  }
+
+  function descartarBorrador() {
+    borrarBorrador()
+    setBorradorOfrecido(null)
+    setListoParaGuardar(true)
+  }
+
+  function borrarBorrador() {
+    try { if (llave) localStorage.removeItem(llave) } catch {}
+  }
 
   const montoTotal = items.reduce((s, i) => s + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
   const montoAbonado = pagos.reduce((s, p) => s + parseFloat(p.monto || 0), 0)
@@ -549,6 +661,12 @@ function NuevoPedidoContenido() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
 
+      // ☠️ El pedido YA existe: el borrador se borra ahora mismo, antes de nada
+      // que pueda fallar. Si sobreviviera, al volver se ofrecería "recuperar"
+      // un pedido ya creado y saldría DOS veces.
+      creadoRef.current = true
+      borrarBorrador()
+
       // Descontar stock de sucursal si hay items de sucursal
       const itemsSucursal = items.filter(i => i.tipo === 'SUCURSAL' && i.sucursalId)
       for (const item of itemsSucursal) {
@@ -646,8 +764,50 @@ function NuevoPedidoContenido() {
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-28">
+      {/* overscroll-y-contain: en el celular este es el contenedor que se
+          desliza; sin esto, el tirón de más al llegar arriba pasa a la página y
+          el navegador lo toma como "refrescar". */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-y-contain pb-28">
         <div className={`${anchoContenido} px-4 pt-4`}>
+          {/* ¿Recuperar el pedido que se estaba llenando? */}
+          {borradorOfrecido && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+                <div>
+                  <div className="text-2xl mb-2">📝</div>
+                  <h3 className="text-white font-semibold text-base">¿Deseas volver a llenar el pedido?</h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Tenías un pedido sin terminar ({haceCuanto(borradorOfrecido.guardado)}):
+                  </p>
+                  <div className="mt-2 bg-gray-800/60 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white">
+                    {resumenBorrador(borradorOfrecido)}
+                  </div>
+                  {borradorOfrecido.sinComprobante && (
+                    <p className="text-xs text-yellow-400 mt-2">
+                      La foto del comprobante de pago no se guarda: tendrás que volver a subirla.
+                    </p>
+                  )}
+                </div>
+                <button onClick={recuperarBorrador}
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white"
+                  style={{ backgroundColor: tiendaColor }}>
+                  ✅ Sí, recuperar el pedido
+                </button>
+                <button onClick={descartarBorrador}
+                  className="w-full py-2.5 rounded-xl text-sm font-medium text-gray-400 border border-gray-700 hover:bg-gray-800">
+                  No, empezar uno nuevo
+                </button>
+              </div>
+            </div>
+          )}
+
+          {avisoComprobante && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-sm px-4 py-3 rounded-xl mb-4 flex items-start gap-2">
+              <span className="flex-1">Pedido recuperado. Vuelve a subir la foto del comprobante de pago.</span>
+              <button onClick={() => setAvisoComprobante(false)} className="text-yellow-500 hover:text-white">✕</button>
+            </div>
+          )}
+
           {error && (
             <div ref={errorRef} className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4 scroll-mt-20">
               {error}
