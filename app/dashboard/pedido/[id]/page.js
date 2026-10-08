@@ -67,6 +67,9 @@ export default function PedidoDetailPage() {
   const [abonoFoto, setAbonoFoto] = useState(null)
   const [abonoFotoPreview, setAbonoFotoPreview] = useState(null)
   const [guardandoAbono, setGuardandoAbono] = useState(false)
+  // Corregir un abono ya registrado (solo ADMIN): { PAGO_ID, tipo, monto, notas, original }
+  const [pagoEditando, setPagoEditando] = useState(null)
+  const [guardandoEdicionPago, setGuardandoEdicionPago] = useState(false)
   // Envío de la hoja al chat. Solo existe en modo embed (ver enviarHojaAlInbox).
   const [enviandoHoja, setEnviandoHoja] = useState(false)
   const [hojaEstado, setHojaEstado] = useState(null)   // { tipo: 'ok'|'error', texto }
@@ -352,6 +355,60 @@ export default function PedidoDetailPage() {
     reader.readAsDataURL(file)
   }
 
+  // Corregir un abono: SOLO ADMIN. La ruta lo exige igual (requireAdmin); esto
+  // solo esconde el botón a quien no puede usarlo.
+  const canEditarAbono = user?.rol === 'ADMIN'
+
+  function abrirEdicionPago(pago) {
+    setPagoEditando({
+      PAGO_ID: pago.PAGO_ID,
+      tipo: pago.TIPO_PAGO || 'EFECTIVO',
+      monto: String(parseFloat(pago.MONTO || 0)),
+      notas: pago.NOTAS || '',
+      original: pago,
+    })
+  }
+
+  async function guardarEdicionPago() {
+    if (!pagoEditando) return
+    if (!(parseFloat(pagoEditando.monto) > 0)) return alert('El monto tiene que ser mayor a 0. Si el pago sobra, elimínalo.')
+    setGuardandoEdicionPago(true)
+    try {
+      const res = await fetch(`/api/pagos/${pagoEditando.PAGO_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: pagoEditando.tipo, monto: pagoEditando.monto, notas: pagoEditando.notas }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo guardar')
+      setPagoEditando(null)
+      await loadPedido()
+    } catch (e) {
+      alert('Error: ' + e.message)
+    } finally {
+      setGuardandoEdicionPago(false)
+    }
+  }
+
+  async function eliminarPago() {
+    if (!pagoEditando) return
+    const o = pagoEditando.original
+    const ok = confirm(`¿Eliminar el pago de $${parseFloat(o.MONTO || 0).toFixed(2)} (${o.TIPO_PAGO})?\n\nEl saldo del pedido se recalcula. Queda anotado en la bitácora.`)
+    if (!ok) return
+    setGuardandoEdicionPago(true)
+    try {
+      const res = await fetch(`/api/pagos/${pagoEditando.PAGO_ID}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo eliminar')
+      setPagoEditando(null)
+      await loadPedido()
+    } catch (e) {
+      alert('Error: ' + e.message)
+    } finally {
+      setGuardandoEdicionPago(false)
+    }
+  }
+
   const canAddAbono = ['ADMIN', 'VENDEDOR', 'VENDEDOR_YAW'].includes(user?.rol)
 
   const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
@@ -553,6 +610,12 @@ export default function PedidoDetailPage() {
                           </button>
                         )}
                       </div>
+                      {canEditarAbono && pago.PAGO_ID && (
+                        <button onClick={() => abrirEdicionPago(pago)} title="Corregir este pago"
+                          className="flex-shrink-0 text-gray-400 hover:text-white p-2 -mr-1 rounded-lg hover:bg-gray-700/50">
+                          ✏️
+                        </button>
+                      )}
                     </div>
                   )
                 })}
@@ -645,6 +708,64 @@ export default function PedidoDetailPage() {
                   className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
                   style={{ backgroundColor: '#22c55e' }}>
                   {guardandoAbono ? '⏳ Guardando...' : '✅ Registrar pago'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: corregir un pago ya registrado (solo ADMIN) */}
+          {pagoEditando && (
+            <div className="fixed inset-0 bg-black/90 z-50 flex items-end justify-center p-4" onClick={e => e.target === e.currentTarget && !guardandoEdicionPago && setPagoEditando(null)}>
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-white font-semibold text-base">✏️ Corregir pago</h3>
+                  <button onClick={() => setPagoEditando(null)} disabled={guardandoEdicionPago} className="text-gray-500 hover:text-white text-lg">✕</button>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Registrado: {pagoEditando.original.TIPO_PAGO} ${parseFloat(pagoEditando.original.MONTO || 0).toFixed(2)}
+                  {pagoEditando.original.FECHA_PAGO && ` · ${String(pagoEditando.original.FECHA_PAGO).split(/[ T]/)[0]}`}
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">Tipo de pago</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[['EFECTIVO','💵','Efectivo'],['TRANSFERENCIA','🏦','Transferencia'],['LINK_PAGO','🔗','Link']].map(([val,icon,label]) => (
+                      <button key={val} onClick={() => setPagoEditando(p => ({ ...p, tipo: val }))}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-medium transition-all ${
+                          pagoEditando.tipo === val ? 'border-mandarina-500 bg-mandarina-500/20 text-mandarina-400' : 'border-gray-700 bg-gray-800/50 text-gray-400'
+                        }`}>
+                        <span className="text-xl">{icon}</span>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">Monto ($)</div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
+                    <input type="number" step="0.01" min="0" inputMode="decimal" value={pagoEditando.monto}
+                      onChange={e => setPagoEditando(p => ({ ...p, monto: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-7 pr-4 py-3 text-sm focus:border-mandarina-500 focus:outline-none" />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">Notas</div>
+                  <input type="text" value={pagoEditando.notas}
+                    onChange={e => setPagoEditando(p => ({ ...p, notas: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:border-mandarina-500 focus:outline-none" />
+                </div>
+
+                <button onClick={guardarEdicionPago} disabled={guardandoEdicionPago}
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+                  style={{ backgroundColor: '#22c55e' }}>
+                  {guardandoEdicionPago ? '⏳ Guardando...' : '✅ Guardar corrección'}
+                </button>
+                <button onClick={eliminarPago} disabled={guardandoEdicionPago}
+                  className="w-full py-2.5 rounded-xl text-sm font-medium text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-all disabled:opacity-50">
+                  🗑️ Eliminar este pago
                 </button>
               </div>
             </div>
