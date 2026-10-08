@@ -62,6 +62,14 @@ No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pa
 
 ## Qué está en producción
 
+**Pedido nuevo: refrescar no borra lo llenado (7-oct, confirmado por Rodrigo).**
+Se bloquea el «bajar para refrescar» del celular, el navegador avisa si se
+intenta salir con trabajo, y el pedido se guarda en localStorage mientras se
+llena: al volver pregunta «¿Deseas volver a llenar el pedido?». Por usuario (y
+por cliente dentro del inbox), vence a las 12 h, sin la foto del comprobante
+(base64). ☠️ Se borra al crear el pedido, ANTES de navegar: si no, se ofrecería
+recuperar uno ya creado. Regla en `lib/borradorPedido.js`.
+
 **Tipos de prenda: limpieza + solo ADMIN crea (7-oct).** El catálogo pasó de 346
 a **194 activos**: 75 sin uso borrados, 77 desactivados (mal escritos, notas
 metidas como tipo y **personajes**, que los vendedores no deben vender), 4
