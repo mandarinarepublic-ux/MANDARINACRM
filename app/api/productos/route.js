@@ -24,19 +24,36 @@ export async function GET(req) {
   }
 }
 
-// Crear un tipo de prenda. Lo usa cualquier vendedor desde el selector del
-// pedido: si la prenda no está en la lista, tiene que poder darla de alta sin
-// esperar a un admin.
+// Crear un tipo de prenda. SOLO ADMIN desde el 7-oct-2026.
+//
+// ☠️ Antes lo podía hacer cualquier vendedor desde el selector del pedido, y el
+// catálogo llegó a 346 tipos activos: 10 versiones de HOODIE PREMIUM, nombres
+// cortados (BUZ, CAMISETA P), personajes (HOODIE SPIDERMAN) y notas de pedido
+// metidas como tipo. Se limpió a 194 (respaldo en
+// crm.respaldo_productos_catalogo_20261007).
 export async function POST(req) {
   try {
+    const auth = await requireAdmin(req)
+    if (!auth.ok) {
+      const error = auth.status === 403 ? 'Solo un ADMIN puede crear tipos de prenda' : auth.error
+      return Response.json({ error }, { status: auth.status })
+    }
+
     const { nombre } = await req.json()
     const limpio = String(nombre ?? '').trim().toUpperCase()
     if (!limpio) return Response.json({ error: 'Nombre requerido' }, { status: 400 })
 
     // Evita el "HOODIE SPIDERMAN" / "HOODIES SPIDERMAN" que ya ensució el catálogo.
-    const existentes = await listCatalogo()
-    if (existentes.some(p => String(p.NOMBRE).trim().toUpperCase() === limpio)) {
-      return Response.json({ error: `"${limpio}" ya existe en el catálogo` }, { status: 409 })
+    // ☠️ Contra el catálogo COMPLETO, no solo los activos: addCatalogo hace un
+    // upsert con activo=true, así que "crear" uno desactivado lo REACTIVABA en
+    // silencio (HOODIE SPIDERMAN volvía al buscador de todos).
+    const existentes = await listCatalogoGestion()
+    const previo = existentes.find(p => String(p.NOMBRE).trim().toUpperCase() === limpio)
+    if (previo) {
+      const error = previo.ACTIVO
+        ? `"${limpio}" ya existe en el catálogo`
+        : `"${limpio}" existe pero está DESACTIVADO. Si de verdad hace falta, actívalo en Tipos de prenda.`
+      return Response.json({ error }, { status: 409 })
     }
 
     // dual-write: Sheets (append [NOMBRE,'TRUE']) + Supabase (upsert por nombre).

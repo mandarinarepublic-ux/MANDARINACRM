@@ -65,6 +65,13 @@
 ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
 
+/* Listas desplegables: la barra global (gris oscuro sobre el mismo fondo que
+   la lista) no se veía, y parecía que no había más opciones. */
+.lista-desplegable { scrollbar-width: thin; scrollbar-color: #9CA3AF #1F2937; }
+.lista-desplegable::-webkit-scrollbar { width: 10px; }
+.lista-desplegable::-webkit-scrollbar-track { background: #1F2937; }
+.lista-desplegable::-webkit-scrollbar-thumb { background: #9CA3AF; border-radius: 5px; border: 2px solid #1F2937; }
+
 /* Status colors */
 .status-pendiente_fabrica { @apply bg-yellow-500/20 text-yellow-400; }
 .status-en_fabrica { @apply bg-blue-500/20 text-blue-400; }

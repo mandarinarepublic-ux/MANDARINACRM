@@ -346,8 +346,13 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false }) {
   const [creando, setCreando] = useState(false)
   const [errorCatalogo, setErrorCatalogo] = useState('')
 
+  // Solo ADMIN crea tipos de prenda. El rol de localStorage sirve solo para
+  // pintar el botón: la API lo exige con requireAdmin.
+  const [esAdmin, setEsAdmin] = useState(false)
+
   useEffect(() => {
     fetch('/api/productos').then(r => r.json()).then(d => setCatalogoProductos(d.productos || []))
+    try { setEsAdmin(JSON.parse(localStorage.getItem('mp_user') || '{}')?.rol === 'ADMIN') } catch {}
   }, [])
 
   /** Crea el tipo de prenda y lo deja seleccionado. Devuelve true si salió bien. */
@@ -406,6 +411,7 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false }) {
             productos={catalogoProductos}
             onCrear={crearTipoPrenda}
             creando={creando}
+            permitirCrear={esAdmin}
           />
           {errorCatalogo && (
             <p className="text-xs text-red-400 mt-1">⚠️ {errorCatalogo}</p>
