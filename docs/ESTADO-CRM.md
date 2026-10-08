@@ -62,6 +62,20 @@ No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pa
 
 ## Qué está en producción
 
+**Tipos de prenda: limpieza + solo ADMIN crea (7-oct).** El catálogo pasó de 346
+a **194 activos**: 75 sin uso borrados, 77 desactivados (mal escritos, notas
+metidas como tipo y **personajes**, que los vendedores no deben vender), 4
+renombrados. Respaldo: `crm.respaldo_productos_catalogo_20261007`.
+☠️ La causa: en el buscador del pedido «Crear» iba primero y resaltado, así que
+Enter creaba lo escrito a medias. Ahora Enter elige la coincidencia, «Crear» va
+al final, sugiere «¿Quisiste decir…?» (`lib/tiposParecidos.js`) y **solo ADMIN
+crea** (`POST /api/productos` con `requireAdmin`). Crear uno desactivado ya no lo
+reactiva en silencio. La lista avisa «↓ N más» porque la barra no se veía.
+⚠️ Las ventas viejas siguen con el nombre mal escrito (no se reescribió
+`detalle_pedido`): un reporte por producto las ve separadas. Sin decidir: DZ,
+selecciones (ARGENTINA, BRASIL, PORTUGAL), CAMISETA NORMAL, CAMISETA TELA JERSEY,
+POLO.
+
 **Corregir abonos, solo ADMIN (7-oct).** En el detalle del pedido cada pago lleva
 un ✏️ para cambiar tipo, monto y notas, o eliminarlo. `PATCH`/`DELETE
 /api/pagos/[id]` con `requireAdmin`; recalcula el saldo y deja `PAGO_EDITADO` /
