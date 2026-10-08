@@ -1,4 +1,4 @@
-# ESTADO DEL CRM · al 14-sep-2026
+# ESTADO DEL CRM · al 7-oct-2026
 
 **Qué es esto:** el único documento que dice en qué punto está el CRM **hoy**.
 Los `HANDOFF-*.md` cuentan lo que pasó en una sesión y no se tocan más; este se
@@ -61,6 +61,17 @@ No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pa
 ---
 
 ## Qué está en producción
+
+**Corregir abonos, solo ADMIN (7-oct).** En el detalle del pedido cada pago lleva
+un ✏️ para cambiar tipo, monto y notas, o eliminarlo. `PATCH`/`DELETE
+/api/pagos/[id]` con `requireAdmin`; recalcula el saldo y deja `PAGO_EDITADO` /
+`PAGO_ELIMINADO` en la bitácora con el antes completo (no hay papelera). Fecha,
+comprobante y quién lo registró no se tocan. Regla en `lib/editarPago.js`.
+
+**Historial: búsqueda corta (7-oct).** Con 1-2 caracteres daba «Bad Request»: los
+ids de ~1000 clientes iban en la URL (26-33 KB). 75 errores desde el 18-sep, sobre
+todo Despacho. Ahora <3 caracteres busca solo el número de pedido y nunca van más
+de 200 ids (`lib/historial-busqueda.js`).
 
 **Corte por PEDIDO (22-sep).** La bandeja de Corte actúa sobre el pedido entero
 desde su cabecera, sin expandir: `✅ Cortar las N` y `✂️ Falta algo`.
@@ -429,6 +440,8 @@ suyo». Los agentes de WhatsApp crean **pedidos**, no cotizaciones.
 | 12 | Las opciones de cotización no se han probado con una real de dos opciones | Crear una, mirar el PDF (pasa de una hoja), mandarla por WhatsApp, y abrir una **vieja** para confirmar que se ve igual |
 | 13 | `tests/pivot-areas.test.js` falla | Preexistente y ajeno: fecha fija `HOY = 2026-09-04` |
 | 14 | Cotizaciones ya enviadas llevan el dominio viejo en el PDF | No se arregla solo. Si hay alguna activa esperando respuesta, el cliente tiene una dirección muerta |
+| 15 | **Corregir abonos y la búsqueda corta no se probaron en vivo** (7-oct) | Buscar `6` en Historial sin error · `select count(*) from crm.eventos_sistema where mensaje like 'El Historial fallo%Bad Request%' and fecha > '2026-10-08'` = 0 · corregir un abono y ver `PAGO_EDITADO` en la bitácora |
+| 16 | 69 errores viejos del Historial siguen «abiertos» en el cuadro | Marcarlos resueltos tras confirmar el #15 |
 
 ---
 
