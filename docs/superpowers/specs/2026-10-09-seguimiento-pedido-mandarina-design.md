@@ -57,7 +57,7 @@ De arriba abajo:
    - con saldo → aviso rojo «Tu pedido tiene un saldo pendiente de pago» +
      botón «Completar mi pago por WhatsApp». **Nunca se muestra ningún monto.**
    - pagado → «PAGO COMPLETO» en verde, como en el PDF.
-5. **Datos de envío**, tapados (ver Seguridad).
+5. **Datos de envío**: nombre, celular completo, cédula con los 5 dígitos del medio tapados y solo la ciudad (ver Seguridad).
 6. **Contenido · N prendas**: por prenda, foto frontal (`FOTO_PECHO_URL`, como
    `fotoPrincipal` del PDF), nombre, cantidad, color y talla. Sin estado interno,
    sin área, sin instrucciones de confección.
@@ -113,8 +113,8 @@ La página la abre cualquiera que tenga el celular y el número. Por eso:
 | dato | se muestra |
 |---|---|
 | Nombre completo | sí |
-| Celular | tapado: `09****5678` |
-| Cédula | tapada: `******4321` |
+| Celular | **completo** (`0998765678`): el cliente acaba de escribirlo |
+| Cédula | los **5 dígitos del medio** tapados: `17*****321`. Con RUC de 13 dígitos, igual 5 del medio: `1712*****4001` |
 | Dirección | **solo la ciudad** |
 | Email | no |
 | Montos (total, abonos, saldo) | no; solo «tiene saldo pendiente» sí/no |
@@ -131,7 +131,7 @@ La página la abre cualquiera que tenga el celular y el número. Por eso:
   `crm.consultas_publicas` (Vercel no guarda memoria entre llamadas). Pasado el
   límite: `429` «Demasiados intentos, prueba en unos minutos».
 - Devuelve **solo** lo de la tabla de arriba, ya tapado en el servidor. El
-  navegador nunca recibe la cédula ni el celular completos.
+  navegador nunca recibe la cédula completa.
 - Toda consulta (acierto, fallo, bloqueo) queda en `crm.consultas_publicas`
   con IP, número intentado y resultado. Así se ve si alguien está barriendo
   números.
