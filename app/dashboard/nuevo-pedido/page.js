@@ -766,8 +766,14 @@ function NuevoPedidoContenido() {
 
       {/* overscroll-y-contain: en el celular este es el contenedor que se
           desliza; sin esto, el tirón de más al llegar arriba pasa a la página y
-          el navegador lo toma como "refrescar". */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-y-contain pb-28">
+          el navegador lo toma como "refrescar".
+
+          ☠️ SOLO en el celular (md:overscroll-y-auto). En escritorio (y dentro del
+          inbox, que lo muestra a más de 768 px) este div NO tiene alto fijo: crece
+          con el contenido y quien se desliza es la PÁGINA. Con contain, la rueda le
+          llega primero a este div, que no tiene nada que deslizar, y no se la pasa
+          a la página: no se podía bajar a los botones (8-oct, desde e862e7dd). */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-y-contain md:overscroll-y-auto pb-28">
         <div className={`${anchoContenido} px-4 pt-4`}>
           {/* ¿Recuperar el pedido que se estaba llenando? */}
           {borradorOfrecido && (
