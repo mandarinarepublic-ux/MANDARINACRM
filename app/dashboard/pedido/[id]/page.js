@@ -845,8 +845,9 @@ export default function PedidoDetailPage() {
                           <div className="flex-shrink-0 w-1 bg-gray-700 rounded-full" />
                           <div className="flex-1 pb-3 border-b border-gray-800/50 last:border-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-gray-600">{log.fecha?.split(' ')[0]}</span>
-                              <span className="text-gray-600">{log.fecha?.split(' ')[1]}</span>
+                              {/* Supabase manda ISO UTC ("2026-10-06T18:59:45+00:00"): partirlo por
+                                  espacio pintaba la cadena cruda y en hora UTC. */}
+                              <span className="text-gray-600">{formatFechaHumana(log.fecha) || log.fecha}</span>
                               <span className="text-mandarina-400 font-medium">{log.usuario}</span>
                             </div>
                             <div className="text-gray-300">
