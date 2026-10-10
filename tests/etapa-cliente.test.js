@@ -58,6 +58,14 @@ test('cortado: Producción, con la fecha del primer corte', () => {
   assert.equal(r.fechas[2], '2026-10-05T16:00:00.000Z')
 })
 
+test('nunca retrocede: un área que vuelve a ENVIADO_APROBACION sigue en Producción si la bitácora ya registró trabajo', () => {
+  const r = calc(pedido({ fecha_impresion_produccion: '2026-10-04T14:00:00Z' }), [item({ subestado: 'ENVIADO_APROBACION' })], [
+    log('SUBESTADO ESTAMPADO', 'EN_PROCESO', '2026-10-05T16:00:00Z'),
+  ])
+  assert.equal(r.etapa, 2)
+  assert.equal(r.fechas[2], '2026-10-05T16:00:00.000Z')
+})
+
 test('un área trabajando (multi-área) también es Producción', () => {
   assert.equal(calc(pedido(), [item({ area: 'ESTAMPADO + BORDADO', subestado: 'ESTAMPADO:SOLICITADO|BORDADO:EN_PROCESO' })]).etapa, 2)
 })
