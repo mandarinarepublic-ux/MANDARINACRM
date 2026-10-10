@@ -62,7 +62,7 @@ export default function HojaPedido({ p, promo, onVolver }) {
         <button type="button" className={s.volver} onClick={onVolver}>← Consultar otro pedido</button>
         <Avance p={p} />
 
-        {p.saldoPendiente ? (
+        {!p.cancelado && (p.saldoPendiente ? (
           <div className={s.saldo}>
             <span aria-hidden="true">🔴</span>
             <div>
@@ -74,7 +74,7 @@ export default function HojaPedido({ p, promo, onVolver }) {
           </div>
         ) : (
           <div className={s.pagado}><span aria-hidden="true">✅</span>PAGO COMPLETO</div>
-        )}
+        ))}
 
         <div className={s.datos}>
           <span className={s.etiqueta}>Datos de envío</span>

@@ -5,8 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import s from './seguimiento.module.css'
 import Promo from './Promo'
 import HojaPedido, { waCon } from './HojaPedido'
-
-const ORIGENES_TIENDA = ['https://www.mandarinaec.com', 'https://mandarinaec.com']
+import { ORIGENES_TIENDA } from '@/lib/origenes'
 
 export default function Seguimiento({ promo }) {
   const [celular, setCelular] = useState('')
