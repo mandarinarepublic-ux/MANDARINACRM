@@ -62,6 +62,25 @@ No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pa
 
 ## Qué está en producción
 
+**Seguimiento del pedido para el cliente: `crm.apps.mandarinaec.com/pedido` (9-oct, falta prueba de Rodrigo y Shopify).**
+El cliente escribe su celular (últimos 9 dígitos) y el número de pedido (`6308`
+o `MAN-JAC-6308`) y ve la hoja «¡Gracias!» a una columna con 5 etapas:
+Recibido · Diseño · Producción · Tránsito · Entregado (= COMPLETADO + 24 h,
+calculado, no se guarda). La regla vive en `lib/etapaCliente.js` y nunca
+retrocede. Solo pedidos de **MANDARINA**; INDSTORE y YAW dan el mismo 404 que un
+pedido inexistente. Se tapa: cédula (5 dígitos del medio), dirección (solo
+ciudad), email, montos (solo «tiene saldo» sí/no), notas, área y vendedor; la
+lista blanca es `armarRespuesta` en `lib/seguimientoPublico.js`.
+Ruta pública: `POST /api/publico/pedido`. Límite: 10 consultas por IP y 5 fallos
+por número (el número LIMPIO: `6308` y `MAN-JAC-6308` cuentan juntos) cada
+15 min → 429. Cada consulta se reserva como `pendiente` ANTES de contar (así una
+ráfaga no pasa entera) y queda en `crm.consultas_publicas` con IP, número y
+resultado: ahí se ve si alguien barre números. La promo se prende y cambia en
+**«Promo del seguimiento»** (solo ADMIN) → `crm.config_publica`, clave
+`promo_mandarina`. `next.config.js` deja enmarcar SOLO `/pedido` desde
+`mandarinaec.com`. Pendiente: página en Shopify (`mandarinaec.com/pedido`),
+Fase 2 (mensajes de WhatsApp por etapa) e INDSTORE en `indlovers.com/pedido`.
+
 **Pedido nuevo: refrescar no borra lo llenado (7-oct, confirmado por Rodrigo).**
 Se bloquea el «bajar para refrescar» del celular, el navegador avisa si se
 intenta salir con trabajo, y el pedido se guarda en localStorage mientras se
