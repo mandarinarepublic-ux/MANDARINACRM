@@ -36,6 +36,20 @@ const nextConfig = {
           },
         ],
       },
+      // /pedido es la página PÚBLICA del seguimiento: la tienda la muestra en un
+      // marco en mandarinaec.com/pedido. Solo esta ruta; el resto del CRM sigue
+      // cerrado a la tienda. Va DESPUÉS de la general porque Next se queda con la
+      // última cabecera que coincide. Repetido a mano: ver ORIGENES_TIENDA en
+      // lib/origenes.js y tests/csp.test.js.
+      {
+        source: '/pedido',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://inbox.apps.mandarinaec.com https://ind-inbox.apps.mandarinaec.com https://www.mandarinaec.com https://mandarinaec.com",
+          },
+        ],
+      },
     ]
   },
 }

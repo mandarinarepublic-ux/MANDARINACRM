@@ -41,3 +41,19 @@ test('la CSP NO usa comodín', () => {
     assert.ok(!token.includes('*'), `token con comodín encontrado: ${token}`)
   }
 })
+
+import { ORIGENES_TIENDA } from '../lib/origenes.js'
+
+test('la tienda puede enmarcar SOLO /pedido', () => {
+  // Bloque de /pedido: lleva los orígenes de la tienda.
+  const bloque = config.match(/source:\s*'\/pedido'[\s\S]*?frame-ancestors([^"]*)"/)
+  assert.ok(bloque, 'falta la regla de /pedido en next.config.js')
+  for (const o of ORIGENES_TIENDA) assert.ok(bloque[1].includes(o), `falta ${o} en la CSP de /pedido`)
+  // Regla general: NO los lleva (el resto del CRM no se puede enmarcar desde la tienda).
+  const general = config.match(/source:\s*'\/:path\*'[\s\S]*?frame-ancestors([^"]*)"/)
+  for (const o of ORIGENES_TIENDA) assert.ok(!general[1].includes(o), `${o} no debe poder enmarcar todo el CRM`)
+})
+
+test('la regla de /pedido va DESPUÉS de la general (Next: la última gana)', () => {
+  assert.ok(config.indexOf("source: '/pedido'") > config.indexOf("source: '/:path*'"))
+})
