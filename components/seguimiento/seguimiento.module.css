@@ -64,6 +64,9 @@
 
 /* Datos */
 .datos{border:2px solid var(--linea);border-radius:14px;padding:14px 16px}
+.guiaFoto{display:block;border:2px solid var(--linea);border-radius:14px;padding:14px 16px;text-decoration:none;color:inherit}
+.guiaFoto img{display:block;width:100%;max-height:520px;object-fit:contain;margin-top:10px;border-radius:10px;background:var(--fondo-ficha)}
+.guiaNota{display:block;margin-top:8px;font-size:11px;color:var(--gris);text-align:center}
 .nombre{font-size:21px;font-weight:900;text-align:center;margin:8px 0 10px;line-height:1.1}
 .fichas{display:flex;flex-wrap:wrap;gap:8px}
 .ficha{background:#f5f5f5;border:1px solid var(--linea);border-radius:10px;padding:8px 14px 8px 12px}

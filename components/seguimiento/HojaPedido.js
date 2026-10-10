@@ -62,6 +62,14 @@ export default function HojaPedido({ p, promo, onVolver }) {
         <button type="button" className={s.volver} onClick={onVolver}>← Consultar otro pedido</button>
         <Avance p={p} />
 
+        {!p.cancelado && p.guia?.foto && (
+          <a className={s.guiaFoto} href={p.guia.foto} target="_blank" rel="noopener noreferrer">
+            <span className={s.etiqueta}>Tu guía {p.guia.transportista} · {p.guia.numero}</span>
+            <img src={p.guia.foto} alt={`Guía ${p.guia.transportista} ${p.guia.numero}`} loading="lazy" />
+            <span className={s.guiaNota}>Toca la foto para verla en grande</span>
+          </a>
+        )}
+
         {!p.cancelado && (p.saldoPendiente ? (
           <div className={s.saldo}>
             <span aria-hidden="true">🔴</span>
@@ -84,7 +92,9 @@ export default function HojaPedido({ p, promo, onVolver }) {
             {p.cedula && <div className={s.ficha}><div className={s.etiqueta}>🆔 Cédula</div><div className={s.fichaValor}>{p.cedula}</div></div>}
             {p.ciudad && <div className={s.ficha}><div className={s.etiqueta}>📍 Ciudad</div><div>{p.ciudad}</div></div>}
           </div>
-          <p className={s.notaPriv}>Por tu seguridad tapamos parte de tu cédula y no mostramos tu dirección.</p>
+          <p className={s.notaPriv}>{p.guia?.foto
+            ? 'Por tu seguridad tapamos parte de tu cédula.'
+            : 'Por tu seguridad tapamos parte de tu cédula y no mostramos tu dirección.'}</p>
         </div>
 
         <div>

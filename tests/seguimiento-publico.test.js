@@ -82,7 +82,7 @@ test('la respuesta lleva lo acordado', () => {
   assert.equal(r.cedula, '17*****321')
   assert.equal(r.ciudad, 'Quito')
   assert.equal(r.saldoPendiente, true)
-  assert.deepEqual(r.guia, { numero: '1234567890', transportista: 'Servientrega' })
+  assert.deepEqual(r.guia, { numero: '1234567890', transportista: 'Servientrega', foto: '' })
   assert.equal(r.prendas.length, 1, 'las prendas eliminadas no se muestran')
   assert.equal(r.prendas[0].foto, 'https://res.cloudinary.com/x/espalda.jpg', 'sin foto de pecho, la de espalda')
   assert.equal(r.prendas[0].cantidad, 1)
@@ -94,6 +94,14 @@ test('NUNCA salen montos, cédula completa, dirección, email ni notas', () => {
     'cliente VIP', 'monto', 'precio', 'subtotal', 'direccion', 'email', 'notas']) {
     assert.ok(!json.includes(prohibido), `la respuesta filtró «${prohibido}»`)
   }
+})
+
+test('la foto de la guía sale solo si es https', () => {
+  const m = muestra()
+  m.guia = { numero: '1234567890', transportista: 'Servientrega', foto: 'https://x.supabase.co/guia.jpg' }
+  assert.equal(armarRespuesta(m).guia.foto, 'https://x.supabase.co/guia.jpg')
+  m.guia.foto = 'javascript:alert(1)'
+  assert.equal(armarRespuesta(m).guia.foto, '')
 })
 
 test('la guía solo se muestra desde Tránsito', () => {

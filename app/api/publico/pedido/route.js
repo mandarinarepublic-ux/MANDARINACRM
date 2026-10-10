@@ -63,7 +63,7 @@ export async function POST(req) {
     }
 
     const detalle = await cargarDetallePublico(pedido)
-    const etapaInfo = calcularEtapa({ pedido, items: detalle.items, logs: detalle.logs })
+    const etapaInfo = calcularEtapa({ pedido, items: detalle.items, logs: detalle.logs, guia: detalle.guia })
     await cerrarConsulta(consultaId, 'ok', pedido.pedido_id)
     return Response.json(armarRespuesta({ pedido, ...detalle, etapaInfo }), { headers: SIN_CACHE })
   } catch (e) {

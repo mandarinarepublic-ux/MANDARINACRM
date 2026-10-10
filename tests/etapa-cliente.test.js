@@ -113,6 +113,31 @@ test('nunca retrocede: si ya está en Tránsito, las etapas de antes cuentan com
   assert.equal(r.fechas[1], null, 'sin dato de impresión no se inventa una fecha')
 })
 
+test('con guía de despacho ya va en Tránsito aunque el CRM siga en EN_FABRICA', () => {
+  const guia = { numero: '9036647895', fecha: '2026-10-09T05:00:00Z' }
+  const r = calcularEtapa({ pedido: pedido(), items: [item()], logs: [], guia, ahora: AHORA })
+  assert.equal(r.etapa, 3)
+  assert.equal(r.fechas[3], '2026-10-09T05:00:00.000Z')
+})
+
+test('con guía: Entregado a las 24 h del despacho', () => {
+  const guia = { numero: '9036647895', fecha: '2026-10-08T15:00:00Z' }
+  const r = calcularEtapa({ pedido: pedido(), items: [item()], logs: [], guia, ahora: AHORA })
+  assert.equal(r.etapa, 4)
+})
+
+test('la guía anterior al cierre manda la fecha de Tránsito', () => {
+  const guia = { numero: '9036647895', fecha: '2026-10-08T20:00:00Z' }
+  const r = calcularEtapa({ pedido: pedido({ estado_pedido: 'COMPLETADO' }), items: [item()],
+    logs: [log('ESTADO_PEDIDO', 'COMPLETADO', '2026-10-09T10:00:00Z')], guia, ahora: AHORA })
+  assert.equal(r.fechas[3], '2026-10-08T20:00:00.000Z')
+})
+
+test('cancelado con guía: sigue cancelado', () => {
+  const r = calcularEtapa({ pedido: pedido({ estado_pedido: 'CANCELADO' }), guia: { numero: '1', fecha: '2026-10-08T20:00:00Z' }, ahora: AHORA })
+  assert.equal(r.cancelado, true)
+})
+
 test('cancelado: sin etapa', () => {
   const r = calc(pedido({ estado_pedido: 'CANCELADO' }))
   assert.equal(r.cancelado, true)
