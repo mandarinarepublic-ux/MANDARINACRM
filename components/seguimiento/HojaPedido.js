@@ -7,6 +7,7 @@ import { formatDiaMes } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
 
 export const WA = 'https://wa.me/593983745757'
+export const TIENDA = 'https://www.mandarinaec.com'
 export const waCon = (texto) => `${WA}?text=${encodeURIComponent(texto)}`
 
 function Avance({ p }) {
@@ -118,6 +119,9 @@ export default function HojaPedido({ p, promo, onVolver }) {
             ))}
           </div>
         </div>
+
+        {/* _top: dentro del marco de la tienda, abre la tienda entera y no la mete en el marco. */}
+        <a className={`${s.btn} ${s.btnNaranja}`} href={TIENDA} target="_top">🛍️ Seguir comprando en Mandarina</a>
 
         <div className={s.duda}>
           <div><h3>¿Tienes alguna duda?</h3><p>Escríbenos y te respondemos por WhatsApp.</p></div>
