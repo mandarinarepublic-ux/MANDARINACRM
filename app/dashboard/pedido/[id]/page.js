@@ -4,7 +4,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { ESTADO_LABELS, ESTADO_LABELS_LARGO } from '@/lib/labels'
-import { parseFecha, formatFechaHumana } from '@/lib/parseFecha'
+import { parseFecha, formatFechaHumana, formatFechaCorta } from '@/lib/parseFecha'
 import { PdfGracias, PdfGraciasPagina, PdfConfeccion, PdfConfeccionPagina, paginarItems, paginarItemsCliente } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import ConversacionPanel from '@/components/pedido/ConversacionPanel'
@@ -495,7 +495,8 @@ export default function PedidoDetailPage() {
                   <div className="text-white font-mono font-bold text-xl mb-0.5"># {pedido.GUIA_NUMERO}</div>
                   <div className="text-gray-400 text-sm">
                     {pedido.GUIA_TRANSPORTISTA}
-                    {pedido.GUIA_FECHA && <span> · Despachado el {pedido.GUIA_FECHA.split(' ')[0]}</span>}
+                    {/* formatFechaCorta y no split(' '): Supabase manda ISO sin espacios y salía la cadena entera */}
+                    {pedido.GUIA_FECHA && <span> · Despachado el {formatFechaCorta(pedido.GUIA_FECHA) || pedido.GUIA_FECHA}</span>}
                   </div>
                 </div>
                 {pedido.GUIA_FOTO_URL && (

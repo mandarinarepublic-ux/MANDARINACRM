@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { coincideBusqueda } from '@/lib/buscarPedido'
-import { parseFecha, formatFechaDia, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
+import { parseFecha, formatFechaDia, formatFechaCorta, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
@@ -455,7 +455,7 @@ export default function DespachosPage() {
                             <div className="flex-1 min-w-0">
                               <div className="text-xs text-green-400 font-semibold mb-0.5">Guía de despacho</div>
                               <div className="text-white font-mono font-bold"># {p.GUIA_NUMERO}</div>
-                              <div className="text-xs text-gray-400">{p.GUIA_TRANSPORTISTA}{p.GUIA_FECHA ? ` · ${p.GUIA_FECHA.split(' ')[0]}` : ''}</div>
+                              <div className="text-xs text-gray-400">{p.GUIA_TRANSPORTISTA}{p.GUIA_FECHA ? ` · ${formatFechaCorta(p.GUIA_FECHA) || p.GUIA_FECHA}` : ''}</div>
                             </div>
                             {p.GUIA_FOTO_URL && (
                               <img src={p.GUIA_FOTO_URL} onClick={() => window.open(p.GUIA_FOTO_URL, '_blank')}
