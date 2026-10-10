@@ -40,6 +40,12 @@ const RUTAS_PUBLICAS = [
   //   el middleware la deje pasar no la abre, solo mueve la puerta al lugar
   //   correcto — la puerta sigue puesta, la pone otro candado.
   '/api/shopify/pedidos',
+  // '/api/publico/pedido' — el seguimiento del cliente en mandarinaec.com/pedido
+  //   (9-oct-2026). El cliente no tiene sesión. Se defiende SOLA: responde solo si
+  //   el número Y el celular coinciden, solo MANDARINA, con límite de intentos por
+  //   IP y por número, y arma la respuesta con lista blanca de campos
+  //   (lib/seguimientoPublico.js). Nunca devuelve montos ni la cédula completa.
+  '/api/publico/pedido',
 ]
 
 function esPublica(pathname) {
