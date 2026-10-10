@@ -138,5 +138,12 @@ test('la promo se ve solo prendida y con título', () => {
 
 test('la ruta pública está en RUTAS_PUBLICAS del middleware', () => {
   const mw = readFileSync(new URL('../middleware.js', import.meta.url), 'utf8')
-  assert.ok(mw.includes("'/api/publico/pedido'"), 'falta /api/publico/pedido en RUTAS_PUBLICAS')
+  // Solo el array real: sin comentarios, porque el comentario también cita la ruta.
+  const bloque = mw.match(/const RUTAS_PUBLICAS = \[([\s\S]*?)\n\]/)
+  assert.ok(bloque, 'no encontré el bloque RUTAS_PUBLICAS')
+  const codigo = bloque[1]
+    .split('\n')
+    .filter((linea) => !linea.trim().startsWith('//'))
+    .join('\n')
+  assert.ok(codigo.includes("'/api/publico/pedido'"), 'falta /api/publico/pedido en RUTAS_PUBLICAS')
 })
