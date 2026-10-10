@@ -808,6 +808,32 @@ export default function PedidoDetailPage() {
                   || '-'}
               </span>
             </div>
+            {/* La guía puede llegar con el pedido aún en fábrica (botón 🚚 del
+                inbox), así que se muestra aquí aunque no esté COMPLETADO. */}
+            {(pedido.GUIA_NUMERO || pedido.GUIA_FOTO_URL) && (
+              <div className="mt-3 pt-3 border-t border-gray-800">
+                <div className="text-base text-gray-400">
+                  Guía:
+                  <span className="text-white font-mono ml-2">{pedido.GUIA_NUMERO || '-'}</span>
+                  {pedido.GUIA_TRANSPORTISTA && <span className="text-gray-500 ml-2">· {pedido.GUIA_TRANSPORTISTA}</span>}
+                </div>
+                {pedido.GUIA_FECHA && (
+                  <div className="text-base text-gray-400 mt-1">
+                    Despachado:
+                    <span className="text-white ml-2">{formatFechaHumana(pedido.GUIA_FECHA) || pedido.GUIA_FECHA}</span>
+                  </div>
+                )}
+                {pedido.GUIA_FOTO_URL ? (
+                  <a href={pedido.GUIA_FOTO_URL} target="_blank" rel="noopener noreferrer" className="block mt-3">
+                    <img src={pedido.GUIA_FOTO_URL} alt={`Guía ${pedido.GUIA_NUMERO || ''}`} loading="lazy"
+                      className="w-full max-h-96 object-contain rounded-xl border border-gray-700 bg-gray-800/50 hover:opacity-90 transition-opacity" />
+                    <span className="block text-xs text-gray-500 mt-1">Toca la foto para verla en grande</span>
+                  </a>
+                ) : (
+                  <div className="text-xs text-gray-600 mt-2">Sin foto de la guía</div>
+                )}
+              </div>
+            )}
           </div>
 
           {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
