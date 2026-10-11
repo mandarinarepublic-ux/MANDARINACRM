@@ -128,3 +128,10 @@ test('☠️ sin teléfono usable, mapearPedido produce cédula con WEB- (no PEN
   assert.strictEqual(p.cliente.cedula, 'WEB-87221999', 'toma los últimos 8 dígitos del id del pedido')
   assert.ok(/^[A-Za-z0-9-]{3,20}$/.test(p.cliente.cedula), 'pasa validarIdentificacion de PASAPORTE')
 })
+
+test('la ciudad va aparte: la dirección no lleva la ciudad pegada', () => {
+  const p = mapearPedido({ ...PEDIDO, shipping_address: { ...PEDIDO.shipping_address, address1: 'Calle A y B', address2: 'Casa verde', city: 'Quito' } }, 'MANDARINA', {})
+  assert.strictEqual(p.ciudadPedido, 'Quito')
+  assert.strictEqual(p.direccionTexto, 'Calle A y B\nCasa verde')
+  assert.strictEqual(p.cliente.direccion, 'Calle A y B\nCasa verde')
+})

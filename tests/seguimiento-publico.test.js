@@ -155,3 +155,10 @@ test('la ruta pública está en RUTAS_PUBLICAS del middleware', () => {
     .join('\n')
   assert.ok(codigo.includes("'/api/publico/pedido'"), 'falta /api/publico/pedido en RUTAS_PUBLICAS')
 })
+
+test('la ciudad sale de ciudad_pedido si existe, y si no de la del cliente', () => {
+  const m = muestra()
+  assert.equal(armarRespuesta(m).ciudad, 'Quito')
+  m.pedido.ciudad_pedido = 'Francisco de Orellana'
+  assert.equal(armarRespuesta(m).ciudad, 'Francisco de Orellana')
+})
