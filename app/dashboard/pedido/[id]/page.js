@@ -6,6 +6,7 @@ import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { ESTADO_LABELS, ESTADO_LABELS_LARGO } from '@/lib/labels'
 import { parseFecha, formatFechaHumana, formatFechaCorta } from '@/lib/parseFecha'
 import { PdfGracias, PdfGraciasPagina, PdfConfeccion, PdfConfeccionPagina, paginarItems, paginarItemsCliente } from '@/components/pedido/PdfPedido'
+import TextoLineas from '@/components/pedido/TextoLineas'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import ConversacionPanel from '@/components/pedido/ConversacionPanel'
 import Origen from './Origen'
@@ -514,12 +515,16 @@ export default function PedidoDetailPage() {
                 {[['Nombre',cliente.NOMBRE],['Cédula',cliente.CEDULA],['Celular',cliente.CELULAR],['Email',cliente.EMAIL]].map(([k,v])=>
                   v ? <div key={k} className="flex justify-between"><span className="text-gray-500">{k}</span><span className="text-white">{v}</span></div> : null
                 )}
+                {(pedido.CIUDAD_PEDIDO||cliente.CIUDAD) && (
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-500 shrink-0">Ciudad</span>
+                    <span className="text-white text-right">{pedido.CIUDAD_PEDIDO||cliente.CIUDAD}</span>
+                  </div>
+                )}
                 {(pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO) && (
                   <div className="flex justify-between gap-4">
                     <span className="text-gray-500 shrink-0">Dirección</span>
-                    {/* whitespace-pre-line: respeta el formato de varias líneas
-                        con el que se escribe la dirección. */}
-                    <span className="text-white text-right text-sm whitespace-pre-line">{pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO}</span>
+                    <TextoLineas texto={pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO} style={{ textAlign:"right" }} />
                   </div>
                 )}
                 {pedido.LATITUD && <a href={`https://maps.google.com/?q=${pedido.LATITUD},${pedido.LONGITUD}`} target="_blank" className="text-mandarina-400 text-xs hover:underline">📍 Ver en Google Maps</a>}
@@ -784,7 +789,7 @@ export default function PedidoDetailPage() {
           {pedido.NOTAS_VENDEDOR && (
             <div className="card p-4">
               <h3 className="text-base font-semibold text-white mb-2">📝 Notas internas</h3>
-              <div className="text-base text-gray-300 bg-gray-800/50 rounded-xl px-4 py-3">{pedido.NOTAS_VENDEDOR}</div>
+              <div className="text-base text-gray-300 bg-gray-800/50 rounded-xl px-4 py-3"><TextoLineas texto={pedido.NOTAS_VENDEDOR} style={{}} /></div>
             </div>
           )}
 
@@ -884,6 +889,7 @@ export default function PedidoDetailPage() {
                                 if(c==='ESTADO_PEDIDO') return `📦 Estado: ${log.antes} → ${log.despues}`
                                 if(c==='GUIA_DESPACHO') return `✅ Guía registrada: ${log.despues}`
                                 if(c==='DIRECCION') return `📍 Dirección actualizada`
+                                if(c==='CIUDAD') return `🏙️ Ciudad: ${log.antes||'—'} → ${log.despues||'—'}`
                                 if(c==='ITEM_AGREGADO') return `➕ Ítem agregado: ${log.despues}`
                                 if(c==='ITEM_ELIMINADO') return `❌ Ítem eliminado: ${log.antes}`
                                 if(c==='PAGO_AGREGADO') return `💰 Pago: ${log.despues}`

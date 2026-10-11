@@ -3,6 +3,7 @@ import { parseFechaCalendario, diasHastaFecha } from '@/lib/parseFecha'
 import { paginarItems, paginarItemsCliente, distribuirFilasCliente } from '@/lib/paginarItems'
 import { imagenAncho, fotoPrincipal } from '@/lib/imagenes'
 import { entregadaEnTienda } from '@/lib/prenda-se-fabrica'
+import TextoLineas from './TextoLineas'
 
 // Re-export por compatibilidad: las pantallas ya importaban paginarItems desde aquí.
 export { paginarItems, paginarItemsCliente, distribuirFilasCliente, pesoItem, CAPACIDAD_HOJA_CONF } from '@/lib/paginarItems'
@@ -37,7 +38,7 @@ function BloqueTexto({ valor, titulo }) {
   return (
     <div style={{ borderRadius:'7px', padding:'7px 9px', border:'1.5px solid #1a1a1a', marginBottom:'6px' }}>
       <div style={{ fontSize:'8px', color:'#1a1a1a', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>{titulo}</div>
-      <div style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5, fontWeight:'600' }}>{texto}</div>
+      <TextoLineas texto={texto} style={{ fontSize:'10px', color:'#1a1a1a', lineHeight:1.5, fontWeight:'600' }} />
       {recortado && (
         <div style={{ fontSize:'8px', color:'#b91c1c', fontWeight:'800', marginTop:'3px' }}>
           ⚠️ TEXTO RECORTADO — ver el detalle completo en el sistema
@@ -92,7 +93,7 @@ function PrendaCliente({ item, numero, tiendaColor, anchoCompleto }) {
         {instrucciones && (
           <div style={{ backgroundColor:'#fff8e1', borderRadius:'7px', padding:'6px 9px', border:'1px solid #ffe082' }}>
             <div style={{ fontSize:'7px', color:'#b45309', fontWeight:'800', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px' }}>📋 Instrucciones</div>
-            <div style={{ fontSize:'9.5px', color:'#1a1a1a', lineHeight:1.45, fontWeight:'600' }}>{instrucciones.texto}</div>
+            <TextoLineas texto={instrucciones.texto} style={{ fontSize:'9.5px', color:'#1a1a1a', lineHeight:1.45, fontWeight:'600' }} />
             {instrucciones.recortado && <div style={{ fontSize:'8px', color:'#b91c1c', fontWeight:'800', marginTop:'2px' }}>⚠️ Texto recortado</div>}
           </div>
         )}
@@ -219,13 +220,17 @@ export function PdfGraciasPagina({
             )}
             <div style={{ clear:'both' }} />
           </div>
-          {(pedido?.DIRECCION_TEXTO || pedido?.DIRECCION_PEDIDO) && (
+          {(pedido?.DIRECCION_TEXTO || pedido?.DIRECCION_PEDIDO || pedido?.CIUDAD_PEDIDO || cliente?.CIUDAD) && (
             <div style={{ borderRadius:'10px', padding:'11px 14px', borderLeft:`4px solid ${tiendaColor}` }}>
               <div style={{ fontSize:'8px', color:tiendaColor, textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px', fontWeight:'700' }}>Dirección de entrega</div>
-              {/* pre-line: la dirección se escribe con un formato de varias líneas
-                  (CIUDAD / calle principal / secundaria / referencia). Antes se
-                  aplastaba a un renglón con ' · ' y era ilegible para el repartidor. */}
-              <div style={{ fontSize:'13px', color:'#1a1a1a', fontWeight:'600', lineHeight:1.4, whiteSpace:'pre-line' }}>{pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO}</div>
+              {/* La ciudad es un campo aparte. La dirección se pinta línea por línea
+                  porque html2canvas no respeta pre-line. */}
+              {(pedido?.CIUDAD_PEDIDO || cliente?.CIUDAD) && (
+                <div style={{ fontSize:'13px', color:'#1a1a1a', fontWeight:'800', lineHeight:1.4, marginBottom:'2px' }}>Ciudad: {pedido?.CIUDAD_PEDIDO || cliente?.CIUDAD}</div>
+              )}
+              {(pedido?.DIRECCION_TEXTO || pedido?.DIRECCION_PEDIDO) && (
+                <TextoLineas texto={pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO} style={{ fontSize:'13px', color:'#1a1a1a', fontWeight:'600', lineHeight:1.4 }} />
+              )}
             </div>
           )}
         </div>

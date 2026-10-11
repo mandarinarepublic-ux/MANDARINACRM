@@ -200,7 +200,7 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
             <div><span className="text-gray-500">Talla:</span> <span className="text-gray-300">{item.TALLA||'—'}</span></div>
             <div><span className="text-gray-500">Cant.:</span> <span className="text-gray-300">{item.CANTIDAD}</span></div>
             <div className="col-span-2"><span className="text-gray-500">Área:</span> <span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
-            {item.DETALLE_PERSONALIZADO&&<div className="col-span-2"><span className="text-gray-500">Detalle:</span> <span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>}
+            {item.DETALLE_PERSONALIZADO&&<div className="col-span-2"><span className="text-gray-500">Detalle:</span> <span className="text-gray-300 whitespace-pre-line">{item.DETALLE_PERSONALIZADO}</span></div>}
             {/* Diseño: nombre del diseño si existe */}
             {item.DISENO&&<div className="col-span-2"><span className="text-gray-500">Diseño:</span> <span className="text-gray-300">{item.DISENO}</span></div>}
           </div>
