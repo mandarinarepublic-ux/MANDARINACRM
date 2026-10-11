@@ -258,3 +258,24 @@ test('avisarHojaFallida: a un padre que no es inbox no le dice nada, y nunca lan
   const rota = { document: { referrer: 'https://inbox.apps.mandarinaec.com/' }, parent: { postMessage: () => { throw new Error('x') } } }
   assert.deepStrictEqual(avisarHojaFallida({ pedidoId: 'P' }, rota), { ok: false })
 })
+
+// ── dejarPintar no puede colgarse: iframe escondido sin requestAnimationFrame ──
+import { dejarPintar } from '../lib/generarPdf.js'
+
+test('dejarPintar se resuelve aunque el navegador nunca llame a requestAnimationFrame', async () => {
+  const antes = globalThis.requestAnimationFrame
+  globalThis.requestAnimationFrame = () => {}   // como Chrome con un iframe que no se ve
+  try {
+    const t0 = Date.now()
+    await dejarPintar()
+    assert.ok(Date.now() - t0 < 1000)
+  } finally {
+    globalThis.requestAnimationFrame = antes
+  }
+})
+
+test('dejarPintar se resuelve si requestAnimationFrame ni existe', async () => {
+  const antes = globalThis.requestAnimationFrame
+  delete globalThis.requestAnimationFrame
+  try { await dejarPintar() } finally { globalThis.requestAnimationFrame = antes }
+})
