@@ -57,3 +57,18 @@ test('la tienda puede enmarcar SOLO /pedido', () => {
 test('la regla de /pedido va DESPUÉS de la general (Next: la última gana)', () => {
   assert.ok(config.indexOf("source: '/pedido'") > config.indexOf("source: '/:path*'"))
 })
+
+import { ORIGENES_TIENDA_IND } from '../lib/origenes.js'
+
+test('IND puede enmarcar SOLO /pedido/ind, y no la página de Mandarina', () => {
+  const ind = config.match(/source:\s*'\/pedido\/ind'[\s\S]*?frame-ancestors([^"]*)"/)
+  assert.ok(ind, 'falta la regla de /pedido/ind en next.config.js')
+  for (const o of ORIGENES_TIENDA_IND) assert.ok(ind[1].includes(o), `falta ${o} en la CSP de /pedido/ind`)
+  const man = config.match(/source:\s*'\/pedido'[\s\S]*?frame-ancestors([^"]*)"/)
+  const general = config.match(/source:\s*'\/:path\*'[\s\S]*?frame-ancestors([^"]*)"/)
+  for (const o of ORIGENES_TIENDA_IND) {
+    assert.ok(!man[1].includes(o), `${o} no debe enmarcar la página de Mandarina`)
+    assert.ok(!general[1].includes(o), `${o} no debe poder enmarcar todo el CRM`)
+  }
+  assert.ok(config.indexOf("source: '/pedido/ind'") > config.indexOf("source: '/:path*'"))
+})

@@ -50,6 +50,17 @@ const nextConfig = {
           },
         ],
       },
+      // /pedido/ind: el seguimiento de IND, enmarcado en indlovers.com/pedido.
+      // Solo los orígenes de IND (ORIGENES_TIENDA_IND en lib/origenes.js).
+      {
+        source: '/pedido/ind',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://inbox.apps.mandarinaec.com https://ind-inbox.apps.mandarinaec.com https://indlovers.com https://www.indlovers.com",
+          },
+        ],
+      },
     ]
   },
 }

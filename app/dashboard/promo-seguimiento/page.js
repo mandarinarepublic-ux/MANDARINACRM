@@ -1,9 +1,11 @@
 'use client'
-// Promo que ve el cliente en mandarinaec.com/pedido. Solo ADMIN.
+// Promo que ve el cliente en mandarinaec.com/pedido o indlovers.com/pedido. Solo ADMIN.
 import { useEffect, useState } from 'react'
 import Promo from '@/components/seguimiento/Promo'
 import { promoVisible } from '@/lib/seguimientoPublico'
 import s from '@/components/seguimiento/seguimiento.module.css'
+import { estiloTienda } from '@/components/seguimiento/HojaPedido'
+import { TIENDAS_SEGUIMIENTO } from '@/lib/tiendasSeguimiento'
 
 const VACIA = { activa: false, etiqueta: '', titulo: '', texto: '', codigo: '', link: '' }
 const CAMPOS = [
@@ -15,20 +17,23 @@ const CAMPOS = [
 ]
 
 export default function PromoSeguimientoPage() {
+  const [tienda, setTienda] = useState('mandarina')
+  const t = TIENDAS_SEGUIMIENTO[tienda]
   const [promo, setPromo] = useState(VACIA)
   const [estado, setEstado] = useState('CARGANDO') // CARGANDO | LISTO | GUARDANDO | ERROR
   const [aviso, setAviso] = useState('')
 
   useEffect(() => {
-    fetch('/api/promo-seguimiento')
+    setEstado('CARGANDO'); setAviso('')
+    fetch(`/api/promo-seguimiento?tienda=${tienda}`)
       .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); setPromo(d.promo); setEstado('LISTO') })
       .catch((e) => { setAviso(`No se pudo cargar la promo: ${e.message}`); setEstado('ERROR') })
-  }, [])
+  }, [tienda])
 
   async function guardar() {
     setEstado('GUARDANDO'); setAviso('')
     try {
-      const r = await fetch('/api/promo-seguimiento', {
+      const r = await fetch(`/api/promo-seguimiento?tienda=${tienda}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(promo),
       })
       const d = await r.json()
@@ -47,7 +52,16 @@ export default function PromoSeguimientoPage() {
     <div className="max-w-2xl mx-auto p-4 space-y-4">
       <div>
         <h1 className="text-xl font-bold text-white">Promo del seguimiento</h1>
-        <p className="text-sm text-gray-400">Es la que ve el cliente en mandarinaec.com/pedido, arriba de su pedido.</p>
+        <p className="text-sm text-gray-400">Es la que ve el cliente en {new URL(t.web).hostname.replace(/^www./, '')}/pedido, arriba de su pedido. Cada tienda tiene la suya.</p>
+      </div>
+
+      <div className="flex gap-2">
+        {Object.values(TIENDAS_SEGUIMIENTO).map((x) => (
+          <button key={x.clave} type="button" disabled={estado === 'GUARDANDO'} onClick={() => setTienda(x.clave)}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${tienda === x.clave ? 'bg-white text-black' : 'bg-gray-800 text-gray-300'}`}>
+            {x.nombre}
+          </button>
+        ))}
       </div>
 
       <label className="card p-4 flex items-center justify-between gap-3 cursor-pointer">
@@ -68,7 +82,7 @@ export default function PromoSeguimientoPage() {
       <div className="card p-4">
         <div className="text-xs text-gray-400 mb-2">Vista previa</div>
         {/* Dentro de .raiz: ahí viven los colores de la promo. */}
-        <div className={s.raiz} style={{ minHeight: 0, padding: 16, borderRadius: 12, background: '#e85d04' }}>
+        <div className={s.raiz} style={{ ...estiloTienda(t), minHeight: 0, padding: 16, borderRadius: 12, background: t.colores?.naranja || '#e85d04' }}>
           {promoVisible(promo) ? <Promo promo={promo} /> : <div style={{ color: '#fff', fontSize: 14 }}>Apagada o sin título: el cliente no ve ningún recuadro.</div>}
         </div>
       </div>

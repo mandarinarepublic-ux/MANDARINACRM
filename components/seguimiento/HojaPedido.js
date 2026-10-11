@@ -6,11 +6,14 @@ import { ETAPAS_CLIENTE } from '@/lib/etapaCliente'
 import { formatDiaMes } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
 
-export const WA = 'https://wa.me/593983745757'
-export const TIENDA = 'https://www.mandarinaec.com'
-export const waCon = (texto) => `${WA}?text=${encodeURIComponent(texto)}`
+export const waCon = (t, texto) => `https://wa.me/${t.wa}?text=${encodeURIComponent(texto)}`
 
-function Avance({ p }) {
+/** Los colores de la tienda pisan las variables de .raiz (Mandarina no trae: queda el naranja). */
+export const estiloTienda = (t) => (t?.colores
+  ? Object.fromEntries(Object.entries(t.colores).map(([k, v]) => [`--${k}`, v]))
+  : undefined)
+
+function Avance({ p, t }) {
   if (p.cancelado) {
     return (
       <div className={s.avance}>
@@ -21,7 +24,7 @@ function Avance({ p }) {
   }
   const msg = p.etapa === 3 && p.guia
     ? `${ETAPAS_CLIENTE[3].mensaje} Guía ${p.guia.transportista} ${p.guia.numero}.`.replace('  ', ' ')
-    : ETAPAS_CLIENTE[p.etapa].mensaje
+    : ETAPAS_CLIENTE[p.etapa].mensaje.replace('Mandarina', t.corto)
   return (
     <div className={s.avance} aria-label="Avance del pedido">
       <div className={s.avanceCab}><span className={s.etiqueta}>Estado de tu pedido</span><span className={s.idpedido}>{p.pedidoId}</span></div>
@@ -42,15 +45,15 @@ function Avance({ p }) {
   )
 }
 
-export default function HojaPedido({ p, promo, onVolver }) {
+export default function HojaPedido({ p, promo, onVolver, tienda: t }) {
   const totalPrendas = p.prendas.reduce((n, i) => n + i.cantidad, 0)
   return (
     <section className={s.hoja}>
       <div className={s.cabecera}>
         <div className={s.cabFila}>
-          <img src="/logos/logo_mandarina_240.png" alt="Mandarina Republic" />
+          <img src={t.logo} alt={t.nombre} />
           <div className={s.cabTxt}>
-            <div className={s.marca}>Mandarina Republic</div>
+            <div className={s.marca}>{t.nombre}</div>
             <h1 className={s.saludo}>¡Hola,<br />{p.primerNombre || 'cliente'}!</h1>
           </div>
         </div>
@@ -61,7 +64,7 @@ export default function HojaPedido({ p, promo, onVolver }) {
 
       <div className={s.cuerpo}>
         <button type="button" className={s.volver} onClick={onVolver}>← Consultar otro pedido</button>
-        <Avance p={p} />
+        <Avance p={p} t={t} />
 
         {!p.cancelado && p.guia?.foto && (
           <a className={s.guiaFoto} href={p.guia.foto} target="_blank" rel="noopener noreferrer">
@@ -78,7 +81,7 @@ export default function HojaPedido({ p, promo, onVolver }) {
               <h3>Tu pedido tiene un saldo pendiente de pago</h3>
               <p>Escríbenos por WhatsApp para completarlo antes del despacho.</p>
               <a className={`${s.btn} ${s.btnWa}`} target="_blank" rel="noopener noreferrer"
-                href={waCon(`Hola, quiero completar el pago del pedido ${p.pedidoId}`)}>💬 Completar mi pago por WhatsApp</a>
+                href={waCon(t, `Hola, quiero completar el pago del pedido ${p.pedidoId}`)}>💬 Completar mi pago por WhatsApp</a>
             </div>
           </div>
         ) : (
@@ -121,15 +124,15 @@ export default function HojaPedido({ p, promo, onVolver }) {
         </div>
 
         {/* _top: dentro del marco de la tienda, abre la tienda entera y no la mete en el marco. */}
-        <a className={`${s.btn} ${s.btnNaranja}`} href={TIENDA} target="_top">🛍️ Seguir comprando en Mandarina</a>
+        <a className={`${s.btn} ${s.btnNaranja}`} href={t.web} target="_top">🛍️ Seguir comprando en {t.corto}</a>
 
         <div className={s.duda}>
           <div><h3>¿Tienes alguna duda?</h3><p>Escríbenos y te respondemos por WhatsApp.</p></div>
           <a className={`${s.btn} ${s.btnWa}`} target="_blank" rel="noopener noreferrer"
-            href={waCon(`Hola, tengo una duda sobre mi pedido ${p.pedidoId}`)}>💬 Escríbenos por WhatsApp</a>
+            href={waCon(t, `Hola, tengo una duda sobre mi pedido ${p.pedidoId}`)}>💬 Escríbenos por WhatsApp</a>
         </div>
       </div>
-      <div className={s.pie}><span>{p.pedidoId}</span><span>MANDARINA REPUBLIC</span></div>
+      <div className={s.pie}><span>{p.pedidoId}</span><span>{t.nombre.toUpperCase()}</span></div>
     </section>
   )
 }

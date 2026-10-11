@@ -10,8 +10,9 @@ export const dynamic = 'force-dynamic'
 
 import {
   normalizarNumero, pedidoCoincideNumero, celularCoincide, armarRespuesta,
-  decidirLimite, TIENDA_PUBLICA, MENSAJE_NO_ENCONTRADO, MENSAJE_DEMASIADOS,
+  decidirLimite, MENSAJE_NO_ENCONTRADO, MENSAJE_DEMASIADOS,
 } from '@/lib/seguimientoPublico'
+import { tiendaSeguimiento } from '@/lib/tiendasSeguimiento'
 import { calcularEtapa } from '@/lib/etapaCliente'
 import {
   buscarPedidosPorNumero, cargarDetallePublico, celularDelCliente,
@@ -35,9 +36,13 @@ export async function POST(req) {
   let body = {}
   try { body = await req.json() } catch { /* cuerpo vacío o roto: cae en «no encontrado» */ }
 
+  // Qué página pregunta: 'mandarina' (por defecto) o 'ind'. Solo busca pedidos de ESA tienda.
+  const tienda = tiendaSeguimiento(body?.tienda)
   const n = normalizarNumero(body?.numero)
   // Siempre el número pelado: «6308» y «MAN-JAC-6308» comparten el mismo contador.
-  const numero = n ? n.numero : String(body?.numero ?? '').slice(0, 40)
+  // IND lleva prefijo para que sus fallos no bloqueen el mismo número en Mandarina.
+  const pelado = n ? n.numero : String(body?.numero ?? '').slice(0, 40)
+  const numero = tienda.clave === 'mandarina' ? pelado : `${tienda.clave}:${pelado}`
 
   try {
     const consultaId = await abrirConsulta({ ip, numero })
@@ -50,10 +55,10 @@ export async function POST(req) {
     // Un número suelto puede calzar con más de un pedido de MANDARINA (p. ej.
     // MAN-JAC-6308 y MAN-AND-6308). No te quedes con el primero: revisa el celular
     // de cada candidato (solo esa columna) y carga el detalle únicamente del que calce.
-    const candidatos = n ? await buscarPedidosPorNumero(n) : []
+    const candidatos = n ? await buscarPedidosPorNumero(n, tienda.tiendaId) : []
     let pedido = null
     for (const p of candidatos) {
-      if (p.tienda_id !== TIENDA_PUBLICA || !pedidoCoincideNumero(p.pedido_id, n)) continue
+      if (p.tienda_id !== tienda.tiendaId || !pedidoCoincideNumero(p.pedido_id, n)) continue
       if (celularCoincide(body?.celular, await celularDelCliente(p.cliente_id))) { pedido = p; break }
     }
 
