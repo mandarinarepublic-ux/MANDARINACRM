@@ -11,7 +11,7 @@ import PdfScaler from '@/components/pedido/PdfScaler'
 import ConversacionPanel from '@/components/pedido/ConversacionPanel'
 import Origen from './Origen'
 import { capturarHojasComoJpg, pesoKbDataUrl, dejarPintar } from '@/lib/generarPdf'
-import { enviarHojaPedido } from '@/lib/aviso-padre'
+import { enviarHojaPedido, avisarHojaFallida } from '@/lib/aviso-padre'
 import { botonFactura } from '@/lib/facturas-visibilidad'
 import { MOTIVOS, etiquetaMotivo } from '@/lib/motivos-factura'
 
@@ -25,6 +25,11 @@ export default function PedidoDetailPage() {
   // después de crear el pedido desde el formulario, que conserva el parámetro al
   // navegar. Es un cambio de presentación, NO de permisos.
   const esEmbed = searchParams.get('embed') === '1'
+  // Con autoenviar=1 (y embed) la hoja se manda SOLA al terminar de cargar: es el
+  // botón «📤 Enviar» del historial del inbox, que abre esta pantalla escondida.
+  // El «¿seguro?» lo pregunta el inbox antes de abrirla.
+  const autoEnviar = esEmbed && searchParams.get('autoenviar') === '1'
+  const autoEnviadoRef = useRef(false)
   const [user, setUser] = useState(null)
   const [pedido, setPedido] = useState(null)
   const [items, setItems] = useState([])
@@ -186,13 +191,15 @@ export default function PedidoDetailPage() {
   // Se capturan los MISMOS nodos que ya usa el PDF (`pdf-gracias-N`, la zona
   // oculta del final de esta pantalla), así que la foto y el PDF salen del mismo
   // diseño: si un día cambia la hoja, cambian los dos juntos.
-  async function enviarHojaAlInbox() {
+  async function enviarHojaAlInbox(opciones) {
     if (enviandoHoja) return       // doble click = dos fotos al chat
+    const automatico = opciones?.automatico === true   // un onClick pasa el evento, no esto
     // Preguntar antes, a pedido de Rodrigo: esto le manda una foto a un cliente
     // REAL por WhatsApp y no hay forma de deshacerlo. El botón está justo debajo
     // de la hoja, o sea al alcance de un clic distraído mientras se revisa el
     // pedido. Un "¿seguro?" cuesta un segundo; un envío equivocado no se borra.
-    if (!window.confirm('¿Estás seguro que quieres enviar la foto del pedido al cliente?')) return
+    // En automático ya lo preguntó el inbox.
+    if (!automatico && !window.confirm('¿Estás seguro que quieres enviar la foto del pedido al cliente?')) return
     setEnviandoHoja(true)
     setHojaEstado(null)
     try {
@@ -215,10 +222,25 @@ export default function PedidoDetailPage() {
         tipo: 'error',
         texto: `⚠️ NO se envió la hoja — el cliente no la recibió. ${e?.message || 'error desconocido'}`,
       })
+      // En automático esta pantalla está escondida: el fallo viaja al inbox.
+      if (automatico) avisarHojaFallida({ pedidoId: pedido?.PEDIDO_ID || params.id, motivo: e?.message })
     } finally {
       setEnviandoHoja(false)
     }
   }
+
+  // ?autoenviar=1: mandar la hoja UNA vez, cuando el pedido y sus prendas ya
+  // cargaron. La pausa deja que la zona oculta de las hojas (y sus fotos) se pinte
+  // antes de capturarla. Si el pedido no existe, se le avisa al inbox igual.
+  useEffect(() => {
+    if (!autoEnviar || autoEnviadoRef.current || loading) return
+    autoEnviadoRef.current = true
+    if (!pedido) { avisarHojaFallida({ pedidoId: params.id, motivo: noEncontrado ? 'el pedido no existe o no tienes permiso' : 'no se pudo cargar el pedido' }); return }
+    // Sin clearTimeout a propósito: si `pedido` cambia en la espera, la limpieza
+    // cancelaría el envío y el candado (autoEnviadoRef) ya no dejaría reintentar.
+    setTimeout(() => { enviarHojaAlInbox({ automatico: true }) }, 1500)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- corre una sola vez (candado)
+  }, [autoEnviar, loading, pedido])
 
   const [enviandoFactura, setEnviandoFactura] = useState(false)
   const [facturaEnviada, setFacturaEnviada]   = useState(false)

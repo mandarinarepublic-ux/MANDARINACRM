@@ -238,3 +238,23 @@ test('reutiliza los mismos nodos que ya usa el PDF, no un render aparte', () => 
   assert.ok(SRC.includes('`pdf-gracias-${i}`'), 'la captura debe usar los nodos pdf-gracias-N')
   assert.ok(SRC.includes("from '@/lib/generarPdf'"), 'la captura debe salir del helper compartido')
 })
+
+// ── El aviso de que la hoja NO salió (envío automático desde el historial) ──
+import { avisarHojaFallida } from '../lib/aviso-padre.js'
+
+test('avisarHojaFallida: le dice al inbox que no salió, al origen exacto', () => {
+  const { win, enviados } = ventanaFalsa('https://inbox.apps.mandarinaec.com/inbox')
+  assert.deepStrictEqual(avisarHojaFallida({ pedidoId: 'MAN-AND-1', motivo: 'sin prendas' }, win), { ok: true })
+  assert.deepStrictEqual(enviados[0], {
+    msg: { tipo: 'hoja-pedido-error', pedidoId: 'MAN-AND-1', motivo: 'sin prendas' },
+    destino: 'https://inbox.apps.mandarinaec.com',
+  })
+})
+
+test('avisarHojaFallida: a un padre que no es inbox no le dice nada, y nunca lanza', () => {
+  const { win, enviados } = ventanaFalsa('https://otro-sitio.com/')
+  assert.deepStrictEqual(avisarHojaFallida({ pedidoId: 'MAN-AND-1' }, win), { ok: false })
+  assert.strictEqual(enviados.length, 0)
+  const rota = { document: { referrer: 'https://inbox.apps.mandarinaec.com/' }, parent: { postMessage: () => { throw new Error('x') } } }
+  assert.deepStrictEqual(avisarHojaFallida({ pedidoId: 'P' }, rota), { ok: false })
+})
