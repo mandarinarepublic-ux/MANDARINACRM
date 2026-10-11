@@ -17,6 +17,9 @@ export default function Seguimiento({ promo }) {
 
   useEffect(() => {
     if (!raiz.current || window.parent === window) return
+    // Dentro del marco, min-height:100vh es el alto del marco: la tienda lo
+    // agranda con el alto que avisamos y crecíamos sin fin (scroll infinito).
+    raiz.current.style.minHeight = '0'
     const avisar = () => {
       const alto = raiz.current?.scrollHeight || 0
       for (const o of ORIGENES_TIENDA) window.parent.postMessage({ tipo: 'mandarina-pedido-altura', alto }, o)
