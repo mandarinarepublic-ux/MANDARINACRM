@@ -67,6 +67,13 @@ export async function PATCH(req, { params }) {
       campos.direccionPedido = body.DIRECCION_TEXTO
     }
 
+    if (body.CIUDAD_PEDIDO !== undefined) {
+      if (body.CIUDAD_PEDIDO !== pedido.CIUDAD_PEDIDO) {
+        changes.push({ campo: 'CIUDAD', antes: pedido.CIUDAD_PEDIDO, despues: body.CIUDAD_PEDIDO })
+      }
+      campos.ciudadPedido = body.CIUDAD_PEDIDO
+    }
+
     if (body.FECHA_ENTREGA_PROMETIDA) {
       changes.push({ campo: 'FECHA_ENTREGA', antes: pedido.FECHA_ENTREGA_PROMETIDA, despues: body.FECHA_ENTREGA_PROMETIDA })
       campos.fechaEntregaPrometida = body.FECHA_ENTREGA_PROMETIDA

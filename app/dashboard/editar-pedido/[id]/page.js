@@ -9,6 +9,7 @@ import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/
 import { imagenAncho } from '@/lib/imagenes'
 import { formatFechaDia } from '@/lib/parseFecha'
 import { emailPareceValido, limpiarEmail } from '@/lib/email-cliente'
+import { direccionSinCiudad } from '@/lib/direccionPedido'
 
 const TALLAS = ['1 AÑO','2','3','4','5','6','7','8','9','10','12','XS','S','M','L','XL','2XL','3XL','4XL']
 const TIPOS_PAGO = ['EFECTIVO','TRANSFERENCIA','LINK_PAGO']
@@ -132,13 +133,15 @@ export default function EditarPedidoPage() {
       setPedido(p)
       setItems(p.items || [])
       setPagos(p.pagos || [])
-      setDireccionEdit(p.DIRECCION_TEXTO || p.DIRECCION_PEDIDO || '')
+      // Borradores viejos traían una línea "CIUDAD: X" dentro de la dirección.
+      setDireccionEdit(direccionSinCiudad(p.DIRECCION_TEXTO || p.DIRECCION_PEDIDO || ''))
+      setCiudadEdit(p.CIUDAD_PEDIDO || '')
       const cr = await fetch(`/api/clientes?id=${encodeURIComponent(p.CLIENTE_ID||'')}`)
       const cd = await cr.json()
       const c = cd.clientes?.[0] || null
       setCliente(c)
       if (c) {
-        setCiudadEdit(c.CIUDAD||''); setEmailEdit(c.EMAIL||''); setCelularEdit(c.CELULAR||'')
+        setCiudadEdit(prev => p.CIUDAD_PEDIDO || prev || c.CIUDAD || ''); setEmailEdit(c.EMAIL||''); setCelularEdit(c.CELULAR||'')
         const ced = String(c.CEDULA||''); setCedulaEdit(ced); setTipoIdEdit(inferirTipo(ced)); setCedulaErrorEdit('')
       }
     } finally { setLoading(false) }
@@ -154,14 +157,9 @@ export default function EditarPedidoPage() {
     if (errId) { setCedulaErrorEdit(errId); setError(`Identificación: ${errId}`); return }
     setSaving(true); setError(''); setSuccess('')
     try {
-      // Si la dirección ya viene en el formato de varias líneas (CIUDAD: ...) se
-      // respeta tal cual; anteponer la ciudad la dejaba como "Quito: CIUDAD: Quito".
-      const dirCompleta = /^\s*CIUDAD\s*:/im.test(direccionEdit || '')
-        ? direccionEdit
-        : (ciudadEdit ? `${ciudadEdit}: ${direccionEdit}` : direccionEdit)
       await fetch(`/api/pedidos/${params.id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ DIRECCION_TEXTO:dirCompleta, _usuarioId:user?.id }),
+        body: JSON.stringify({ DIRECCION_TEXTO:direccionEdit, CIUDAD_PEDIDO:ciudadEdit.trim(), _usuarioId:user?.id }),
       })
       if (cliente) {
         await fetch(`/api/clientes/${cliente.CLIENTE_ID}`, {
@@ -263,7 +261,7 @@ export default function EditarPedidoPage() {
                   onChange={e => { setCedulaEdit(e.target.value); setCedulaErrorEdit(validarIdentificacion(tipoIdEdit, e.target.value) || '') }} />
                 {cedulaErrorEdit && <p className="text-red-400 text-xs">{cedulaErrorEdit}</p>}
                 <input className="input text-sm" placeholder="Ciudad (ej: Quito)" value={ciudadEdit} onChange={e=>setCiudadEdit(e.target.value)} />
-                <textarea className="input resize-none text-sm leading-relaxed" rows={4} value={direccionEdit} onChange={e=>setDireccionEdit(e.target.value)} placeholder={'CIUDAD: \nCalle principal: \nCalle secundaria: \nLugar de referencia: '} />
+                <textarea className="input resize-none text-sm leading-relaxed" rows={4} value={direccionEdit} onChange={e=>setDireccionEdit(e.target.value)} placeholder={'Calle principal: \nCalle secundaria: \nLugar de referencia: '} />
                 <input className="input text-sm" placeholder="Email" value={emailEdit} onChange={e=>setEmailEdit(e.target.value)} />
                 {/* Esta es la pantalla por donde se ARREGLAN los correos rotos, así
                     que es la que más necesita decir si quedó bien. No bloquea:

@@ -13,6 +13,7 @@ import { puedeVerTienda, tiendasDisponibles } from '@/lib/tiendasUsuario'
 import { parseFechaCalendario, diasHastaEntrega, hoyEcuador } from '@/lib/parseFecha'
 import { avisarPedidoCreado } from '@/lib/aviso-padre'
 import { emailPareceValido, limpiarEmail } from '@/lib/email-cliente'
+import { direccionSinCiudad } from '@/lib/direccionPedido'
 import { llaveBorrador, armarBorrador, borradorVigente, hayTrabajo, resumenBorrador, haceCuanto } from '@/lib/borradorPedido'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
@@ -60,9 +61,9 @@ function getMinFecha() {
 }
 
 // Formato de dirección que la empresa pide llenar SIEMPRE. El cuadro arranca con
-// estas etiquetas y el vendedor escribe al lado de cada una. La línea CIUDAD la
-// completa el sistema con el campo "Ciudad de entrega" para no escribirla dos veces.
-const PLANTILLA_DIRECCION = 'CIUDAD: \nCalle principal: \nCalle secundaria: \nLugar de referencia: '
+// estas etiquetas y el vendedor escribe al lado de cada una. La ciudad NO va aquí:
+// tiene su propio campo ("Ciudad de entrega") y se guarda aparte.
+const PLANTILLA_DIRECCION = 'Calle principal: \nCalle secundaria: \nLugar de referencia: '
 
 /** ¿El texto sigue siendo la plantilla vacía (nadie escribió nada)? */
 function plantillaVacia(texto) {
@@ -83,17 +84,6 @@ function campoDireccion(texto, etiqueta) {
   const linea = String(texto || '').split('\n').find(l => l.trim().toLowerCase().startsWith(etiqueta.toLowerCase()))
   if (!linea) return ''
   return linea.split(':').slice(1).join(':').trim()
-}
-
-/** Rellena la línea CIUDAD con la ciudad del formulario si quedó vacía. */
-function conCiudad(texto, ciudad) {
-  const t = String(texto || '')
-  if (!ciudad?.trim() || !/^\s*CIUDAD\s*:/im.test(t)) return t
-  return t.split('\n').map(linea =>
-    /^\s*CIUDAD\s*:/i.test(linea) && !linea.split(':').slice(1).join(':').trim()
-      ? `CIUDAD: ${ciudad.trim()}`
-      : linea
-  ).join('\n')
 }
 
 function itemsValidos(items) {
@@ -424,19 +414,11 @@ function NuevoPedidoContenido() {
   const tiendaColor = TIENDA_COLORS[tienda] || '#6C3FC5'
   const isYAW = user?.rol === 'VENDEDOR_YAW'
 
+  // Solo la dirección: la ciudad es un campo aparte (ciudadPedido). Si un
+  // borrador viejo trae una línea "CIUDAD: X" dentro del texto, se quita.
   function buildDireccion() {
     if (usarMapa) return direccionTexto
-    const ciudad = (cliente.ciudad || '').trim()
-    const dir = (cliente.direccion || '').trim()
-    if (!ciudad && !dir) return ''
-    // Formato nuevo (con la etiqueta CIUDAD): se guarda tal cual, en varias
-    // líneas, y solo se completa la ciudad. Antes se anteponía "Quito: " a la
-    // primera línea y quedaba "Quito: CIUDAD: Quito".
-    if (/^\s*CIUDAD\s*:/im.test(dir)) return conCiudad(dir, ciudad)
-    if (!ciudad) return dir
-    if (!dir) return ciudad
-    if (dir.toLowerCase().startsWith(ciudad.toLowerCase())) return dir
-    return `${ciudad}: ${dir}`
+    return direccionSinCiudad(cliente.direccion)
   }
 
   // Pedido "borrador" para el preview del paso 4. Misma forma que una fila real
@@ -445,11 +427,13 @@ function NuevoPedidoContenido() {
     NOMBRE:  cliente.nombre || '',
     CELULAR: cliente.celular || '',
     CEDULA:  cliente.cedula || '',
+    CIUDAD:  cliente.ciudad || '',
   }
   const pedidoPreview = {
     PEDIDO_ID: 'POR ASIGNAR',
     TIENDA_ID: tienda === 'SUCURSAL' ? 'MANDARINA' : tienda,
     DIRECCION_TEXTO: buildDireccion(),
+    CIUDAD_PEDIDO: (cliente.ciudad || '').trim(),
     MONTO_TOTAL: montoTotal.toFixed(2),
     MONTO_ABONADO: montoAbonado.toFixed(2),
     ESTADO_PAGO: montoAbonado >= montoTotal - 0.01 ? 'PAGADO' : 'ABONO',
@@ -615,7 +599,7 @@ function NuevoPedidoContenido() {
     // Una sola fuente para la dirección: la misma que se muestra en el preview y
     // en el PDF. Antes aquí se rearmaba con join(': ') y quedaba distinta.
     const direccionFinal = buildDireccion()
-    const clienteDireccion = usarMapa ? direccionTexto : conCiudad(cliente.direccion || '', cliente.ciudad)
+    const clienteDireccion = usarMapa ? direccionTexto : direccionSinCiudad(cliente.direccion)
 
     // Para YAW no actualizamos el cliente (es un cliente compartido de tienda)
     if (clienteId && !isYAW) {
@@ -655,6 +639,7 @@ function NuevoPedidoContenido() {
           fechaEntregaPrometida: fechaEntrega,
           notasVendedor,
           direccionTexto: direccionFinal,
+          ciudadPedido: (cliente.ciudad || '').trim(),
           latitud, longitud,
         }),
       })
@@ -842,7 +827,7 @@ function NuevoPedidoContenido() {
                     const f = clienteExistente
                     setClienteId(f.CLIENTE_ID)
                     const ced = String(f.CEDULA||'')
-                    setCliente({ nombre: f.NOMBRE||'', cedula: ced, celular: String(f.CELULAR||''), email: f.EMAIL||'', ciudad: f.CIUDAD||'', direccion: f.DIRECCION || PLANTILLA_DIRECCION })
+                    setCliente({ nombre: f.NOMBRE||'', cedula: ced, celular: String(f.CELULAR||''), email: f.EMAIL||'', ciudad: f.CIUDAD||'', direccion: direccionSinCiudad(f.DIRECCION) || PLANTILLA_DIRECCION })
                     const t = inferirTipo(ced); setTipoId(t); setEmitirFactura(tipoIdMeta(t).factura)
                     setClienteKey(k => k+1)
                     setClienteExistente(null)
@@ -858,7 +843,7 @@ function NuevoPedidoContenido() {
               <BuscadorCliente onSelect={c => {
                 setClienteId(c.CLIENTE_ID || c.id || null)
                 const ced = String(c.CEDULA||c.cedula||'')
-                setCliente({ nombre: c.NOMBRE||c.nombre||'', cedula: ced, celular: String(c.CELULAR||c.celular||''), email: c.EMAIL||c.email||'', ciudad: c.CIUDAD||c.ciudad||'', direccion: c.DIRECCION||c.direccion|| PLANTILLA_DIRECCION })
+                setCliente({ nombre: c.NOMBRE||c.nombre||'', cedula: ced, celular: String(c.CELULAR||c.celular||''), email: c.EMAIL||c.email||'', ciudad: c.CIUDAD||c.ciudad||'', direccion: direccionSinCiudad(c.DIRECCION||c.direccion) || PLANTILLA_DIRECCION })
                 const t = inferirTipo(ced); setTipoId(t); setEmitirFactura(tipoIdMeta(t).factura)
                 setClienteKey(k => k + 1)
                 setUsarMapa(false)
@@ -991,7 +976,7 @@ function NuevoPedidoContenido() {
                         placeholder={PLANTILLA_DIRECCION}
                         value={cliente.direccion}
                         onChange={e => setCliente(p => ({...p, direccion: e.target.value}))} />
-                      <p className="text-xs text-gray-600 mt-1">Completa cada línea; la ciudad se llena sola con la de arriba.</p>
+                      <p className="text-xs text-gray-600 mt-1">Completa cada línea. La ciudad se guarda aparte, en el campo de arriba.</p>
                     </div>
                     {buildDireccion() && (
                       <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
@@ -1152,12 +1137,13 @@ function NuevoPedidoContenido() {
                   ['Tienda', tienda],
                   ['Cliente', cliente.nombre],
                   [tipoIdMeta(tipoId).label, cliente.cedula],
+                  ['Ciudad', (cliente.ciudad || '').trim() || '—'],
                   ['Dirección', buildDireccion() || cliente.direccion],
                   ['Factura', tipoId === 'PASAPORTE' ? '🚫 No (pasaporte)' : emitirFactura ? '✅ Sí' : '❌ No'],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4">
                     <span className="text-gray-500 shrink-0">{k}</span>
-                    <span className="text-white text-right text-xs">{v}</span>
+                    <span className="text-white text-right text-xs whitespace-pre-line">{v}</span>
                   </div>
                 ))}
                 <hr className="border-gray-800" />

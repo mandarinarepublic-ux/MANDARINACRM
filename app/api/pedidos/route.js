@@ -69,7 +69,7 @@ export async function POST(req) {
       tiendaId,
       cliente, items, pagos: pagosInput,
       emitirFactura, fechaEntregaPrometida,
-      notasVendedor, direccionTexto, latitud, longitud,
+      notasVendedor, direccionTexto, ciudadPedido, latitud, longitud,
     } = body
 
     // ☠️ QUIÉN VENDE Y EN QUÉ TIENDA NO LO DECIDE EL NAVEGADOR.
@@ -190,6 +190,7 @@ export async function POST(req) {
       facturaDatilId: '',
       notasVendedor: notasVendedor || '',
       direccionPedido: direccionTexto || cliente.direccion || '',
+      ciudadPedido: String(ciudadPedido || cliente.ciudad || '').trim(),
       latitud: latitud || null,
       longitud: longitud || null,
     }), siguienteNumeroPedido)
