@@ -7,7 +7,8 @@ import { crearPedidoConReintento } from '@/lib/reintento-pedido'
 import { upsertClienteByCedula } from '@/lib/db/clientes'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
-import { enviarPurchase, capiConfigurado, debeEnviarCapi } from '@/lib/metaCapi'
+import { enviarPurchase, capiConfigurado } from '@/lib/metaCapi'
+import { esCompraParaMeta } from '@/lib/compraParaMeta'
 import { registrarEvento } from '@/lib/eventos'
 import { sesionActual } from '@/lib/auth'
 import { getUsuarioById } from '@/lib/db/usuarios'
@@ -298,8 +299,9 @@ export async function POST(req) {
     try {
       // YAW no pauta en Meta: sus ventas no se envían por ninguno de los dos
       // caminos. Antes sí se enviaban, rotuladas como MANDARINA.
-      if (!debeEnviarCapi(tiendaId)) {
-        // nada que hacer
+      if (!esCompraParaMeta(tiendaId, montoTotal)) {
+        // nada que hacer: YAW no pauta, y un pedido de $0 (canje del club de
+        // premios) no es una compra — reportarlo ensuciaría la pauta.
       } else if (capiConfigurado()) {
         // vendedorId decide el action_source cuando el cliente NO vino de un
         // anuncio: si vende en el mostrador va como physical_store para que Meta

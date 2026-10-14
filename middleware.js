@@ -46,6 +46,12 @@ const RUTAS_PUBLICAS = [
   //   IP y por número, y arma la respuesta con lista blanca de campos
   //   (lib/seguimientoPublico.js). Nunca devuelve montos ni la cédula completa.
   '/api/publico/pedido',
+  // '/api/fidelidad/canje' — los canjes del club de premios (14-oct-2026). Lo
+  //   llama el SERVIDOR de la app del club, que no tiene sesión de persona. Se
+  //   defiende SOLA: exige `Authorization: Bearer $FIDELIDAD_TOKEN` (comparación
+  //   de largo constante; sin token configurado responde 401 a todos) y solo crea
+  //   pedidos de $0 de UNA prenda (lib/canjeFidelidad.js).
+  '/api/fidelidad/canje',
 ]
 
 function esPublica(pathname) {
