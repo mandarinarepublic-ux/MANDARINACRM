@@ -37,7 +37,7 @@ const NAV_ALL = [
   { href:'https://ind-inbox.apps.mandarinaec.com', label:'Inbox Indstore',  icon:'🏪', externo:true, acceso:'INBOX_INDSTORE' },
   // El panel del club de premios (15-oct-2026) es otra app en premios.apps.mandarinaec.com:
   // entra con esta MISMA sesión (cookie de .apps.mandarinaec.com) y relee el rol en la base.
-  { href:'https://premios.apps.mandarinaec.com/admin', label:'Club de premios', icon:'🎁', externo:true, roles:['ADMIN'] },
+  { href:'https://premios.apps.mandarinaec.com/admin', label:'Club de premios', icon:'🎁', externo:true, roles:['ADMIN'], oAcceso:['CLUB_MANDARINA','CLUB_INDSTORE'] },
 ]
 
 const ROL_PRIORITY = {
@@ -64,7 +64,8 @@ function getNavItems(user) {
   const all = NAV_ALL.filter(n => {
     if (n.acceso) return accesos.includes(n.acceso)
     if (n.roles?.includes(rol)) return true
-    return n.oAcceso ? accesos.includes(n.oAcceso) : false
+    // `oAcceso` puede ser uno o varios: basta tener cualquiera (el club: Mandarina o IND).
+    return n.oAcceso ? [].concat(n.oAcceso).some(a => accesos.includes(a)) : false
   })
   const priority = ROL_PRIORITY[rol] || []
   if (!priority.length) return all

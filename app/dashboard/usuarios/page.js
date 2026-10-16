@@ -221,6 +221,10 @@ export default function UsuariosPage() {
         // Levanta el filtro por vendedor del Historial: ve las ventas de todos,
         // pero SOLO en las tiendas que tenga asignadas arriba. No toca Mis Pedidos.
         ['VER_TODAS_LAS_VENTAS', '👁️ Ve las ventas de todos'],
+        // Panel del club de premios de ESA marca (premios.apps.mandarinaec.com/admin).
+        // No da ningún poder en el CRM. Un ADMIN ya ve los dos clubes sin marcar nada.
+        ['CLUB_MANDARINA', '🎁 Club Mandarina'],
+        ['CLUB_INDSTORE',  '🎁 Club IND'],
       ].map(([clave, etiqueta]) => (
         <label key={clave} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all
           ${valor.includes(clave) ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 text-gray-500'}`}>
