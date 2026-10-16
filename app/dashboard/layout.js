@@ -35,6 +35,9 @@ const NAV_ALL = [
   // que se marca por persona en la pantalla de Usuarios.
   { href:'https://inbox.apps.mandarinaec.com',     label:'Inbox Mandarina', icon:'🍊', externo:true, acceso:'INBOX_MANDARINA' },
   { href:'https://ind-inbox.apps.mandarinaec.com', label:'Inbox Indstore',  icon:'🏪', externo:true, acceso:'INBOX_INDSTORE' },
+  // El panel del club de premios (15-oct-2026) es otra app en premios.apps.mandarinaec.com:
+  // entra con esta MISMA sesión (cookie de .apps.mandarinaec.com) y relee el rol en la base.
+  { href:'https://premios.apps.mandarinaec.com/admin', label:'Club de premios', icon:'🎁', externo:true, roles:['ADMIN'] },
 ]
 
 const ROL_PRIORITY = {
