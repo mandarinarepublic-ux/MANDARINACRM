@@ -20,7 +20,7 @@ export async function GET(req) {
     if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status })
 
     const { searchParams } = new URL(req.url)
-    const fuente = searchParams.get('fuente')        // meta | datil | supabase | webhook
+    const fuente = searchParams.get('fuente')        // meta | datil | supabase | webhook | whatsapp
     const nivel = searchParams.get('nivel')          // error | aviso | ok
     const soloPendientes = searchParams.get('pendientes') === '1'
     const limit = Math.min(parseInt(searchParams.get('limit') || '100', 10), 500)
@@ -45,7 +45,7 @@ export async function GET(req) {
     if (e2) throw e2
 
     const salud = {}
-    for (const f of ['meta', 'datil', 'supabase', 'webhook']) {
+    for (const f of ['meta', 'datil', 'supabase', 'webhook', 'whatsapp']) {
       const suyos = (recientes || []).filter(r => r.fuente === f)
       const ultimoOk = suyos.find(r => r.nivel === 'ok')
       const ultimoError = suyos.find(r => r.nivel === 'error')

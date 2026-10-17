@@ -10,6 +10,7 @@ const FUENTE_META = {
   datil:    { label: 'Dátil (facturas)', icon: '🧾' },
   supabase: { label: 'Base de datos', icon: '🗄️' },
   webhook:  { label: 'Webhooks', icon: '🔗' },
+  whatsapp: { label: 'WhatsApp (mensajes que no llegaron)', icon: '💬' },
 }
 
 // ¿Cuánto hace desde una fecha? Para la tira de salud ("hace 5 min").
