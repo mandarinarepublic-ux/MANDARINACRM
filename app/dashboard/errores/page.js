@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { formatFechaHumana } from '@/lib/parseFecha'
 import { filasDeDetalle, detalleComoTexto } from '@/lib/detalle-evento'
 import { MOTIVOS } from '@/lib/motivos-factura'
+import PanelConexiones from '@/components/PanelConexiones'
 
 const FUENTE_META = {
   meta:     { label: 'Meta CAPI', icon: '📊' },
@@ -244,6 +245,10 @@ export default function ErroresPage() {
           <button onClick={() => router.back()} className="text-gray-500 hover:text-white text-sm px-2">← Volver</button>
         </div>
       </div>
+
+      {/* Tablero de conexiones (17-oct-2026): ARRIBA de todo, para ver de un vistazo
+          si algún servicio de la empresa está parado — incluso por falta de pago. */}
+      {user && <PanelConexiones headers={headers()} />}
 
       {/* Facturas pedidas que no salieron.
           Va ARRIBA de la tira de salud y no en la lista de eventos porque no es
