@@ -29,6 +29,7 @@ const NAV_ALL = [
   { href:'/dashboard/auto',         label:'AUTO',         icon:'🤖', roles:['ADMIN'] },
   { href:'/dashboard/pauta',        label:'Pauta',        icon:'📣', roles:['ADMIN'] },
   { href:'/dashboard/errores',      label:'Errores',      icon:'🩺', roles:['ADMIN'] },
+  { href:'/dashboard/tareas',       label:'Tareas automáticas', icon:'⏱️', roles:['ADMIN'] },
   { href:'/dashboard/usuarios',     label:'Usuarios',     icon:'👥', roles:['ADMIN'] },
   // Los inbox son OTRAS aplicaciones: se abren en pestaña nueva y no se pintan
   // como "activas" nunca. Quién las ve NO depende del rol sino de `accesos`,
