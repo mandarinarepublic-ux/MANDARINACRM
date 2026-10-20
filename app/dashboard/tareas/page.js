@@ -56,8 +56,12 @@ function Tarea({ tarea, corridas }) {
           <h2 className="text-white font-bold">{tarea.nombre}{tarea.activa === false && <span className="ml-2 text-xs text-gray-500">(pausada)</span>}</h2>
           <p className="text-xs text-gray-500">{tarea.horario}{tarea.descripcion ? ` · ${tarea.descripcion}` : ''}</p>
         </div>
-        <a href={`https://claude.ai/code/routines/${tarea.id}`} target="_blank" rel="noreferrer"
-          className="text-xs text-mandarina-400 hover:underline whitespace-nowrap">Editar en Claude ↗</a>
+        {/* Solo las rutinas de Claude (trig_…) se editan allá; las demás (p. ej. el
+            catálogo de WhatsApp, que corre en el inbox) no tienen página que abrir. */}
+        {String(tarea.id).startsWith('trig_') && (
+          <a href={`https://claude.ai/code/routines/${tarea.id}`} target="_blank" rel="noreferrer"
+            className="text-xs text-mandarina-400 hover:underline whitespace-nowrap">Editar en Claude ↗</a>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mb-3">
