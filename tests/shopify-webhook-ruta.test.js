@@ -162,7 +162,11 @@ test('☠️ el duplicado NO registra evento — es el funcionamiento normal, no
 })
 
 test('☠️ orders/create pagado tampoco registra evento — lo crea orders/paid, no es un descarte', () => {
-  const bloque = ruta.slice(ruta.indexOf("if (estaPagado(order)) {"), ruta.indexOf("return ok({ sinPagar: true })"))
+  // Solo la rama de "ya viene pagado": hasta su propio return. La rama de SIN
+  // pagar que viene después sí registra (cuando el aviso al inbox falla).
+  const desde = ruta.indexOf("if (estaPagado(order)) {")
+  const bloque = ruta.slice(desde, ruta.indexOf('return ok(', desde))
+  assert.ok(bloque.length > 0)
   assert.ok(!/registrarEvento/.test(bloque))
 })
 

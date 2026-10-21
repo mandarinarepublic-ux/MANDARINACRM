@@ -4,7 +4,12 @@ export const maxDuration = 60
 import { tiendaPorDominio, firmaValida, secretoDeFirma } from '@/lib/shopifyWebhook'
 import { fetchFotosDeVariantes } from '@/lib/shopify'
 import { mapearPedido, estaPagado, normalizarCelular } from '@/lib/shopifyPedido'
-import { notificarPedidoWebSinPagar, notificarPedidoWebFallido, notificarPedidoWebCreado } from '@/lib/telegram'
+import { notificarPedidoWebSinPagar, notificarPedidoWebFallido, notificarPedidoWebCreado, notificarPedidoWebPagadoDespues } from '@/lib/telegram'
+import { avisarPedidoEnInbox } from '@/lib/inbox-supabase'
+import {
+  textoAvisoPedidoWeb, telefonoInbox, idAvisoPedidoWeb,
+  DIRECCION_INTERNO, TIPO_PEDIDO_WEB, CANAL_POR_DEFECTO,
+} from '@/lib/pedidoWebPendiente'
 import { firmarSesion, secretoSesion, COOKIE_SESION } from '@/lib/sesion'
 import { getSupabase } from '@/lib/supabase'
 import { registrarEvento } from '@/lib/eventos'
@@ -58,15 +63,48 @@ export async function POST(req) {
         return ok({ ignorado: true, motivo: 'orders/create pagado; lo crea orders/paid' })
       }
       const env = order.shipping_address || {}
+      const nombre = env.name || [order.customer?.first_name, order.customer?.last_name].filter(Boolean).join(' ')
+      const celular = normalizarCelular(env.phone || order.customer?.phone || order.phone)
+
+      // 1) La marca va PRIMERO: es lo que impide que orders/paid lo cree solo
+      //    después (el vendedor lo carga a mano). Si esto falla, se sigue igual,
+      //    pero queda registrado: sin marca, un pago posterior lo crearía.
+      const { error: errorMarca } = await sb.from('shopify_sin_pagar').upsert(
+        { shopify_order_id: orderId, tienda_id: tienda.id, order_name: order.name || null, celular: celular || null },
+        { onConflict: 'shopify_order_id', ignoreDuplicates: true },
+      )
+      if (errorMarca) {
+        await registrarEvento({ fuente: 'shopify', nivel: 'error', mensaje: `Pedido web sin pagar ${order.name}: no se guardó la marca (${errorMarca.message})` })
+      }
+
       await notificarPedidoWebSinPagar({
         tiendaId: tienda.id,
-        nombre: env.name || order.customer?.first_name,
-        celular: normalizarCelular(env.phone || order.customer?.phone),
+        nombre,
+        celular,
         monto: order.total_price,
         prendas: (order.line_items || []).reduce((s, i) => s + (i.quantity || 1), 0),
         urlShopify: order.order_status_url || '',
       })
-      return ok({ sinPagar: true })
+
+      // 2) El aviso resaltado en el chat del cliente, en el inbox de la tienda.
+      const cuenta = String(tienda.id).includes('IND') ? 'IND' : 'MANDI'
+      const aviso = await avisarPedidoEnInbox({
+        tiendaId: tienda.id,
+        telefono: telefonoInbox(celular),
+        nombre,
+        waMessageId: idAvisoPedidoWeb(orderId),
+        texto: textoAvisoPedidoWeb(order),
+        direccion: DIRECCION_INTERNO,
+        tipo: TIPO_PEDIDO_WEB,
+        canalPorDefecto: CANAL_POR_DEFECTO[cuenta],
+      })
+      await sb.from('shopify_sin_pagar')
+        .update({ aviso_inbox: aviso.ok ? 'ok' : `error: ${aviso.motivo}` })
+        .eq('shopify_order_id', orderId)
+      if (!aviso.ok) {
+        await registrarEvento({ fuente: 'shopify', nivel: 'aviso', mensaje: `Pedido web sin pagar ${order.name}: no llegó al inbox ${cuenta} (${aviso.motivo})` })
+      }
+      return ok({ sinPagar: true, inbox: aviso })
     }
 
     if (topic !== 'orders/paid') {
@@ -96,6 +134,28 @@ export async function POST(req) {
         mensaje: `orders/paid de ${order.name} descartado: financial_status='${order.financial_status}' (tienda ${tienda.id})`,
       })
       return ok({ ignorado: true, motivo: 'orders/paid pero financial_status no es paid' })
+    }
+
+    // ☠️ Nació sin pagar → NO se crea solo. El vendedor tiene el aviso en el
+    // inbox y lo carga con Pedido manual; crearlo acá también lo metería DOS
+    // veces a fábrica (#1191 → MAN-AND-6409). Solo suena Telegram.
+    const { data: nacioSinPagar, error: errorConsultaMarca } = await sb.from('shopify_sin_pagar')
+      .select('shopify_order_id').eq('shopify_order_id', orderId).limit(1)
+    if (errorConsultaMarca) throw errorConsultaMarca // sin saberlo, no se crea a ciegas
+    if (nacioSinPagar?.length) {
+      const env = order.shipping_address || {}
+      await notificarPedidoWebPagadoDespues({
+        tiendaId: tienda.id,
+        orderName: order.name,
+        cliente: env.name || order.customer?.first_name,
+        monto: order.total_price,
+      })
+      await registrarEvento({
+        fuente: 'shopify',
+        nivel: 'ok',
+        mensaje: `orders/paid de ${order.name} no se creó: nació sin pagar, se carga a mano (tienda ${tienda.id})`,
+      })
+      return ok({ creado: false, motivo: 'nació sin pagar; lo carga el vendedor' })
     }
 
     // La foto del producto por variante: primero la del webhook (por si algún
