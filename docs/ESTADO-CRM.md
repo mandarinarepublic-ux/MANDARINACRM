@@ -1,4 +1,4 @@
-# ESTADO DEL CRM · al 7-oct-2026
+# ESTADO DEL CRM · al 20-oct-2026
 
 **Qué es esto:** el único documento que dice en qué punto está el CRM **hoy**.
 Los `HANDOFF-*.md` cuentan lo que pasó en una sesión y no se tocan más; este se
@@ -27,7 +27,7 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 | Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
 | Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
 | Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
-| Pruebas | `npm test` → **881, todas pasan** (medido 20-oct) |
+| Pruebas | `npm test` → **891, todas pasan** (medido 20-oct, tras el pedido web sin pagar) |
 
 ---
 
@@ -61,6 +61,18 @@ No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pa
 ---
 
 ## Qué está en producción
+
+**🛒 Pedido web SIN PAGAR → aviso en el inbox de la tienda (20-oct, sin prueba con pedido real).**
+`orders/create` sin pagar (depósito, dLocal efectivo…) ahora, además del Telegram:
+marca el pedido en **`crm.shopify_sin_pagar`** y deja un aviso **INTERNO** resaltado
+(ámbar, «el cliente no lo ve») en el chat del cliente del inbox de esa tienda
+(MANDARINA→MANDI, INDSTORE→IND), y lo pone en **Pendientes**. Si no hay chat, lo crea
+en el número principal con la IA apagada; ahí sale «📋 Enviar plantilla».
+☠️ **Un pedido que nació sin pagar NUNCA entra solo**, aunque lo marquen pagado en
+Shopify: el vendedor lo carga con Pedido manual (si no, entraba dos veces a fábrica:
+#1191 → `MAN-AND-6409`). `orders/paid` solo manda Telegram. El aviso va con
+`direccion='INTERNO'`, nunca ENTRANTE (abriría una ventana de 24 h falsa).
+Detalle: `docs/HANDOFF-2026-10-20-pedido-web-sin-pagar.md`.
 
 **🧾 «Validar comprobante» en el menú (20-oct, probado por Rodrigo).**
 Entrada externa (↗, pestaña nueva) a `https://lector-qr-pagos.vercel.app` en
@@ -483,7 +495,7 @@ suyo». Los agentes de WhatsApp crean **pedidos**, no cotizaciones.
 | 5 | `lib/useNuevosPedidos.js` avisa mal | Compara `PEDIDO_ID` como texto: **96% de silencio** medido sobre 531 pedidos |
 | 6 | `pauta_dia` sin `.range()` | Ver arriba. ~16-nov-2026 |
 | 7 | `todosItemsListos` usa `.every()` | Un pedido **sin ítems** devuelve `true` y se auto-despacha. Mina armada, hoy no se dispara |
-| 8 | **El webhook de Shopify no ha procesado ni un pedido real** | Compra de prueba en la tienda web → tiene que aparecer en el CRM como TIENDA WEB. Si da **401**, es el secreto: añadir `SHOPIFY_<TIENDA>_WEBHOOK_SECRET` |
+| 8 | ~~El webhook de Shopify no ha procesado ni un pedido real~~ ✅ **cerrado**: ya entraron 5 reales (`MAN-WEB-5903`, `MAN-WEB-6241`, `IND-WEB-5862/6312/6315`, medido 20-oct) | — |
 | 9 | **El panel de productos no se ha probado con un producto real** | Subir uno a MANDARINA y mirarlo en la tienda |
 | 10 | **Anthropic sin saldo** | Recargar. Rompe `Redactar con IA` y `/api/analyze-image`; «Llenar a mano» funciona igual |
 | 11 | INDSTORE sin permisos de escritura en Shopify | `write_products`, `read_publications`, `write_publications` en su app |
@@ -492,6 +504,9 @@ suyo». Los agentes de WhatsApp crean **pedidos**, no cotizaciones.
 | 14 | Cotizaciones ya enviadas llevan el dominio viejo en el PDF | No se arregla solo. Si hay alguna activa esperando respuesta, el cliente tiene una dirección muerta |
 | 15 | **Corregir abonos y la búsqueda corta no se probaron en vivo** (7-oct) | Buscar `6` en Historial sin error · `select count(*) from crm.eventos_sistema where mensaje like 'El Historial fallo%Bad Request%' and fecha > '2026-10-08'` = 0 · corregir un abono y ver `PAGO_EDITADO` en la bitácora |
 | 16 | 69 errores viejos del Historial siguen «abiertos» en el cuadro | Marcarlos resueltos tras confirmar el #15 |
+| 17 | **El aviso de pedido web sin pagar no ha visto un pedido real** (20-oct) | Al primero: `select * from crm.shopify_sin_pagar order by creado_en desc limit 3` → `aviso_inbox='ok'` y el chat en Pendientes con el recuadro ámbar |
+| 18 | **dLocal en efectivo** nace sin pagar y se confirma SOLO días después: con la regla nueva NO entra solo | Depende de que el vendedor vea el Telegram «marcado PAGADO». Si se pierden ventas, reabrir la regla para esa pasarela |
+| 19 | #1190 (18-oct, dLocal efectivo) es anterior al cambio: sin marca ni aviso | Rodrigo lo dejó así; si se paga, entra solo como antes |
 
 ---
 
@@ -520,6 +535,7 @@ suyo». Los agentes de WhatsApp crean **pedidos**, no cotizaciones.
 |---|---|
 | **este archivo** | en qué punto está el CRM hoy |
 | `/crm-mandarina` (skill) | arquitectura, roles, trampas, mapa del código y de la base |
+| `docs/HANDOFF-2026-10-20-pedido-web-sin-pagar.md` | pedido web sin pagar → aviso INTERNO en el inbox; no entra solo al pagar |
 | `docs/HANDOFF-2026-10-07-errores-abonos-catalogo-borrador.md` | errores del Historial, abonos, limpieza de tipos de prenda y el borrador del pedido |
 | `docs/HANDOFF-2026-09-14-shopify-y-cotizaciones.md` | el panel de Shopify, las opciones de cotización y los dos dominios mal |
 | `docs/HANDOFF-2026-08-28-...md` | bandejas, filtro de área, el pago en la hoja, permisos |
