@@ -27,7 +27,7 @@ puedas comprobar contra el código o la base en 30 segundos** — y arregla el o
 | Dominio | `crm.apps.mandarinaec.com` (el viejo `mandarina-pro-sales.vercel.app` sigue vivo) |
 | Supabase | `piingkecjgoisnxccvaa` (mandarina-DATA), schema `crm`, `service_role` |
 | Backend | `DATA_BACKEND=supabase` · Sheets **apagado** desde el 19-ago |
-| Pruebas | `npm test` → **761** (760 pasan; `pivot-areas` falla por fecha fija, ajeno) |
+| Pruebas | `npm test` → **881, todas pasan** (medido 20-oct) |
 
 ---
 
@@ -61,6 +61,15 @@ No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pa
 ---
 
 ## Qué está en producción
+
+**🧾 «Validar comprobante» en el menú (20-oct, probado por Rodrigo).**
+Entrada externa (↗, pestaña nueva) a `https://lector-qr-pagos.vercel.app` en
+`app/dashboard/layout.js`. La ven `ADMIN`, `VENDEDOR`, `VENDEDOR_YAW` y quien
+tenga el acceso `VENTAS`; a los vendedores les sale después de «Mis Pedidos»
+(`ROL_PRIORITY`, slug `lector-qr`). **No es parte del CRM**: página estática
+aparte, sin sesión y sin repo, en `Desktop\LECTOR-QR-PAGOS` (su `HANDOFF.md`
+cuenta qué lee del QR y qué NO puede comprobar). Solo está en el menú lateral, no
+en la rejilla de Inicio.
 
 **Seguimiento del pedido para el cliente: `crm.apps.mandarinaec.com/pedido` (9-oct, falta prueba de Rodrigo y Shopify).**
 El cliente escribe su celular (últimos 9 dígitos) y el número de pedido (`6308`
