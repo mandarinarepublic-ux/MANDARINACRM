@@ -39,11 +39,14 @@ const NAV_ALL = [
   // El panel del club de premios (15-oct-2026) es otra app en premios.apps.mandarinaec.com:
   // entra con esta MISMA sesión (cookie de .apps.mandarinaec.com) y relee el rol en la base.
   { href:'https://premios.apps.mandarinaec.com/admin', label:'Club de premios', icon:'🎁', externo:true, roles:['ADMIN'], oAcceso:['CLUB_MANDARINA','CLUB_INDSTORE'] },
+  // Lector del QR de los comprobantes de transferencia (20-oct-2026): página aparte,
+  // sin sesión, todo se lee en el celular. Repo: Desktop\LECTOR-QR-PAGOS.
+  { href:'https://lector-qr-pagos.vercel.app', label:'Validar comprobante', icon:'🧾', externo:true, roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'], oAcceso:'VENTAS' },
 ]
 
 const ROL_PRIORITY = {
-  VENDEDOR:    ['nuevo-pedido','mis-pedidos','historial','cotizacion','catalogo','tablero'],
-  VENDEDOR_YAW:['nuevo-pedido','historial','cotizacion','tablero'],
+  VENDEDOR:    ['nuevo-pedido','mis-pedidos','lector-qr','historial','cotizacion','catalogo','tablero'],
+  VENDEDOR_YAW:['nuevo-pedido','lector-qr','historial','cotizacion','tablero'],
   DISEÑO:      ['produccion','tablero','historial','impresion'],
   ESTAMPADO:   ['produccion','tablero','historial','impresion'],
   SUBLIMACION: ['produccion','tablero','historial','impresion'],
