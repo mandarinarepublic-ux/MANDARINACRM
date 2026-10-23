@@ -10,7 +10,8 @@ import { PdfGracias } from '@/components/pedido/PdfPedido'
 import PdfScaler from '@/components/pedido/PdfScaler'
 import { TIPOS_ID, tipoIdMeta, validarIdentificacion, inferirTipo } from '@/lib/identificacion'
 import { puedeVerTienda, tiendasDisponibles } from '@/lib/tiendasUsuario'
-import { parseFechaCalendario, diasHastaEntrega, hoyEcuador } from '@/lib/parseFecha'
+import { parseFechaCalendario } from '@/lib/parseFecha'
+import { DIAS_ENTREGA, DIAS_ENTREGA_MIN_ELEGIDA, fechaEntregaPedido, fechaMinimaElegida, resolverFechaEntrega } from '@/lib/plazoEntrega'
 import { avisarPedidoCreado } from '@/lib/aviso-padre'
 import { emailPareceValido, limpiarEmail } from '@/lib/email-cliente'
 import { direccionSinCiudad } from '@/lib/direccionPedido'
@@ -39,25 +40,6 @@ function validarCelular(v) {
   if (!v) return 'Requerido'
   if (!/^0\d{9}$/.test(v)) return 'Formato: 0987654321 (10 dígitos, empieza en 0)'
   return null
-}
-
-function getMinFechaConDias(dias = 3) {
-  // Se cuenta desde HOY EN ECUADOR. Antes se partía de la hora local y el día se
-  // sacaba con toISOString(), que es UTC: vendiendo después de las 19:00 la fecha
-  // mínima de entrega saltaba un día de más.
-  const [y, m, d0] = hoyEcuador().split('-').map(Number)
-  const d = new Date(Date.UTC(y, m - 1, d0))
-  let count = 0
-  while (count < dias) {
-    d.setUTCDate(d.getUTCDate() + 1)
-    const day = d.getUTCDay()
-    if (day !== 0 && day !== 6) count++   // sin sábados ni domingos
-  }
-  return d.toISOString().split('T')[0]
-}
-
-function getMinFecha() {
-  return getMinFechaConDias(3)
 }
 
 // Formato de dirección que la empresa pide llenar SIEMPRE. El cuadro arranca con
@@ -136,8 +118,9 @@ function NuevoPedidoContenido() {
   const [direccionTexto, setDireccionTexto] = useState('')
   const [latitud, setLatitud] = useState(null)
   const [longitud, setLongitud] = useState(null)
-  const [fechaEntrega, setFechaEntrega] = useState(getMinFecha())
-  const [diasCalculado, setDiasCalculado] = useState(4)
+  // Vacío = la fecha automática (3 días laborables). Solo se llena si el vendedor
+  // la cambia, y entonces el mínimo es 4. Regla única en lib/plazoEntrega.js.
+  const [fechaEntrega, setFechaEntrega] = useState('')
   const [notasVendedor, setNotasVendedor] = useState('')
   const pagoRef = useRef(null)
   const errorRef = useRef(null)
@@ -158,7 +141,6 @@ function NuevoPedidoContenido() {
   const [borradorOfrecido, setBorradorOfrecido] = useState(null)
   const [listoParaGuardar, setListoParaGuardar] = useState(false)
   const [avisoComprobante, setAvisoComprobante] = useState(false)
-  const saltarFechaRef = useRef(false)
   const creadoRef = useRef(false)
 
   useEffect(() => {
@@ -291,23 +273,6 @@ function NuevoPedidoContenido() {
     })
   }
 
-  useEffect(() => {
-    if (items.length === 0) return
-    const areas = [...new Set(items.map(i => (i.area || '').replace(/\s*\+\s*/g, ',').split(',').map(x => x.trim())).flat())].sort()
-    const combos = {
-      'BORDADO': 5, 'ESTAMPADO': 3, 'SUBLIMACION': 4,
-      'BORDADO,ESTAMPADO': 6, 'BORDADO,SUBLIMACION': 7,
-      'ESTAMPADO,SUBLIMACION': 6, 'BORDADO,ESTAMPADO,SUBLIMACION': 8,
-    }
-    const dias = combos[areas.join(',')] || 4
-    setDiasCalculado(dias)
-    // Al recuperar un borrador, la fecha que el vendedor ya había elegido manda:
-    // recalcularla aquí la pisaría con la mínima.
-    if (saltarFechaRef.current) { saltarFechaRef.current = false; return }
-    const fecha = getMinFechaConDias(dias)
-    setFechaEntrega(fecha)
-  }, [items])
-
   // ─── Borrador: que refrescar no borre el pedido ────────────────────────────
   //
   // ☠️ En el celular, bajar con el dedo desde arriba RECARGA la página, y el
@@ -376,7 +341,6 @@ function NuevoPedidoContenido() {
   function recuperarBorrador() {
     const d = borradorOfrecido?.datos
     if (!d) return
-    if ((d.items || []).length > 0) saltarFechaRef.current = true
     if (d.tienda) setTienda(d.tienda)
     setClienteId(d.clienteId ?? null)
     if (d.cliente) setCliente(d.cliente)
@@ -388,7 +352,9 @@ function NuevoPedidoContenido() {
     setDireccionTexto(d.direccionTexto || '')
     setLatitud(d.latitud ?? null)
     setLongitud(d.longitud ?? null)
-    if (d.fechaEntrega) setFechaEntrega(d.fechaEntrega)
+    // La fecha que eligió a mano se respeta solo si todavía cumple la regla (el
+    // borrador puede ser de ayer). Si no, vuelve a la automática.
+    setFechaEntrega(d.fechaEntrega && !resolverFechaEntrega(d.fechaEntrega).error ? d.fechaEntrega : '')
     setNotasVendedor(d.notasVendedor || '')
     setSucursalIdVendido(d.sucursalIdVendido ?? null)
     if (d.step) setStep(d.step)
@@ -617,11 +583,6 @@ function NuevoPedidoContenido() {
       })
     }
 
-    // fechaEntrega es un día del calendario ("2026-07-30"), no un instante:
-    // `new Date(...)` lo tomaba como medianoche UTC = 19:00 del día anterior en
-    // Ecuador, así que el cálculo daba un día menos si se vendía de noche.
-    const diasPrometido = diasHastaEntrega(fechaEntrega)
-
     try {
       const res = await fetch('/api/pedidos', {
         method: 'POST',
@@ -635,7 +596,7 @@ function NuevoPedidoContenido() {
           items,
           pagos,
           emitirFactura,
-          diasEntregaPrometido: diasPrometido,
+          // Vacío = automática; el servidor la calcula y valida con la misma regla.
           fechaEntregaPrometida: fechaEntrega,
           notasVendedor,
           direccionTexto: direccionFinal,
@@ -1096,12 +1057,29 @@ function NuevoPedidoContenido() {
           {step === 3 && (
             <div className="space-y-4">
               <div className="card p-5">
-                <h3 className="font-semibold text-white mb-3">📅 Fecha de entrega</h3>
-                <div className="text-xs text-gray-500 mb-2">Mínimo recomendado: <span className="text-white">{diasCalculado} días hábiles</span></div>
-                <input type="date" className="input" min={getMinFecha()} value={fechaEntrega}
-                  onChange={e => setFechaEntrega(e.target.value)} />
-                {fechaEntrega && fechaEntrega < getMinFechaConDias(diasCalculado) && (
-                  <p className="text-yellow-400 text-xs mt-2">⚠️ Fecha por debajo del mínimo recomendado</p>
+                <h3 className="font-semibold text-white mb-3">📅 Fecha estimada de entrega</h3>
+                {!fechaEntrega ? (
+                  <>
+                    <p className="text-white">{parseFechaCalendario(fechaEntregaPedido())?.toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                    <p className="text-xs text-gray-500 mt-1">Automática: {DIAS_ENTREGA} días laborables desde hoy.</p>
+                    <button type="button" className="text-xs text-orange-400 underline mt-2"
+                      onClick={() => setFechaEntrega(fechaMinimaElegida())}>
+                      Cambiar fecha
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xs text-gray-500 mb-2">Si la cambias, mínimo <span className="text-white">{DIAS_ENTREGA_MIN_ELEGIDA} días laborables</span>.</div>
+                    <input type="date" className="input" min={fechaMinimaElegida()} value={fechaEntrega}
+                      onChange={e => setFechaEntrega(e.target.value)} />
+                    {resolverFechaEntrega(fechaEntrega).error && (
+                      <p className="text-red-400 text-xs mt-2">⚠️ Lo más pronto que puedes escoger es {parseFechaCalendario(fechaMinimaElegida())?.toLocaleDateString('es-EC', { day: 'numeric', month: 'long' })}.</p>
+                    )}
+                    <button type="button" className="text-xs text-orange-400 underline mt-2"
+                      onClick={() => setFechaEntrega('')}>
+                      Volver a la automática ({DIAS_ENTREGA} días)
+                    </button>
+                  </>
                 )}
               </div>
               <div ref={pagoRef}><SeccionPago pagos={pagos} onChange={setPagos} montoTotal={montoTotal} /></div>
@@ -1154,7 +1132,7 @@ function NuevoPedidoContenido() {
                 </div>
                 <hr className="border-gray-800" />
                 <div className="flex justify-between"><span className="text-gray-500">Entrega</span>
-                  <span className="text-white">{parseFechaCalendario(fechaEntrega)?.toLocaleDateString('es-EC', {day:'numeric',month:'long',year:'numeric'}) || fechaEntrega}</span>
+                  <span className="text-white">{parseFechaCalendario(fechaEntrega || fechaEntregaPedido())?.toLocaleDateString('es-EC', {day:'numeric',month:'long',year:'numeric'}) || fechaEntrega}</span>
                 </div>
               </div>
               <div>

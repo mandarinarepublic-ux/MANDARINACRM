@@ -1,6 +1,6 @@
 import { fechaAhora } from '@/lib/sheets'
 import { generateItemId, subestadoInicial, logCambio } from '@/lib/pedidos'
-import { calcularDiasEntregaDesdeSheet } from '@/lib/db/diasEntrega'
+import { DIAS_ENTREGA, resolverFechaEntrega } from '@/lib/plazoEntrega'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
 import { listPedidos, createPedido, generatePedidoId, siguienteNumeroPedido } from '@/lib/db/pedidos'
 import { crearPedidoConReintento } from '@/lib/reintento-pedido'
@@ -69,7 +69,7 @@ export async function POST(req) {
     const {
       tiendaId,
       cliente, items, pagos: pagosInput,
-      emitirFactura, fechaEntregaPrometida,
+      emitirFactura, fechaEntregaPrometida: fechaPedida,
       notasVendedor, direccionTexto, ciudadPedido, latitud, longitud,
     } = body
 
@@ -134,8 +134,13 @@ export async function POST(req) {
     // del producto; el excedente NO es saldo negativo, es dinero extra ya cobrado.
     const montoPendiente = Math.max(0, montoTotal - montoAbonado)
 
-    const areas = items.map(i => i.area || '').filter(a => a !== 'ENTREGA EN TIENDA')
-    const diasCalculado = await calcularDiasEntregaDesdeSheet(areas)
+    // La entrega sale de la única regla (lib/plazoEntrega.js): sin tocar, 3 días
+    // laborables desde hoy; si el vendedor la cambió, mínimo 4. Se valida aquí y
+    // no solo en la pantalla: el navegador no decide.
+    const entrega = resolverFechaEntrega(fechaPedida)
+    if (entrega.error) return Response.json({ error: entrega.error }, { status: 400 })
+    const fechaEntregaPrometida = entrega.fecha
+    const diasPrometido = entrega.dias
 
     const now = fechaAhora()
 
@@ -178,9 +183,9 @@ export async function POST(req) {
       clienteId,
       fechaPedido: now,
       fechaActualizacion: now,
-      fechaEntregaPrometida: fechaEntregaPrometida || '',
-      diasCalculado,
-      diasPrometido: diasCalculado,
+      fechaEntregaPrometida,
+      diasCalculado: DIAS_ENTREGA,
+      diasPrometido,
       alertaEntrega: false,
       estadoPedido: 'EN_FABRICA',
       estadoPago,
@@ -336,7 +341,7 @@ export async function POST(req) {
       console.error('META CAPI build error:', capiErr.message)
     }
 
-    return Response.json({ pedidoId, montoTotal, diasCalculado })
+    return Response.json({ pedidoId, montoTotal, diasCalculado: DIAS_ENTREGA, fechaEntregaPrometida })
   } catch (e) {
     console.error('POST pedido error:', e)
     // Un fallo al crear el pedido casi siempre es de la escritura a Supabase/Sheets.

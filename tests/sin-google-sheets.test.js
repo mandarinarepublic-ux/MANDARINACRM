@@ -23,8 +23,9 @@ test('crear un pedido NO importa nada que lea Google directo', () => {
     'esa version lee la hoja DIAS_ENTREGA siempre; la buena esta en @/lib/db/diasEntrega')
   assert.ok(!/generatePedidoId/.test(importaViejo),
     'esa version leia la hoja PEDIDOS: si Google fallaba, no se podia vender')
-  assert.ok(/from '@\/lib\/db\/diasEntrega'/.test(codigo),
-    'los plazos salen del repo que respeta DATA_BACKEND')
+  // Desde el 23-oct-2026 el plazo ya no se lee de ninguna tabla: es una regla
+  // fija en lib/plazoEntrega.js (lo vigila tests/plazo-entrega.test.js).
+  assert.ok(!/diasEntrega'/.test(codigo), 'la venta no lee ninguna tabla de plazos')
 })
 
 test('lo unico que queda de sheets en la ruta es formato de fecha', () => {
