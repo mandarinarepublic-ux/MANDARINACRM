@@ -9,6 +9,7 @@ import { createGuia } from '@/lib/db/guias'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
 import { recalcTotalesSeguro } from '@/lib/db/totales'
+import { notificarGuiaDespachada } from '@/lib/telegram'
 
 // Detalle de UN pedido (join acotado a ese id vía getPedidoById). Las pantallas
 // de detalle y edición antes bajaban la lista COMPLETA con join de 5 tablas solo
@@ -148,6 +149,29 @@ export async function PATCH(req, { params }) {
         `${body.GUIA_TRANSPORTISTA || 'SERVIENTREGA'} #${body.GUIA_NUMERO}${fotoGuiaUrl ? ' 📷' : ''}`,
         usuarioId
       )
+
+      // ── Aviso al grupo de alarmas: foto de la guía + detalle del pedido ──
+      // CON await: en serverless la instancia se congela al responder y un
+      // envío suelto se pierde. Nunca bloquea el despacho (no lanza).
+      try {
+        let registradoPor = usuarioId
+        try {
+          const u = usuarioId && usuarioId !== 'SISTEMA' ? await getUsuarioById(usuarioId) : null
+          if (u?.NOMBRE) registradoPor = u.NOMBRE
+        } catch { /* el nombre es cosmético */ }
+        const enviado = await notificarGuiaDespachada({
+          pedido,
+          fotoUrl: fotoGuiaUrl,
+          guia: {
+            numero: body.GUIA_NUMERO.trim(),
+            transportista: body.GUIA_TRANSPORTISTA || 'SERVIENTREGA',
+            registradoPor,
+          },
+        })
+        if (!enviado) console.error(`Aviso de guía NO enviado por Telegram (${id})`)
+      } catch (avisoErr) {
+        console.error('notificarGuiaDespachada falló:', avisoErr?.message || avisoErr)
+      }
     }
 
     // ── Nuevo ítem (dual-write; createItem incluye ARCHIVO_DISENO, deuda #2) ───
