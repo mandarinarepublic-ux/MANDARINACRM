@@ -39,7 +39,9 @@ export async function GET(req) {
       getPlan(fecha),
       getPlanAnterior(fecha),
     ])
-    return Response.json({ fecha, plan, anterior, pedidos: tablero.pedidos, completo: tablero.completo })
+    // La pantalla solo pinta el nombre: cédula y celular no salen de aquí.
+    const pedidos = tablero.pedidos.map(({ CLIENTE_CEDULA, CLIENTE_CELULAR, ...p }) => p)
+    return Response.json({ fecha, plan, anterior, pedidos, completo: tablero.completo })
   } catch (e) {
     console.error('GET /api/plan-fabrica:', e)
     await registrarEvento({
