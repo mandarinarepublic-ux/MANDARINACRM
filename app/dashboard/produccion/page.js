@@ -14,12 +14,13 @@ import BarraFiltros from '@/components/BarraFiltros'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
+  ESPERANDO_PRENDA:   { label: '⏸️ Esperando prenda',    color: 'bg-orange-500' },
   EN_PROCESO:         { label: '🔧 En proceso',          color: 'bg-blue-500' },
   ENVIADO_APROBACION: { label: '📤 Enviado aprobación',  color: 'bg-purple-500' },
   LISTO:              { label: '✅ Listo',               color: 'bg-green-500' },
   ENTREGADO_TIENDA:   { label: '🏪 Entregado en tienda', color: 'bg-gray-500' },
 }
-const SUBESTADOS_ORDEN = ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO']
+const SUBESTADOS_ORDEN = ['SOLICITADO', 'ESPERANDO_PRENDA', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO']
 
 // itemEsDeUsuario vivía aquí. Ahora está en lib/areas-usuario.js y lo aplica el
 // SERVIDOR, contra la cookie firmada: mientras vivió en el navegador había que
@@ -28,7 +29,7 @@ const SUBESTADOS_ORDEN = ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LIS
 // Ver docs/superpowers/specs/2026-08-19-bandeja-produccion-design.md
 
 const AREAS_BASE_P = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
-const ORDEN_P = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO','ENTREGADO_TIENDA','ELIMINADO']
+const ORDEN_P = ['SOLICITADO','ESPERANDO_PRENDA','EN_PROCESO','ENVIADO_APROBACION','LISTO','ENTREGADO_TIENDA','ELIMINADO']
 const PAGE_SIZE_P = 20
 
 function parseSubestadoP(str, areaStr) {
@@ -290,7 +291,7 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
 // agregado aqui entra solo en el aviso, sin tocar nada mas.
 const CHIP_P = {
   busqueda:        (v) => `🔍 ${v}`,
-  filtroSubestado: (v) => ({ SOLICITADO: '⏳ Solicitado', EN_PROCESO: '🔧 En proceso',
+  filtroSubestado: (v) => ({ SOLICITADO: '⏳ Solicitado', ESPERANDO_PRENDA: '⏸️ Esperando prenda', EN_PROCESO: '🔧 En proceso',
                              ENVIADO_APROBACION: '📤 Aprobación', LISTO: '✅ Listo' }[v] || v),
   filtroArea:      (v) => `🧩 ${v.charAt(0) + v.slice(1).toLowerCase()}`,
   filtroTienda:    (v) => ({ MANDARINA: '🍊 Mandarina', INDSTORE: '🏬 Indstore' }[v] || v),
@@ -546,6 +547,7 @@ export default function ProduccionPage() {
                   ${filtroSubestado !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                 <option value="TODOS">Todos</option>
                 <option value="SOLICITADO">⏳ Solicitado</option>
+                <option value="ESPERANDO_PRENDA">⏸️ Esperando prenda</option>
                 <option value="EN_PROCESO">🔧 En proceso</option>
                 <option value="ENVIADO_APROBACION">📤 Aprobación</option>
                 <option value="LISTO">✅ Listo</option>

@@ -308,6 +308,14 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           </div>
         </div>
       </div>
+      <Link href="/dashboard/plan-fabrica" className="card p-4 mb-3 flex items-center gap-4 border-mandarina-500/30 hover:border-mandarina-500/60 transition-all group">
+        <div className="w-11 h-11 rounded-xl bg-mandarina-500/20 flex items-center justify-center text-xl flex-shrink-0">🏭</div>
+        <div className="flex-1">
+          <div className="font-semibold text-white text-sm">Plan de fábrica</div>
+          <div className="text-xs text-gray-500">Corte · diseño · confección, y qué se hace hoy</div>
+        </div>
+        <span className="text-gray-600 group-hover:text-mandarina-400 text-xl">→</span>
+      </Link>
       <Link href="/dashboard/tablero" className="card p-4 mb-3 flex items-center gap-4 border-mandarina-500/30 hover:border-mandarina-500/60 transition-all group">
         <div className="w-11 h-11 rounded-xl bg-mandarina-500/20 flex items-center justify-center text-xl flex-shrink-0">📊</div>
         <div className="flex-1">

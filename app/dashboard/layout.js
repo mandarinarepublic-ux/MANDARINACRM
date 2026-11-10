@@ -11,6 +11,8 @@ import ToastHost from '@/components/ToastHost'
 const NAV_ALL = [
   { href:'/dashboard',              label:'Inicio',       icon:'🏠', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/tablero',      label:'Tablero',      icon:'📊', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
+  // Plan de fábrica (9-nov-2026): CORTE · DISEÑO · CONFECCIÓN + QUÉ SE HACE HOY. Solo guía.
+  { href:'/dashboard/plan-fabrica', label:'Plan de fábrica', icon:'🏭', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/calendario',   label:'Calendario',   icon:'📅', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   // `oAcceso`: ademas del rol, lo ve quien tenga ese permiso marcado por persona.
   // Asi los de DISEÑO pueden vender sin dejar de ser produccion (21-ago-2026).
@@ -47,13 +49,13 @@ const NAV_ALL = [
 const ROL_PRIORITY = {
   VENDEDOR:    ['nuevo-pedido','mis-pedidos','lector-qr','historial','cotizacion','catalogo','tablero'],
   VENDEDOR_YAW:['nuevo-pedido','lector-qr','historial','cotizacion','tablero'],
-  DISEÑO:      ['produccion','tablero','historial','impresion'],
-  ESTAMPADO:   ['produccion','tablero','historial','impresion'],
-  SUBLIMACION: ['produccion','tablero','historial','impresion'],
-  BORDADO:     ['produccion','tablero','historial','impresion'],
-  CORTE:       ['corte','tablero','historial'],
-  DESPACHO:    ['despacho','tablero','historial'],
-  ADMIN:       ['tablero','nuevo-pedido','historial','produccion','despacho','usuarios'],
+  DISEÑO:      ['produccion','plan-fabrica','tablero','historial','impresion'],
+  ESTAMPADO:   ['produccion','plan-fabrica','tablero','historial','impresion'],
+  SUBLIMACION: ['produccion','plan-fabrica','tablero','historial','impresion'],
+  BORDADO:     ['produccion','plan-fabrica','tablero','historial','impresion'],
+  CORTE:       ['corte','plan-fabrica','tablero','historial'],
+  DESPACHO:    ['despacho','plan-fabrica','tablero','historial'],
+  ADMIN:       ['tablero','plan-fabrica','nuevo-pedido','historial','produccion','despacho','usuarios'],
 }
 
 function getNavItems(user) {

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { SUBESTADO_LABELS, SUBESTADO_COLORS, SUBESTADO_BG } from '@/lib/labels'
 import { imagenAncho } from '@/lib/imagenes'
 
-const SUBESTADOS_ORDEN = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO']
+const SUBESTADOS_ORDEN = ['SOLICITADO','ESPERANDO_PRENDA','EN_PROCESO','ENVIADO_APROBACION','LISTO']
 const AREAS_BASE = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
 
 // Estados de CORTE — independiente del área, aplica a todos los ítems
@@ -35,7 +35,7 @@ function parseSubestados(subestadoStr, areaStr) {
 }
 
 // El más atrasado define el estado global
-const ORDEN_ESTADOS = ['SOLICITADO','EN_PROCESO','ENVIADO_APROBACION','LISTO','ENTREGADO_TIENDA','ELIMINADO']
+const ORDEN_ESTADOS = ['SOLICITADO','ESPERANDO_PRENDA','EN_PROCESO','ENVIADO_APROBACION','LISTO','ENTREGADO_TIENDA','ELIMINADO']
 function estadoGlobal(estados) {
   const vals = Object.values(estados)
   let minIdx = ORDEN_ESTADOS.length

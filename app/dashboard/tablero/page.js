@@ -45,11 +45,12 @@ const COLOR_SUB = {
 
 const ESTADO_ETQ = {
   SOLICITADO: 'Solicitado',
+  ESPERANDO_PRENDA: 'Esperando prenda',
   EN_PROCESO: 'En proceso',
   ENVIADO_APROBACION: 'Espera al cliente',
   LISTO: 'Listo',
 }
-const ORDEN_ESTADO = ['SOLICITADO', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO']
+const ORDEN_ESTADO = ['SOLICITADO', 'ESPERANDO_PRENDA', 'EN_PROCESO', 'ENVIADO_APROBACION', 'LISTO']
 
 const ORDENES = {
   atraso: { label: 'Más atrasado primero', cmp: (a, b) => cmp(b.atraso, a.atraso) },
