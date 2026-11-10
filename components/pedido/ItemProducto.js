@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { subirFoto, subirArchivo } from '@/lib/subirImagen'
 import { imagenAncho } from '@/lib/imagenes'
+import { nacePlegado } from '@/lib/itemPlegado'
 
 const TALLAS = ['4XL','3XL','2XL','XL','L','M','S','XS','12','10','9','8','7','6','5','4','3','2','1 AÑO']
 const AREAS = [
@@ -12,7 +13,8 @@ const AREAS = [
 ]
 
 export default function ItemProducto({ item, index, onChange, onRemove, onDuplicate }) {
-  const [expanded, setExpanded] = useState(true)
+  // Completa → nace plegada (se ve el resumen); si le falta algo, abierta.
+  const [expanded, setExpanded] = useState(() => !nacePlegado(item))
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [uploading, setUploading] = useState({})
   const [uploadError, setUploadError] = useState('')

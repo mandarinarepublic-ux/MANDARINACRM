@@ -15,6 +15,7 @@ import { DIAS_ENTREGA, DIAS_ENTREGA_MIN_ELEGIDA, fechaEntregaPedido, fechaMinima
 import { avisarPedidoCreado } from '@/lib/aviso-padre'
 import { emailPareceValido, limpiarEmail } from '@/lib/email-cliente'
 import { direccionSinCiudad } from '@/lib/direccionPedido'
+import { nuevoUid } from '@/lib/itemPlegado'
 import { llaveBorrador, armarBorrador, borradorVigente, hayTrabajo, resumenBorrador, haceCuanto } from '@/lib/borradorPedido'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
@@ -225,6 +226,7 @@ function NuevoPedidoContenido() {
     // las prendas de sucursal se guardaban sin nombre y llegaban en blanco
     // a la orden de fábrica.
     setItems(p => [...p, {
+      _uid: nuevoUid(),
       tipo: 'SUCURSAL',
       sucursalId: prod.ID,
       productoNombre: prod.NOMBRE,
@@ -266,6 +268,7 @@ function NuevoPedidoContenido() {
     setItems(p => {
       const copia = {
         ...p[idx],
+        _uid: nuevoUid(),
         talla: '', precioUnit: '', cantidad: 0,
         detalle: String(p[idx].detalle || '').replace(/\s*[-–]\s*talla\s+\S+\s*$/i, ''),
       }
@@ -347,7 +350,7 @@ function NuevoPedidoContenido() {
     if (d.tipoId) setTipoId(d.tipoId)
     if (typeof d.emitirFactura === 'boolean') setEmitirFactura(d.emitirFactura)
     setUsarMapa(!!d.usarMapa)
-    setItems(d.items || [])
+    setItems((d.items || []).map(it => (it && it._uid ? it : { ...it, _uid: nuevoUid() })))
     if (Array.isArray(d.pagos) && d.pagos.length) setPagos(d.pagos)
     setDireccionTexto(d.direccionTexto || '')
     setLatitud(d.latitud ?? null)
@@ -1028,7 +1031,7 @@ function NuevoPedidoContenido() {
               <BuscadorProductos
                 tienda={tienda}
                 soloPersonalizado={isYAW}
-                onAdd={item => setItems(p => [...p, { ...item, cantidad: item.cantidad || 1, precioUnit: item.precioUnit || '' }])}
+                onAdd={item => setItems(p => [...p, { ...item, _uid: nuevoUid(), cantidad: item.cantidad || 1, precioUnit: item.precioUnit || '' }])}
               />
               {items.length === 0 && (
                 <div className="card p-6 text-center text-gray-500 border-dashed">
@@ -1039,7 +1042,7 @@ function NuevoPedidoContenido() {
               {items.length > 0 && (
                 <div className="space-y-3">
                   {items.map((item, idx) => (
-                    <ItemProducto key={idx} item={item} index={idx}
+                    <ItemProducto key={item._uid || idx} item={item} index={idx}
                       onChange={updated => setItems(p => p.map((it, i) => i === idx ? updated : it))}
                       onRemove={() => setItems(p => p.filter((_, i) => i !== idx))}
                       onDuplicate={() => duplicarItem(idx)} />
