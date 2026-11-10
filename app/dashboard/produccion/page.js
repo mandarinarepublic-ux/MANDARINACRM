@@ -11,7 +11,7 @@ import { estadoBandeja } from '@/lib/bandeja-estado'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
 import BarraFiltros from '@/components/BarraFiltros'
-import { planCambio, estadoComun } from '@/lib/cambioEstadoPedido'
+import { ESTADO_LABELS } from '@/lib/labels'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -60,49 +60,46 @@ function areaUsuarioP(u, item) {
 const AREA_COLORS = { ESTAMPADO: 'text-orange-400', SUBLIMACION: 'text-blue-400', BORDADO: 'text-purple-400' }
 const TIENDA_COLORS = { MANDARINA: '#FF6B00', INDSTORE: '#E91E8C', YAW: '#6C3FC5' }
 
-// ─── Combo de estado del pedido (al lado del PDF) ─────────────────────────────
-// Cambia TODAS las prendas del pedido que le tocan al usuario sin abrirlo.
-// Un PATCH por prenda (y por área), en serie: igual que tocar cada botón, así
-// el auto-avance y la bitácora corren como siempre. Regla: lib/cambioEstadoPedido.js
-function ComboEstadoPedido({ pedido, user, onHecho }) {
-  const esAdmin = user?.rol === 'ADMIN'
-  const areaDe = (item) => areaUsuarioP(user, item)
-  const actual = estadoComun(pedido.itemsFiltrados, esAdmin, areaDe)
+// ─── Combo de ESTADO DEL PEDIDO (al lado del PDF) ─────────────────────────────
+// Cierra o mueve el pedido entero (En producción, En despacho, Completado,
+// Entregado, Cancelado) sin abrirlo. Mismo PATCH y misma regla que el combo del
+// detalle del pedido: solo ADMIN. Queda en la bitácora con quién lo cambió.
+function ComboEstadoPedido({ pedido, user, onCambio }) {
+  const [estado, setEstado] = useState(pedido.ESTADO_PEDIDO || 'EN_FABRICA')
   const [guardando, setGuardando] = useState(false)
   const [aviso, setAviso] = useState('')
+  if (user?.rol !== 'ADMIN') return null
 
   async function cambiar(nuevo) {
-    if (!nuevo || nuevo === actual) return
-    const { llamadas, resultado } = planCambio(pedido.itemsFiltrados, nuevo, esAdmin, areaDe)
-    if (!llamadas.length) return
-    setGuardando(true); setAviso('')
-    const hechos = {}
-    let fallo = 0
-    for (const l of llamadas) {
-      try {
-        const res = await fetch(`/api/pedidos/item/${l.itemId}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...l.body, _usuarioId: user?.id }),
-        })
-        if (res.ok) hechos[l.itemId] = resultado[l.itemId]
-        else fallo++
-      } catch { fallo++ }
+    if (!nuevo || nuevo === estado) return
+    const antes = estado
+    setEstado(nuevo); setGuardando(true); setAviso('')
+    try {
+      const res = await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ESTADO_PEDIDO: nuevo, _usuarioId: user?.id }),
+      })
+      if (!res.ok) throw new Error(`Error ${res.status}`)
+      setAviso('✓')
+      onCambio(nuevo)
+    } catch (e) {
+      setEstado(antes)
+      setAviso('⚠️ No se guardó')
+    } finally {
+      setGuardando(false)
+      setTimeout(() => setAviso(''), 3000)
     }
-    setGuardando(false)
-    onHecho(hechos)
-    setAviso(fallo ? `⚠️ ${fallo} no se guardaron` : '✓')
-    setTimeout(() => setAviso(''), fallo ? 4000 : 1200)
   }
 
   return (
     <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
       {aviso && <span className={`text-[11px] ${aviso.startsWith('⚠️') ? 'text-red-400' : 'text-green-400'}`}>{aviso}</span>}
-      <select value={actual} disabled={guardando} onChange={e => cambiar(e.target.value)}
-        title="Cambiar el estado de todas las prendas de este pedido"
+      <select value={estado} disabled={guardando} onChange={e => cambiar(e.target.value)}
+        title="Estado del pedido"
         className={`bg-gray-800 border rounded-xl px-2 py-1.5 text-xs outline-none cursor-pointer max-w-[150px]
           ${guardando ? 'opacity-50 border-gray-700 text-gray-500' : 'border-gray-600 text-gray-200 hover:border-white'}`}>
-        <option value="" disabled>{guardando ? 'Guardando…' : 'Varios estados'}</option>
-        {SUBESTADOS_ORDEN.map(s => <option key={s} value={s}>{SUBESTADO_CONFIG[s]?.label || s}</option>)}
+        {Object.entries(ESTADO_LABELS).filter(([k]) => k !== 'PENDIENTE_FABRICA' || k === estado)
+          .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
       </select>
     </div>
   )
@@ -743,12 +740,11 @@ export default function ProduccionPage() {
                         </div>
                       </div>
 
-                      {/* Combo de estado: cambia todas las prendas sin abrir el pedido */}
+                      {/* Combo de estado DEL PEDIDO (solo ADMIN). Si se cierra, sale de la lista. */}
                       <ComboEstadoPedido pedido={pedido} user={user}
-                        onHecho={hechos => setPedidos(prev => prev.map(x => x.PEDIDO_ID !== pedido.PEDIDO_ID ? x : {
-                          ...x,
-                          itemsFiltrados: x.itemsFiltrados.map(it => hechos[it.ITEM_ID] ? { ...it, SUBESTADO: hechos[it.ITEM_ID], _v: (it._v || 0) + 1 } : it),
-                        }))} />
+                        onCambio={nuevo => setPedidos(prev => ['COMPLETADO', 'ENTREGADO', 'CANCELADO'].includes(nuevo)
+                          ? prev.filter(x => x.PEDIDO_ID !== pedido.PEDIDO_ID)
+                          : prev.map(x => x.PEDIDO_ID === pedido.PEDIDO_ID ? { ...x, ESTADO_PEDIDO: nuevo } : x))} />
 
                       {/* Botón PDF — no propaga el clic al expand */}
                       <button
@@ -772,7 +768,7 @@ export default function ProduccionPage() {
                       <div className="border-t border-gray-800 divide-y divide-gray-800">
                         {pedido.itemsFiltrados.map(item => (
                           <ItemCard
-                            key={`${item.ITEM_ID}:${item._v || 0}`}
+                            key={item.ITEM_ID}
                             item={item}
                             userId={user?.id}
                             user={user}
