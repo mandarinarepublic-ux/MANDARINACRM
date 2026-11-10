@@ -1,5 +1,6 @@
 import { fechaAhora } from '@/lib/sheets'
 import { generateItemId, subestadoInicial, logCambio } from '@/lib/pedidos'
+import { estadoInicialPedido } from '@/lib/estadoInicialPedido'
 import { DIAS_ENTREGA, resolverFechaEntrega } from '@/lib/plazoEntrega'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
 import { listPedidos, createPedido, generatePedidoId, siguienteNumeroPedido } from '@/lib/db/pedidos'
@@ -161,6 +162,10 @@ export async function POST(req) {
 
     const estadoPago = montoAbonado >= montoTotal ? 'PAGADO' : montoAbonado > 0 ? 'ABONO' : 'PENDIENTE'
 
+    // Venta de mostrador (todo ENTREGA EN TIENDA) nace COMPLETADO: no hay nada
+    // que imprimir ni fabricar. Ver lib/estadoInicialPedido.js.
+    const estadoPedido = estadoInicialPedido(items)
+
     // La ATRIBUCIÓN no se resuelve acá.
     //
     // Antes esto llamaba a resolverOrigen() con `await` justo antes de grabar:
@@ -187,7 +192,7 @@ export async function POST(req) {
       diasCalculado: DIAS_ENTREGA,
       diasPrometido,
       alertaEntrega: false,
-      estadoPedido: 'EN_FABRICA',
+      estadoPedido,
       estadoPago,
       montoTotal: montoTotal.toFixed(2),
       montoAbonado: montoAbonado.toFixed(2),
@@ -205,7 +210,7 @@ export async function POST(req) {
     pedidoId = creado.pedidoId
     uniqueId = creado.uniqueId
 
-    await logCambio(pedidoId, 'CREACION', '', 'EN_FABRICA', vendedorId)
+    await logCambio(pedidoId, 'CREACION', '', estadoPedido, vendedorId)
 
     // Items (dual-write). Las fotos/archivo se suben aquí; createItem recibe URLs.
     for (let i = 0; i < items.length; i++) {
