@@ -11,6 +11,7 @@ import { estadoBandeja } from '@/lib/bandeja-estado'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
 import BarraFiltros from '@/components/BarraFiltros'
+import { planCambio, estadoComun } from '@/lib/cambioEstadoPedido'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -58,6 +59,54 @@ function areaUsuarioP(u, item) {
 }
 const AREA_COLORS = { ESTAMPADO: 'text-orange-400', SUBLIMACION: 'text-blue-400', BORDADO: 'text-purple-400' }
 const TIENDA_COLORS = { MANDARINA: '#FF6B00', INDSTORE: '#E91E8C', YAW: '#6C3FC5' }
+
+// ─── Combo de estado del pedido (al lado del PDF) ─────────────────────────────
+// Cambia TODAS las prendas del pedido que le tocan al usuario sin abrirlo.
+// Un PATCH por prenda (y por área), en serie: igual que tocar cada botón, así
+// el auto-avance y la bitácora corren como siempre. Regla: lib/cambioEstadoPedido.js
+function ComboEstadoPedido({ pedido, user, onHecho }) {
+  const esAdmin = user?.rol === 'ADMIN'
+  const areaDe = (item) => areaUsuarioP(user, item)
+  const actual = estadoComun(pedido.itemsFiltrados, esAdmin, areaDe)
+  const [guardando, setGuardando] = useState(false)
+  const [aviso, setAviso] = useState('')
+
+  async function cambiar(nuevo) {
+    if (!nuevo || nuevo === actual) return
+    const { llamadas, resultado } = planCambio(pedido.itemsFiltrados, nuevo, esAdmin, areaDe)
+    if (!llamadas.length) return
+    setGuardando(true); setAviso('')
+    const hechos = {}
+    let fallo = 0
+    for (const l of llamadas) {
+      try {
+        const res = await fetch(`/api/pedidos/item/${l.itemId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...l.body, _usuarioId: user?.id }),
+        })
+        if (res.ok) hechos[l.itemId] = resultado[l.itemId]
+        else fallo++
+      } catch { fallo++ }
+    }
+    setGuardando(false)
+    onHecho(hechos)
+    setAviso(fallo ? `⚠️ ${fallo} no se guardaron` : '✓')
+    setTimeout(() => setAviso(''), fallo ? 4000 : 1200)
+  }
+
+  return (
+    <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      {aviso && <span className={`text-[11px] ${aviso.startsWith('⚠️') ? 'text-red-400' : 'text-green-400'}`}>{aviso}</span>}
+      <select value={actual} disabled={guardando} onChange={e => cambiar(e.target.value)}
+        title="Cambiar el estado de todas las prendas de este pedido"
+        className={`bg-gray-800 border rounded-xl px-2 py-1.5 text-xs outline-none cursor-pointer max-w-[150px]
+          ${guardando ? 'opacity-50 border-gray-700 text-gray-500' : 'border-gray-600 text-gray-200 hover:border-white'}`}>
+        <option value="" disabled>{guardando ? 'Guardando…' : 'Varios estados'}</option>
+        {SUBESTADOS_ORDEN.map(s => <option key={s} value={s}>{SUBESTADO_CONFIG[s]?.label || s}</option>)}
+      </select>
+    </div>
+  )
+}
 
 // ─── ItemCard ─────────────────────────────────────────────────────────────────
 function ItemCard({ item, userId, user, onSubestadoChange }) {
@@ -650,9 +699,10 @@ export default function ProduccionPage() {
 
                 return (
                   <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${urgente ? 'border-red-500/40' : ''}`}>
-                    <button
+                    <div role="button" tabIndex={0}
                       onClick={() => setExpandedPedidos(prev => { const n = new Set(prev); n.has(pedido.PEDIDO_ID) ? n.delete(pedido.PEDIDO_ID) : n.add(pedido.PEDIDO_ID); return n })}
-                      className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left">
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click() } }}
+                      className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left cursor-pointer">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <Link href={`/dashboard/pedido/${pedido.PEDIDO_ID}`}
@@ -693,6 +743,13 @@ export default function ProduccionPage() {
                         </div>
                       </div>
 
+                      {/* Combo de estado: cambia todas las prendas sin abrir el pedido */}
+                      <ComboEstadoPedido pedido={pedido} user={user}
+                        onHecho={hechos => setPedidos(prev => prev.map(x => x.PEDIDO_ID !== pedido.PEDIDO_ID ? x : {
+                          ...x,
+                          itemsFiltrados: x.itemsFiltrados.map(it => hechos[it.ITEM_ID] ? { ...it, SUBESTADO: hechos[it.ITEM_ID], _v: (it._v || 0) + 1 } : it),
+                        }))} />
+
                       {/* Botón PDF — no propaga el clic al expand */}
                       <button
                         onClick={e => handleVerPdf(e, pedido)}
@@ -709,13 +766,13 @@ export default function ProduccionPage() {
                       </button>
 
                       <span className="text-gray-600 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
-                    </button>
+                    </div>
 
                     {isExpanded && (
                       <div className="border-t border-gray-800 divide-y divide-gray-800">
                         {pedido.itemsFiltrados.map(item => (
                           <ItemCard
-                            key={item.ITEM_ID}
+                            key={`${item.ITEM_ID}:${item._v || 0}`}
                             item={item}
                             userId={user?.id}
                             user={user}
