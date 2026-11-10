@@ -14,6 +14,18 @@ import { contextoDeError } from '@/lib/detalle-evento'
 // El trabajo de fábrica es transversal: no se filtra por tienda (igual que el
 // Tablero para los roles de fábrica).
 
+// Mismo criterio que /api/tablero: a los roles de VENTA se les filtra por sus
+// tiendas (no ven pedidos ni clientes de otra tienda); la fábrica ve todo.
+const ROLES_POR_TIENDA = ['VENDEDOR', 'VENDEDOR_YAW']
+function tiendasDe(usuario) {
+  const rol = String(usuario?.ROL ?? '').toUpperCase()
+  if (rol === 'ADMIN' || !ROLES_POR_TIENDA.includes(rol)) return []
+  const t = usuario?.TIENDAS
+  const lista = Array.isArray(t) ? t : String(t ?? '').split(',')
+  const r = lista.map((x) => String(x).trim().toUpperCase()).filter(Boolean)
+  return r.length ? r : ['__NINGUNA__']
+}
+
 export async function GET(req) {
   let usuario = null
   try {
@@ -23,7 +35,7 @@ export async function GET(req) {
     const f = new URL(req.url).searchParams.get('fecha')
     const fecha = fechaValida(f) ? f : hoyEcuador()
     const [tablero, plan, anterior] = await Promise.all([
-      listTablero({}),
+      listTablero({ tiendas: tiendasDe(usuario) }),
       getPlan(fecha),
       getPlanAnterior(fecha),
     ])
