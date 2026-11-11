@@ -327,6 +327,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           {href:'/dashboard/nuevo-pedido',icon:'➕',label:'Nueva Venta'},
+          {href:'/dashboard/link-pago',   icon:'💳',label:'Link de pago'},
           {href:'/dashboard/impresion',   icon:'🖨️',label:'Imprimir'},
           {href:'/dashboard/despacho',    icon:'🚚',label:'Despachos'},
           {href:'/dashboard/usuarios',    icon:'👥',label:'Usuarios'},
@@ -373,6 +374,12 @@ function DashboardVendedor({ data, user, filtro, setFiltro }) {
         <div className="w-12 h-12 bg-mandarina-500 rounded-xl flex items-center justify-center text-xl group-hover:scale-105 transition-transform">➕</div>
         <div><div className="font-semibold text-white">Nueva Venta</div><div className="text-gray-500 text-sm">Registrar un pedido nuevo</div></div>
         <div className="ml-auto text-gray-600 group-hover:text-mandarina-400 text-xl">→</div>
+      </Link>
+      {/* Link de pago Payphone, justo debajo de Nueva Venta (10-nov-2026). */}
+      <Link href="/dashboard/link-pago" className="flex items-center gap-4 card p-4 -mt-3 mb-6 border-emerald-500/30 hover:border-emerald-500/60 transition-all group">
+        <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-lg group-hover:scale-105 transition-transform">💳</div>
+        <div><div className="font-semibold text-white">Link de pago</div><div className="text-gray-500 text-sm">Cobrar con tarjeta por WhatsApp</div></div>
+        <div className="ml-auto text-gray-600 group-hover:text-emerald-400 text-xl">→</div>
       </Link>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[
@@ -470,6 +477,11 @@ function DashboardYAW({ data, user }) {
         <div className="w-12 h-12 rounded-xl flex items-center justify-center text-xl group-hover:scale-105 transition-transform" style={{backgroundColor:'#6C3FC5'}}>➕</div>
         <div><div className="font-semibold text-white">Nueva Venta</div><div className="text-gray-500 text-sm">Registrar un pedido nuevo</div></div>
         <div className="ml-auto text-gray-600 group-hover:text-purple-400 text-xl">→</div>
+      </Link>
+      <Link href="/dashboard/link-pago" className="flex items-center gap-4 card p-4 -mt-3 mb-6 border-emerald-500/30 hover:border-emerald-500/60 transition-all group">
+        <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-lg group-hover:scale-105 transition-transform">💳</div>
+        <div><div className="font-semibold text-white">Link de pago</div><div className="text-gray-500 text-sm">Cobrar con tarjeta por WhatsApp</div></div>
+        <div className="ml-auto text-gray-600 group-hover:text-emerald-400 text-xl">→</div>
       </Link>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[

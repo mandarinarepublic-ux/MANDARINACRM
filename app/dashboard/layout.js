@@ -17,6 +17,8 @@ const NAV_ALL = [
   // `oAcceso`: ademas del rol, lo ve quien tenga ese permiso marcado por persona.
   // Asi los de DISEÑO pueden vender sin dejar de ser produccion (21-ago-2026).
   { href:'/dashboard/nuevo-pedido', label:'Nueva Venta',  icon:'➕', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'], oAcceso:'VENTAS' },
+  // Link de pago Payphone (10-nov-2026): celular + valor → se manda por el WhatsApp del vendedor.
+  { href:'/dashboard/link-pago',    label:'Link de pago', icon:'💳', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'], oAcceso:'VENTAS' },
   { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'], oAcceso:'VENTAS' },
   { href:'/dashboard/historial',    label:'Historial',    icon:'📋', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
   { href:'/dashboard/catalogo',     label:'Catálogo',     icon:'🛍️', roles:['ADMIN','VENDEDOR'] },
@@ -47,15 +49,15 @@ const NAV_ALL = [
 ]
 
 const ROL_PRIORITY = {
-  VENDEDOR:    ['nuevo-pedido','mis-pedidos','lector-qr','historial','cotizacion','catalogo','tablero'],
-  VENDEDOR_YAW:['nuevo-pedido','lector-qr','historial','cotizacion','tablero'],
+  VENDEDOR:    ['nuevo-pedido','link-pago','mis-pedidos','lector-qr','historial','cotizacion','catalogo','tablero'],
+  VENDEDOR_YAW:['nuevo-pedido','link-pago','lector-qr','historial','cotizacion','tablero'],
   DISEÑO:      ['produccion','plan-fabrica','tablero','historial','impresion'],
   ESTAMPADO:   ['produccion','plan-fabrica','tablero','historial','impresion'],
   SUBLIMACION: ['produccion','plan-fabrica','tablero','historial','impresion'],
   BORDADO:     ['produccion','plan-fabrica','tablero','historial','impresion'],
   CORTE:       ['corte','plan-fabrica','tablero','historial'],
   DESPACHO:    ['despacho','plan-fabrica','tablero','historial'],
-  ADMIN:       ['tablero','plan-fabrica','nuevo-pedido','historial','produccion','despacho','usuarios'],
+  ADMIN:       ['tablero','plan-fabrica','nuevo-pedido','link-pago','historial','produccion','despacho','usuarios'],
 }
 
 function getNavItems(user) {
