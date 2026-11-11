@@ -50,6 +50,27 @@ const nextConfig = {
           },
         ],
       },
+      // /pagar: el pago con tarjeta (Payphone) dentro de mandarinaec.com, en un
+      // recuadro sobre el carrito (11-nov-2026). Mismos orígenes que /pedido.
+      // También /pagar/respuesta, adonde Payphone devuelve al cliente.
+      {
+        source: '/pagar',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://inbox.apps.mandarinaec.com https://ind-inbox.apps.mandarinaec.com https://www.mandarinaec.com https://mandarinaec.com",
+          },
+        ],
+      },
+      {
+        source: '/pagar/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://inbox.apps.mandarinaec.com https://ind-inbox.apps.mandarinaec.com https://www.mandarinaec.com https://mandarinaec.com",
+          },
+        ],
+      },
       // /pedido/ind: el seguimiento de IND, enmarcado en indlovers.com/pedido.
       // Solo los orígenes de IND (ORIGENES_TIENDA_IND en lib/origenes.js).
       {

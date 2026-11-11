@@ -46,6 +46,14 @@ const RUTAS_PUBLICAS = [
   //   IP y por número, y arma la respuesta con lista blanca de campos
   //   (lib/seguimientoPublico.js). Nunca devuelve montos ni la cédula completa.
   '/api/publico/pedido',
+  // '/api/publico/pago' — el pago con tarjeta dentro de la tienda (11-nov-2026).
+  //   Lo llama /pagar, en el navegador del cliente, sin sesión. Se defiende SOLA:
+  //   el navegador solo manda variantes y cantidades (precios y envío los calcula
+  //   Shopify), cada compra se abre por un id al azar, y el pedido se crea recién
+  //   cuando Payphone CONFIRMA el pago por el monto guardado (lib/procesarPagoTienda.js).
+  '/api/publico/pago',
+  // '/api/cron/carritos' — carritos sin pagar → chat PENDIENTE en el inbox. Valida CRON_SECRET.
+  '/api/cron/carritos',
   // '/api/fidelidad/canje' — los canjes del club de premios (14-oct-2026). Lo
   //   llama el SERVIDOR de la app del club, que no tiene sesión de persona. Se
   //   defiende SOLA: exige `Authorization: Bearer $FIDELIDAD_TOKEN` (comparación

@@ -1,0 +1,105 @@
+import { leerCarrito, nuevoIdCheckout, validarDatos, ctxDeIntento, montosPayphone } from '@/lib/checkoutTienda'
+import { crearCheckout, leerCheckout, actualizarCheckout } from '@/lib/db/checkouts'
+import { calcularCompra } from '@/lib/shopifyCheckout'
+import { tokenCajita } from '@/lib/payphone'
+
+export const dynamic = 'force-dynamic'
+
+// ── Pago con tarjeta DENTRO de la tienda (pública) ──────────────────────────
+// La usa /pagar, que la tienda abre en un recuadro. El cliente no tiene sesión.
+//
+// Se defiende sola:
+//   - El navegador solo manda VARIANTES y CANTIDADES. Precios, descuentos y envío
+//     los calcula Shopify; lo que se cobra es lo guardado acá, no lo que diga el cliente.
+//   - El id de la compra es al azar (36^10) y solo da acceso a ESA compra.
+//   - El token que se entrega es el de la app WEB de Payphone, que Payphone
+//     limita al dominio autorizado (es así por diseño de la Cajita).
+//
+// POST { accion: 'iniciar', carrito }                 → { id }
+// POST { accion: 'cotizar', id, datos }               → { ok, resumen } | { ok:false, errores }
+// POST { accion: 'intento', id }                      → { ok, cajita }
+// POST { accion: 'estado', id }                       → { estado, pedido }
+
+const no = (error, status = 400, extra = {}) => Response.json({ ok: false, error, ...extra }, { status })
+
+export async function POST(req) {
+  const body = await req.json().catch(() => ({}))
+  const accion = String(body?.accion || '')
+
+  try {
+    if (accion === 'iniciar') {
+      const lineas = leerCarrito(body?.carrito)
+      if (!lineas.length) return no('El carrito está vacío')
+      const c = await crearCheckout({ id: nuevoIdCheckout(), tienda: 'MANDARINA', lineas })
+      return Response.json({ ok: true, id: c.id })
+    }
+
+    const id = String(body?.id || '')
+    if (!/^[0-9a-z]{10}$/.test(id)) return no('Compra no válida')
+    const c = await leerCheckout(id)
+    if (!c) return no('Compra no encontrada', 404)
+
+    if (accion === 'estado') {
+      return Response.json({ ok: true, estado: c.estado, pedido: c.shopify_order_name || null })
+    }
+
+    if (['PAGADO', 'CREANDO'].includes(c.estado)) {
+      return Response.json({ ok: true, yaPagado: true, pedido: c.shopify_order_name || null })
+    }
+
+    if (accion === 'cotizar') {
+      const v = validarDatos(body?.datos || {})
+      if (!v.ok) return no('Revisa tus datos', 400, { errores: v.errores })
+      let resumen
+      try {
+        resumen = await calcularCompra({
+          tienda: c.tienda, lineas: c.lineas, checkoutId: c.id, ...v.datos,
+        })
+      } catch (e) {
+        console.error('[/api/publico/pago] cotizar:', e.message)
+        return no('No pudimos calcular tu compra. Intenta de nuevo en un momento.', 502)
+      }
+      if (!resumen.envio) return no('No hacemos envíos a esa dirección', 400)
+      // Un código que Shopify no aplicó se avisa, no se cobra como si sí.
+      const codigoNoAplicado = v.datos.descuento && !resumen.codigos.includes(v.datos.descuento)
+      await actualizarCheckout(c.id, {
+        cliente: v.datos.cliente, direccion: v.datos.direccion,
+        descuento: codigoNoAplicado ? null : v.datos.descuento,
+        calculo: resumen, total_centavos: resumen.total, estado: 'COTIZADO', error: null,
+      })
+      return Response.json({ ok: true, resumen, codigoNoAplicado: !!codigoNoAplicado })
+    }
+
+    if (accion === 'intento') {
+      if (!['COTIZADO', 'PAGANDO'].includes(c.estado) || !(c.total_centavos > 0)) {
+        return no('Primero completa tus datos')
+      }
+      const token = tokenCajita()
+      const storeId = String(process.env.PAYPHONE_STORE_ID_MANDARINA || '').replace(/[^\x21-\x7E]/g, '')
+      if (!token || !storeId) return no('El pago con tarjeta no está disponible en este momento', 503)
+      const montos = montosPayphone(c.total_centavos, c.calculo?.impuestos || 0)
+      const intento = (c.intentos || 0) + 1
+      await actualizarCheckout(c.id, { intentos: intento, estado: 'PAGANDO' })
+      const cli = c.cliente || {}
+      return Response.json({
+        ok: true,
+        cajita: {
+          token, storeId,
+          clientTransactionId: ctxDeIntento(c.id, intento),
+          ...montos,
+          currency: 'USD',
+          reference: 'Compra en mandarinaec.com',
+          email: cli.email,
+          phoneNumber: cli.celular ? '+593' + cli.celular.slice(1) : undefined,
+          documentId: cli.cedula,
+          identificationType: String(cli.cedula || '').length === 13 ? 2 : 1,
+        },
+      })
+    }
+
+    return no('Acción no reconocida')
+  } catch (e) {
+    console.error('[/api/publico/pago]', accion, e.message)
+    return no('Algo falló. Intenta de nuevo.', 500)
+  }
+}
