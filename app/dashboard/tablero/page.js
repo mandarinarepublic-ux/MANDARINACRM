@@ -21,6 +21,7 @@ import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
+import ReporteListos from '@/components/ReporteListos'
 import { construirPivot, subareasVisibles, META_SUBAREA } from '@/lib/pivot-areas'
 
 const TIENDA_META = {
@@ -418,6 +419,8 @@ export default function TableroPage() {
             <span className="text-[11px] text-gray-600">{cerradosCount} pedido(s) ya cerrados</span>
           )}
         </div>
+
+        {String(user?.rol || '').toUpperCase() === 'ADMIN' && <ReporteListos />}
       </div>
     </div>
   )
