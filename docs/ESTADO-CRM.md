@@ -175,6 +175,11 @@ carga, un producto a la vez, sale **ACTIVO**.
   foto**. Es el único control que queda, porque el producto sale ACTIVO.
 - ⛔ **MANDARINA sí publica; INDSTORE no**: le faltan `write_products`,
   `read_publications` y `write_publications` en su app de Shopify.
+- 🔑 La app de Shopify de MANDARINA es **"MANDI Token"** (Dev Dashboard de Mandarina).
+  11-nov-2026: versión **`mandi-token-5`** suma `write_draft_orders` para el pago con
+  tarjeta dentro de la tienda (`/pagar`: draftOrderCalculate/Create/Complete).
+  ☠️ El CRM guarda el token de Shopify ~24 h en memoria: tras cambiar permisos hay
+  que **redesplegar** o sigue dando `ACCESS_DENIED` con el token viejo.
 - ⚠️ Necesita `ANTHROPIC_API_KEY` y **hoy la cuenta está sin saldo**.
 
 Lo puro vive en `lib/shopifyProducto.js` (arma el input y verifica lo devuelto).
