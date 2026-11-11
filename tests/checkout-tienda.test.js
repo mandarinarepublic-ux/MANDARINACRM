@@ -31,10 +31,12 @@ test('carrito: tope de cantidad por línea', () => {
 // ── ids ──────────────────────────────────────────────────────────────────────
 test('el clientTransactionId lleva la compra y cambia en cada intento', () => {
   const id = nuevoIdCheckout()
-  assert.match(id, /^[0-9a-z]{10}$/)
+  assert.match(id, /^[0-9a-z]{20}$/)
+  assert.ok(ctxDeIntento(id, 9999).length <= 50) // límite de Payphone
+  assert.strictEqual(new Set(Array.from({ length: 2000 }, nuevoIdCheckout)).size, 2000)
   assert.notStrictEqual(ctxDeIntento(id, 1), ctxDeIntento(id, 2))
   assert.strictEqual(idDeCtx(ctxDeIntento(id, 7)), id)
-  for (const malo of ['', 'abc', 'CAJmwbn83or', `${id}`, `${id}-x`, null]) assert.strictEqual(idDeCtx(malo), null)
+  for (const malo of ['', 'abc', 'CAJmwbn83or', 'abc1234567-1', `${id}`, `${id}-x`, null]) assert.strictEqual(idDeCtx(malo), null)
 })
 
 // ── datos del cliente ────────────────────────────────────────────────────────
@@ -69,7 +71,7 @@ test('datos incompletos: un error por campo', () => {
 // ── Shopify ──────────────────────────────────────────────────────────────────
 test('borrador: variantes como gid, descuentos automáticos SIEMPRE, cédula y código', () => {
   const { datos } = validarDatos(BUENOS)
-  const input = inputBorrador({ lineas: [{ variantId: '43372760334429', cantidad: 2 }], checkoutId: 'abc1234567', ...datos })
+  const input = inputBorrador({ lineas: [{ variantId: '43372760334429', cantidad: 2 }], checkoutId: 'x', ...datos })
   assert.deepStrictEqual(input.lineItems, [{ variantId: 'gid://shopify/ProductVariant/43372760334429', quantity: 2 }])
   assert.strictEqual(input.acceptAutomaticDiscounts, true) // la preventa no se puede perder
   assert.deepStrictEqual(input.discountCodes, ['NAVIDAD'])
@@ -167,7 +169,7 @@ test('aviso de abandono: productos, total y qué hacer', () => {
   assert.match(t, /Ugly Sweater · M · x1 — \$25\.00/)
   assert.match(t, /Total: \$25\.00/)
   assert.match(t, /plantilla/)
-  assert.strictEqual(idAvisoAbandono('abc1234567'), 'carrito_abc1234567')
+  assert.strictEqual(idAvisoAbandono('abc'), 'carrito_abc')
 })
 
 // ── la tienda puede enmarcar /pagar (y solo eso además de /pedido) ───────────

@@ -1,4 +1,4 @@
-import { leerCarrito, nuevoIdCheckout, validarDatos, ctxDeIntento, montosPayphone } from '@/lib/checkoutTienda'
+import { leerCarrito, nuevoIdCheckout, validarDatos, ctxDeIntento, montosPayphone, ID_VALIDO } from '@/lib/checkoutTienda'
 import { crearCheckout, leerCheckout, actualizarCheckout } from '@/lib/db/checkouts'
 import { calcularCompra } from '@/lib/shopifyCheckout'
 import { tokenCajita } from '@/lib/payphone'
@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic'
 // Se defiende sola:
 //   - El navegador solo manda VARIANTES y CANTIDADES. Precios, descuentos y envío
 //     los calcula Shopify; lo que se cobra es lo guardado acá, no lo que diga el cliente.
-//   - El id de la compra es al azar (36^10) y solo da acceso a ESA compra.
+//   - El id de la compra sale de un generador criptográfico (~103 bits) y solo
+//     da acceso a ESA compra.
 //   - El token que se entrega es el de la app WEB de Payphone, que Payphone
 //     limita al dominio autorizado (es así por diseño de la Cajita).
 //
@@ -35,7 +36,7 @@ export async function POST(req) {
     }
 
     const id = String(body?.id || '')
-    if (!/^[0-9a-z]{10}$/.test(id)) return no('Compra no válida')
+    if (!ID_VALIDO.test(id)) return no('Compra no válida')
     const c = await leerCheckout(id)
     if (!c) return no('Compra no encontrada', 404)
 
