@@ -178,8 +178,10 @@ carga, un producto a la vez, sale **ACTIVO**.
 - 🔑 La app de Shopify de MANDARINA es **"MANDI Token"** (Dev Dashboard de Mandarina).
   11-nov-2026: versión **`mandi-token-5`** suma `write_draft_orders` para el pago con
   tarjeta dentro de la tienda (`/pagar`: draftOrderCalculate/Create/Complete).
-  ☠️ El CRM guarda el token de Shopify ~24 h en memoria: tras cambiar permisos hay
-  que **redesplegar** o sigue dando `ACCESS_DENIED` con el token viejo.
+  ☠️ Lanzar la versión NO basta: la tienda tiene que **aprobar** el permiso nuevo
+  (Dev Dashboard → Apps → ⋮ de MANDI Token → Instalar app → Mandarina →
+  "Actualizar acceso a los datos" → Actualizar). Sin eso, `ACCESS_DENIED` aunque se redespliegue.
+  Además el CRM guarda el token de Shopify ~24 h en memoria: tras aprobar, redesplegar.
 - ⚠️ Necesita `ANTHROPIC_API_KEY` y **hoy la cuenta está sin saldo**.
 
 Lo puro vive en `lib/shopifyProducto.js` (arma el input y verifica lo devuelto).
