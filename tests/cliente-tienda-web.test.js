@@ -32,12 +32,16 @@ test('todo coincide → nada que escribir, sin nota', () => {
 
 // ☠️ Revisiones de seguridad (12-nov): el CELULAR nunca se escribe desde la tienda.
 // Si se llenaba en una ficha sin celular, una 2.ª compra "coincidía" y pisaba todo.
-test('ficha sin celular → se llenan los vacíos MENOS el celular', () => {
+test('ficha sin celular → NO se escribe nada (no hay cómo probar que es el dueño)', () => {
   const sinCel = { ...ficha, CELULAR: '', EMAIL: '' }
   const d = decidirClienteWeb(sinCel, { nombre: 'Intruso', celular: '0991234567', email: 'i@x.com', ciudad: 'Loja', direccion: 'Otra' })
-  assert.strictEqual(d.accion, 'completar')
-  assert.deepStrictEqual(d.campos, { email: 'i@x.com' })
+  assert.strictEqual(d.accion, 'conservar')
   assert.match(d.nota, /no coinciden con la ficha/)
+})
+
+test('otro celular y la ficha tiene vacíos → tampoco se llenan', () => {
+  const d = decidirClienteWeb({ ...ficha, EMAIL: '' }, { nombre: 'Carlos', celular: '0987654321', email: 'c@y.com' })
+  assert.strictEqual(d.accion, 'conservar')
 })
 
 test('☠️ ataque en dos compras: la ficha sigue sin celular y nada se pisa', () => {
