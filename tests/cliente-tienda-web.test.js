@@ -18,28 +18,36 @@ test('no existe la cédula → se crea', () => {
   assert.deepStrictEqual(decidirClienteWeb(null, { nombre: 'Ana' }), { accion: 'crear', nota: '' })
 })
 
-test('mismo celular → es la misma persona: se actualiza como siempre', () => {
-  const d = decidirClienteWeb(ficha, { nombre: 'Ana P.', celular: '+593991234567', email: 'nuevo@x.com' })
-  assert.strictEqual(d.accion, 'actualizar')
-  assert.strictEqual(d.nota, '')
+test('mismo celular → misma persona, pero igual NO se pisa: solo se llena lo vacío', () => {
+  const d = decidirClienteWeb({ ...ficha, EMAIL: '' }, { nombre: 'Ana P.', celular: '+593991234567', email: 'nuevo@x.com' })
+  assert.strictEqual(d.accion, 'completar')
+  assert.deepStrictEqual(d.campos, { email: 'nuevo@x.com' }) // el nombre de la ficha se queda
+  assert.match(d.nota, /no coinciden/) // "Ana P." ≠ "Ana Pérez" → el vendedor lo ve
 })
 
-// ☠️ Revisión de seguridad: "ficha sin celular → actualizar" dejaba que cualquiera
-// pusiera SU celular y pisara nombre, correo y dirección. Ahora solo se LLENA lo vacío.
-test('la ficha no tenía celular → solo se llenan los campos vacíos, nada se pisa', () => {
+test('todo coincide → nada que escribir, sin nota', () => {
+  const d = decidirClienteWeb(ficha, { nombre: 'ana  PÉREZ', celular: '0991234567', email: 'ANA@x.com' })
+  assert.deepStrictEqual(d, { accion: 'conservar', nota: '' })
+})
+
+// ☠️ Revisiones de seguridad (12-nov): el CELULAR nunca se escribe desde la tienda.
+// Si se llenaba en una ficha sin celular, una 2.ª compra "coincidía" y pisaba todo.
+test('ficha sin celular → se llenan los vacíos MENOS el celular', () => {
   const sinCel = { ...ficha, CELULAR: '', EMAIL: '' }
   const d = decidirClienteWeb(sinCel, { nombre: 'Intruso', celular: '0991234567', email: 'i@x.com', ciudad: 'Loja', direccion: 'Otra' })
   assert.strictEqual(d.accion, 'completar')
-  assert.deepStrictEqual(d.campos, { celular: '0991234567', email: 'i@x.com' })
-  // nombre/ciudad/dirección distintos a la ficha → el pedido avisa
+  assert.deepStrictEqual(d.campos, { email: 'i@x.com' })
   assert.match(d.nota, /no coinciden con la ficha/)
 })
 
-test('ficha sin celular y los datos coinciden → completa sin nota', () => {
-  const d = decidirClienteWeb({ ...ficha, CELULAR: '' }, { nombre: 'ana pérez', celular: '0991234567', email: 'ANA@x.com' })
-  assert.strictEqual(d.accion, 'completar')
-  assert.deepStrictEqual(d.campos, { celular: '0991234567' })
-  assert.strictEqual(d.nota, '')
+test('☠️ ataque en dos compras: la ficha sigue sin celular y nada se pisa', () => {
+  const sinCel = { ...ficha, CELULAR: '' }
+  const primera = decidirClienteWeb(sinCel, { nombre: 'Intruso', celular: '0980000000' })
+  assert.ok(!('celular' in (primera.campos || {})))
+  // la ficha quedó igual (sin celular): la segunda compra tampoco pisa nada
+  const segunda = decidirClienteWeb(sinCel, { nombre: 'Intruso', celular: '0980000000', email: 'x@x.com', direccion: 'Otra' })
+  assert.deepStrictEqual(segunda.campos || {}, {})
+  assert.match(segunda.nota, /no coinciden/)
 })
 
 test('OTRO celular → la ficha NO se toca y el pedido lleva los datos del comprador', () => {

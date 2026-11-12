@@ -137,8 +137,8 @@ export async function POST(req) {
       direccion: direccionTexto || cliente.direccion,
     }
     // ☠️ 12-nov: la TIENDA WEB es pública y cualquiera puede escribir la cédula de
-    // otro. Desde ahí la ficha solo se actualiza si el celular coincide; si no,
-    // queda intacta y el pedido lleva los datos del comprador (lib/clienteTiendaWeb.js).
+    // otro. Desde ahí una ficha existente solo se LLENA (nunca se pisa ni se
+    // escribe el celular); si algo no coincide, el pedido avisa (lib/clienteTiendaWeb.js).
     const esTiendaWeb = !!idTiendaWeb && String(vendedorId) === idTiendaWeb
     let notaCliente = ''
     let clienteId
