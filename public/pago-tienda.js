@@ -49,8 +49,21 @@
   var ABIERTO_A_TODOS = CFG.abierto
 
   // IND vende al exterior: fuera de Ecuador la tienda queda con el pago de Shopify.
-  var pais = window.Shopify && window.Shopify.country
-  if (CFG.soloEcuador && pais && pais !== 'EC') return
+  // ☠️ NO usar window.Shopify.country: en IND da 'US' a un cliente EN Ecuador (es el
+  // país del mercado activo, no dónde está). El país real lo detecta Shopify por IP en
+  // /browsing_context_suggestions.json. Si esa consulta falla, se muestran los botones
+  // (el extranjero igual tiene 🌎 Pago internacional).
+  var activo = false
+  function paisPermitido() {
+    if (!CFG.soloEcuador) return Promise.resolve(true)
+    return fetch('/browsing_context_suggestions.json', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : {} })
+      .then(function (d) {
+        var p = d && d.detected_values && d.detected_values.country && d.detected_values.country.handle
+        return !p || p === 'EC'
+      })
+      .catch(function () { return true })
+  }
 
   function leer(k) { try { return localStorage.getItem(k) } catch (e) { return null } }
   function guardar(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v) } catch (e) {} }
@@ -237,6 +250,7 @@
   // Red de seguridad: si algún botón o enlace al checkout viejo se nos escapa
   // (una app, un tema nuevo), el clic abre NUESTRO recuadro en vez de Shopify.
   document.addEventListener('click', function (e) {
+    if (!activo) return
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null
     if (!a || !esLinkCheckout(a)) return
     e.preventDefault()
@@ -245,9 +259,13 @@
   }, true)
 
   function iniciar() {
-    ponerBotones()
-    // El tema vuelve a pintar el carrito al cambiar cantidades: reponer los botones.
-    new MutationObserver(programar).observe(document.body, { childList: true, subtree: true })
+    paisPermitido().then(function (ok) {
+      if (!ok) return // fuera de Ecuador: la tienda queda como siempre
+      activo = true
+      ponerBotones()
+      // El tema vuelve a pintar el carrito al cambiar cantidades: reponer los botones.
+      new MutationObserver(programar).observe(document.body, { childList: true, subtree: true })
+    })
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar)

@@ -79,6 +79,11 @@ test('script de la tienda: IND con pago internacional, solo Ecuador y apagado ha
   assert.match(ind, /internacional: true/)
   assert.match(ind, /soloEcuador: true/)
   assert.match(ind, /param: 'ind'/)
+  // ☠️ país por IP (browsing_context_suggestions), NUNCA Shopify.country: en IND da 'US' estando en Ecuador
+  assert.match(js, /browsing_context_suggestions\.json/)
+  assert.ok(!/window\.Shopify\.country\s*(&&|\|\||!==|===|\))/.test(js.replace(/\/\/.*$/gm, '')), 'no decidir con Shopify.country')
+  // la red de seguridad solo actúa si los botones están activos (fuera de Ecuador no intercepta nada)
+  assert.match(js, /if \(!activo\) return/)
   // el internacional va por location, no por <a>: la red de seguridad no lo intercepta
   assert.match(js, /function irAInternacional\(\) \{ location\.href = '\/checkout' \}/)
   // Mandarina no cambia: abierta y sin botón internacional
