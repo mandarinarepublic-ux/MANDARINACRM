@@ -4,6 +4,7 @@ import { calcularCompra } from '@/lib/shopifyCheckout'
 import { tokenCajita } from '@/lib/payphone'
 import { cuentaPorId } from '@/lib/cuentasBancarias'
 import { procesarComprobante } from '@/lib/procesarTransferencia'
+import { revisarLimite, MENSAJE_TOPE } from '@/lib/limitePublico'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -33,6 +34,14 @@ export async function POST(req) {
   const accion = String(body?.accion || '')
 
   try {
+    // Tope de envíos (12-nov): por IP y por compra. Si el contador falla, deja pasar.
+    const idLimite = ID_VALIDO.test(String(body?.id || '')) ? String(body.id) : null
+    const limite = await revisarLimite({ req, accion, checkoutId: idLimite })
+    if (!limite.ok) {
+      console.warn('[/api/publico/pago] tope', accion, limite.motivo)
+      return no(MENSAJE_TOPE, 429)
+    }
+
     if (accion === 'iniciar') {
       const lineas = leerCarrito(body?.carrito)
       if (!lineas.length) return no('El carrito está vacío')

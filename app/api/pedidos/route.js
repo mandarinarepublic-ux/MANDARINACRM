@@ -5,7 +5,8 @@ import { DIAS_ENTREGA, resolverFechaEntrega } from '@/lib/plazoEntrega'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
 import { listPedidos, createPedido, generatePedidoId, siguienteNumeroPedido } from '@/lib/db/pedidos'
 import { crearPedidoConReintento } from '@/lib/reintento-pedido'
-import { upsertClienteByCedula } from '@/lib/db/clientes'
+import { upsertClienteByCedula, findClienteByCedula } from '@/lib/db/clientes'
+import { decidirClienteWeb } from '@/lib/clienteTiendaWeb'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
 import { enviarPurchase, capiConfigurado } from '@/lib/metaCapi'
@@ -128,13 +129,31 @@ export async function POST(req) {
 
     // Cliente: upsert por cédula (dual-write). Si existe, actualiza conservando
     // lo previo cuando el nuevo venga vacío; si no, lo crea. Devuelve su CLIENTE_ID.
-    const clienteId = await upsertClienteByCedula(String(cliente.cedula), {
+    const datosCliente = {
       nombre:    cliente.nombre,
       celular:   cliente.celular,
       email:     cliente.email,
       ciudad:    cliente.ciudad,
       direccion: direccionTexto || cliente.direccion,
-    })
+    }
+    // ☠️ 12-nov: la TIENDA WEB es pública y cualquiera puede escribir la cédula de
+    // otro. Desde ahí la ficha solo se actualiza si el celular coincide; si no,
+    // queda intacta y el pedido lleva los datos del comprador (lib/clienteTiendaWeb.js).
+    const esTiendaWeb = !!idTiendaWeb && String(vendedorId) === idTiendaWeb
+    let notaCliente = ''
+    let clienteId
+    if (esTiendaWeb) {
+      const existente = await findClienteByCedula(String(cliente.cedula))
+      const decision = decidirClienteWeb(existente, datosCliente)
+      if (decision.accion === 'conservar') {
+        clienteId = existente.CLIENTE_ID
+        notaCliente = decision.nota
+      } else {
+        clienteId = await upsertClienteByCedula(String(cliente.cedula), datosCliente)
+      }
+    } else {
+      clienteId = await upsertClienteByCedula(String(cliente.cedula), datosCliente)
+    }
 
     const montoTotal    = items.reduce((sum, i) => sum + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
     const pagosArray    = Array.isArray(pagosInput) ? pagosInput : []
@@ -208,7 +227,7 @@ export async function POST(req) {
       montoPendiente: montoPendiente.toFixed(2),
       facturaSolicitada: !!emitirFactura,
       facturaDatilId: '',
-      notasVendedor: notasVendedor || '',
+      notasVendedor: [notasVendedor, notaCliente].filter(Boolean).join('\n'),
       direccionPedido: direccionTexto || cliente.direccion || '',
       ciudadPedido: String(ciudadPedido || cliente.ciudad || '').trim(),
       latitud: latitud || null,
