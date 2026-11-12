@@ -1,9 +1,15 @@
 /*
- * pago-tienda.js — Botones de pago propios de mandarinaec.com (11/12-nov-2026).
+ * pago-tienda.js — Botones de pago propios de las tiendas (11/12-nov-2026).
  * Lo sirve el CRM; el tema lo carga en TODAS las páginas con una línea (sección
  * "Liquid personalizado" del pie de página):
  *
- *   <script src="https://crm.apps.mandarinaec.com/pago-tienda.js" defer></script>
+ *   mandarinaec.com → <script src="https://crm.apps.mandarinaec.com/pago-tienda.js" defer></script>
+ *   indlovers.com   → <script src="https://crm.apps.mandarinaec.com/pago-tienda.js" data-tienda="INDSTORE" defer></script>
+ *
+ * Cada tienda tiene su config en TIENDAS (abierto, bancos, colores). IND además:
+ *   - 🌎 PAGO INTERNACIONAL → el checkout de Shopify de siempre (lo que esté configurado ahí).
+ *   - Fuera de Ecuador (mercado de Shopify ≠ EC) no toca nada: la tienda queda como siempre.
+ * Skill: ~/.claude/skills/pasarela-tienda.
  *
  * Esconde el "Pagar pedido" y el "Comprar ahora" de Shopify y pone en su lugar
  * dos botones, en el carrito, en la ventanita "Artículo agregado" y en la ficha
@@ -20,9 +26,31 @@
   if (window.__mpPagoTienda) return
   window.__mpPagoTienda = true
 
-  var ABIERTO_A_TODOS = true
   var CRM = 'https://crm.apps.mandarinaec.com'
   var CLAVE = 'mp_pago_tarjeta'
+
+  // abierto=false → solo actúa en el navegador que entró con ?pagotarjeta=1 (pruebas).
+  var TIENDAS = {
+    MANDARINA: {
+      abierto: true, param: '',
+      bancos: 'Pichincha · Guayaquil · Produbanco · Deuna',
+      colorTarjeta: '#f26a1b', internacional: false, soloEcuador: false,
+    },
+    INDSTORE: {
+      abierto: false, param: 'ind',
+      bancos: 'Pichincha · Produbanco · Pacífico · Austro · Bolivariano · Deuna',
+      colorTarjeta: '#e5007d', internacional: true, soloEcuador: true,
+    },
+  }
+  var guion = document.currentScript
+  var pedida = String((guion && guion.getAttribute('data-tienda')) || '').toUpperCase()
+  var TIENDA = TIENDAS[pedida] ? pedida : (/indlovers\./.test(location.hostname) ? 'INDSTORE' : 'MANDARINA')
+  var CFG = TIENDAS[TIENDA]
+  var ABIERTO_A_TODOS = CFG.abierto
+
+  // IND vende al exterior: fuera de Ecuador la tienda queda con el pago de Shopify.
+  var pais = window.Shopify && window.Shopify.country
+  if (CFG.soloEcuador && pais && pais !== 'EC') return
 
   function leer(k) { try { return localStorage.getItem(k) } catch (e) { return null } }
   function guardar(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v) } catch (e) {} }
@@ -43,8 +71,9 @@
     '.mp-btn small{font-weight:400;font-size:12px;letter-spacing:0;text-transform:none;opacity:.92;margin-top:3px}',
     '.mp-btn:hover{filter:brightness(1.06)}',
     '.mp-btn[disabled]{opacity:.6;cursor:wait}',
-    '.mp-tarjeta{background:#f26a1b}',
+    '.mp-tarjeta{background:' + CFG.colorTarjeta + '}',
     '.mp-transfer{background:#121212}',
+    '.mp-inter{background:#fff;color:#121212;border:2px solid #121212}',
     '.mp-aviso{font-family:inherit;font-size:13px;line-height:1.3;color:#b42318;margin:6px 0 0;text-align:center}',
     '.mp-pago-fondo{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:12px}',
     '.mp-pago-caja{background:#fff;width:min(520px,100%);height:min(820px,94vh);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.3)}',
@@ -76,7 +105,7 @@
           '<div class="mp-pago-barra"><span>' + titulo + '</span><button type="button" aria-label="Cerrar">×</button></div>' +
           '<iframe allow="payment" title="Pago"></iframe></div>'
         fondo.querySelector('iframe').src = CRM + '/pagar?c=' + encodeURIComponent(lineas.join(',')) +
-          (modo === 'transferencia' ? '&m=t' : '')
+          (modo === 'transferencia' ? '&m=t' : '') + (CFG.param ? '&t=' + CFG.param : '')
         fondo.querySelector('button').onclick = function () { cerrar(fondo) }
         document.body.appendChild(fondo)
         document.documentElement.style.overflow = 'hidden'
@@ -85,6 +114,10 @@
   }
 
   function irATransferencia() { return abrirRecuadro('transferencia') }
+
+  // 🌎 Pago internacional: el checkout de Shopify tal cual. Va por location (no por
+  // un <a>), así la red de seguridad de abajo no lo intercepta.
+  function irAInternacional() { location.href = '/checkout' }
 
   function cerrar(fondo) {
     fondo.remove()
@@ -125,7 +158,8 @@
     par.className = 'mp-par'
     par.innerHTML =
       '<button type="button" class="mp-btn mp-tarjeta">💳 Pagar con tarjeta<small>Crédito o débito · sin salir de la tienda</small></button>' +
-      '<button type="button" class="mp-btn mp-transfer">🏦 Pagar con transferencia<small>Pichincha · Guayaquil · Produbanco · Deuna</small></button>'
+      '<button type="button" class="mp-btn mp-transfer">🏦 Pagar con transferencia<small>' + CFG.bancos + '</small></button>' +
+      (CFG.internacional ? '<button type="button" class="mp-btn mp-inter">🌎 Pago internacional<small>Si compras desde fuera de Ecuador</small></button>' : '')
     var aviso = null
     function correr(accion) {
       return function () {
@@ -145,6 +179,8 @@
     }
     par.querySelector('.mp-tarjeta').onclick = correr(abrirTarjeta)
     par.querySelector('.mp-transfer').onclick = correr(irATransferencia)
+    var inter = par.querySelector('.mp-inter')
+    if (inter) inter.onclick = correr(irAInternacional)
     return par
   }
 

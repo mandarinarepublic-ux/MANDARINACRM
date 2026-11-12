@@ -1,11 +1,11 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { PROVINCIAS_EC } from '@/lib/checkoutTienda'
-import { CUENTAS } from '@/lib/cuentasBancarias'
+import { cuentasDe } from '@/lib/cuentasBancarias'
 import PagoTransferencia from './PagoTransferencia'
 
 /**
- * Pago con tarjeta DENTRO de mandarinaec.com (11-nov-2026).
+ * Pago DENTRO de la tienda (mandarinaec.com 11-nov-2026; indlovers.com con tienda=INDSTORE).
  * Se muestra en un recuadro encima del carrito. Tres pasos en una sola pantalla:
  *   1. Datos de envío y facturación (+ código de descuento)
  *   2. Resumen calculado por Shopify (productos, descuento, envío, total)
@@ -36,7 +36,7 @@ function Campo({ label, error, children }) {
   )
 }
 
-export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
+export default function PagoEnTienda({ carrito, modo = 'tarjeta', tienda = 'MANDARINA' }) {
   const [metodo, setMetodo] = useState(modo === 'transferencia' ? 'transferencia' : 'tarjeta')
   const [id, setId] = useState(null)
   const [fase, setFase] = useState('cargando') // cargando | datos | pagar | transferencia | pagado | recibido | error
@@ -66,7 +66,7 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
       try {
         const r = await fetch('/api/publico/pago', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accion: 'iniciar', carrito }),
+          body: JSON.stringify({ accion: 'iniciar', carrito, tienda }),
         })
         const d = await r.json().catch(() => ({}))
         if (!vivo) return
@@ -77,19 +77,20 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
       }
     })()
     return () => { vivo = false }
-  }, [carrito])
+  }, [carrito, tienda])
 
   const cambiar = (k) => (e) => { setDatos((d) => ({ ...d, [k]: e.target.value })); setErrores((x) => ({ ...x, [k]: undefined })) }
 
   // 2) Calcular con Shopify y pasar a pagar.
-  async function continuar(e) {
-    e?.preventDefault()
+  // envio: el handle de la tarifa que eligió el cliente (o null = la de siempre).
+  async function continuar(e, envio = resumen?.envio?.handle || null) {
+    e?.preventDefault?.()
     if (ocupado || !id) return
     setOcupado(true); setErrorGeneral(''); setAvisoCodigo('')
     try {
       const r = await fetch('/api/publico/pago', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accion: 'cotizar', id, datos }),
+        body: JSON.stringify({ accion: 'cotizar', id, datos, envio }),
       })
       const d = await r.json().catch(() => ({}))
       if (d.yaPagado) { setPedido(d.pedido); setFase('pagado'); return }
@@ -200,7 +201,7 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
 
       {fase === 'pagar' && resumen && (
         <>
-          <Resumen r={resumen} />
+          <Resumen r={resumen} onEnvio={(h) => continuar(null, h)} ocupado={ocupado} />
           {avisoCodigo && <p style={{ color: C.error, fontSize: 13 }}>⚠️ {avisoCodigo}</p>}
           <button onClick={() => { setFase('datos'); setErrorGeneral('') }}
             style={{ background: 'none', border: 0, color: C.suave, fontSize: 13, padding: 0, margin: '4px 0 12px', cursor: 'pointer', textDecoration: 'underline' }}>
@@ -217,7 +218,7 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
 
       {fase === 'transferencia' && resumen && (
         <>
-          <Resumen r={resumen} />
+          <Resumen r={resumen} onEnvio={(h) => continuar(null, h)} ocupado={ocupado} />
           <button onClick={() => { setFase('datos'); setErrorGeneral('') }}
             style={{ background: 'none', border: 0, color: C.suave, fontSize: 13, padding: 0, margin: '4px 0 12px', cursor: 'pointer', textDecoration: 'underline' }}>
             ← Cambiar mis datos
@@ -225,7 +226,8 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
           <PagoTransferencia
             id={id}
             total={resumen.total}
-            cuentas={CUENTAS}
+            cuentas={cuentasDe(tienda)}
+            tienda={tienda}
             onRecibido={(ped) => { setPedido(ped); setFase('recibido'); avisarTienda({ evento: 'resultado', estado: 'PAGADO' }) }}
           />
           <button onClick={() => { setMetodo('tarjeta'); cajitaLista.current = false; setErrorGeneral(''); setFase('pagar') }}
@@ -238,7 +240,7 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
   )
 }
 
-function Resumen({ r }) {
+function Resumen({ r, onEnvio, ocupado }) {
   return (
     <div style={{ border: `1px solid ${C.borde}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
       {r.lineas.map((l, i) => (
@@ -257,7 +259,22 @@ function Resumen({ r }) {
       <Fila k="Subtotal" v={dinero(r.subtotalOriginal ?? r.subtotal)} />
       {r.ahorro > 0 && <Fila k={r.codigos?.length ? `Descuento · ${r.codigos.join(', ')}` : 'Descuento'} v={<span style={{ color: '#047857', fontWeight: 600 }}>-{dinero(r.ahorro)}</span>} />}
       {r.impuestos > 0 && <Fila k="IVA" v={dinero(r.impuestos)} />}
-      <Fila k={`Envío · ${r.envio?.title || ''}`} v={r.envio?.centavos ? dinero(r.envio.centavos) : 'Gratis'} />
+      {/* Si Shopify da más de una tarifa (domicilio, retiro en tienda…), elige el cliente. */}
+      {(r.tarifas || []).length > 1 ? (
+        <div style={{ margin: '6px 0' }}>
+          <div style={{ fontSize: 13, color: C.suave, marginBottom: 4 }}>Envío</div>
+          {r.tarifas.map((t) => (
+            <label key={t.handle} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: C.texto, padding: '4px 0', cursor: ocupado ? 'wait' : 'pointer' }}>
+              <input type="radio" name="envio" checked={r.envio?.handle === t.handle} disabled={ocupado}
+                onChange={() => onEnvio?.(t.handle)} />
+              <span style={{ flex: 1 }}>{t.title}</span>
+              <span>{t.centavos ? dinero(t.centavos) : 'Gratis'}</span>
+            </label>
+          ))}
+        </div>
+      ) : (
+        <Fila k={`Envío · ${r.envio?.title || ''}`} v={r.envio?.centavos ? dinero(r.envio.centavos) : 'Gratis'} />
+      )}
       <div style={{ borderTop: `1px solid ${C.borde}`, marginTop: 6, paddingTop: 6 }}>
         <Fila k={<b>Total</b>} v={<b>{dinero(r.total)}</b>} />
       </div>

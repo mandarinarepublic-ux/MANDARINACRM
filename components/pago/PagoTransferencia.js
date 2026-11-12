@@ -71,7 +71,7 @@ function Dato({ k, v, copiable = true, grande = false }) {
   )
 }
 
-export default function PagoTransferencia({ id, total, cuentas, onRecibido }) {
+export default function PagoTransferencia({ id, total, cuentas, onRecibido, tienda = 'MANDARINA' }) {
   const [cuenta, setCuenta] = useState(null)
   const [foto, setFoto] = useState(null)
   const [ocupado, setOcupado] = useState(false)
@@ -157,7 +157,7 @@ export default function PagoTransferencia({ id, total, cuentas, onRecibido }) {
               <div style={{ fontSize: 14, fontWeight: 700, color: C.texto, marginBottom: 8 }}>Escanea con tu app Deuna</div>
               <img src={cuenta.qr} alt={`Código QR de ${cuenta.banco}`} width={220} height={238}
                 style={{ width: 220, maxWidth: '80%', height: 'auto', display: 'block', margin: '0 auto', borderRadius: 8, border: `1px solid ${C.borde}` }} />
-              <a href={cuenta.qr} download="QR-Deuna-Mandarina.jpg" style={{
+              <a href={cuenta.qr} download={tienda === 'INDSTORE' ? 'QR-Deuna-IndStore.jpg' : 'QR-Deuna-Mandarina.jpg'} style={{
                 display: 'inline-block', marginTop: 10, padding: '8px 14px', fontSize: 13, fontWeight: 600, borderRadius: 8,
                 border: `1px solid ${C.borde}`, color: C.texto, textDecoration: 'none', background: '#fff',
               }}>⬇️ Guardar QR</a>
@@ -165,7 +165,13 @@ export default function PagoTransferencia({ id, total, cuentas, onRecibido }) {
             </div>
           )}
           <Dato k="Monto a transferir" v={dinero(total)} grande />
-          <Dato k={`Cuenta de ${cuenta.tipo.toLowerCase()}`} v={cuenta.numero} />
+          {/* Deuna de IND: solo QR, sin número (escrito a mano sale "cuenta inválida") */}
+          {cuenta.numero && <Dato k={`Cuenta de ${String(cuenta.tipo || '').toLowerCase()}`} v={cuenta.numero} />}
+          {cuenta.aviso && (
+            <p style={{ margin: '8px 0', padding: '8px 10px', borderRadius: 8, background: '#fef3c7', color: '#92400e', fontSize: 13, fontWeight: 600 }}>
+              ⚠️ {cuenta.aviso}
+            </p>
+          )}
           <Dato k="Titular" v={cuenta.titular} />
           <Dato k="Cédula" v={cuenta.cedula} />
         </div>

@@ -8,7 +8,7 @@ import { procesarRespuestaPago } from '@/lib/procesarPagoTienda'
 import ResultadoPago from '@/components/pago/ResultadoPago'
 
 export const metadata = {
-  title: 'Pago · Mandarina Republic',
+  title: 'Pago seguro',
   robots: { index: false, follow: false },
 }
 

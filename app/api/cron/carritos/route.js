@@ -1,7 +1,8 @@
 import { listarPosiblesAbandonos, actualizarCheckout } from '@/lib/db/checkouts'
 import { esAbandonado, textoAbandono, idAvisoAbandono } from '@/lib/checkoutTienda'
 import { avisarPedidoEnInbox } from '@/lib/inbox-supabase'
-import { DIRECCION_INTERNO, TIPO_PEDIDO_WEB, CANAL_POR_DEFECTO, telefonoInbox } from '@/lib/pedidoWebPendiente'
+import { DIRECCION_INTERNO, TIPO_PEDIDO_WEB, canalDeTienda, telefonoInbox } from '@/lib/pedidoWebPendiente'
+import { tiendaPago } from '@/lib/cuentasBancarias'
 import { registrarEvento } from '@/lib/eventos'
 
 export const dynamic = 'force-dynamic'
@@ -38,14 +39,14 @@ export async function GET(req) {
   const resultados = []
   for (const c of candidatos.filter((x) => esAbandonado(x, ahora))) {
     const r = await avisarPedidoEnInbox({
-      tiendaId: 'MANDARINA',
+      tiendaId: tiendaPago(c.tienda),
       telefono: telefonoInbox(c.cliente.celular),
       nombre: [c.cliente.nombre, c.cliente.apellido].filter(Boolean).join(' ') || null,
       waMessageId: idAvisoAbandono(c.id),
       texto: textoAbandono(c),
       direccion: DIRECCION_INTERNO,
       tipo: TIPO_PEDIDO_WEB,
-      canalPorDefecto: CANAL_POR_DEFECTO.MANDI,
+      canalPorDefecto: canalDeTienda(c.tienda),
     })
     if (r?.ok) {
       await actualizarCheckout(c.id, { aviso_abandono_en: new Date().toISOString() }).catch(() => {})

@@ -72,3 +72,15 @@ test('IND puede enmarcar SOLO /pedido/ind, y no la página de Mandarina', () => 
   }
   assert.ok(config.indexOf("source: '/pedido/ind'") > config.indexOf("source: '/:path*'"))
 })
+
+test('las DOS tiendas pueden enmarcar el recuadro de pago (/pagar y /pagar/:path*)', () => {
+  for (const ruta of ["source: '/pagar',", "source: '/pagar/:path*',"]) {
+    const desde = config.indexOf(ruta)
+    assert.ok(desde >= 0, `falta la regla ${ruta} en next.config.js`)
+    const fa = config.indexOf('frame-ancestors', desde)
+    const valor = config.slice(fa, config.indexOf('"', fa))
+    for (const o of [...ORIGENES_TIENDA, ...ORIGENES_TIENDA_IND]) {
+      assert.ok(valor.includes(o), `falta ${o} en la CSP de ${ruta} (el recuadro sale en blanco)`)
+    }
+  }
+})

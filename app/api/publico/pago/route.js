@@ -2,7 +2,7 @@ import { leerCarrito, nuevoIdCheckout, validarDatos, ctxDeIntento, montosPayphon
 import { crearCheckout, leerCheckout, actualizarCheckout } from '@/lib/db/checkouts'
 import { calcularCompra } from '@/lib/shopifyCheckout'
 import { tokenCajita } from '@/lib/payphone'
-import { cuentaPorId } from '@/lib/cuentasBancarias'
+import { cuentaPorId, tiendaPago } from '@/lib/cuentasBancarias'
 import { procesarComprobante } from '@/lib/procesarTransferencia'
 import { revisarLimite, MENSAJE_TOPE } from '@/lib/limitePublico'
 
@@ -45,7 +45,8 @@ export async function POST(req) {
     if (accion === 'iniciar') {
       const lineas = leerCarrito(body?.carrito)
       if (!lineas.length) return no('El carrito está vacío')
-      const c = await crearCheckout({ id: nuevoIdCheckout(), tienda: 'MANDARINA', lineas })
+      // La tienda sale de una lista CERRADA (MANDARINA | INDSTORE); cualquier otra cosa → MANDARINA.
+      const c = await crearCheckout({ id: nuevoIdCheckout(), tienda: tiendaPago(body?.tienda), lineas })
       return Response.json({ ok: true, id: c.id })
     }
 
@@ -66,7 +67,7 @@ export async function POST(req) {
     }
 
     if (accion === 'transferencia') {
-      const cuenta = cuentaPorId(body?.banco)
+      const cuenta = cuentaPorId(body?.banco, c.tienda)
       if (!cuenta) return no('Elige un banco')
       if (!['COTIZADO', 'PAGANDO'].includes(c.estado) || !(c.total_centavos > 0)) return no('Primero completa tus datos')
       // Se guarda ya: si no sube el comprobante, el carrito abandonado dice qué banco eligió.
@@ -90,6 +91,8 @@ export async function POST(req) {
       try {
         resumen = await calcularCompra({
           tienda: c.tienda, lineas: c.lineas, checkoutId: c.id, ...v.datos,
+          // la tarifa que eligió el cliente (si Shopify da varias); si ya no existe, la más barata
+          handleEnvio: typeof body?.envio === 'string' ? body.envio.slice(0, 200) : null,
         })
       } catch (e) {
         console.error('[/api/publico/pago] cotizar:', e.message)
@@ -111,7 +114,7 @@ export async function POST(req) {
         return no('Primero completa tus datos')
       }
       const token = tokenCajita()
-      const storeId = String(process.env.PAYPHONE_STORE_ID_MANDARINA || '').replace(/[^\x21-\x7E]/g, '')
+      const storeId = String(process.env[`PAYPHONE_STORE_ID_${tiendaPago(c.tienda)}`] || '').replace(/[^\x21-\x7E]/g, '')
       if (!token || !storeId) return no('El pago con tarjeta no está disponible en este momento', 503)
       const montos = montosPayphone(c.total_centavos, c.calculo?.impuestos || 0)
       const intento = (c.intentos || 0) + 1
@@ -124,7 +127,7 @@ export async function POST(req) {
           clientTransactionId: ctxDeIntento(c.id, intento),
           ...montos,
           currency: 'USD',
-          reference: 'Compra en mandarinaec.com',
+          reference: tiendaPago(c.tienda) === 'INDSTORE' ? 'Compra en indlovers.com' : 'Compra en mandarinaec.com',
           email: cli.email,
           phoneNumber: cli.celular ? '+593' + cli.celular.slice(1) : undefined,
           documentId: cli.cedula,

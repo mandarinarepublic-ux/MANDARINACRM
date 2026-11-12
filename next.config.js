@@ -50,15 +50,16 @@ const nextConfig = {
           },
         ],
       },
-      // /pagar: el pago con tarjeta (Payphone) dentro de mandarinaec.com, en un
-      // recuadro sobre el carrito (11-nov-2026). Mismos orígenes que /pedido.
+      // /pagar: el pago (tarjeta Payphone / transferencia) dentro de la tienda, en un
+      // recuadro sobre el carrito (11-nov-2026). Orígenes de las DOS tiendas
+      // (ORIGENES_TIENDA + ORIGENES_TIENDA_IND), escritos a mano: tests/csp.test.js los compara.
       // También /pagar/respuesta, adonde Payphone devuelve al cliente.
       {
         source: '/pagar',
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://inbox.apps.mandarinaec.com https://ind-inbox.apps.mandarinaec.com https://www.mandarinaec.com https://mandarinaec.com",
+            value: "frame-ancestors 'self' https://inbox.apps.mandarinaec.com https://ind-inbox.apps.mandarinaec.com https://www.mandarinaec.com https://mandarinaec.com https://indlovers.com https://www.indlovers.com",
           },
         ],
       },
@@ -67,7 +68,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://inbox.apps.mandarinaec.com https://ind-inbox.apps.mandarinaec.com https://www.mandarinaec.com https://mandarinaec.com",
+            value: "frame-ancestors 'self' https://inbox.apps.mandarinaec.com https://ind-inbox.apps.mandarinaec.com https://www.mandarinaec.com https://mandarinaec.com https://indlovers.com https://www.indlovers.com",
           },
         ],
       },
