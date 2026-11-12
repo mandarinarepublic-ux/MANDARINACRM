@@ -44,6 +44,12 @@ test('el inventario NO se rastrea: con stock 0 Shopify bloquearia la compra', ()
   for (const v of input.variants) assert.equal(v.inventoryItem.tracked, false)
 })
 
+test('☠️ ninguna talla cobra impuesto: Shopify las crea con taxable=true y suma 12 % al precio', () => {
+  // 11-nov-2026: 18 productos subidos desde el CRM cobraban $20 → $22,40 en el checkout.
+  const input = construirProductSetInput(BASE)
+  for (const v of input.variants) assert.equal(v.taxable, false)
+})
+
 test('sin ninguna talla marcada sale UNA variante de talla unica, no cero', () => {
   const input = construirProductSetInput({ ...BASE, tallas: [] })
   assert.equal(input.variants.length, 1, 'Shopify exige al menos una variante')
