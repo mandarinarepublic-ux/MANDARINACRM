@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { PROVINCIAS_EC } from '@/lib/checkoutTienda'
+import { CUENTAS } from '@/lib/cuentasBancarias'
+import PagoTransferencia from './PagoTransferencia'
 
 /**
  * Pago con tarjeta DENTRO de mandarinaec.com (11-nov-2026).
@@ -34,9 +36,10 @@ function Campo({ label, error, children }) {
   )
 }
 
-export default function PagoEnTienda({ carrito }) {
+export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
+  const [metodo, setMetodo] = useState(modo === 'transferencia' ? 'transferencia' : 'tarjeta')
   const [id, setId] = useState(null)
-  const [fase, setFase] = useState('cargando') // cargando | datos | pagar | pagado | error
+  const [fase, setFase] = useState('cargando') // cargando | datos | pagar | transferencia | pagado | recibido | error
   const [errorGeneral, setErrorGeneral] = useState('')
   const [datos, setDatos] = useState({ provincia: 'Pichincha' })
   const [errores, setErrores] = useState({})
@@ -90,12 +93,13 @@ export default function PagoEnTienda({ carrito }) {
       })
       const d = await r.json().catch(() => ({}))
       if (d.yaPagado) { setPedido(d.pedido); setFase('pagado'); return }
+      if (d.yaComprobante) { setPedido(d.pedido); setFase('recibido'); return }
       if (!r.ok || !d.ok) { setErrores(d.errores || {}); setErrorGeneral(d.error || 'Revisa tus datos'); return }
       try { localStorage.setItem('mp_pago_datos', JSON.stringify(Object.fromEntries(CAMPOS_GUARDADOS.map((k) => [k, datos[k] || ''])))) } catch {}
       setResumen(d.resumen)
       if (d.codigoNoAplicado) setAvisoCodigo(`El código "${String(datos.descuento || '').toUpperCase()}" no aplica a esta compra.`)
       cajitaLista.current = false
-      setFase('pagar')
+      setFase(metodo === 'transferencia' ? 'transferencia' : 'pagar')
       avisarTienda({ evento: 'datos_listos', total: d.resumen.total })
     } catch {
       setErrorGeneral('Sin conexión. Intenta de nuevo.')
@@ -133,6 +137,18 @@ export default function PagoEnTienda({ carrito }) {
 
   if (fase === 'cargando') return <Marco><p style={{ color: C.suave }}>Cargando tu compra…</p></Marco>
   if (fase === 'error') return <Marco><p style={{ color: C.error }}>⚠️ {errorGeneral}</p></Marco>
+  if (fase === 'recibido') return (
+    <Marco>
+      <div style={{ background: C.verdeFondo, color: C.verde, padding: 18, borderRadius: 12, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 34, marginBottom: 6 }}>✅</div>
+        <div style={{ fontWeight: 700, fontSize: 17 }}>¡Recibimos tu comprobante!</div>
+        <div style={{ fontSize: 14, marginTop: 6 }}>
+          Lo verificamos y te confirmamos por WhatsApp. Apenas confirmemos el pago, tu pedido entra a producción.
+          {pedido ? <><br />Tu pedido es el <b>{pedido}</b>.</> : null}
+        </div>
+      </div>
+    </Marco>
+  )
   if (fase === 'pagado') return (
     <Marco>
       <div style={{ background: C.verdeFondo, color: C.verde, padding: 16, borderRadius: 10, fontWeight: 600 }}>
@@ -170,7 +186,7 @@ export default function PagoEnTienda({ carrito }) {
           <button type="submit" disabled={ocupado} style={{
             width: '100%', padding: 14, fontSize: 16, fontWeight: 700, color: '#fff',
             background: ocupado ? '#9ca3af' : C.naranja, border: 0, borderRadius: 10, cursor: ocupado ? 'default' : 'pointer',
-          }}>{ocupado ? 'Calculando…' : 'Continuar al pago'}</button>
+          }}>{ocupado ? 'Calculando…' : metodo === 'transferencia' ? 'Continuar a la transferencia' : 'Continuar al pago'}</button>
         </form>
       )}
 
@@ -184,6 +200,30 @@ export default function PagoEnTienda({ carrito }) {
           </button>
           {errorGeneral && <p style={{ color: C.error, fontSize: 14 }}>⚠️ {errorGeneral}</p>}
           <div id="pp-button" />
+          <button onClick={() => { setMetodo('transferencia'); setErrorGeneral(''); setFase('transferencia') }}
+            style={{ width: '100%', marginTop: 14, padding: 12, fontSize: 14, fontWeight: 600, background: '#fff', color: C.texto, border: `1px solid ${C.borde}`, borderRadius: 10, cursor: 'pointer' }}>
+            🏦 Prefiero pagar con transferencia
+          </button>
+        </>
+      )}
+
+      {fase === 'transferencia' && resumen && (
+        <>
+          <Resumen r={resumen} />
+          <button onClick={() => { setFase('datos'); setErrorGeneral('') }}
+            style={{ background: 'none', border: 0, color: C.suave, fontSize: 13, padding: 0, margin: '4px 0 12px', cursor: 'pointer', textDecoration: 'underline' }}>
+            ← Cambiar mis datos
+          </button>
+          <PagoTransferencia
+            id={id}
+            total={resumen.total}
+            cuentas={CUENTAS}
+            onRecibido={(ped) => { setPedido(ped); setFase('recibido'); avisarTienda({ evento: 'resultado', estado: 'PAGADO' }) }}
+          />
+          <button onClick={() => { setMetodo('tarjeta'); cajitaLista.current = false; setErrorGeneral(''); setFase('pagar') }}
+            style={{ width: '100%', marginTop: 14, padding: 12, fontSize: 14, fontWeight: 600, background: '#fff', color: C.texto, border: `1px solid ${C.borde}`, borderRadius: 10, cursor: 'pointer' }}>
+            💳 Prefiero pagar con tarjeta
+          </button>
         </>
       )}
     </Marco>

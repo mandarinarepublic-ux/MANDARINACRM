@@ -9,9 +9,8 @@
  * dos botones, en el carrito, en la ventanita "Artículo agregado" y en la ficha
  * del producto:
  *   💳 PAGAR CON TARJETA      → recuadro con CRM/pagar (Payphone) sin salir de la tienda.
- *   🏦 PAGAR CON TRANSFERENCIA → POR AHORA el checkout de Shopify (depósito bancario),
- *      hasta que exista la transferencia propia en el recuadro
- *      (docs/superpowers/specs/2026-11-12-transferencia-en-tienda-design.md).
+ *   🏦 PAGAR CON TRANSFERENCIA → el mismo recuadro con &m=t: bancos, cuenta, monto y foto
+ *      del comprobante (docs/superpowers/specs/2026-11-12-transferencia-en-tienda-design.md).
  *
  * SALIDA SEGURA: con ABIERTO_A_TODOS=false solo actúa en el navegador que entró con
  * ?pagotarjeta=1 (y ?pagotarjeta=0 lo apaga). Si este archivo no carga, el tema
@@ -57,7 +56,9 @@
 
   var pagado = false
 
-  function abrirTarjeta() {
+  function abrirTarjeta() { return abrirRecuadro('tarjeta') }
+
+  function abrirRecuadro(modo) {
     return fetch('/cart.js', { credentials: 'same-origin' })
       .then(function (r) { return r.json() })
       .then(function (cart) {
@@ -67,10 +68,12 @@
         if (abierta && abierta.close) try { abierta.close() } catch (e) {}
         var fondo = document.createElement('div')
         fondo.className = 'mp-pago-fondo'
-        fondo.innerHTML = '<div class="mp-pago-caja" role="dialog" aria-label="Pago con tarjeta">' +
-          '<div class="mp-pago-barra"><span>🔒 Pago seguro con tarjeta</span><button type="button" aria-label="Cerrar">×</button></div>' +
-          '<iframe allow="payment" title="Pago con tarjeta"></iframe></div>'
-        fondo.querySelector('iframe').src = CRM + '/pagar?c=' + encodeURIComponent(lineas.join(','))
+        var titulo = modo === 'transferencia' ? '🏦 Pago por transferencia' : '🔒 Pago seguro con tarjeta'
+        fondo.innerHTML = '<div class="mp-pago-caja" role="dialog" aria-label="Pago">' +
+          '<div class="mp-pago-barra"><span>' + titulo + '</span><button type="button" aria-label="Cerrar">×</button></div>' +
+          '<iframe allow="payment" title="Pago"></iframe></div>'
+        fondo.querySelector('iframe').src = CRM + '/pagar?c=' + encodeURIComponent(lineas.join(',')) +
+          (modo === 'transferencia' ? '&m=t' : '')
         fondo.querySelector('button').onclick = function () { cerrar(fondo) }
         document.body.appendChild(fondo)
         document.documentElement.style.overflow = 'hidden'
@@ -78,7 +81,7 @@
       .catch(function () { alert('No pudimos abrir el pago. Intenta de nuevo.') })
   }
 
-  function irATransferencia() { location.href = '/checkout' }
+  function irATransferencia() { return abrirRecuadro('transferencia') }
 
   function cerrar(fondo) {
     fondo.remove()

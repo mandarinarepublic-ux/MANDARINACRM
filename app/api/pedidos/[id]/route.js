@@ -10,6 +10,7 @@ import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
 import { recalcTotalesSeguro } from '@/lib/db/totales'
 import { notificarGuiaDespachada } from '@/lib/telegram'
+import { ESTADOS_QUE_EXIGEN_PAGO, transferenciaSinConfirmar } from '@/lib/transferenciaTienda'
 
 // Detalle de UN pedido (join acotado a ese id vía getPedidoById). Las pantallas
 // de detalle y edición antes bajaban la lista COMPLETA con join de 5 tablas solo
@@ -57,6 +58,14 @@ export async function PATCH(req, { params }) {
     const campos = {}
 
     if (body.ESTADO_PEDIDO && body.ESTADO_PEDIDO !== pedido.ESTADO_PEDIDO) {
+      // 🏦 Transferencia de la tienda sin confirmar: no sale a producción (ni
+      // se cierra) hasta que un ADMIN confirme la plata en la sección Pagos.
+      if (ESTADOS_QUE_EXIGEN_PAGO.has(body.ESTADO_PEDIDO) && transferenciaSinConfirmar(pedido.pagos)) {
+        return Response.json(
+          { error: 'Falta confirmar la transferencia: un ADMIN la confirma en la sección Pagos del pedido.' },
+          { status: 409 },
+        )
+      }
       changes.push({ campo: 'ESTADO_PEDIDO', antes: pedido.ESTADO_PEDIDO, despues: body.ESTADO_PEDIDO })
       campos.estadoPedido = body.ESTADO_PEDIDO
     }

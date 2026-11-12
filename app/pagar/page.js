@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 import PagoEnTienda from '@/components/pago/PagoEnTienda'
 
 export const metadata = {
-  title: 'Pago con tarjeta · Mandarina Republic',
+  title: 'Pago · Mandarina Republic',
   robots: { index: false, follow: false },
   // La Cajita de Payphone revisa el dominio por el Referer: sin esto, una
   // política estricta lo vacía y Payphone responde "Acceso denegado".
@@ -14,5 +14,7 @@ export const metadata = {
 }
 
 export default function PagarPage({ searchParams }) {
-  return <PagoEnTienda carrito={String(searchParams?.c || '')} />
+  // ?m=t: el cliente tocó "Pagar con transferencia" en la tienda.
+  const modo = searchParams?.m === 't' ? 'transferencia' : 'tarjeta'
+  return <PagoEnTienda carrito={String(searchParams?.c || '')} modo={modo} />
 }

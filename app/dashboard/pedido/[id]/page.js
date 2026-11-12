@@ -31,6 +31,7 @@ export default function PedidoDetailPage() {
   const autoEnviar = esEmbed && searchParams.get('autoenviar') === '1'
   const autoEnviadoRef = useRef(false)
   const [user, setUser] = useState(null)
+  const [decidiendoPago, setDecidiendoPago] = useState(null) // transferencia de la tienda: confirmando/rechazando
   const [pedido, setPedido] = useState(null)
   const [items, setItems] = useState([])
   const [cliente, setCliente] = useState(null)
@@ -413,6 +414,33 @@ export default function PedidoDetailPage() {
     }
   }
 
+  // 🏦 Transferencia de la tienda: SOLO ADMIN confirma (→ producción) o rechaza (→ cancelado).
+  async function decidirTransferencia(pago, accion) {
+    const monto = `$${parseFloat(pago.MONTO || 0).toFixed(2)}`
+    let motivo = ''
+    if (accion === 'confirmar') {
+      if (!confirm(`¿Confirmas que la transferencia de ${monto} ENTRÓ al banco?\n\nEl pedido pasa a producción, se crea pagado en Shopify y se avisa la venta a Meta.`)) return
+    } else {
+      motivo = prompt(`¿Por qué rechazas la transferencia de ${monto}? (el pedido se CANCELA)`) ?? null
+      if (motivo === null) return
+    }
+    setDecidiendoPago(pago.PAGO_ID)
+    try {
+      const res = await fetch(`/api/pagos/${pago.PAGO_ID}/transferencia`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion, motivo }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo guardar')
+      if (data.avisos?.length) alert('Listo, pero ojo:\n\n' + data.avisos.join('\n'))
+      await loadPedido()
+    } catch (e) {
+      alert('Error: ' + e.message)
+    } finally {
+      setDecidiendoPago(null)
+    }
+  }
+
   async function eliminarPago() {
     if (!pagoEditando) return
     const o = pagoEditando.original
@@ -628,6 +656,26 @@ export default function PedidoDetailPage() {
                         <div className={`text-sm font-semibold ${cfg.color}`}>{cfg.label}</div>
                         {pago.FECHA_PAGO && <div className="text-xs text-gray-500">{pago.FECHA_PAGO.split(' ')[0]}</div>}
                         {pago.NOTAS && <div className="text-xs text-gray-400 mt-0.5">{pago.NOTAS}</div>}
+                        {pago.TIPO_PAGO === 'TRANSFERENCIA' && pago.ESTADO_PAGO === 'PENDIENTE' && (
+                          <div className="mt-1.5">
+                            <div className="text-xs font-semibold text-amber-400">⏳ Sin confirmar — el pedido espera hasta que un ADMIN la confirme</div>
+                            {canEditarAbono && (
+                              <div className="flex gap-2 mt-1.5">
+                                <button disabled={decidiendoPago === pago.PAGO_ID} onClick={() => decidirTransferencia(pago, 'confirmar')}
+                                  className="text-xs px-3 py-1.5 rounded-lg font-semibold bg-green-500/20 text-green-300 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50">
+                                  ✅ Confirmar pago
+                                </button>
+                                <button disabled={decidiendoPago === pago.PAGO_ID} onClick={() => decidirTransferencia(pago, 'rechazar')}
+                                  className="text-xs px-3 py-1.5 rounded-lg font-semibold bg-red-500/15 text-red-300 border border-red-500/40 hover:bg-red-500/25 disabled:opacity-50">
+                                  ❌ Rechazar
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {pago.TIPO_PAGO === 'TRANSFERENCIA' && pago.ESTADO_PAGO === 'RECHAZADO' && (
+                          <div className="text-xs font-semibold text-red-400 mt-1">❌ Rechazada</div>
+                        )}
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="text-white font-bold">${parseFloat(pago.MONTO||0).toFixed(2)}</div>

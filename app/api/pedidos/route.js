@@ -72,6 +72,7 @@ export async function POST(req) {
       cliente, items, pagos: pagosInput,
       emitirFactura, fechaEntregaPrometida: fechaPedida,
       notasVendedor, direccionTexto, ciudadPedido, latitud, longitud,
+      retenerTransferencia,
     } = body
 
     // ☠️ QUIÉN VENDE Y EN QUÉ TIENDA NO LO DECIDE EL NAVEGADOR.
@@ -92,6 +93,13 @@ export async function POST(req) {
     const vendedorId     = usuario.USUARIO_ID
     const vendedorNombre = usuario.NOMBRE
     const vendedorCodigo = usuario.CODIGO
+
+    // 🏦 Transferencia subida en la tienda web (12-nov-2026): el pedido nace
+    // RETENIDO hasta que un ADMIN confirme la plata. SOLO la acepta del usuario
+    // TIENDA WEB (el que usan el webhook y el recuadro de pago): nadie más puede
+    // crear un pedido que se salte producción o el aviso a Meta.
+    const idTiendaWeb = String(process.env.SHOPIFY_VENDEDOR_USUARIO_ID || '').replace(/[^!-~]/g, '')
+    const retener = retenerTransferencia === true && !!idTiendaWeb && String(vendedorId) === idTiendaWeb
 
     // ☠️ Y la TIENDA se comprueba contra las que tiene asignadas.
     //
@@ -130,7 +138,8 @@ export async function POST(req) {
 
     const montoTotal    = items.reduce((sum, i) => sum + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
     const pagosArray    = Array.isArray(pagosInput) ? pagosInput : []
-    const montoAbonado  = pagosArray.reduce((sum, p) => sum + parseFloat(p.monto || 0), 0)
+    // Retenido: la transferencia sin confirmar NO es plata recibida.
+    const montoAbonado  = retener ? 0 : pagosArray.reduce((sum, p) => sum + parseFloat(p.monto || 0), 0)
     // Clamp a 0: si el abono inicial incluye envío/flete puede superar el total
     // del producto; el excedente NO es saldo negativo, es dinero extra ya cobrado.
     const montoPendiente = Math.max(0, montoTotal - montoAbonado)
@@ -164,7 +173,7 @@ export async function POST(req) {
 
     // Venta de mostrador (todo ENTREGA EN TIENDA) nace COMPLETADO: no hay nada
     // que imprimir ni fabricar. Ver lib/estadoInicialPedido.js.
-    const estadoPedido = estadoInicialPedido(items)
+    const estadoPedido = retener ? 'PENDIENTE_FABRICA' : estadoInicialPedido(items)
 
     // La ATRIBUCIÓN no se resuelve acá.
     //
@@ -287,7 +296,14 @@ export async function POST(req) {
         comprobanteUrl,
         vendedorId,
         notas: pago.notas || '',
+        ...(retener ? { estado: 'PENDIENTE' } : {}),
       })
+    }
+
+    // Retenido: ni Telegram de venta ni Purchase a Meta hasta que se confirme la
+    // plata (lo manda lib/procesarTransferencia.js al confirmar).
+    if (retener) {
+      return Response.json({ pedidoId, montoTotal, diasCalculado: DIAS_ENTREGA, fechaEntregaPrometida, retenido: true })
     }
 
     // ── Aviso de venta por Telegram ── fire & forget (lo que hacía Make).

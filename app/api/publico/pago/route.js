@@ -2,8 +2,11 @@ import { leerCarrito, nuevoIdCheckout, validarDatos, ctxDeIntento, montosPayphon
 import { crearCheckout, leerCheckout, actualizarCheckout } from '@/lib/db/checkouts'
 import { calcularCompra } from '@/lib/shopifyCheckout'
 import { tokenCajita } from '@/lib/payphone'
+import { cuentaPorId } from '@/lib/cuentasBancarias'
+import { procesarComprobante } from '@/lib/procesarTransferencia'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 // ── Pago con tarjeta DENTRO de la tienda (pública) ──────────────────────────
 // La usa /pagar, que la tienda abre en un recuadro. El cliente no tiene sesión.
@@ -20,6 +23,8 @@ export const dynamic = 'force-dynamic'
 // POST { accion: 'cotizar', id, datos }               → { ok, resumen } | { ok:false, errores }
 // POST { accion: 'intento', id }                      → { ok, cajita }
 // POST { accion: 'estado', id }                       → { estado, pedido }
+// POST { accion: 'transferencia', id, banco }         → { ok, cuenta, total }   (12-nov-2026)
+// POST { accion: 'comprobante', id, banco, foto }     → { ok, pedido }          foto = data:image/…;base64
 
 const no = (error, status = 400, extra = {}) => Response.json({ ok: false, error, ...extra }, { status })
 
@@ -44,8 +49,28 @@ export async function POST(req) {
       return Response.json({ ok: true, estado: c.estado, pedido: c.shopify_order_name || null })
     }
 
+    if (c.estado === 'COMPROBANTE' || (c.estado === 'ERROR' && c.comprobante_url)) {
+      return Response.json({ ok: true, yaComprobante: true, pedido: c.crm_pedido_id || null })
+    }
     if (['PAGADO', 'CREANDO'].includes(c.estado)) {
       return Response.json({ ok: true, yaPagado: true, pedido: c.shopify_order_name || null })
+    }
+
+    if (accion === 'transferencia') {
+      const cuenta = cuentaPorId(body?.banco)
+      if (!cuenta) return no('Elige un banco')
+      if (!['COTIZADO', 'PAGANDO'].includes(c.estado) || !(c.total_centavos > 0)) return no('Primero completa tus datos')
+      // Se guarda ya: si no sube el comprobante, el carrito abandonado dice qué banco eligió.
+      await actualizarCheckout(c.id, { metodo: 'TRANSFERENCIA', banco: cuenta.id })
+      const { color, texto, ...datos } = cuenta
+      return Response.json({ ok: true, cuenta: datos, total: c.total_centavos })
+    }
+
+    if (accion === 'comprobante') {
+      const base = process.env.CRM_BASE_URL || `https://${req.headers.get('host')}`
+      const r = await procesarComprobante({ checkoutId: c.id, banco: body?.banco, foto: body?.foto, base })
+      if (!r.ok) return no(r.mensaje, r.estado === 'ERROR' ? 502 : 400)
+      return Response.json({ ok: true, pedido: r.pedido || null })
     }
 
     if (accion === 'cotizar') {
@@ -80,7 +105,7 @@ export async function POST(req) {
       if (!token || !storeId) return no('El pago con tarjeta no está disponible en este momento', 503)
       const montos = montosPayphone(c.total_centavos, c.calculo?.impuestos || 0)
       const intento = (c.intentos || 0) + 1
-      await actualizarCheckout(c.id, { intentos: intento, estado: 'PAGANDO' })
+      await actualizarCheckout(c.id, { intentos: intento, estado: 'PAGANDO', metodo: null, banco: null })
       const cli = c.cliente || {}
       return Response.json({
         ok: true,

@@ -13,6 +13,7 @@ import {
 import { firmarSesion, secretoSesion, COOKIE_SESION } from '@/lib/sesion'
 import { getSupabase } from '@/lib/supabase'
 import { registrarEvento } from '@/lib/eventos'
+import { tieneEtiquetaTransferencia } from '@/lib/transferenciaTienda'
 
 // A Shopify SIEMPRE 200 cuando ya se hizo lo que había que hacer: si se le
 // devuelve error, reintenta 19 veces y termina borrando la suscripción sola.
@@ -40,6 +41,14 @@ export async function POST(req) {
 
   const orderId = String(order.id || '')
   if (!orderId) return Response.json({ error: 'Pedido sin id' }, { status: 400 })
+
+  // 🏦 Transferencia de la tienda (12-nov-2026): este pedido de Shopify lo creó
+  // el CRM al CONFIRMAR una transferencia, y el pedido del CRM YA existe desde
+  // que el cliente subió el comprobante. Crearlo acá lo metería DOS veces a
+  // fábrica; tratarlo como "sin pagar" dispararía un aviso falso.
+  if (tieneEtiquetaTransferencia(order)) {
+    return ok({ ignorado: true, motivo: 'transferencia de la tienda: el CRM ya tiene el pedido' })
+  }
 
   // ☠️ Red de seguridad: todo lo de acá para abajo puede reventar por algo que
   // no es culpa de Shopify (p.ej. firmarSesion con SESSION_SECRET vacío tira
