@@ -124,3 +124,50 @@ test('IND 1.er cálculo (sin tarifa puesta) con IVA incluido: no se suma el IVA 
   })
   assert.strictEqual(r.total, 2300)
 })
+
+import { tarifasParaCiudad } from '../lib/checkoutTienda.js'
+
+// 12-nov: Shopify de IND ofrece "Envío Quito $3,50" y "Envío a provincia $6" a
+// CUALQUIER dirección. Alguien de Guayaquil podía elegir $3,50. Se filtra por ciudad
+// (en el servidor: la tarifa que mande el navegador no puede saltarse esto).
+const TARIFAS_IND = [
+  { handle: 'q', title: 'Envío Quito $3,50 (3 a 4 días laborables)', centavos: 350 },
+  { handle: 'p', title: 'Envío a provincia $6 (3 a 4 días laborables)', centavos: 600 },
+]
+
+test('envío: Quito ve solo la tarifa de Quito', () => {
+  for (const ciudad of ['Quito', 'quito ', 'QUITO', 'Distrito Metropolitano de Quito']) {
+    assert.deepStrictEqual(tarifasParaCiudad(TARIFAS_IND, ciudad).map((t) => t.handle), ['q'], ciudad)
+  }
+})
+
+test('envío: fuera de Quito solo la de provincia', () => {
+  for (const ciudad of ['Guayaquil', 'Cuenca', 'Sangolquí', '']) {
+    assert.deepStrictEqual(tarifasParaCiudad(TARIFAS_IND, ciudad).map((t) => t.handle), ['p'], ciudad)
+  }
+})
+
+test('envío: tarifas sin ciudad (retiro, gratis de Mandarina) siguen para todos', () => {
+  const t = [...TARIFAS_IND, { handle: 'r', title: 'Retiro en tienda', centavos: 0 }]
+  assert.deepStrictEqual(tarifasParaCiudad(t, 'Guayaquil').map((x) => x.handle), ['p', 'r'])
+  const man = [{ handle: 'g', title: 'GRATIS en compras $20 o más', centavos: 0 }]
+  assert.deepStrictEqual(tarifasParaCiudad(man, 'Loja'), man)
+})
+
+test('envío: si el filtro deja cero, no se deja al cliente sin envío', () => {
+  const soloQuito = [TARIFAS_IND[0]]
+  assert.deepStrictEqual(tarifasParaCiudad(soloQuito, 'Cuenca'), soloQuito)
+})
+
+test('☠️ el navegador no puede pedir la tarifa de Quito desde Guayaquil', () => {
+  const calc = {
+    lineItems: [], availableShippingRates: [
+      { handle: 'q', title: 'Envío Quito $3,50', price: { amount: '3.5' } },
+      { handle: 'p', title: 'Envío a provincia $6', price: { amount: '6.0' } },
+    ],
+    subtotalPriceSet: m(19.5), totalTaxSet: m(0), totalPriceSet: m(19.5), discountCodes: [],
+  }
+  const r = resumenCalculo(calc, 'q', { ciudad: 'Guayaquil' })
+  assert.strictEqual(r.envio.handle, 'p')
+  assert.deepStrictEqual(r.tarifas.map((t) => t.handle), ['p'])
+})
