@@ -91,3 +91,36 @@ test('script de la tienda: IND con pago internacional, solo Ecuador y apagado ha
   assert.match(man, /abierto: true/)
   assert.match(man, /internacional: false/)
 })
+
+import { resumenCalculo } from '../lib/checkoutTienda.js'
+const m = (x) => ({ shopMoney: { amount: String(x) } })
+
+// Caso REAL de IND (12-nov): $30 → $19,50 con descuento automático, IVA INCLUIDO
+// en el precio ($2,09), envío Quito $3,50, total $23. Sin `taxesIncluded` el
+// resumen decía "Descuento −$12,59" + "IVA $2,09" (sumaba el IVA dos veces).
+test('IND: IVA incluido en el precio → descuento real y sin sumar el IVA otra vez', () => {
+  const r = resumenCalculo({
+    lineItems: [{ title: 'Buzo Navidad', variantTitle: 'S', quantity: 1, originalTotalSet: m(30), discountedTotalSet: m(19.5) }],
+    availableShippingRates: [
+      { handle: 'q', title: 'Envío Quito $3,50', price: { amount: '3.5' } },
+      { handle: 'p', title: 'Envío a provincia $6', price: { amount: '6.0' } },
+    ],
+    shippingLine: { title: 'Envío Quito $3,50' },
+    subtotalPriceSet: m(19.5), totalDiscountsSet: m(10.5), totalTaxSet: m(2.09), totalPriceSet: m(23),
+    taxesIncluded: true, discountCodes: [],
+  }, 'q')
+  assert.strictEqual(r.total, 2300)
+  assert.strictEqual(r.impuestosIncluidos, true)
+  assert.strictEqual(r.ahorro, 1050)
+  assert.strictEqual(r.subtotalOriginal - r.ahorro + r.envio.centavos, r.total)
+})
+
+test('IND 1.er cálculo (sin tarifa puesta) con IVA incluido: no se suma el IVA al total', () => {
+  const r = resumenCalculo({
+    lineItems: [{ title: 'Buzo', quantity: 1, originalTotalSet: m(30), discountedTotalSet: m(19.5) }],
+    availableShippingRates: [{ handle: 'q', title: 'Quito', price: { amount: '3.5' } }],
+    subtotalPriceSet: m(19.5), totalDiscountsSet: m(10.5), totalTaxSet: m(2.09), totalPriceSet: m(19.5),
+    taxesIncluded: true, discountCodes: [],
+  })
+  assert.strictEqual(r.total, 2300)
+})

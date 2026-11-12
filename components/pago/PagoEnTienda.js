@@ -258,7 +258,8 @@ function Resumen({ r, onEnvio, ocupado }) {
       {/* Cálculos viejos (sin subtotalOriginal/ahorro) caen al subtotal de Shopify sin fila de descuento: siempre cuadra. */}
       <Fila k="Subtotal" v={dinero(r.subtotalOriginal ?? r.subtotal)} />
       {r.ahorro > 0 && <Fila k={r.codigos?.length ? `Descuento · ${r.codigos.join(', ')}` : 'Descuento'} v={<span style={{ color: '#047857', fontWeight: 600 }}>-{dinero(r.ahorro)}</span>} />}
-      {r.impuestos > 0 && <Fila k="IVA" v={dinero(r.impuestos)} />}
+      {/* IVA aparte se suma; IVA incluido en el precio (IND) solo se informa al pie del total. */}
+      {r.impuestos > 0 && !r.impuestosIncluidos && <Fila k="IVA" v={dinero(r.impuestos)} />}
       {/* Si Shopify da más de una tarifa (domicilio, retiro en tienda…), elige el cliente. */}
       {(r.tarifas || []).length > 1 ? (
         <div style={{ margin: '6px 0' }}>
@@ -277,6 +278,9 @@ function Resumen({ r, onEnvio, ocupado }) {
       )}
       <div style={{ borderTop: `1px solid ${C.borde}`, marginTop: 6, paddingTop: 6 }}>
         <Fila k={<b>Total</b>} v={<b>{dinero(r.total)}</b>} />
+        {r.impuestos > 0 && r.impuestosIncluidos && (
+          <div style={{ fontSize: 12, color: C.suave, textAlign: 'right' }}>Incluye IVA {dinero(r.impuestos)}</div>
+        )}
       </div>
     </div>
   )
