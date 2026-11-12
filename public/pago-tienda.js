@@ -1,19 +1,26 @@
 /*
- * pago-tienda.js — Botón "Pagar con tarjeta" en el carrito de mandarinaec.com
- * (11-nov-2026). Lo sirve el CRM; el tema solo lo carga con una línea:
+ * pago-tienda.js — Botones de pago propios de mandarinaec.com (11/12-nov-2026).
+ * Lo sirve el CRM; el tema lo carga en TODAS las páginas con una línea (sección
+ * "Liquid personalizado" del pie de página):
  *
- *   <div id="pago-tarjeta-mandarina"></div>
  *   <script src="https://crm.apps.mandarinaec.com/pago-tienda.js" defer></script>
  *
- * Al tocar el botón abre un recuadro con https://crm.apps.mandarinaec.com/pagar
- * (datos + total que calcula Shopify + Cajita de Payphone) SIN salir de la tienda.
- * Cuando el pago se aprueba, vacía el carrito.
+ * Esconde el "Pagar pedido" y el "Comprar ahora" de Shopify y pone en su lugar
+ * dos botones, en el carrito, en la ventanita "Artículo agregado" y en la ficha
+ * del producto:
+ *   💳 PAGAR CON TARJETA      → recuadro con CRM/pagar (Payphone) sin salir de la tienda.
+ *   🏦 PAGAR CON TRANSFERENCIA → POR AHORA el checkout de Shopify (depósito bancario),
+ *      hasta que exista la transferencia propia en el recuadro
+ *      (docs/superpowers/specs/2026-11-12-transferencia-en-tienda-design.md).
  *
- * SALIDA SEGURA: mientras ABIERTO_A_TODOS sea false, el botón solo aparece en el
- * navegador de quien entró una vez a la tienda con ?pagotarjeta=1
- * (y ?pagotarjeta=0 lo vuelve a esconder). Para todos: cambiar a true y desplegar el CRM.
+ * SALIDA SEGURA: con ABIERTO_A_TODOS=false solo actúa en el navegador que entró con
+ * ?pagotarjeta=1 (y ?pagotarjeta=0 lo apaga). Si este archivo no carga, el tema
+ * queda con sus botones de Shopify de siempre: nadie se queda sin poder pagar.
  */
 (function () {
+  if (window.__mpPagoTienda) return
+  window.__mpPagoTienda = true
+
   var ABIERTO_A_TODOS = true
   var CRM = 'https://crm.apps.mandarinaec.com'
   var CLAVE = 'mp_pago_tarjeta'
@@ -28,9 +35,18 @@
 
   var estilos = document.createElement('style')
   estilos.textContent = [
-    '.mp-pago-btn{display:block;width:100%;margin:10px 0 0;padding:15px 18px;font-size:16px;font-weight:700;color:#fff;background:#f26a1b;border:0;cursor:pointer;letter-spacing:.02em}',
-    '.mp-pago-btn:hover{filter:brightness(1.05)}',
-    '.mp-pago-btn small{display:block;font-weight:400;font-size:12px;opacity:.9;margin-top:2px}',
+    // Los botones de Shopify que mandan a su checkout se esconden SOLO donde ya
+    // pusimos los nuestros (si este script falla, la tienda queda como siempre).
+    '.mp-escondido{display:none!important}',
+    '.mp-con-par .shopify-payment-button,.mp-activo .additional-checkout-buttons{display:none!important}',
+    '.mp-par{display:flex;flex-direction:column;gap:10px;margin:12px 0 0;width:100%}',
+    '.mp-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;min-height:54px;padding:12px 16px;border:0;border-radius:6px;cursor:pointer;font:700 16px/1.2 inherit;letter-spacing:.04em;text-transform:uppercase;color:#fff}',
+    '.mp-btn small{font-weight:400;font-size:12px;letter-spacing:0;text-transform:none;opacity:.92;margin-top:3px}',
+    '.mp-btn:hover{filter:brightness(1.06)}',
+    '.mp-btn[disabled]{opacity:.6;cursor:wait}',
+    '.mp-tarjeta{background:#f26a1b}',
+    '.mp-transfer{background:#121212}',
+    '.mp-aviso{font:13px/1.3 inherit;color:#b42318;margin:6px 0 0;text-align:center}',
     '.mp-pago-fondo{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:12px}',
     '.mp-pago-caja{background:#fff;width:min(520px,100%);height:min(820px,94vh);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.3)}',
     '.mp-pago-barra{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #eee;font:600 15px system-ui,sans-serif;color:#111}',
@@ -41,12 +57,14 @@
 
   var pagado = false
 
-  function abrir() {
-    fetch('/cart.js', { credentials: 'same-origin' })
+  function abrirTarjeta() {
+    return fetch('/cart.js', { credentials: 'same-origin' })
       .then(function (r) { return r.json() })
       .then(function (cart) {
         var lineas = (cart.items || []).map(function (i) { return i.variant_id + ':' + i.quantity })
         if (!lineas.length) { alert('Tu carrito está vacío'); return }
+        var abierta = document.querySelector('cart-notification.active, cart-notification [aria-modal]')
+        if (abierta && abierta.close) try { abierta.close() } catch (e) {}
         var fondo = document.createElement('div')
         fondo.className = 'mp-pago-fondo'
         fondo.innerHTML = '<div class="mp-pago-caja" role="dialog" aria-label="Pago con tarjeta">' +
@@ -59,6 +77,8 @@
       })
       .catch(function () { alert('No pudimos abrir el pago. Intenta de nuevo.') })
   }
+
+  function irATransferencia() { location.href = '/checkout' }
 
   function cerrar(fondo) {
     fondo.remove()
@@ -74,19 +94,86 @@
     }
   })
 
-  function ponerBoton() {
-    if (document.querySelector('.mp-pago-btn')) return
-    var btn = document.createElement('button')
-    btn.type = 'button'
-    btn.className = 'mp-pago-btn'
-    btn.innerHTML = '💳 Pagar con tarjeta aquí<small>Crédito o débito · sin salir de la tienda</small>'
-    btn.onclick = abrir
-    var lugar = document.getElementById('pago-tarjeta-mandarina')
-    var checkout = document.querySelector('#main-cart-footer [name="checkout"], form[action="/cart"] [name="checkout"]')
-    if (lugar) lugar.appendChild(btn)
-    else if (checkout && checkout.parentNode) checkout.parentNode.insertBefore(btn, checkout.nextSibling)
+  // En la ficha del producto: primero agrega lo elegido al carrito (con talla y
+  // personalización: se manda el formulario tal cual) y luego paga.
+  function agregarDesdeFicha(form) {
+    return fetch('/cart/add.js', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+      body: new FormData(form),
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) throw new Error(d.description || d.message || 'No se pudo agregar al carrito')
+        return d
+      })
+    })
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ponerBoton)
-  else ponerBoton()
+  function crearPar(form) {
+    var par = document.createElement('div')
+    par.className = 'mp-par'
+    par.innerHTML =
+      '<button type="button" class="mp-btn mp-tarjeta">💳 Pagar con tarjeta<small>Crédito o débito · sin salir de la tienda</small></button>' +
+      '<button type="button" class="mp-btn mp-transfer">🏦 Pagar con transferencia<small>Pichincha · Guayaquil · Produbanco · Deuna</small></button>'
+    var aviso = null
+    function correr(accion) {
+      return function () {
+        if (aviso) { aviso.remove(); aviso = null }
+        var botones = par.querySelectorAll('button')
+        for (var i = 0; i < botones.length; i++) botones[i].disabled = true
+        var paso = form ? agregarDesdeFicha(form) : Promise.resolve()
+        paso.then(accion).catch(function (e) {
+          aviso = document.createElement('p')
+          aviso.className = 'mp-aviso'
+          aviso.textContent = (e && e.message) || 'Algo falló. Intenta de nuevo.'
+          par.appendChild(aviso)
+        }).then(function () {
+          for (var i = 0; i < botones.length; i++) botones[i].disabled = false
+        })
+      }
+    }
+    par.querySelector('.mp-tarjeta').onclick = correr(abrirTarjeta)
+    par.querySelector('.mp-transfer').onclick = correr(irATransferencia)
+    return par
+  }
+
+  function ponerBotones() {
+    // Carrito (/cart) y ventanita "Artículo agregado": junto a cada "Pagar pedido".
+    var checkouts = document.querySelectorAll('[name="checkout"]')
+    for (var i = 0; i < checkouts.length; i++) {
+      var co = checkouts[i]
+      var cont = co.closest('form') || co.parentNode
+      if (!cont || !cont.parentNode) continue
+      if (!cont.parentNode.querySelector(':scope > .mp-par')) cont.parentNode.insertBefore(crearPar(null), cont)
+      co.classList.add('mp-escondido')
+      document.body.classList.add('mp-activo')
+    }
+    // Ficha del producto: debajo de "Agregar al carrito".
+    var cajas = document.querySelectorAll('.product-form__buttons')
+    for (var j = 0; j < cajas.length; j++) {
+      var caja = cajas[j]
+      if (caja.querySelector('.mp-par')) continue
+      var form = caja.closest('form')
+      if (!form) continue
+      caja.appendChild(crearPar(form))
+      form.classList.add('mp-con-par')
+    }
+  }
+
+  var pendiente = false
+  function programar() {
+    if (pendiente) return
+    pendiente = true
+    requestAnimationFrame(function () { pendiente = false; ponerBotones() })
+  }
+
+  function iniciar() {
+    ponerBotones()
+    // El tema vuelve a pintar el carrito al cambiar cantidades: reponer los botones.
+    new MutationObserver(programar).observe(document.body, { childList: true, subtree: true })
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar)
+  else iniciar()
 })()
