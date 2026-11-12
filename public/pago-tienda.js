@@ -108,6 +108,9 @@
         if (!lineas.length) { alert('Tu carrito está vacío'); return }
         var abierta = document.querySelector('cart-notification.active, cart-notification [aria-modal]')
         if (abierta && abierta.close) try { abierta.close() } catch (e) {}
+        // La bolsa lateral de Dawn (IND la usa) se queda abierta detrás del recuadro.
+        var bolsa = document.querySelector('cart-drawer.active, cart-drawer[open]')
+        if (bolsa && bolsa.close) try { bolsa.close() } catch (e) {}
         // El carrito flotante propio de la home (assets/mrh.js) se cierra con su ✕.
         var xHome = document.querySelector('.mrh-drawer.is-open [data-close]')
         if (xHome) try { xHome.click() } catch (e) {}
