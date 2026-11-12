@@ -673,6 +673,15 @@ export default function PedidoDetailPage() {
                             )}
                           </div>
                         )}
+                        {canEditarAbono && pago.TIPO_PAGO === 'TRANSFERENCIA' && pago.ESTADO_PAGO === 'PAGADO' && pedido.ESTADO_PEDIDO === 'PENDIENTE_FABRICA' && (
+                          <div className="mt-1.5">
+                            <div className="text-xs font-semibold text-amber-400">⚠️ La confirmación quedó a medias: el pedido no pasó a producción</div>
+                            <button disabled={decidiendoPago === pago.PAGO_ID} onClick={() => decidirTransferencia(pago, 'confirmar')}
+                              className="mt-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold bg-green-500/20 text-green-300 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50">
+                              ✅ Terminar confirmación
+                            </button>
+                          </div>
+                        )}
                         {pago.TIPO_PAGO === 'TRANSFERENCIA' && pago.ESTADO_PAGO === 'RECHAZADO' && (
                           <div className="text-xs font-semibold text-red-400 mt-1">❌ Rechazada</div>
                         )}

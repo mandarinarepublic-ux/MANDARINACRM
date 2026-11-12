@@ -67,7 +67,8 @@ export async function POST(req) {
     }
 
     if (accion === 'comprobante') {
-      const base = process.env.CRM_BASE_URL || `https://${req.headers.get('host')}`
+      // Dominio FIJO: la sesión firmada de la TIENDA WEB nunca va a un host que mande el cliente.
+      const base = String(process.env.CRM_BASE_URL || 'https://crm.apps.mandarinaec.com').replace(/[^\x21-\x7E]/g, '').replace(/\/$/, '')
       const r = await procesarComprobante({ checkoutId: c.id, banco: body?.banco, foto: body?.foto, base })
       if (!r.ok) return no(r.mensaje, r.estado === 'ERROR' ? 502 : 400)
       return Response.json({ ok: true, pedido: r.pedido || null })
