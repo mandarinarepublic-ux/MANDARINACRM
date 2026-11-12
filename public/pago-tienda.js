@@ -14,7 +14,7 @@
  * (y ?pagotarjeta=0 lo vuelve a esconder). Para todos: cambiar a true y desplegar el CRM.
  */
 (function () {
-  var ABIERTO_A_TODOS = false
+  var ABIERTO_A_TODOS = true
   var CRM = 'https://crm.apps.mandarinaec.com'
   var CLAVE = 'mp_pago_tarjeta'
 
