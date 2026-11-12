@@ -66,6 +66,9 @@
         if (!lineas.length) { alert('Tu carrito está vacío'); return }
         var abierta = document.querySelector('cart-notification.active, cart-notification [aria-modal]')
         if (abierta && abierta.close) try { abierta.close() } catch (e) {}
+        // El carrito flotante propio de la home (assets/mrh.js) se cierra con su ✕.
+        var xHome = document.querySelector('.mrh-drawer.is-open [data-close]')
+        if (xHome) try { xHome.click() } catch (e) {}
         var fondo = document.createElement('div')
         fondo.className = 'mp-pago-fondo'
         var titulo = modo === 'transferencia' ? '🏦 Pago por transferencia' : '🔒 Pago seguro con tarjeta'
@@ -156,6 +159,17 @@
       co.classList.add('mp-escondido')
       document.body.classList.add('mp-activo')
     }
+    // Enlaces sueltos al checkout de Shopify, p. ej. el "Ir a pagar" del carrito
+    // flotante de la home (assets/mrh.js arma <a href="/checkout">, no un botón
+    // name="checkout", por eso se escapaba — 12-nov).
+    var enlaces = document.querySelectorAll('a[href]')
+    for (var k = 0; k < enlaces.length; k++) {
+      var a = enlaces[k]
+      if (!esLinkCheckout(a) || a.classList.contains('mp-escondido')) continue
+      if (!a.parentNode) continue
+      a.parentNode.insertBefore(crearPar(null), a)
+      a.classList.add('mp-escondido')
+    }
     // Ficha del producto: debajo de "Agregar al carrito".
     var cajas = document.querySelectorAll('.product-form__buttons')
     for (var j = 0; j < cajas.length; j++) {
@@ -174,6 +188,25 @@
     pendiente = true
     requestAnimationFrame(function () { pendiente = false; ponerBotones() })
   }
+
+  // ¿Este enlace lleva al checkout de Shopify? (/checkout o /checkouts/…)
+  function esLinkCheckout(a) {
+    var h = a.getAttribute('href') || ''
+    try {
+      var u = new URL(h, location.href)
+      return u.host === location.host && /^\/checkouts?(\/|$)/.test(u.pathname)
+    } catch (e) { return false }
+  }
+
+  // Red de seguridad: si algún botón o enlace al checkout viejo se nos escapa
+  // (una app, un tema nuevo), el clic abre NUESTRO recuadro en vez de Shopify.
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null
+    if (!a || !esLinkCheckout(a)) return
+    e.preventDefault()
+    e.stopPropagation()
+    abrirTarjeta()
+  }, true)
 
   function iniciar() {
     ponerBotones()
