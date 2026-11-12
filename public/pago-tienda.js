@@ -95,6 +95,10 @@
       pagado = true
       fetch('/cart/clear.js', { method: 'POST', credentials: 'same-origin' }).catch(function () {})
     }
+    if (e.data.evento === 'cerrar') {
+      var abierto = document.querySelector('.mp-pago-fondo')
+      if (abierto) cerrar(abierto)
+    }
   })
 
   // En la ficha del producto: primero agrega lo elegido al carrito (con talla y

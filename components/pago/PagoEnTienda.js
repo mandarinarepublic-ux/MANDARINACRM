@@ -147,6 +147,10 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
           {pedido ? <><br />Tu pedido es el <b>{pedido}</b>.</> : null}
         </div>
       </div>
+      <button type="button" onClick={() => avisarTienda({ evento: 'cerrar' })}
+        style={{ marginTop: 16, width: '100%', padding: '14px 16px', fontSize: 16, fontWeight: 700, color: '#fff', background: C.naranja, border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+        Cerrar
+      </button>
     </Marco>
   )
   if (fase === 'pagado') return (
@@ -154,6 +158,10 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
       <div style={{ background: C.verdeFondo, color: C.verde, padding: 16, borderRadius: 10, fontWeight: 600 }}>
         ✅ Esta compra ya está pagada{pedido ? ` (pedido ${pedido})` : ''}.
       </div>
+      <button type="button" onClick={() => avisarTienda({ evento: 'cerrar' })}
+        style={{ marginTop: 16, width: '100%', padding: '14px 16px', fontSize: 16, fontWeight: 700, color: '#fff', background: C.naranja, border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+        Cerrar
+      </button>
     </Marco>
   )
 
