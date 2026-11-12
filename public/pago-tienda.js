@@ -197,6 +197,13 @@
     return par
   }
 
+  // ☠️ IND (12-nov): el tema fuerza display:flex en su "Pagar pedido" con una regla más
+  // específica que la clase: se esconde TAMBIÉN con estilo en línea !important.
+  function esconder(el) {
+    el.classList.add('mp-escondido')
+    el.style.setProperty('display', 'none', 'important')
+  }
+
   function ponerBotones() {
     // Carrito (/cart) y ventanita "Artículo agregado": junto a cada "Pagar pedido".
     var checkouts = document.querySelectorAll('[name="checkout"]')
@@ -205,7 +212,7 @@
       var cont = co.closest('form') || co.parentNode
       if (!cont || !cont.parentNode) continue
       if (!cont.parentNode.querySelector(':scope > .mp-par')) cont.parentNode.insertBefore(crearPar(null), cont)
-      co.classList.add('mp-escondido')
+      esconder(co)
       document.body.classList.add('mp-activo')
     }
     // Enlaces sueltos al checkout de Shopify, p. ej. el "Ir a pagar" del carrito
@@ -217,7 +224,7 @@
       if (!esLinkCheckout(a) || a.classList.contains('mp-escondido')) continue
       if (!a.parentNode) continue
       a.parentNode.insertBefore(crearPar(null), a)
-      a.classList.add('mp-escondido')
+      esconder(a)
     }
     // Ficha del producto: debajo de "Agregar al carrito".
     var cajas = document.querySelectorAll('.product-form__buttons')
