@@ -5,7 +5,7 @@ import { DIAS_ENTREGA, resolverFechaEntrega } from '@/lib/plazoEntrega'
 import { uploadToCloudinary, uploadFileToCloudinary } from '@/lib/cloudinary'
 import { listPedidos, createPedido, generatePedidoId, siguienteNumeroPedido } from '@/lib/db/pedidos'
 import { crearPedidoConReintento } from '@/lib/reintento-pedido'
-import { upsertClienteByCedula, findClienteByCedula } from '@/lib/db/clientes'
+import { upsertClienteByCedula, findClienteByCedula, updateCliente } from '@/lib/db/clientes'
 import { decidirClienteWeb } from '@/lib/clienteTiendaWeb'
 import { createItem } from '@/lib/db/detalle'
 import { createPago } from '@/lib/db/pagos'
@@ -145,9 +145,13 @@ export async function POST(req) {
     if (esTiendaWeb) {
       const existente = await findClienteByCedula(String(cliente.cedula))
       const decision = decidirClienteWeb(existente, datosCliente)
-      if (decision.accion === 'conservar') {
+      if (decision.accion === 'conservar' || decision.accion === 'completar') {
         clienteId = existente.CLIENTE_ID
         notaCliente = decision.nota
+        // completar: solo lo que en la ficha estaba VACÍO (updateCliente es parcial)
+        if (decision.accion === 'completar' && Object.keys(decision.campos).length) {
+          await updateCliente(clienteId, decision.campos)
+        }
       } else {
         clienteId = await upsertClienteByCedula(String(cliente.cedula), datosCliente)
       }
