@@ -121,6 +121,35 @@ test('resumen: preventa real ($30 → $25, envío gratis)', () => {
   assert.strictEqual(r.envio.centavos, 0)
 })
 
+// 12-nov: el recuadro mostraba Subtotal $75 · Descuento −$15 · Total $75 (no
+// cuadraba): el subtotal de Shopify YA trae la preventa. Se muestra el subtotal
+// a precio original y un descuento que hace que la cuenta cierre.
+test('resumen: preventa en 3 sweaters → Subtotal 90 · Descuento 15 · Total 75', () => {
+  const r = resumenCalculo({
+    lineItems: [
+      { title: 'Ugly Sweater Navideño Stranger Things II', variantTitle: '2XS', quantity: 2, originalTotalSet: m(60), discountedTotalSet: m(50) },
+      { title: 'Ugly Sweater Navideño Stranger Things', variantTitle: '2XS', quantity: 1, originalTotalSet: m(30), discountedTotalSet: m(25) },
+    ],
+    availableShippingRates: [{ handle: 'g', title: 'GRATIS en compras $20 o más', price: { amount: '0.0' } }],
+    subtotalPriceSet: m(75), totalDiscountsSet: m(15), totalTaxSet: m(0), totalPriceSet: m(75), discountCodes: [],
+  })
+  assert.strictEqual(r.subtotalOriginal, 9000)
+  assert.strictEqual(r.ahorro, 1500)
+  assert.strictEqual(r.total, 7500)
+  assert.strictEqual(r.subtotalOriginal - r.ahorro + r.impuestos + r.envio.centavos, r.total)
+  assert.deepStrictEqual(r.lineas.map((l) => [l.original, l.centavos]), [[6000, 5000], [3000, 2500]])
+})
+
+test('resumen: sin descuento no inventa ahorro', () => {
+  const r = resumenCalculo({
+    lineItems: [{ title: 'Camiseta', quantity: 1, originalTotalSet: m(15), discountedTotalSet: m(15) }],
+    availableShippingRates: [{ handle: 'svt', title: 'Servientrega', price: { amount: '5' } }],
+    subtotalPriceSet: m(15), totalDiscountsSet: m(0), totalTaxSet: m(0), totalPriceSet: m(20), discountCodes: [],
+  })
+  assert.strictEqual(r.subtotalOriginal, 1500)
+  assert.strictEqual(r.ahorro, 0)
+})
+
 // ── Payphone ─────────────────────────────────────────────────────────────────
 test('montos: suma exacta con IVA incluido en el precio', () => {
   for (const t of [100, 2500, 3500, 3999, 123456]) {

@@ -209,7 +209,7 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
           {errorGeneral && <p style={{ color: C.error, fontSize: 14 }}>⚠️ {errorGeneral}</p>}
           <div id="pp-button" />
           <button onClick={() => { setMetodo('transferencia'); setErrorGeneral(''); setFase('transferencia') }}
-            style={{ width: '100%', marginTop: 14, padding: 12, fontSize: 14, fontWeight: 600, background: '#fff', color: C.texto, border: `1px solid ${C.borde}`, borderRadius: 10, cursor: 'pointer' }}>
+            style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 15, fontWeight: 700, background: '#121212', color: '#fff', border: 0, borderRadius: 10, cursor: 'pointer' }}>
             🏦 Prefiero pagar con transferencia
           </button>
         </>
@@ -229,7 +229,7 @@ export default function PagoEnTienda({ carrito, modo = 'tarjeta' }) {
             onRecibido={(ped) => { setPedido(ped); setFase('recibido'); avisarTienda({ evento: 'resultado', estado: 'PAGADO' }) }}
           />
           <button onClick={() => { setMetodo('tarjeta'); cajitaLista.current = false; setErrorGeneral(''); setFase('pagar') }}
-            style={{ width: '100%', marginTop: 14, padding: 12, fontSize: 14, fontWeight: 600, background: '#fff', color: C.texto, border: `1px solid ${C.borde}`, borderRadius: 10, cursor: 'pointer' }}>
+            style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 15, fontWeight: 700, background: '#fff3ea', color: '#c2410c', border: '2px solid #f26a1b', borderRadius: 10, cursor: 'pointer' }}>
             💳 Prefiero pagar con tarjeta
           </button>
         </>
@@ -247,11 +247,16 @@ function Resumen({ r }) {
           <div style={{ flex: 1, fontSize: 14, color: C.texto }}>
             {l.titulo}<div style={{ fontSize: 12, color: C.suave }}>{l.variante} · x{l.cantidad}</div>
           </div>
-          <div style={{ fontSize: 14, color: C.texto }}>{dinero(l.centavos)}</div>
+          <div style={{ fontSize: 14, color: C.texto, textAlign: 'right' }}>
+            {l.original > l.centavos && <div style={{ fontSize: 12, color: C.suave, textDecoration: 'line-through' }}>{dinero(l.original)}</div>}
+            {dinero(l.centavos)}
+          </div>
         </div>
       ))}
-      <Fila k="Subtotal" v={dinero(r.subtotal)} />
-      {r.descuentos > 0 && <Fila k="Descuento" v={`-${dinero(r.descuentos)}`} />}
+      {/* Cálculos viejos (sin subtotalOriginal/ahorro) caen al subtotal de Shopify sin fila de descuento: siempre cuadra. */}
+      <Fila k="Subtotal" v={dinero(r.subtotalOriginal ?? r.subtotal)} />
+      {r.ahorro > 0 && <Fila k={r.codigos?.length ? `Descuento · ${r.codigos.join(', ')}` : 'Descuento'} v={<span style={{ color: '#047857', fontWeight: 600 }}>-{dinero(r.ahorro)}</span>} />}
+      {r.impuestos > 0 && <Fila k="IVA" v={dinero(r.impuestos)} />}
       <Fila k={`Envío · ${r.envio?.title || ''}`} v={r.envio?.centavos ? dinero(r.envio.centavos) : 'Gratis'} />
       <div style={{ borderTop: `1px solid ${C.borde}`, marginTop: 6, paddingTop: 6 }}>
         <Fila k={<b>Total</b>} v={<b>{dinero(r.total)}</b>} />

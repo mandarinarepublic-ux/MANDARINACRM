@@ -152,6 +152,18 @@ export default function PagoTransferencia({ id, total, cuentas, onRecibido }) {
           }}>Cambiar banco</button>
         </div>
         <div style={{ padding: '4px 14px 8px', background: '#fff' }}>
+          {cuenta.qr && (
+            <div style={{ textAlign: 'center', padding: '10px 0 12px' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.texto, marginBottom: 8 }}>Escanea con tu app Deuna</div>
+              <img src={cuenta.qr} alt={`Código QR de ${cuenta.banco}`} width={220} height={238}
+                style={{ width: 220, maxWidth: '80%', height: 'auto', display: 'block', margin: '0 auto', borderRadius: 8, border: `1px solid ${C.borde}` }} />
+              <a href={cuenta.qr} download="QR-Deuna-Mandarina.jpg" style={{
+                display: 'inline-block', marginTop: 10, padding: '8px 14px', fontSize: 13, fontWeight: 600, borderRadius: 8,
+                border: `1px solid ${C.borde}`, color: C.texto, textDecoration: 'none', background: '#fff',
+              }}>⬇️ Guardar QR</a>
+              <div style={{ fontSize: 12, color: C.suave, marginTop: 6 }}>¿Estás en el celular? Guárdalo y ábrelo desde la galería en tu app Deuna.</div>
+            </div>
+          )}
           <Dato k="Monto a transferir" v={dinero(total)} grande />
           <Dato k={`Cuenta de ${cuenta.tipo.toLowerCase()}`} v={cuenta.numero} />
           <Dato k="Titular" v={cuenta.titular} />
