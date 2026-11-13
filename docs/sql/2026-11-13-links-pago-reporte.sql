@@ -32,3 +32,14 @@ alter table crm.links_pago alter column vendedor_id drop not null;
 
 create index if not exists links_pago_creado_idx on crm.links_pago (creado_en desc, id);
 create index if not exists links_pago_pagado_idx on crm.links_pago (pagado_en desc) where pagado_en is not null;
+
+-- crm_2026_11_13_sync_pasarelas
+-- Cuándo se llamó por última vez a una consulta con cupo. La "consulta por
+-- lotes" de Payphone (pagos aprobados de los últimos 3 días) permite solo
+-- 5 llamadas por día por token: se espacian por esta tabla.
+create table if not exists crm.sync_pasarelas (
+  clave       text primary key,
+  ultima      timestamptz not null default now(),
+  detalle     jsonb
+);
+alter table crm.sync_pasarelas enable row level security;

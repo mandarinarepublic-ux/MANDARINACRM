@@ -138,3 +138,37 @@ test('a Payphone no se le pregunta por links de dLocal', () => {
   ], ahora)
   assert.deepEqual(r.map((l) => l.id), [2, 3])
 })
+
+import { filaDesdeVentaPayphone, idsDeLotePayphone, normalizarTransaccion, celularDeClientTx } from '../lib/reportePagos.js'
+import { idTransaccion } from '../lib/payphone.js'
+
+test('venta Payphone aprobada → fila en dólares (amount viene en centavos)', () => {
+  const clientTx = idTransaccion('593987654321', () => 0.5)
+  const f = filaDesdeVentaPayphone({
+    amount: 3500, statusCode: 3, transactionStatus: 'Approved', clientTransactionId: clientTx,
+    transactionId: 93507187, cardBrand: 'Visa Produbanco', storeName: 'Ind Store', date: '2026-11-10T22:06:00',
+  })
+  assert.equal(f.valor, 35)
+  assert.equal(f.estado, 'PAGADO')
+  assert.equal(f.tienda, 'INDSTORE')
+  assert.equal(f.celular, '593987654321')
+  assert.equal(f.transaction_id, '93507187')
+  assert.equal(f.comision, 2.01)
+  assert.equal(f.comision_estimada, true)
+})
+
+test('venta Payphone rechazada no tiene comisión; sin clientTx no sirve', () => {
+  const f = filaDesdeVentaPayphone({ amount: 100, statusCode: 2, clientTransactionId: 'x123', storeName: 'Mandarina Republic' })
+  assert.equal(f.estado, 'RECHAZADO')
+  assert.equal(f.comision, null)
+  assert.equal(f.tienda, 'MANDARINA')
+  assert.equal(filaDesdeVentaPayphone({ amount: 100, statusCode: 3 }), null)
+  assert.equal(celularDeClientTx('x123'), '')
+})
+
+test('consulta por lotes: solo los # de transacción, sin repetir', () => {
+  assert.deepEqual(idsDeLotePayphone([{ idTransaction: 1 }, { idTransaction: 1 }, { idTransaction: 2 }, {}]), ['1', '2'])
+  assert.deepEqual(idsDeLotePayphone(null), [])
+  assert.equal(normalizarTransaccion('#93 507 187'), '93507187')
+  assert.equal(normalizarTransaccion('abc'), null)
+})

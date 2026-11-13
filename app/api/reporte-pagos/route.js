@@ -1,12 +1,16 @@
 import { requireAdmin } from '@/lib/auth'
 import { getSupabase } from '@/lib/supabase'
 import { listUsuarios } from '@/lib/db/usuarios'
-import { listarLinksRango, linksPayphonePendientes, guardarPagosDlocal, actualizarEstadoLink } from '@/lib/db/linksPago'
-import { consultarLink } from '@/lib/payphone'
+import {
+  listarLinksRango, linksPayphonePendientes, guardarPagosDlocal, guardarPagosExternos, actualizarEstadoLink,
+  ultimaSync, marcarSync,
+} from '@/lib/db/linksPago'
+import { consultarLink, ventaPayphone, loteAprobadosPayphone } from '@/lib/payphone'
 import { dlocalConfigurado, listarPagosDlocal, listarRetirosDlocal } from '@/lib/dlocal'
 import { registrarEvento } from '@/lib/eventos'
 import {
   rangoEcuador, filtrar, resumen, filaDesdeDlocal, filaRetiroDlocal, estimarPayphone, estadoEfectivo,
+  filaDesdeVentaPayphone, idsDeLotePayphone, normalizarTransaccion, hoyEcuador,
 } from '@/lib/reportePagos'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +26,8 @@ export const maxDuration = 60
 //      le pregunta a Payphone por los links pendientes. → { ok, dlocal, payphone, avisos }
 
 const ESTADO_PAYPHONE_DIAS = 7   // un link vence a las 48 h; margen por si pagaron al filo
-const TOPE_PAYPHONE = 25         // Payphone permite 30 consultas por minuto
+const TOPE_PAYPHONE = 25         // Payphone permite 30 consultas por minuto (en TOTAL por sincronización)
+const HORAS_ENTRE_LOTES = 5      // la consulta por lotes tiene 5 llamadas por día
 
 export async function GET(req) {
   const auth = await requireAdmin(req)
@@ -105,6 +110,24 @@ export async function POST(req) {
   if (!auth.ok) return Response.json({ ok: false, error: auth.error }, { status: auth.status })
 
   const body = await req.json().catch(() => ({}))
+
+  // Traer UN pago de Payphone por su # de transacción (el que se ve en el panel).
+  // Para los links que salieron antes de que los inbox los registraran.
+  if (body?.accion === 'traer_payphone') {
+    const tx = normalizarTransaccion(body?.transaccion)
+    if (!tx) return Response.json({ ok: false, error: 'Escribe el # de transacción de Payphone (solo números)' }, { status: 400 })
+    try {
+      const venta = await ventaPayphone(tx)
+      if (!venta) return Response.json({ ok: false, error: `Payphone no tiene la transacción #${tx} con esta cuenta` }, { status: 404 })
+      const fila = filaDesdeVentaPayphone(venta)
+      if (!fila) return Response.json({ ok: false, error: 'Payphone respondió algo que no se entiende' }, { status: 502 })
+      const r = await guardarPagosExternos([fila], 'PAYPHONE')
+      return Response.json({ ok: true, fila, ...r })
+    } catch (e) {
+      return Response.json({ ok: false, error: e.message }, { status: 502 })
+    }
+  }
+
   const { desde, hasta } = body || {}
   const rango = rangoEcuador(desde, hasta)
   if (!rango) return Response.json({ ok: false, error: 'Rango de fechas inválido' }, { status: 400 })
@@ -130,11 +153,36 @@ export async function POST(req) {
     }
   }
 
-  // 2) Payphone: no lista links; se pregunta uno por uno por los pendientes.
-  let payphone = { revisados: 0, pagados: 0, fallos: 0 }
+  // 2) Payphone, pagos APROBADOS de los últimos 3 días (consulta por lotes):
+  //    trae los que nadie registró (links del inbox de antes del 13-nov, o
+  //    hechos en el panel de Payphone). Cupo de 5 por día → cada 5 h como mucho.
+  let payphone = { revisados: 0, pagados: 0, fallos: 0, lote: null }
+  let cupo = TOPE_PAYPHONE
+  try {
+    const ult = await ultimaSync('payphone_lotes')
+    if (!ult || Date.now() - Date.parse(ult.ultima) > HORAS_ENTRE_LOTES * 3600000) {
+      const fin = hoyEcuador()
+      const ini = new Date(Date.parse(`${fin}T12:00:00Z`) - 2 * 86400000).toISOString().slice(0, 10)
+      const ids = idsDeLotePayphone(await loteAprobadosPayphone(ini, fin)).slice(0, cupo)
+      const filasLote = []
+      for (const id of ids) {
+        cupo--
+        try {
+          const f = filaDesdeVentaPayphone(await ventaPayphone(id))
+          if (f) filasLote.push(f)
+        } catch (e) { payphone.fallos++ }
+      }
+      payphone.lote = { aprobados: ids.length, ...(await guardarPagosExternos(filasLote, 'PAYPHONE')) }
+      await marcarSync('payphone_lotes', { desde: ini, hasta: fin, ...payphone.lote })
+    }
+  } catch (e) {
+    avisos.push(`Payphone (aprobados de los últimos 3 días): ${e.message}`)
+  }
+
+  // 3) Payphone: no lista links; se pregunta uno por uno por los pendientes.
   try {
     const desdeIso = new Date(Date.now() - ESTADO_PAYPHONE_DIAS * 86400000).toISOString()
-    const pendientes = await linksPayphonePendientes({ desdeIso, limite: TOPE_PAYPHONE })
+    const pendientes = cupo > 0 ? await linksPayphonePendientes({ desdeIso, limite: cupo }) : []
     for (const l of pendientes) {
       try {
         const r = await consultarLink(l.client_tx_id)

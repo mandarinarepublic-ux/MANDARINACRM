@@ -16,7 +16,7 @@ import { useRouter } from 'next/navigation'
 
 const NOMBRE_TIENDA = { MANDARINA: 'Mandarina', INDSTORE: 'IND STORE' }
 const NOMBRE_PROV = { PAYPHONE: 'Payphone', DLOCAL: 'dLocal Go' }
-const NOMBRE_ORIGEN = { CRM: 'CRM', INBOX_MANDI: 'Inbox Mandarina', INBOX_IND: 'Inbox IND', DLOCAL: 'dLocal (sin registro)' }
+const NOMBRE_ORIGEN = { CRM: 'CRM', INBOX_MANDI: 'Inbox Mandarina', INBOX_IND: 'Inbox IND', DLOCAL: 'dLocal (sin registro)', PAYPHONE: 'Payphone (sin registro)' }
 
 const ESTADO = {
   PAGADO:    { txt: '✅ Pagado',    cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
@@ -122,6 +122,9 @@ export default function ReportePagosPage() {
   const [error, setError] = useState('')
   const [avisosSync, setAvisosSync] = useState([])
   const [ultimaSync, setUltimaSync] = useState(null)
+  const [transaccion, setTransaccion] = useState('')
+  const [trayendo, setTrayendo] = useState(false)
+  const [msgTraer, setMsgTraer] = useState('')
 
   useEffect(() => {
     try {
@@ -155,6 +158,26 @@ export default function ReportePagosPage() {
     } catch (e) { setAvisosSync([e.message]) } finally { setSincronizando(false) }
     await cargar()
   }, [desde, hasta, cargar])
+
+  // Un pago de Payphone que no está (link de antes del 13-nov): se trae con el #
+  // de transacción que se ve en el panel de Payphone.
+  const traerPayphone = useCallback(async (e) => {
+    e?.preventDefault()
+    if (trayendo || !transaccion.trim()) return
+    setTrayendo(true); setMsgTraer('')
+    try {
+      const r = await fetch('/api/reporte-pagos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'traer_payphone', transaccion }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo traer')
+      const f = d.fila
+      setMsgTraer(`✅ #${f.transaction_id}: ${money(f.valor)} · ${ESTADO[f.estado]?.txt || f.estado}${d.nuevos ? ' · agregado' : d.actualizados ? ' · actualizado' : ' · ya estaba'}`)
+      setTransaccion('')
+      await cargar()
+    } catch (e) { setMsgTraer(`⚠️ ${e.message}`) } finally { setTrayendo(false) }
+  }, [trayendo, transaccion, cargar])
 
   // Al abrir: sincroniza una vez. Después, cambiar filtros solo relee la base.
   const [primera, setPrimera] = useState(true)
@@ -265,7 +288,8 @@ export default function ReportePagosPage() {
             <p className="text-[11px] text-gray-600 mb-4">
               Consultado {fmtFecha(ultimaSync.en)}
               {ultimaSync.dlocal ? ` · dLocal: ${ultimaSync.dlocal.leidos} pagos (${ultimaSync.dlocal.nuevos} nuevos, ${ultimaSync.dlocal.actualizados} cambiaron)` : ''}
-              {` · Payphone: ${ultimaSync.payphone?.revisados ?? 0} revisados`}
+              {` · Payphone: ${ultimaSync.payphone?.revisados ?? 0} pendientes revisados`}
+              {ultimaSync.payphone?.lote ? `, ${ultimaSync.payphone.lote.aprobados} aprobados de los últimos 3 días (${ultimaSync.payphone.lote.nuevos} nuevos)` : ''}
             </p>
           )}
 
@@ -296,6 +320,21 @@ export default function ReportePagosPage() {
             </div>
           )}
 
+          <form onSubmit={traerPayphone} className="card p-3 mb-4">
+            <div className="text-sm font-semibold text-white">¿Un pago de Payphone que no aparece?</div>
+            <div className="text-xs text-gray-500 mb-2">
+              Los aprobados de los últimos 3 días entran solos. Para uno más viejo, copia su # de transacción del panel de Payphone.
+            </div>
+            <div className="flex gap-2">
+              <input className="input flex-1" inputMode="numeric" placeholder="# de transacción, ej. 93507187"
+                value={transaccion} onChange={e => setTransaccion(e.target.value)} />
+              <button type="submit" disabled={trayendo || !transaccion.trim()} className="btn-primary px-4 disabled:opacity-50">
+                {trayendo ? '⏳' : 'Traer'}
+              </button>
+            </div>
+            {msgTraer && <div className="text-xs mt-2 text-gray-300">{msgTraer}</div>}
+          </form>
+
           {/* Detalle */}
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-white font-semibold">Detalle · {datos.filas.length} links</h2>
@@ -315,7 +354,7 @@ export default function ReportePagosPage() {
                         <span className="ml-2 text-xs font-normal text-gray-500">{NOMBRE_PROV[l.proveedor] || l.proveedor}</span>
                       </div>
                       <div className="text-xs text-gray-500">
-                        {fmtFecha(l.creado_en)} · {NOMBRE_TIENDA[l.tienda] || 'Sin tienda'} · {l.vendedor || (l.origen === 'DLOCAL' ? 'histórico' : 'sin vendedor')}
+                        {fmtFecha(l.creado_en)} · {NOMBRE_TIENDA[l.tienda] || 'Sin tienda'} · {l.vendedor || (['DLOCAL', 'PAYPHONE'].includes(l.origen) ? 'histórico' : 'sin vendedor')}
                         {' · '}{NOMBRE_ORIGEN[l.origen] || l.origen}
                       </div>
                       {l.estado === 'PAGADO' && (
