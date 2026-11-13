@@ -121,7 +121,7 @@ export async function GET() {
       const r = await consultarLink(l.client_tx_id)
       const fecha = r.fecha && !Number.isNaN(Date.parse(r.fecha)) ? new Date(r.fecha).toISOString() : null
       return await actualizarEstadoLink(l.id, {
-        estado: r.estado, transactionId: r.transactionId, tarjeta: r.tarjeta, pagadoEn: fecha,
+        estado: r.estado, transactionId: r.transactionId, tarjeta: r.tarjeta, pagadoEn: fecha, valor: l.valor,
       })
     } catch (e) {
       console.error('[/api/link-pago] no se pudo revisar', l.client_tx_id, e.message)

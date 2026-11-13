@@ -32,6 +32,8 @@ const NAV_ALL = [
   { href:'/dashboard/promo-seguimiento', label:'Promo del seguimiento', icon:'🎁', roles:['ADMIN'] },
   { href:'/dashboard/auto',         label:'AUTO',         icon:'🤖', roles:['ADMIN'] },
   { href:'/dashboard/pauta',        label:'Pauta',        icon:'📣', roles:['ADMIN'] },
+  // Reporte de links de pago Payphone + dLocal (13-nov-2026): ¿se pagan? + balance. Solo ADMIN.
+  { href:'/dashboard/reporte-pagos', label:'Reporte de pagos', icon:'💰', roles:['ADMIN'] },
   { href:'/dashboard/errores',      label:'Errores',      icon:'🩺', roles:['ADMIN'] },
   { href:'/dashboard/tareas',       label:'Tareas automáticas', icon:'⏱️', roles:['ADMIN'] },
   { href:'/dashboard/usuarios',     label:'Usuarios',     icon:'👥', roles:['ADMIN'] },
