@@ -10,8 +10,12 @@ import { dlocalConfigurado, listarPagosDlocal, listarRetirosDlocal } from '@/lib
 import { registrarEvento } from '@/lib/eventos'
 import {
   rangoEcuador, filtrar, resumen, filaDesdeDlocal, filaRetiroDlocal, estimarPayphone, estadoEfectivo,
-  filaDesdeVentaPayphone, idsDeLotePayphone, normalizarTransaccion, hoyEcuador,
+  filaDesdeVentaPayphone, idsDeLotePayphone, normalizarTransaccion, hoyEcuador, saldos,
 } from '@/lib/reportePagos'
+
+// Desde cuándo se cuenta "todo" para el tablero de saldos (antes no había links).
+const INICIO_HISTORIA = '2025-01-01'
+const HISTORIA_ISO = '2025-01-01T05:00:00.000Z'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -28,6 +32,23 @@ export const maxDuration = 60
 const ESTADO_PAYPHONE_DIAS = 7   // un link vence a las 48 h; margen por si pagaron al filo
 const TOPE_PAYPHONE = 25         // Payphone permite 30 consultas por minuto (en TOTAL por sincronización)
 const HORAS_ENTRE_LOTES = 5      // la consulta por lotes tiene 5 llamadas por día
+
+/** Pagos con tarjeta dentro de la tienda (Cajita de Payphone) de un rango. */
+async function tiendaWebTotal({ desde, hasta, por = 'pagado', tienda = '' }) {
+  const col = por === 'pagado' ? 'actualizado_en' : 'creado_en'
+  const { data, error } = await getSupabase()
+    .from('checkouts_tienda')
+    .select('id,tienda,total_centavos,estado,payphone_tx_id,actualizado_en')
+    .eq('estado', 'PAGADO')
+    .not('payphone_tx_id', 'is', null)
+    .gte(col, desde).lt(col, hasta)
+    .limit(1000)
+  if (error) throw new Error(error.message)
+  const lista = (data || []).filter((c) => !tienda || c.tienda === tienda)
+  const cobrado = lista.reduce((s, c) => s + (Number(c.total_centavos) || 0) / 100, 0)
+  const est = estimarPayphone(cobrado)
+  return { pagos: lista.length, cobrado: Math.round(cobrado * 100) / 100, comision: est.comision, neto: est.neto }
+}
 
 export async function GET(req) {
   const auth = await requireAdmin(req)
@@ -84,24 +105,29 @@ export async function GET(req) {
   // pero es plata de Payphone: van aparte para que el balance de Payphone cuadre.
   let tiendaWeb = null
   try {
-    const col = por === 'pagado' ? 'actualizado_en' : 'creado_en'
-    const { data, error } = await getSupabase()
-      .from('checkouts_tienda')
-      .select('id,tienda,total_centavos,estado,payphone_tx_id,shopify_order_name,actualizado_en')
-      .eq('estado', 'PAGADO')
-      .not('payphone_tx_id', 'is', null)
-      .gte(col, rango.desde).lt(col, rango.hasta)
-      .limit(1000)
-    if (error) throw new Error(error.message)
-    const tienda = p.get('tienda') || ''
-    const lista = (data || []).filter((c) => !tienda || c.tienda === tienda)
-    const cobrado = lista.reduce((s, c) => s + (Number(c.total_centavos) || 0) / 100, 0)
-    const est = estimarPayphone(cobrado)
-    tiendaWeb = { pagos: lista.length, cobrado: Math.round(cobrado * 100) / 100, comision: est.comision, neto: est.neto }
+    tiendaWeb = await tiendaWebTotal({ ...rango, por, tienda: p.get('tienda') || '' })
   } catch (e) { avisos.push(`Tienda web: ${e.message}`) }
 
+  // Tablero de arriba: SALDOS de TODA la historia, sin filtros (pedido de Rodrigo:
+  // "el dinero disponible en esas cuentas, a primera vista").
+  let tablero = null
+  try {
+    const manana = new Date(Date.now() + 86400000).toISOString()
+    const pagadas = (await listarLinksRango({ desde: HISTORIA_ISO, hasta: manana, por: 'pagado' }))
+      .filter((f) => f.estado === 'PAGADO')
+    let retirosTodos = []
+    if (dlocalConfigurado()) {
+      try { retirosTodos = (await listarRetirosDlocal(INICIO_HISTORIA, hoyEcuador())).items.map(filaRetiroDlocal) }
+      catch (e) { avisos.push(`dLocal (retiros para el saldo): ${e.message}`) }
+    }
+    tablero = {
+      ...saldos({ filas: pagadas, retiros: retirosTodos, tiendaWeb: await tiendaWebTotal({ desde: HISTORIA_ISO, hasta: manana }) }),
+      dlocal_conectado: dlocalConfigurado(),
+    }
+  } catch (e) { avisos.push(`Saldos: ${e.message}`) }
+
   return Response.json({
-    ok: true, filas, resumen: resumen(filas, nombres), retiros, tiendaWeb, vendedores, avisos,
+    ok: true, tablero, filas, resumen: resumen(filas, nombres), retiros, tiendaWeb, vendedores, avisos,
   })
 }
 
@@ -135,9 +161,15 @@ export async function POST(req) {
   const avisos = []
 
   // 1) dLocal: la lista de pagos del rango es la verdad (comisión y neto reales).
+  //    La PRIMERA vez se trae toda la historia: el saldo del tablero la necesita.
   let dlocal = null
   if (dlocalConfigurado()) {
     try {
+      if (!(await ultimaSync('dlocal_historico'))) {
+        const { items } = await listarPagosDlocal(INICIO_HISTORIA, hoyEcuador(Date.now() + 86400000))
+        const r = await guardarPagosDlocal(items.map(filaDesdeDlocal))
+        await marcarSync('dlocal_historico', { leidos: items.length, ...r })
+      }
       // Un día más al final: si dLocal filtra en UTC, un pago después de las
       // 19:00 de Ecuador del último día caería fuera. Lo de más no estorba.
       const hastaMas = new Date(Date.parse(`${hasta}T12:00:00Z`) + 86400000).toISOString().slice(0, 10)

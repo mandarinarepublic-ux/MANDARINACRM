@@ -203,6 +203,49 @@ export default function ReportePagosPage() {
       </div>
       <p className="text-gray-500 text-sm mb-4">Links de Payphone y dLocal Go: cuáles se pagaron, y cuánto quedó después de comisiones.</p>
 
+      {/* Tablero: el dinero en cada pasarela, de TODA la historia (no lo tocan los filtros). */}
+      {datos?.tablero && (
+        <div className="mb-4">
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="card p-4 border-sky-500/30">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-white">dLocal Go</div>
+                <div className="text-[11px] text-gray-500">{datos.tablero.dlocal.pagos} pagos</div>
+              </div>
+              {datos.tablero.dlocal_conectado ? (
+                <>
+                  <div className="text-[11px] uppercase tracking-wide text-gray-500 mt-2">Disponible para retirar</div>
+                  <div className="text-3xl font-bold text-emerald-300">{money(datos.tablero.dlocal.disponible)}</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    + {money(datos.tablero.dlocal.por_liberar)} por liberar (cobrado en los últimos 7 días)
+                  </div>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    Neto cobrado {money(datos.tablero.dlocal.neto_total)} − retirado {money(datos.tablero.dlocal.retirado)}
+                    {datos.tablero.dlocal.retiros_en_curso > 0 ? ` (${money(datos.tablero.dlocal.retiros_en_curso)} en camino al banco)` : ''}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-amber-300 mt-2">Sin conectar: faltan las llaves de dLocal en el CRM.</div>
+              )}
+            </div>
+            <div className="card p-4 border-emerald-500/30">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-white">Payphone</div>
+                <div className="text-[11px] text-gray-500">{datos.tablero.payphone.pagos} pagos</div>
+              </div>
+              <div className="text-[11px] uppercase tracking-wide text-gray-500 mt-2">Neto cobrado (estimado)</div>
+              <div className="text-3xl font-bold text-emerald-300">{money(datos.tablero.payphone.neto)}</div>
+              <div className="text-xs text-gray-400 mt-1">
+                {money(datos.tablero.payphone.cobrado)} cobrado · hoy {money(datos.tablero.payphone.hoy)}
+              </div>
+              <div className="text-[11px] text-gray-500 mt-1">
+                Payphone no informa cuánto ya te depositó al banco: este valor no lo resta.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="card p-3 mb-4 space-y-3">
         <div className="flex flex-wrap gap-2">

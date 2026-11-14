@@ -172,3 +172,42 @@ test('consulta por lotes: solo los # de transacción, sin repetir', () => {
   assert.equal(normalizarTransaccion('#93 507 187'), '93507187')
   assert.equal(normalizarTransaccion('abc'), null)
 })
+
+import { saldos } from '../lib/reportePagos.js'
+
+test('tablero: saldo dLocal = neto pagado − retiros; lo reciente queda por liberar', () => {
+  const ahora = Date.parse('2026-11-13T17:00:00Z')
+  const s = saldos({
+    ahora,
+    filas: [
+      { proveedor: 'DLOCAL', estado: 'PAGADO', valor: 100, neto: 91, pagado_en: '2026-10-01T15:00:00Z' },
+      { proveedor: 'DLOCAL', estado: 'PAGADO', valor: 50, neto: 45.5, pagado_en: '2026-11-12T15:00:00Z' },
+      { proveedor: 'DLOCAL', estado: 'EXPIRADO', valor: 999, pagado_en: null },
+      { proveedor: 'PAYPHONE', estado: 'PAGADO', valor: 35, neto: 32.99, pagado_en: '2026-11-13T14:00:00Z' },
+      { proveedor: 'PAYPHONE', estado: 'PENDIENTE', valor: 20 },
+    ],
+    retiros: [
+      { estado: 'COMPLETED', solicitado: 60, transferido: 59 },
+      { estado: 'CANCELLED', solicitado: 500 },
+      { estado: 'PENDING', solicitado: 10 },
+    ],
+    tiendaWeb: { pagos: 1, cobrado: 20, neto: 18.85 },
+  })
+  assert.equal(s.dlocal.neto_total, 136.5)
+  assert.equal(s.dlocal.retirado, 70)
+  assert.equal(s.dlocal.retiros_en_curso, 10)
+  assert.equal(s.dlocal.saldo, 66.5)
+  assert.equal(s.dlocal.por_liberar, 45.5)
+  assert.equal(s.dlocal.disponible, 21)
+  assert.equal(s.payphone.neto, 51.84)
+  assert.equal(s.payphone.cobrado, 55)
+  assert.equal(s.payphone.pagos, 2)
+  assert.equal(s.payphone.hoy, 35)
+  assert.equal(s.total, 118.34)
+})
+
+test('tablero vacío no revienta', () => {
+  const s = saldos()
+  assert.equal(s.total, 0)
+  assert.equal(s.dlocal.disponible, 0)
+})
