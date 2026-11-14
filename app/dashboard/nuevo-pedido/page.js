@@ -159,12 +159,31 @@ function NuevoPedidoContenido() {
     // precargado traba el formulario y es peor que no precargar nada.
     const celularUrl = searchParams?.get('celular') || ''
     const nombreUrl  = searchParams?.get('nombre') || ''
-    if (celularUrl || nombreUrl) {
+    // 📝 Formulario de WhatsApp (inbox, 14-nov-2026): el cliente ya llenó sus
+    // datos de facturación y envío, y el botón "Crear pedido" de esa burbuja los
+    // manda acá. Cada uno es opcional: lo que no viene queda como siempre.
+    const cedulaUrl    = (searchParams?.get('cedula') || '').replace(/\D/g, '')
+    const emailUrl     = (searchParams?.get('email') || '').trim()
+    const ciudadUrl    = (searchParams?.get('ciudad') || '').trim()
+    const direccionUrl = (searchParams?.get('direccion') || '').trim()
+    if (celularUrl || nombreUrl || cedulaUrl || emailUrl || ciudadUrl || direccionUrl) {
       setCliente((p) => ({
         ...p,
         ...(/^0\d{9}$/.test(celularUrl) ? { celular: celularUrl } : {}),
         ...(nombreUrl ? { nombre: nombreUrl } : {}),
+        ...(cedulaUrl ? { cedula: cedulaUrl } : {}),
+        ...(emailUrl ? { email: emailUrl } : {}),
+        ...(ciudadUrl ? { ciudad: ciudadUrl } : {}),
+        ...(direccionUrl ? { direccion: direccionUrl } : {}),
       }))
+      if (cedulaUrl) {
+        // Mismo trato que al elegir un cliente del buscador: el tipo sale de la
+        // cédula/RUC y con él la factura; el error se ve de una si no valida.
+        const t = inferirTipo(cedulaUrl)
+        setTipoId(t)
+        setEmitirFactura(tipoIdMeta(t).factura)
+        setCedulaError(validarIdentificacion(t, cedulaUrl) || '')
+      }
     }
     // Modo YAW: precargar cliente fijo y saltar directo a productos
     if (u.rol === 'VENDEDOR_YAW') {
