@@ -14,7 +14,9 @@ export default function Promo({ promo, enCabecera = false }) {
       {(promo.codigo || promo.link) && (
         <div className={s.promoAcc}>
           {promo.codigo && <div className={s.codigo}>{promo.codigo}</div>}
-          {promo.link && <a href={promo.link} target="_blank" rel="noopener noreferrer">Ver la promo ↗</a>}
+          {/* _top: la página vive en un iframe de la tienda; la promo se abre en
+              la MISMA pestaña, con el carrito y el pixel de la tienda. */}
+          {promo.link && <a href={promo.link} target="_top">Ver la promo →</a>}
         </div>
       )}
     </div>

@@ -31,6 +31,14 @@ export default function Seguimiento({ promo, tienda: clave = 'mandarina' }) {
     return () => ro.disconnect()
   }, [t])
 
+  // Le dice a la tienda qué ve el cliente: el buscador ('entrada') o su pedido
+  // ('hoja'). La página de Shopify muestra el banner de abajo solo con la hoja.
+  useEffect(() => {
+    if (window.parent === window) return
+    const vista = pedido ? 'hoja' : 'entrada'
+    for (const o of t.origenes) window.parent.postMessage({ tipo: 'mandarina-pedido-vista', vista }, o)
+  }, [pedido, t])
+
   async function consultar(e) {
     e.preventDefault()
     setError(''); setCargando(true)
