@@ -1,0 +1,13 @@
+<div id="mr-seguimiento" style="width:100%;margin:0 auto;"><iframe id="mr-seguimiento-marco" src="https://crm.apps.mandarinaec.com/pedido" title="Sigue tu pedido" loading="eager" style="width:100%;height:1100px;border:0;display:block;" allow="clipboard-write"></iframe></div>
+<script>
+(function(){
+  var marco = document.getElementById('mr-seguimiento-marco');
+  if (!marco) return;
+  window.addEventListener('message', function(e){
+    if (e.origin !== 'https://crm.apps.mandarinaec.com') return;
+    var d = e.data || {};
+    if (d.tipo !== 'mandarina-pedido-altura' || !(d.alto > 0)) return;
+    marco.style.height = Math.max(500, Math.ceil(d.alto) + 20) + 'px';
+  });
+})();
+</script>
