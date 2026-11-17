@@ -457,6 +457,14 @@ export default function ProduccionPage() {
 
   const hayFecha = fechaDesde || fechaHasta
 
+  // Qué áreas puede filtrar este usuario. ADMIN y CORTE ven todo; el resto, solo
+  // las áreas que tiene en usuarios.areas (David: SUBLIMACION + ESTAMPADO).
+  const opcionesArea = (() => {
+    const areasU = (user?.areas || []).map(a => String(a).toUpperCase())
+    if (user?.rol === 'ADMIN' || user?.rol === 'CORTE' || areasU.includes('TODAS')) return AREAS_BASE_P
+    return AREAS_BASE_P.filter(a => areasU.includes(a))
+  })()
+
   const filtered = pedidos
     .map(p => ({
       ...p,
@@ -599,17 +607,17 @@ export default function ProduccionPage() {
                 <option value="LISTO">✅ Listo</option>
               </select>
             </div>
-            {/* Área — solo ADMIN */}
-            {user?.rol === 'ADMIN' && (
+            {/* Área — para quien ve más de un área (ADMIN, CORTE, o DISEÑO con varias áreas como David) */}
+            {opcionesArea.length > 1 && (
               <div className="flex flex-col gap-1">
                 <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Área</span>
                 <select value={filtroArea} onChange={e => setFiltroArea(e.target.value)}
                   className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
                     ${filtroArea !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                   <option value="TODAS">Todas</option>
-                  <option value="ESTAMPADO">🎨 Estampado</option>
-                  <option value="BORDADO">🧵 Bordado</option>
-                  <option value="SUBLIMACION">💙 Sublimación</option>
+                  {opcionesArea.includes('ESTAMPADO') && <option value="ESTAMPADO">🎨 Estampado</option>}
+                  {opcionesArea.includes('BORDADO') && <option value="BORDADO">🧵 Bordado</option>}
+                  {opcionesArea.includes('SUBLIMACION') && <option value="SUBLIMACION">💙 Sublimación</option>}
                 </select>
               </div>
             )}
