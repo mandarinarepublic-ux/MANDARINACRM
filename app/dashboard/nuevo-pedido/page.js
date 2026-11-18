@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import MapaPicker from '@/components/maps/MapaPicker'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
@@ -16,6 +16,7 @@ import { avisarPedidoCreado } from '@/lib/aviso-padre'
 import { emailPareceValido, limpiarEmail } from '@/lib/email-cliente'
 import { direccionSinCiudad } from '@/lib/direccionPedido'
 import { nuevoUid } from '@/lib/itemPlegado'
+import { resolverPendientes } from '@/lib/productoPendiente'
 import { llaveBorrador, armarBorrador, borradorVigente, hayTrabajo, resumenBorrador, haceCuanto } from '@/lib/borradorPedido'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
@@ -115,6 +116,18 @@ function NuevoPedidoContenido() {
   const [emitirFactura, setEmitirFactura] = useState(true)
   const [usarMapa, setUsarMapa] = useState(false)
   const [items, setItems] = useState([])
+  // Productos llenados en el buscador pero sin "+ Agregar al pedido" todavía.
+  // Al dar Siguiente se agregan solos si están completos (lib/productoPendiente.js).
+  const [pendientes, setPendientes] = useState({})
+  const reportarPendiente = useCallback((clave, valor) => {
+    setPendientes(prev => {
+      if (!valor) {
+        if (!(clave in prev)) return prev
+        const n = { ...prev }; delete n[clave]; return n
+      }
+      return { ...prev, [clave]: valor }
+    })
+  }, [])
   const [pagos, setPagos] = useState([{ tipo: 'EFECTIVO', monto: '', notas: '' }])
   const [direccionTexto, setDireccionTexto] = useState('')
   const [latitud, setLatitud] = useState(null)
@@ -465,9 +478,20 @@ function NuevoPedidoContenido() {
     return null
   }
 
-  function validateStep2() {
-    if (items.length === 0) return 'Debes agregar al menos un producto'
-    if (!itemsValidos(items)) return 'Completa cantidad y precio en todos los productos'
+  // Igual que el onAdd del buscador: _uid propio y cantidad/precio por defecto.
+  function normalizarItem(item) {
+    return { ...item, _uid: nuevoUid(), cantidad: item.cantidad || 1, precioUnit: item.precioUnit || '' }
+  }
+
+  // Los ítems + los productos completos que siguen en el formulario sin agregar.
+  function itemsConPendientes() {
+    const { agregar } = resolverPendientes(Object.values(pendientes))
+    return agregar.length ? [...items, ...agregar.map(normalizarItem)] : items
+  }
+
+  function validateStep2(lista = items) {
+    if (lista.length === 0) return 'Debes agregar al menos un producto'
+    if (!itemsValidos(lista)) return 'Completa cantidad y precio en todos los productos'
     return null
   }
 
@@ -480,7 +504,7 @@ function NuevoPedidoContenido() {
   function canGoToStep(s) {
     if (s <= 1) return true
     if (s === 2) return !validateStep1()
-    if (s >= 3) return !validateStep1() && !validateStep2()
+    if (s >= 3) return !validateStep1() && !validateStep2(itemsConPendientes())
     return true
   }
 
@@ -495,8 +519,14 @@ function NuevoPedidoContenido() {
         if (err) { setError(err); scrollToError(); return }
       }
       if (step === 2) {
-        const err = validateStep2()
+        // Un producto llenado y no agregado se perdía al avanzar (el paso 2 se
+        // desmonta). Completo → entra solo; a medias → no avanza y dice qué falta.
+        const { agregar, error: errPendiente } = resolverPendientes(Object.values(pendientes))
+        if (errPendiente) { setError(errPendiente); scrollToError(); return }
+        const lista = agregar.length ? [...items, ...agregar.map(normalizarItem)] : items
+        const err = validateStep2(lista)
         if (err) { setError(err); scrollToError(); return }
+        if (agregar.length) { setItems(lista); setPendientes({}) }
       }
       if (step === 3) {
         const err = validateStep3()
@@ -1050,7 +1080,8 @@ function NuevoPedidoContenido() {
               <BuscadorProductos
                 tienda={tienda}
                 soloPersonalizado={isYAW}
-                onAdd={item => setItems(p => [...p, { ...item, _uid: nuevoUid(), cantidad: item.cantidad || 1, precioUnit: item.precioUnit || '' }])}
+                onAdd={item => setItems(p => [...p, normalizarItem(item)])}
+                onPendiente={reportarPendiente}
               />
               {items.length === 0 && (
                 <div className="card p-6 text-center text-gray-500 border-dashed">

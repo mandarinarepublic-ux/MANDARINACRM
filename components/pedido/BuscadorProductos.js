@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { subirFoto, subirArchivo } from '@/lib/subirImagen'
 import SelectorTipoPrenda from '@/components/pedido/SelectorTipoPrenda'
 import { imagenAncho } from '@/lib/imagenes'
+import { faltantesShopify, faltantesPersonalizado, personalizadoTocado } from '@/lib/productoPendiente'
 
 const TALLAS = ['4XL','3XL','2XL','XL','L','M','S','XS','12','10','9','8','7','6','5','4','3','2','1 AÑO']
 
@@ -20,7 +21,32 @@ const AREAS = [
   'ENTREGA EN TIENDA',
 ]
 
-export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = false }) {
+// El ítem que se agrega al pedido. Una sola fuente: lo usan el botón
+// "+ Agregar al pedido" y el agregado automático al dar "Siguiente".
+function armarItemShopify(prod, variant, talla, area, detalle, cantidad, color, fotos, precioEdit) {
+  return {
+    productoNombre: prod.title,
+    shopifyVariantId: variant?.id || '',
+    color, talla,
+    cantidad: cantidad || 1,
+    precioUnit: precioEdit ?? parseFloat(variant?.price || 0),
+    area, detalle,
+    esPersonalizado: false,
+    imagen: prod.image,
+    imagenShopify: prod.image || null,
+    ...fotos,
+    fotoPecho: fotos.fotoPecho || prod.image || null,
+  }
+}
+
+function armarItemPersonalizado(nombre, data, fotos) {
+  return { productoNombre: nombre, ...data, cantidad: parseInt(data.cantidad)||1, precioUnit: parseFloat(data.precio)||0, ...fotos, esPersonalizado: true, imagen: null }
+}
+
+// onPendiente(clave, {item, faltan, tocado} | null): cada formulario abierto
+// avisa lo que tiene escrito, para que "Siguiente" no lo pierda (ver
+// lib/productoPendiente.js).
+export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = false, onPendiente }) {
   const [query, setQuery] = useState('')
   const [productos, setProductos] = useState([])
   const [loading, setLoading] = useState(false)
@@ -85,22 +111,11 @@ export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = f
       {selected && (
         <ProductoDetail producto={selected}
           onAdd={(prod, variant, talla, area, detalle, cantidad, color, fotos, precioEdit) => {
-            onAdd({
-              productoNombre: prod.title,
-              shopifyVariantId: variant?.id || '',
-              color, talla,
-              cantidad: cantidad || 1,
-              precioUnit: precioEdit ?? parseFloat(variant?.price || 0),
-              area, detalle,
-              esPersonalizado: false,
-              imagen: prod.image,
-              imagenShopify: prod.image || null,
-              ...fotos,
-              fotoPecho: fotos.fotoPecho || prod.image || null,
-            })
+            onAdd(armarItemShopify(prod, variant, talla, area, detalle, cantidad, color, fotos, precioEdit))
             setSelected(null); setQuery(''); setProductos([])
           }}
-          onCancel={() => setSelected(null)} />
+          onCancel={() => setSelected(null)}
+          onPendiente={onPendiente} />
       )}
 
       {showPersonalizado && (
@@ -112,6 +127,7 @@ export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = f
           }}
           onCancel={() => setShowPersonalizado(false)}
           ocultarCancelar={soloPersonalizado}
+          onPendiente={onPendiente}
         />
       )}
     </div>
@@ -235,7 +251,7 @@ function FotoUploader({ fotos, onChange }) {
   )
 }
 
-function ProductoDetail({ producto, onAdd, onCancel }) {
+function ProductoDetail({ producto, onAdd, onCancel, onPendiente }) {
   const [variant, setVariant] = useState(producto.variants[0])
   const [talla, setTalla] = useState('')
   const [area, setArea] = useState('')
@@ -247,6 +263,18 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
   // salía vacío y parecía que no había foto. Se puede reemplazar subiendo otra.
   const [fotos, setFotos] = useState(producto.image ? { fotoPecho: producto.image } : {})
   const [precioEdit, setPrecioEdit] = useState(parseFloat(producto.variants[0]?.price || 0))
+
+  // Elegir un producto de Shopify ya cuenta como "tocado": si queda a medias,
+  // Siguiente avisa en vez de perderlo.
+  useEffect(() => {
+    if (!onPendiente) return
+    onPendiente('shopify', {
+      item: armarItemShopify(producto, variant, talla, area, detalle, cantidad, color, fotos, precioEdit),
+      faltan: faltantesShopify({ color, talla, area, detalle, cantidad, precio: precioEdit }),
+      tocado: true,
+    })
+  }, [producto, variant, talla, area, detalle, cantidad, color, fotos, precioEdit, onPendiente])
+  useEffect(() => () => onPendiente?.('shopify', null), [onPendiente])
 
   function handleVariantChange(variantId) {
     const v = producto.variants.find(v => v.id == variantId)
@@ -337,7 +365,7 @@ function ProductoDetail({ producto, onAdd, onCancel }) {
   )
 }
 
-function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false }) {
+function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false, onPendiente }) {
   const [catalogoProductos, setCatalogoProductos] = useState([])
   const [nombre, setNombre] = useState('')
   // FIX: defaults correctos — cantidad 0, precio 0, área vacía
@@ -385,9 +413,19 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false }) {
 
   const valido = nombre && data.color && data.talla && data.area && parseInt(data.cantidad||0) >= 1 && parseFloat(data.precio||0) > 0 && data.detalle
 
+  useEffect(() => {
+    if (!onPendiente) return
+    onPendiente('personalizado', {
+      item: armarItemPersonalizado(nombre, data, fotos),
+      faltan: faltantesPersonalizado({ nombre, ...data }),
+      tocado: personalizadoTocado({ nombre, ...data }, fotos),
+    })
+  }, [nombre, data, fotos, onPendiente])
+  useEffect(() => () => onPendiente?.('personalizado', null), [onPendiente])
+
   function handleAgregar() {
     if (!valido) return
-    onAdd({ productoNombre: nombre, ...data, cantidad: parseInt(data.cantidad)||1, precioUnit: parseFloat(data.precio)||0, ...fotos, esPersonalizado: true, imagen: null })
+    onAdd(armarItemPersonalizado(nombre, data, fotos))
     // Reset para poder agregar otro producto sin cerrar el form
     setNombre('')
     setData({ color: '', talla: '', cantidad: '', precio: '', area: '', detalle: '' })
