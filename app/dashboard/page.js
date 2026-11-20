@@ -331,6 +331,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           {href:'/dashboard/reporte-pagos',icon:'💰',label:'Reporte de pagos'},
           {href:'/dashboard/impresion',   icon:'🖨️',label:'Imprimir'},
           {href:'/dashboard/despacho',    icon:'🚚',label:'Despachos'},
+          {href:'/dashboard/guias',       icon:'🔎',label:'Consultar guías'},
           {href:'/dashboard/usuarios',    icon:'👥',label:'Usuarios'},
           {href:'/dashboard/producto-nuevo',icon:'🏷️',label:'Subir producto'},
           {href:'/dashboard/promo-seguimiento',icon:'🎁',label:'Promo seguimiento'},

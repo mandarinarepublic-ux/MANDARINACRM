@@ -21,6 +21,8 @@ const NAV_ALL = [
   { href:'/dashboard/link-pago',    label:'Link de pago', icon:'💳', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'], oAcceso:'VENTAS' },
   { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'], oAcceso:'VENTAS' },
   { href:'/dashboard/historial',    label:'Historial',    icon:'📋', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
+  // Consultar guías (20-nov-2026): ¿ya salió?, ¿con qué guía? Solo lectura, con el alcance del Historial.
+  { href:'/dashboard/guias',        label:'Guías',        icon:'🔎', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','DESPACHO'], oAcceso:'VENTAS' },
   { href:'/dashboard/catalogo',     label:'Catálogo',     icon:'🛍️', roles:['ADMIN','VENDEDOR'] },
   { href:'/dashboard/producto-nuevo', label:'Subir producto', icon:'🏷️', roles:['ADMIN'] },
   { href:'/dashboard/cotizacion',   label:'Cotización',   icon:'📄', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'] },
@@ -51,14 +53,14 @@ const NAV_ALL = [
 ]
 
 const ROL_PRIORITY = {
-  VENDEDOR:    ['nuevo-pedido','link-pago','mis-pedidos','lector-qr','historial','cotizacion','catalogo','tablero'],
-  VENDEDOR_YAW:['nuevo-pedido','link-pago','lector-qr','historial','cotizacion','tablero'],
+  VENDEDOR:    ['nuevo-pedido','link-pago','mis-pedidos','lector-qr','historial','guias','cotizacion','catalogo','tablero'],
+  VENDEDOR_YAW:['nuevo-pedido','link-pago','lector-qr','historial','guias','cotizacion','tablero'],
   DISEÑO:      ['produccion','plan-fabrica','tablero','historial','impresion'],
   ESTAMPADO:   ['produccion','plan-fabrica','tablero','historial','impresion'],
   SUBLIMACION: ['produccion','plan-fabrica','tablero','historial','impresion'],
   BORDADO:     ['produccion','plan-fabrica','tablero','historial','impresion'],
   CORTE:       ['corte','plan-fabrica','tablero','historial'],
-  DESPACHO:    ['despacho','plan-fabrica','tablero','historial'],
+  DESPACHO:    ['despacho','guias','plan-fabrica','tablero','historial'],
   ADMIN:       ['tablero','plan-fabrica','nuevo-pedido','link-pago','historial','produccion','despacho','usuarios'],
 }
 
