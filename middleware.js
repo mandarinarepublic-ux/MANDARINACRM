@@ -54,6 +54,8 @@ const RUTAS_PUBLICAS = [
   '/api/publico/pago',
   // '/api/cron/carritos' — carritos sin pagar → chat PENDIENTE en el inbox. Valida CRON_SECRET.
   '/api/cron/carritos',
+  // '/api/cron/pagos' — sincroniza el reporte de pagos con dLocal/Payphone 2 veces al día. Valida CRON_SECRET.
+  '/api/cron/pagos',
   // '/api/fidelidad/canje' — los canjes del club de premios (14-oct-2026). Lo
   //   llama el SERVIDOR de la app del club, que no tiene sesión de persona. Se
   //   defiende SOLA: exige `Authorization: Bearer $FIDELIDAD_TOKEN` (comparación

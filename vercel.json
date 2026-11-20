@@ -8,6 +8,7 @@
     { "path": "/api/shopify/sync", "schedule": "0 11 * * *" },
     { "path": "/api/cron/pauta", "schedule": "0 12 * * *" },
     { "path": "/api/cron/conexiones", "schedule": "20 12,20 * * *" },
-    { "path": "/api/cron/carritos", "schedule": "*/10 * * * *" }
+    { "path": "/api/cron/carritos", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/pagos", "schedule": "20 1,13 * * *" }
   ]
 }
