@@ -37,7 +37,7 @@
       colorTarjeta: '#f26a1b', internacional: false, soloEcuador: false,
     },
     INDSTORE: {
-      abierto: false, param: 'ind',
+      abierto: true, param: 'ind',
       bancos: 'Pichincha · Produbanco · Pacífico · Austro · Bolivariano · Deuna',
       colorTarjeta: '#e5007d', internacional: true, soloEcuador: true,
     },
