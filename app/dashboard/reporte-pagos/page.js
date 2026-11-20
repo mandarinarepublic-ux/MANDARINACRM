@@ -63,18 +63,17 @@ function fmtCelular(c) {
 function Tarjeta({ titulo, valor, sub, tono = 'text-white' }) {
   return (
     <div className="card p-3">
-      <div className="text-[11px] uppercase tracking-wide text-gray-500">{titulo}</div>
-      <div className={`text-lg font-bold ${tono}`}>{valor}</div>
+      <div className="text-xs text-gray-500">{titulo}</div>
+      <div className={`text-xl font-bold tabular-nums ${tono}`}>{valor}</div>
       {sub && <div className="text-[11px] text-gray-500">{sub}</div>}
     </div>
   )
 }
 
-function Desglose({ titulo, filas }) {
-  if (!filas?.length) return null
+function Desglose({ filas }) {
+  if (!filas?.length) return <div className="text-xs text-gray-500 py-2">Sin links en este período.</div>
   return (
-    <div className="card p-3">
-      <div className="text-sm font-semibold text-white mb-2">{titulo}</div>
+    <div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -125,6 +124,8 @@ export default function ReportePagosPage() {
   const [transaccion, setTransaccion] = useState('')
   const [trayendo, setTrayendo] = useState(false)
   const [msgTraer, setMsgTraer] = useState('')
+  const [panelAbierto, setPanelAbierto] = useState(false)
+  const [vista, setVista] = useState('proveedor')
 
   useEffect(() => {
     try {
@@ -193,227 +194,300 @@ export default function ReportePagosPage() {
     .reduce((s, r) => s + (Number(r.transferido) || 0), 0)
   const presetActivo = ps.find(p => p.desde === desde && p.hasta === hasta)?.k
 
+  // Filtros puestos (distintos del valor por defecto): se ven SIEMPRE como chips,
+  // aunque el panel esté cerrado. Un reporte filtrado se ve igual que uno completo.
+  const nombreVendedor = (id) => id === 'SIN_VENDEDOR' ? 'Sin vendedor' : ((datos?.vendedores || []).find(v => String(v.id) === String(id))?.nombre || id)
+  const chips = [
+    por !== 'creado' && { clave: 'por', txt: 'Por fecha de pago', quitar: () => setPor('creado') },
+    proveedor && { clave: 'proveedor', txt: NOMBRE_PROV[proveedor] || proveedor, quitar: () => setProveedor('') },
+    tienda && { clave: 'tienda', txt: tienda === 'SIN_TIENDA' ? 'Sin tienda' : (NOMBRE_TIENDA[tienda] || tienda), quitar: () => setTienda('') },
+    vendedor && { clave: 'vendedor', txt: nombreVendedor(vendedor), quitar: () => setVendedor('') },
+    estado && { clave: 'estado', txt: (ESTADO[estado]?.txt || estado).replace(/^\S+\s/, ''), quitar: () => setEstado('') },
+  ].filter(Boolean)
+  const limpiarFiltros = () => { setPor('creado'); setProveedor(''); setTienda(''); setVendedor(''); setEstado('') }
+  const fDia = (d) => new Date(`${d}T12:00:00Z`).toLocaleDateString('es-EC', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+  const rangoTxt = desde === hasta ? fDia(desde) : `${fDia(desde)} – ${fDia(hasta)}`
+  const VISTAS = [{ k: 'proveedor', txt: 'Pasarela' }, { k: 'tienda', txt: 'Tienda' }, { k: 'vendedor', txt: 'Vendedor' }]
+
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex items-start justify-between gap-3 mb-1">
-        <h1 className="text-xl font-bold text-white">💰 Reporte de pagos</h1>
+    <div className="max-w-5xl mx-auto pb-10">
+      {/* Cabecera */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-white">💰 Reporte de pagos</h1>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {ultimaSync ? `Consultado a las pasarelas ${fmtFecha(ultimaSync.en)}. ` : sincronizando ? 'Consultando a las pasarelas… ' : ''}
+            Se actualiza solo a las 8:20 y 20:20.
+          </p>
+        </div>
         <button onClick={sincronizar} disabled={sincronizando} className="btn-secondary text-xs px-3 py-2 shrink-0 disabled:opacity-50">
-          {sincronizando ? '⏳ Consultando pasarelas…' : '🔄 Actualizar'}
+          {sincronizando ? '⏳ Consultando…' : '🔄 Actualizar'}
         </button>
       </div>
-      <p className="text-gray-500 text-sm mb-4">Links de Payphone y dLocal Go: cuáles se pagaron, y cuánto quedó después de comisiones.</p>
 
-      {/* Tablero: el dinero en cada pasarela, de TODA la historia (no lo tocan los filtros). */}
-      {datos?.tablero && (
-        <div className="mb-4">
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="card p-4 border-sky-500/30">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-white">dLocal Go</div>
-                <div className="text-[11px] text-gray-500">{datos.tablero.dlocal.pagos} pagos</div>
-              </div>
-              {datos.tablero.dlocal_conectado ? (
-                <>
-                  <div className="text-[11px] uppercase tracking-wide text-gray-500 mt-2">Disponible para retirar</div>
-                  <div className="text-3xl font-bold text-emerald-300">{money(datos.tablero.dlocal.disponible)}</div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    + {money(datos.tablero.dlocal.por_liberar)} por liberar (cobrado en los últimos 7 días)
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    Neto cobrado {money(datos.tablero.dlocal.neto_total)} − retirado {money(datos.tablero.dlocal.retirado)}
-                    {datos.tablero.dlocal.retiros_en_curso > 0 ? ` (${money(datos.tablero.dlocal.retiros_en_curso)} en camino al banco)` : ''}
-                  </div>
-                </>
-              ) : (
-                <div className="text-sm text-amber-300 mt-2">Sin conectar: faltan las llaves de dLocal en el CRM.</div>
-              )}
-            </div>
-            <div className="card p-4 border-emerald-500/30">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-white">Payphone</div>
-                <div className="text-[11px] text-gray-500">{datos.tablero.payphone.pagos} pagos</div>
-              </div>
-              <div className="text-[11px] uppercase tracking-wide text-gray-500 mt-2">Neto cobrado (estimado)</div>
-              <div className="text-3xl font-bold text-emerald-300">{money(datos.tablero.payphone.neto)}</div>
-              <div className="text-xs text-gray-400 mt-1">
-                {money(datos.tablero.payphone.cobrado)} cobrado · hoy {money(datos.tablero.payphone.hoy)}
-              </div>
-              <div className="text-[11px] text-gray-500 mt-1">
-                Payphone no informa cuánto ya te depositó al banco: este valor no lo resta.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Filtros */}
-      <div className="card p-3 mb-4 space-y-3">
-        <div className="flex flex-wrap gap-2">
-          {ps.map(p => (
-            <button key={p.k} onClick={() => { setDesde(p.desde); setHasta(p.hasta) }}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${presetActivo === p.k
-                ? 'bg-mandarina-500/20 border-mandarina-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-              {p.txt}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <div><label className="label">Desde</label><input type="date" className="input" value={desde} max={hasta} onChange={e => e.target.value && setDesde(e.target.value)} /></div>
-          <div><label className="label">Hasta</label><input type="date" className="input" value={hasta} min={desde} onChange={e => e.target.value && setHasta(e.target.value)} /></div>
-          <div>
-            <label className="label">Fecha de</label>
-            <select className="input" value={por} onChange={e => setPor(e.target.value)}>
-              <option value="creado">Envío del link</option>
-              <option value="pagado">Pago</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Pasarela</label>
-            <select className="input" value={proveedor} onChange={e => setProveedor(e.target.value)}>
-              <option value="">Todas</option>
-              <option value="PAYPHONE">Payphone</option>
-              <option value="DLOCAL">dLocal Go</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Tienda</label>
-            <select className="input" value={tienda} onChange={e => setTienda(e.target.value)}>
-              <option value="">Todas</option>
-              <option value="MANDARINA">Mandarina</option>
-              <option value="INDSTORE">IND STORE</option>
-              <option value="SIN_TIENDA">Sin tienda</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Vendedor</label>
-            <select className="input" value={vendedor} onChange={e => setVendedor(e.target.value)}>
-              <option value="">Todos</option>
-              {(datos?.vendedores || []).map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}
-              <option value="SIN_VENDEDOR">Sin vendedor</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Estado</label>
-            <select className="input" value={estado} onChange={e => setEstado(e.target.value)}>
-              <option value="">Todos</option>
-              <option value="PAGADO">Pagados</option>
-              <option value="PENDIENTE">Pendientes</option>
-              <option value="EXPIRADO">Vencidos</option>
-              <option value="RECHAZADO">Rechazados</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {error && <div className="text-sm text-red-400 mb-3">⚠️ {error}</div>}
+      {error && <div className="mt-3 text-sm text-red-400">⚠️ {error}</div>}
       {avisos.length > 0 && (
-        <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200 space-y-1">
+        <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200 space-y-1">
           {avisos.map(a => <div key={a}>⚠️ {a}</div>)}
         </div>
       )}
 
+      {/* ── 1. Dinero en las pasarelas: TODA la historia, los filtros no lo tocan ── */}
+      {datos?.tablero && (
+        <section className="mt-5">
+          <h2 className="text-sm font-semibold text-gray-200">Dinero en las pasarelas</h2>
+          <p className="text-xs text-gray-500 mb-2">Desde el primer cobro. Los filtros de abajo no cambian estas cifras.</p>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-sky-500/30 bg-sky-500/5 p-4">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-semibold text-sky-200">dLocal Go</span>
+                <span className="text-xs text-gray-500">{datos.tablero.dlocal.pagos} cobros</span>
+              </div>
+              {datos.tablero.dlocal_conectado ? (
+                <>
+                  <div className="mt-2 text-3xl font-bold text-white tabular-nums">{money(datos.tablero.dlocal.disponible)}</div>
+                  <div className="text-xs text-gray-400">disponible para retirar</div>
+                  <div className="mt-3 pt-3 border-t border-sky-500/20 grid grid-cols-2 gap-2 text-xs">
+                    <div><div className="text-gray-500">Por liberar (7 días)</div><div className="text-gray-200 tabular-nums">{money(datos.tablero.dlocal.por_liberar)}</div></div>
+                    <div><div className="text-gray-500">Ya retirado al banco</div><div className="text-gray-200 tabular-nums">{money(datos.tablero.dlocal.retirado)}</div></div>
+                  </div>
+                  {datos.tablero.dlocal.retiros_en_curso > 0 && (
+                    <div className="mt-2 text-xs text-sky-300">{money(datos.tablero.dlocal.retiros_en_curso)} en camino al banco</div>
+                  )}
+                </>
+              ) : (
+                <div className="mt-2 text-sm text-amber-300">Sin conectar: faltan las llaves de dLocal en el CRM.</div>
+              )}
+            </div>
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-semibold text-emerald-200">Payphone</span>
+                <span className="text-xs text-gray-500">{datos.tablero.payphone.pagos} cobros</span>
+              </div>
+              <div className="mt-2 text-3xl font-bold text-white tabular-nums">{money(datos.tablero.payphone.neto)}</div>
+              <div className="text-xs text-gray-400">neto cobrado, sin restar depósitos</div>
+              <div className="mt-3 pt-3 border-t border-emerald-500/20 grid grid-cols-2 gap-2 text-xs">
+                <div><div className="text-gray-500">Cobrado</div><div className="text-gray-200 tabular-nums">{money(datos.tablero.payphone.cobrado)}</div></div>
+                <div><div className="text-gray-500">Hoy</div><div className="text-gray-200 tabular-nums">{money(datos.tablero.payphone.hoy)}</div></div>
+              </div>
+              <div className="mt-2 text-[11px] text-gray-500">Payphone no informa sus depósitos al banco; la comisión es estimada (5,75 %).</div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── 2. Período y filtros: UNA fila; el resto se despliega ── */}
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold text-gray-200 mb-2">Links del período</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-xl border border-gray-700 overflow-hidden" role="group" aria-label="Período">
+            {ps.map(p => (
+              <button key={p.k} onClick={() => { setDesde(p.desde); setHasta(p.hasta) }} aria-pressed={presetActivo === p.k}
+                className={`px-3 py-2 text-xs font-semibold border-r border-gray-700 last:border-r-0 ${presetActivo === p.k
+                  ? 'bg-mandarina-500/20 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
+                {p.txt}
+              </button>
+            ))}
+          </div>
+          <span className="text-sm text-gray-300 tabular-nums">{rangoTxt}</span>
+          <button onClick={() => setPanelAbierto(a => !a)} aria-expanded={panelAbierto}
+            className={`ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold ${chips.length
+              ? 'border-mandarina-500 text-mandarina-300 bg-mandarina-500/10' : 'border-gray-700 text-gray-300 hover:text-white'}`}>
+            ⚙ Filtros
+            {chips.length > 0 && <span className="bg-mandarina-500 text-white rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[11px]">{chips.length}</span>}
+            <span className={`opacity-60 transition-transform ${panelAbierto ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+        </div>
+
+        {chips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {chips.map(c => (
+              <button key={c.clave} onClick={c.quitar} title={`Quitar ${c.txt}`}
+                className="flex items-center gap-1 text-xs bg-mandarina-500/10 border border-mandarina-500/40 text-mandarina-300 rounded-lg pl-2 pr-1.5 py-1 hover:bg-mandarina-500/20">
+                {c.txt} <span className="opacity-70">×</span>
+              </button>
+            ))}
+            <button onClick={limpiarFiltros} className="text-xs text-gray-500 hover:text-white px-1">Quitar todos</button>
+          </div>
+        )}
+
+        {panelAbierto && (
+          <div className="mt-2 rounded-xl border border-gray-800 bg-gray-900/60 p-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div><label className="label">Desde</label><input type="date" className="input" value={desde} max={hasta} onChange={e => e.target.value && setDesde(e.target.value)} /></div>
+            <div><label className="label">Hasta</label><input type="date" className="input" value={hasta} min={desde} onChange={e => e.target.value && setHasta(e.target.value)} /></div>
+            <div>
+              <label className="label">Contar por fecha de</label>
+              <select className="input" value={por} onChange={e => setPor(e.target.value)}>
+                <option value="creado">Envío del link</option>
+                <option value="pagado">Pago</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Pasarela</label>
+              <select className="input" value={proveedor} onChange={e => setProveedor(e.target.value)}>
+                <option value="">Todas</option>
+                <option value="PAYPHONE">Payphone</option>
+                <option value="DLOCAL">dLocal Go</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Tienda</label>
+              <select className="input" value={tienda} onChange={e => setTienda(e.target.value)}>
+                <option value="">Todas</option>
+                <option value="MANDARINA">Mandarina</option>
+                <option value="INDSTORE">IND STORE</option>
+                <option value="SIN_TIENDA">Sin tienda</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Vendedor</label>
+              <select className="input" value={vendedor} onChange={e => setVendedor(e.target.value)}>
+                <option value="">Todos</option>
+                {(datos?.vendedores || []).map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}
+                <option value="SIN_VENDEDOR">Sin vendedor</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Estado</label>
+              <select className="input" value={estado} onChange={e => setEstado(e.target.value)}>
+                <option value="">Todos</option>
+                <option value="PAGADO">Pagados</option>
+                <option value="PENDIENTE">Pendientes</option>
+                <option value="EXPIRADO">Vencidos</option>
+                <option value="RECHAZADO">Rechazados</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </section>
+
       {!datos ? (
-        <div className="text-sm text-gray-500">{cargando || sincronizando ? 'Cargando…' : ''}</div>
+        <div className="mt-4 text-sm text-gray-500">{cargando || sincronizando ? 'Cargando…' : ''}</div>
       ) : (
         <>
-          {/* Balance */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
-            <Tarjeta titulo="Links enviados" valor={t.links} sub={`${money(t.generado)} en total`} />
-            <Tarjeta titulo="Pagados" valor={`${t.pagados} · ${t.tasa_pago}%`} sub={`${t.pendientes} pendientes · ${t.expirados} vencidos · ${t.rechazados} rechazados`} tono="text-emerald-300" />
-            <Tarjeta titulo="Cobrado" valor={money(t.cobrado)} sub={`${money(t.monto_pendiente)} todavía pendiente`} />
-            <Tarjeta titulo="Comisión" valor={money(t.comision)} sub={t.comision_estimada ? '* Payphone estimado al 5,75 %' : 'real de la pasarela'} tono="text-red-300" />
-            <Tarjeta titulo="Neto" valor={money(t.neto)} sub="lo que llega a la cuenta" tono="text-emerald-300" />
-            {datos.retiros && (
-              <Tarjeta titulo="Retirado de dLocal" valor={money(retirado)} sub={`${datos.retiros.length} retiros en el rango`} />
-            )}
+          {/* ── 3. Números del período ── */}
+          <div className={`mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 ${cargando ? 'opacity-60' : ''}`}>
+            <Tarjeta titulo="Links enviados" valor={t.links} sub={`${t.pagados} pagados (${t.tasa_pago} %)`} />
+            <Tarjeta titulo="Cobrado" valor={money(t.cobrado)}
+              sub={t.monto_pendiente > 0 ? `${money(t.monto_pendiente)} sin pagar aún` : `${t.pendientes} pendientes`} />
+            <Tarjeta titulo="Comisión" valor={money(t.comision)} tono="text-red-300"
+              sub={t.comision_estimada ? 'Payphone estimada' : 'real de la pasarela'} />
+            <Tarjeta titulo="Neto" valor={money(t.neto)} tono="text-emerald-300" sub="lo que llega a la cuenta" />
           </div>
-          {ultimaSync && (
-            <p className="text-[11px] text-gray-600 mb-4">
-              Consultado {fmtFecha(ultimaSync.en)}
-              {ultimaSync.dlocal ? ` · dLocal: ${ultimaSync.dlocal.leidos} pagos (${ultimaSync.dlocal.nuevos} nuevos, ${ultimaSync.dlocal.actualizados} cambiaron)` : ''}
-              {` · Payphone: ${ultimaSync.payphone?.revisados ?? 0} pendientes revisados`}
-              {ultimaSync.payphone?.lote ? `, ${ultimaSync.payphone.lote.aprobados} aprobados de los últimos 3 días (${ultimaSync.payphone.lote.nuevos} nuevos)` : ''}
+          {(t.expirados > 0 || t.rechazados > 0) && (
+            <p className="mt-1.5 text-xs text-gray-500">En el período: {t.expirados} vencidos y {t.rechazados} rechazados.</p>
+          )}
+
+          {/* Desglose: una sola tabla, con pestañas */}
+          <div className="mt-5 card p-3">
+            <div className="flex items-center gap-1 mb-2" role="tablist">
+              <span className="text-xs text-gray-500 mr-1">Ver por</span>
+              {VISTAS.map(v => (
+                <button key={v.k} role="tab" aria-selected={vista === v.k} onClick={() => setVista(v.k)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${vista === v.k ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+                  {v.txt}
+                </button>
+              ))}
+            </div>
+            <Desglose filas={datos.resumen[vista]} />
+          </div>
+
+          {datos.tiendaWeb && datos.tiendaWeb.pagos > 0 && !proveedor.startsWith('D') && (
+            <p className="mt-2 text-xs text-gray-400">
+              Además, {datos.tiendaWeb.pagos} pagos con tarjeta dentro de la tienda web (Payphone, no son links): {money(datos.tiendaWeb.cobrado)} cobrado, {money(datos.tiendaWeb.neto)} neto.
             </p>
           )}
 
-          <div className="grid md:grid-cols-2 gap-3 mb-4">
-            <Desglose titulo="Por pasarela" filas={datos.resumen.proveedor} />
-            <Desglose titulo="Por tienda" filas={datos.resumen.tienda} />
-          </div>
-          <div className="mb-4"><Desglose titulo="Por vendedor" filas={datos.resumen.vendedor} /></div>
-
-          {datos.tiendaWeb && datos.tiendaWeb.pagos > 0 && !proveedor.startsWith('D') && (
-            <div className="card p-3 mb-4 text-xs text-gray-400">
-              <span className="text-white font-semibold">Aparte: pagos con tarjeta dentro de la tienda web</span> (Payphone, no son links):
-              {' '}{datos.tiendaWeb.pagos} pagos · {money(datos.tiendaWeb.cobrado)} cobrado · {money(datos.tiendaWeb.comision)}* comisión · {money(datos.tiendaWeb.neto)} neto
-            </div>
-          )}
-
-          {datos.retiros?.length > 0 && (
-            <div className="card p-3 mb-4">
-              <div className="text-sm font-semibold text-white mb-2">Retiros de dLocal al banco</div>
-              <div className="space-y-1 text-xs">
-                {datos.retiros.map(r => (
-                  <div key={r.id} className="flex justify-between gap-2 text-gray-300 border-t border-gray-800 pt-1">
-                    <span>{r.fecha ? String(r.fecha).slice(0, 10) : ''} · {r.banco || 'banco'} · <span className="text-gray-500">{r.estado}</span></span>
-                    <span>{money(r.transferido)} <span className="text-gray-500">(comisión {money(r.comision)})</span></span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <form onSubmit={traerPayphone} className="card p-3 mb-4">
-            <div className="text-sm font-semibold text-white">¿Un pago de Payphone que no aparece?</div>
-            <div className="text-xs text-gray-500 mb-2">
-              Los aprobados de los últimos 3 días entran solos. Para uno más viejo, copia su # de transacción del panel de Payphone.
-            </div>
-            <div className="flex gap-2">
-              <input className="input flex-1" inputMode="numeric" placeholder="# de transacción, ej. 93507187"
-                value={transaccion} onChange={e => setTransaccion(e.target.value)} />
-              <button type="submit" disabled={trayendo || !transaccion.trim()} className="btn-primary px-4 disabled:opacity-50">
-                {trayendo ? '⏳' : 'Traer'}
-              </button>
-            </div>
-            {msgTraer && <div className="text-xs mt-2 text-gray-300">{msgTraer}</div>}
-          </form>
-
           {/* Detalle */}
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-white font-semibold">Detalle · {datos.filas.length} links</h2>
+          <div className="mt-6 flex items-baseline justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-200">Detalle <span className="text-gray-500 font-normal">· {datos.filas.length} links</span></h2>
             {cargando && <span className="text-xs text-gray-500">⏳</span>}
           </div>
           {datos.filas.length === 0 ? (
-            <div className="text-sm text-gray-500">No hay links en este rango con estos filtros.</div>
+            <div className="card p-4 text-sm text-gray-400">No hay links en este período con estos filtros. Prueba otro rango o quita filtros.</div>
           ) : (
-            <div className="space-y-2">
-              {datos.filas.map(l => {
-                const est = ESTADO[l.estado] || ESTADO.PENDIENTE
-                return (
-                  <div key={l.id} className="card p-3 flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-white font-semibold">
-                        {money(l.valor)} · {fmtCelular(l.celular)}
-                        <span className="ml-2 text-xs font-normal text-gray-500">{NOMBRE_PROV[l.proveedor] || l.proveedor}</span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {fmtFecha(l.creado_en)} · {NOMBRE_TIENDA[l.tienda] || 'Sin tienda'} · {l.vendedor || (['DLOCAL', 'PAYPHONE'].includes(l.origen) ? 'histórico' : 'sin vendedor')}
-                        {' · '}{NOMBRE_ORIGEN[l.origen] || l.origen}
-                      </div>
-                      {l.estado === 'PAGADO' && (
-                        <div className="text-xs text-gray-400">
-                          Pagó {fmtFecha(l.pagado_en)}{l.pagador ? ` · ${l.pagador}` : ''}{l.tarjeta ? ` · ${l.tarjeta}` : ''}
-                          {l.neto != null && <> · neto <span className="text-emerald-300">{money(l.neto)}</span>{l.comision_estimada ? '*' : ''}</>}
-                        </div>
-                      )}
-                    </div>
-                    <span className={`shrink-0 text-xs font-semibold px-2 py-1 rounded-lg border ${est.cls}`}>{est.txt}</span>
-                  </div>
-                )
-              })}
+            <div className="card overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-gray-500 text-left border-b border-gray-800">
+                    <th className="py-2 px-3 font-medium">Enviado</th>
+                    <th className="py-2 px-3 font-medium">Cliente</th>
+                    <th className="py-2 px-3 font-medium hidden md:table-cell">Tienda y vendedor</th>
+                    <th className="py-2 px-3 font-medium hidden sm:table-cell">Pasarela</th>
+                    <th className="py-2 px-3 font-medium text-right">Valor</th>
+                    <th className="py-2 px-3 font-medium text-right">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {datos.filas.map(l => {
+                    const est = ESTADO[l.estado] || ESTADO.PENDIENTE
+                    return (
+                      <tr key={l.id} className="border-t border-gray-800/70 text-gray-300 align-top">
+                        <td className="py-2 px-3 whitespace-nowrap text-gray-400">{fmtFecha(l.creado_en)}</td>
+                        <td className="py-2 px-3">
+                          <div className="text-white whitespace-nowrap">{fmtCelular(l.celular)}</div>
+                          {l.estado === 'PAGADO' && (
+                            <div className="text-gray-500">Pagó {fmtFecha(l.pagado_en)}{l.tarjeta ? `, ${l.tarjeta}` : ''}</div>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 hidden md:table-cell">
+                          <div>{NOMBRE_TIENDA[l.tienda] || 'Sin tienda'}</div>
+                          <div className="text-gray-500">{l.vendedor || (['DLOCAL', 'PAYPHONE'].includes(l.origen) ? 'histórico' : 'sin vendedor')}, {NOMBRE_ORIGEN[l.origen] || l.origen}</div>
+                        </td>
+                        <td className="py-2 px-3 hidden sm:table-cell whitespace-nowrap">{NOMBRE_PROV[l.proveedor] || l.proveedor}</td>
+                        <td className="py-2 px-3 text-right whitespace-nowrap tabular-nums">
+                          <div className="text-white font-semibold">{money(l.valor)}</div>
+                          {l.estado === 'PAGADO' && l.neto != null && (
+                            <div className="text-emerald-300">neto {money(l.neto)}{l.comision_estimada ? '*' : ''}</div>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span className={`inline-block whitespace-nowrap font-semibold px-2 py-0.5 rounded-lg border ${est.cls}`}>{est.txt}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
-          <p className="text-xs text-gray-600 mt-3">
+
+          {/* Herramientas: plegadas, se usan poco */}
+          <div className="mt-6 space-y-2">
+            {datos.retiros?.length > 0 && (
+              <details className="card p-3">
+                <summary className="cursor-pointer text-sm text-gray-300 select-none">
+                  Retiros de dLocal al banco en el período <span className="text-gray-500">({datos.retiros.length}, {money(retirado)})</span>
+                </summary>
+                <div className="mt-2 space-y-1 text-xs">
+                  {datos.retiros.map(r => (
+                    <div key={r.id} className="flex justify-between gap-2 text-gray-300 border-t border-gray-800 pt-1">
+                      <span>{r.fecha ? String(r.fecha).slice(0, 10) : ''}, {r.banco || 'banco'} <span className="text-gray-500">({r.estado})</span></span>
+                      <span className="tabular-nums">{money(r.transferido)} <span className="text-gray-500">(comisión {money(r.comision)})</span></span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+            <details className="card p-3" open={!!msgTraer}>
+              <summary className="cursor-pointer text-sm text-gray-300 select-none">¿Falta un pago de Payphone?</summary>
+              <form onSubmit={traerPayphone} className="mt-2">
+                <div className="text-xs text-gray-500 mb-2">
+                  Los aprobados de los últimos 3 días entran solos. Para uno más viejo, copia su número de transacción del panel de Payphone.
+                </div>
+                <div className="flex gap-2">
+                  <input className="input flex-1" inputMode="numeric" placeholder="Número de transacción, ej. 93507187"
+                    value={transaccion} onChange={e => setTransaccion(e.target.value)} />
+                  <button type="submit" disabled={trayendo || !transaccion.trim()} className="btn-primary px-4 disabled:opacity-50">
+                    {trayendo ? '⏳' : 'Traer pago'}
+                  </button>
+                </div>
+                {msgTraer && <div className="text-xs mt-2 text-gray-300">{msgTraer}</div>}
+              </form>
+            </details>
+          </div>
+
+          <p className="text-xs text-gray-600 mt-4">
             * Payphone no informa su comisión por API: se calcula al 5,75 % (5 % + IVA, medido con el primer cobro real).
             Un link de Payphone sin pagar a las 48 h cuenta como vencido. dLocal da la comisión y el neto reales.
           </p>
