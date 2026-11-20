@@ -126,6 +126,14 @@ export default function ReportePagosPage() {
   const [msgTraer, setMsgTraer] = useState('')
   const [panelAbierto, setPanelAbierto] = useState(false)
   const [vista, setVista] = useState('proveedor')
+  // Depósitos de Payphone anotados a mano (19-nov-2026)
+  const [formDeposito, setFormDeposito] = useState(false)
+  const [depFecha, setDepFecha] = useState(() => ymdEcuador())
+  const [depMonto, setDepMonto] = useState('')
+  const [depNota, setDepNota] = useState('')
+  const [guardandoDep, setGuardandoDep] = useState(false)
+  const [msgDeposito, setMsgDeposito] = useState('')
+  const [borrandoDep, setBorrandoDep] = useState(null)
 
   useEffect(() => {
     try {
@@ -179,6 +187,37 @@ export default function ReportePagosPage() {
       await cargar()
     } catch (e) { setMsgTraer(`⚠️ ${e.message}`) } finally { setTrayendo(false) }
   }, [trayendo, transaccion, cargar])
+
+  const guardarDeposito = useCallback(async (e) => {
+    e?.preventDefault()
+    if (guardandoDep) return
+    setGuardandoDep(true); setMsgDeposito('')
+    try {
+      const r = await fetch('/api/reporte-pagos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'deposito_crear', fecha: depFecha, monto: depMonto, nota: depNota }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo guardar el depósito')
+      setMsgDeposito(`✅ Depósito de ${money(d.deposito.monto)} guardado`)
+      setFormDeposito(false); setDepMonto(''); setDepNota('')
+      await cargar()
+    } catch (e) { setMsgDeposito(`⚠️ ${e.message}`) } finally { setGuardandoDep(false) }
+  }, [guardandoDep, depFecha, depMonto, depNota, cargar])
+
+  const borrarDeposito = useCallback(async (id) => {
+    setMsgDeposito('')
+    try {
+      const r = await fetch('/api/reporte-pagos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'deposito_borrar', id }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo borrar el depósito')
+      setMsgDeposito('Depósito borrado')
+      await cargar()
+    } catch (e) { setMsgDeposito(`⚠️ ${e.message}`) } finally { setBorrandoDep(null) }
+  }, [cargar])
 
   // Al abrir: sincroniza una vez. Después, cambiar filtros solo relee la base.
   const [primera, setPrimera] = useState(true)
@@ -264,13 +303,61 @@ export default function ReportePagosPage() {
                 <span className="text-sm font-semibold text-emerald-200">Payphone</span>
                 <span className="text-xs text-gray-500">{datos.tablero.payphone.pagos} cobros</span>
               </div>
-              <div className="mt-2 text-3xl font-bold text-white tabular-nums">{money(datos.tablero.payphone.neto)}</div>
-              <div className="text-xs text-gray-400">neto cobrado, sin restar depósitos</div>
-              <div className="mt-3 pt-3 border-t border-emerald-500/20 grid grid-cols-2 gap-2 text-xs">
-                <div><div className="text-gray-500">Cobrado</div><div className="text-gray-200 tabular-nums">{money(datos.tablero.payphone.cobrado)}</div></div>
+              <div className="mt-2 text-3xl font-bold text-white tabular-nums">{money(datos.tablero.payphone.saldo ?? datos.tablero.payphone.neto)}</div>
+              <div className="text-xs text-gray-400">
+                {(datos.tablero.payphone.depositos?.length || 0) > 0 ? 'queda en Payphone, por depositar' : 'neto cobrado; anota los depósitos para ver lo que queda'}
+              </div>
+              <div className="mt-3 pt-3 border-t border-emerald-500/20 grid grid-cols-3 gap-2 text-xs">
+                <div><div className="text-gray-500">Neto cobrado</div><div className="text-gray-200 tabular-nums">{money(datos.tablero.payphone.neto)}</div></div>
+                <div><div className="text-gray-500">Depositado</div><div className="text-gray-200 tabular-nums">{money(datos.tablero.payphone.depositado || 0)}</div></div>
                 <div><div className="text-gray-500">Hoy</div><div className="text-gray-200 tabular-nums">{money(datos.tablero.payphone.hoy)}</div></div>
               </div>
-              <div className="mt-2 text-[11px] text-gray-500">Payphone no informa sus depósitos al banco; la comisión es estimada (5,75 %).</div>
+
+              {!formDeposito ? (
+                <button onClick={() => { setFormDeposito(true); setMsgDeposito('') }}
+                  className="mt-3 text-xs font-semibold text-emerald-300 hover:text-emerald-200 border border-emerald-500/40 rounded-lg px-3 py-1.5">
+                  + Anotar depósito
+                </button>
+              ) : (
+                <form onSubmit={guardarDeposito} className="mt-3 rounded-xl border border-emerald-500/30 bg-gray-950/40 p-3 space-y-2">
+                  <div className="text-xs text-gray-300">¿Cuánto depositó Payphone a tu banco?</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="label">Fecha</label><input type="date" className="input" value={depFecha} max={ymdEcuador()} onChange={e => setDepFecha(e.target.value)} /></div>
+                    <div><label className="label">Monto</label><input className="input" inputMode="decimal" placeholder="338,12" value={depMonto} onChange={e => setDepMonto(e.target.value)} /></div>
+                  </div>
+                  <div><label className="label">Nota (opcional)</label><input className="input" placeholder="Banco, número de comprobante…" value={depNota} onChange={e => setDepNota(e.target.value)} /></div>
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={guardandoDep} className="btn-primary text-xs px-3 py-2 disabled:opacity-50">{guardandoDep ? '⏳ Guardando…' : 'Guardar depósito'}</button>
+                    <button type="button" onClick={() => setFormDeposito(false)} className="btn-secondary text-xs px-3 py-2">Cancelar</button>
+                  </div>
+                </form>
+              )}
+              {msgDeposito && <div className="mt-2 text-xs text-gray-300">{msgDeposito}</div>}
+
+              {(datos.tablero.payphone.depositos?.length || 0) > 0 && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-xs text-gray-400 select-none">Depósitos anotados ({datos.tablero.payphone.depositos.length})</summary>
+                  <div className="mt-2 space-y-1 text-xs">
+                    {datos.tablero.payphone.depositos.map(d => (
+                      <div key={d.id} className="flex items-center justify-between gap-2 border-t border-emerald-500/10 pt-1 text-gray-300">
+                        <span className="min-w-0 truncate">{fDia(d.fecha)} {d.nota ? <span className="text-gray-500">· {d.nota}</span> : null}</span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span className="tabular-nums">{money(d.monto)}</span>
+                          {borrandoDep === d.id ? (
+                            <>
+                              <button onClick={() => borrarDeposito(d.id)} className="text-red-300 hover:text-red-200 font-semibold">Sí, borrar</button>
+                              <button onClick={() => setBorrandoDep(null)} className="text-gray-500 hover:text-white">No</button>
+                            </>
+                          ) : (
+                            <button onClick={() => setBorrandoDep(d.id)} title="Borrar este depósito" aria-label="Borrar este depósito" className="text-gray-500 hover:text-red-300">✕</button>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+              <div className="mt-2 text-[11px] text-gray-500">Payphone no informa sus depósitos: se anotan a mano. La comisión es estimada (5,75 %).</div>
             </div>
           </div>
         </section>

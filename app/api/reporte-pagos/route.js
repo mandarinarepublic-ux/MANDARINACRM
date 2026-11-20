@@ -2,6 +2,7 @@ import { requireAdmin } from '@/lib/auth'
 import { sincronizarPasarelas, INICIO_HISTORIA } from '@/lib/sincronizarPagos'
 import { getSupabase } from '@/lib/supabase'
 import { listUsuarios } from '@/lib/db/usuarios'
+import { listarDepositos, crearDeposito, borrarDeposito } from '@/lib/db/depositosPasarela'
 import {
   listarLinksRango, guardarPagosExternos,
 } from '@/lib/db/linksPago'
@@ -9,7 +10,7 @@ import { ventaPayphone } from '@/lib/payphone'
 import { dlocalConfigurado, listarRetirosDlocal } from '@/lib/dlocal'
 import {
   rangoEcuador, filtrar, resumen, filaRetiroDlocal, estimarPayphone, estadoEfectivo,
-  filaDesdeVentaPayphone, normalizarTransaccion, hoyEcuador, saldos,
+  filaDesdeVentaPayphone, normalizarTransaccion, hoyEcuador, saldos, validarDeposito, saldoPayphone,
 } from '@/lib/reportePagos'
 
 // Desde cuándo se cuenta "todo" para el tablero de saldos (antes no había links).
@@ -115,8 +116,16 @@ export async function GET(req) {
       try { retirosTodos = (await listarRetirosDlocal(INICIO_HISTORIA, hoyEcuador())).items.map(filaRetiroDlocal) }
       catch (e) { avisos.push(`dLocal (retiros para el saldo): ${e.message}`) }
     }
+    const base = saldos({ filas: pagadas, retiros: retirosTodos, tiendaWeb: await tiendaWebTotal({ desde: HISTORIA_ISO, hasta: manana }) })
+    // Depósitos de Payphone anotados a mano (su API no los da): saldo = neto − depósitos.
+    let depositos = []
+    try { depositos = await listarDepositos('PAYPHONE') }
+    catch (e) { avisos.push(`Depósitos de Payphone: ${e.message}`) }
+    const pp = saldoPayphone(base.payphone.neto, depositos)
     tablero = {
-      ...saldos({ filas: pagadas, retiros: retirosTodos, tiendaWeb: await tiendaWebTotal({ desde: HISTORIA_ISO, hasta: manana }) }),
+      ...base,
+      payphone: { ...base.payphone, depositado: pp.depositado, saldo: pp.saldo, depositos },
+      total: Math.round((base.dlocal.saldo + pp.saldo) * 100) / 100,
       dlocal_conectado: dlocalConfigurado(),
     }
   } catch (e) { avisos.push(`Saldos: ${e.message}`) }
@@ -131,6 +140,32 @@ export async function POST(req) {
   if (!auth.ok) return Response.json({ ok: false, error: auth.error }, { status: auth.status })
 
   const body = await req.json().catch(() => ({}))
+
+  // Depósitos de Payphone al banco, anotados a mano (19-nov-2026).
+  if (body?.accion === 'deposito_crear') {
+    const v = validarDeposito(body)
+    if (!v.ok) return Response.json({ ok: false, error: v.error }, { status: 400 })
+    try {
+      const d = await crearDeposito({
+        ...v.datos, proveedor: 'PAYPHONE',
+        usuarioId: auth.usuario?.USUARIO_ID, usuarioNombre: auth.usuario?.NOMBRE,
+      })
+      return Response.json({ ok: true, deposito: d })
+    } catch (e) {
+      return Response.json({ ok: false, error: e.message }, { status: 500 })
+    }
+  }
+  if (body?.accion === 'deposito_borrar') {
+    const id = Number(body?.id)
+    if (!Number.isSafeInteger(id) || id <= 0) return Response.json({ ok: false, error: 'Depósito no válido' }, { status: 400 })
+    try {
+      const borrado = await borrarDeposito(id, auth.usuario?.USUARIO_ID)
+      if (!borrado) return Response.json({ ok: false, error: 'Ese depósito ya no existe' }, { status: 404 })
+      return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ ok: false, error: e.message }, { status: 500 })
+    }
+  }
 
   // Traer UN pago de Payphone por su # de transacción (el que se ve en el panel).
   // Para los links que salieron antes de que los inbox los registraran.

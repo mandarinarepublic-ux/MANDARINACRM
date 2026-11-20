@@ -211,3 +211,22 @@ test('tablero vacío no revienta', () => {
   assert.equal(s.total, 0)
   assert.equal(s.dlocal.disponible, 0)
 })
+
+// ── Depósitos de Payphone (19-nov-2026) ──────────────────────────────────────
+import { validarDeposito, saldoPayphone } from '../lib/reportePagos.js'
+
+test('validarDeposito: acepta coma decimal y redondea', () => {
+  const v = validarDeposito({ fecha: '2026-11-18', monto: '338,12', nota: ' Pichincha ' }, '2026-11-19')
+  assert.deepStrictEqual(v, { ok: true, datos: { fecha: '2026-11-18', monto: 338.12, nota: 'Pichincha' } })
+})
+
+test('validarDeposito: rechaza fecha futura, monto cero y fecha mal escrita', () => {
+  assert.strictEqual(validarDeposito({ fecha: '2026-11-20', monto: 10 }, '2026-11-19').ok, false)
+  assert.strictEqual(validarDeposito({ fecha: '2026-11-18', monto: 0 }, '2026-11-19').ok, false)
+  assert.strictEqual(validarDeposito({ fecha: '18/11/2026', monto: 10 }, '2026-11-19').ok, false)
+})
+
+test('saldoPayphone: neto menos depósitos', () => {
+  assert.deepStrictEqual(saldoPayphone(506.83, [{ monto: 338.12 }]), { depositado: 338.12, saldo: 168.71, depositos: 1 })
+  assert.deepStrictEqual(saldoPayphone(100, []), { depositado: 0, saldo: 100, depositos: 0 })
+})
