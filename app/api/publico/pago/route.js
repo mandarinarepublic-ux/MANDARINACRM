@@ -1,4 +1,4 @@
-import { leerCarrito, nuevoIdCheckout, validarDatos, ctxDeIntento, montosPayphone, ID_VALIDO } from '@/lib/checkoutTienda'
+import { leerCarrito, nuevoIdCheckout, validarDatos, errorDeCampoShopify, ctxDeIntento, montosPayphone, ID_VALIDO } from '@/lib/checkoutTienda'
 import { crearCheckout, leerCheckout, actualizarCheckout } from '@/lib/db/checkouts'
 import { calcularCompra } from '@/lib/shopifyCheckout'
 import { tokenCajita } from '@/lib/payphone'
@@ -96,6 +96,11 @@ export async function POST(req) {
         })
       } catch (e) {
         console.error('[/api/publico/pago] cotizar:', e.message)
+        // Shopify rechaza correos con dominio inexistente ("Email contains an invalid
+        // domain name", ej. @gmail.con) y teléfonos raros: se le dice al cliente qué
+        // campo corregir en vez de "intenta de nuevo" (no se arregla reintentando).
+        const campo = errorDeCampoShopify(e.message)
+        if (campo) return no('Revisa tus datos', 400, { errores: campo })
         return no('No pudimos calcular tu compra. Intenta de nuevo en un momento.', 502)
       }
       if (!resumen.envio) return no('No hacemos envíos a esa dirección', 400)

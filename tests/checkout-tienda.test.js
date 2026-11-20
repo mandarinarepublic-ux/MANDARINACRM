@@ -211,3 +211,12 @@ test('CSP: /pagar y /pagar/respuesta aceptan la tienda', () => {
   }
   assert.ok(config.indexOf("source: '/pagar'") > config.indexOf("source: '/:path*'"))
 })
+
+// ☠️ 19-nov-2026: correo con dominio inexistente → Shopify lo rechaza al cotizar.
+import { errorDeCampoShopify } from '../lib/checkoutTienda.js'
+test('errorDeCampoShopify: correo con dominio inválido → error en el campo email', () => {
+  assert.ok(errorDeCampoShopify('Email contains an invalid domain name').email)
+  assert.ok(errorDeCampoShopify('Phone is invalid').celular)
+  assert.strictEqual(errorDeCampoShopify('Throttled'), null)
+  assert.strictEqual(errorDeCampoShopify(undefined), null)
+})
