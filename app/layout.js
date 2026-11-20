@@ -8,7 +8,6 @@ export const metadata = {
   title: 'Mandarina Pro',
   description: 'Sistema de gestión Mandarina Republic & Indstore',
   manifest: '/manifest.json',
-  themeColor: '#FF6B00',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -24,6 +23,10 @@ export const metadata = {
     ],
   },
 }
+
+// Next 14 pide el color de la barra del navegador en `viewport`, no en `metadata`
+// (el build avisaba en cada página). Mismo color de siempre.
+export const viewport = { themeColor: '#FF6B00' }
 
 export default function RootLayout({ children }) {
   return (
