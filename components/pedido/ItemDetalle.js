@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { SUBESTADO_LABELS, SUBESTADO_COLORS, SUBESTADO_BG } from '@/lib/labels'
 import { imagenAncho } from '@/lib/imagenes'
+import { useDialogo } from '@/lib/useDialogo'
 
 const SUBESTADOS_ORDEN = ['SOLICITADO','ESPERANDO_PRENDA','EN_PROCESO','ENVIADO_APROBACION','LISTO']
 const AREAS_BASE = ['ESTAMPADO', 'SUBLIMACION', 'BORDADO']
@@ -114,6 +115,10 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
   const [notaGuardada,   setNotaGuardada]   = useState(item.NOTAS_AREA || '')
   const [savingNota,     setSavingNota]     = useState(false)
   const [notaError,      setNotaError]      = useState('')
+  // La foto ampliada es un diálogo: Escape la cierra y el foco entra a ella.
+  const cajaFotoRef = useDialogo(!!fotoFullscreen, () => setFotoFullscreen(null))
+  const uid = useId()
+  const fotoLabel = (key) => fotos.find(f => f.key === key)?.label || ''
 
   async function saveNota() {
     setSavingNota(true); setNotaError('')
@@ -169,16 +174,20 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
         <div className="w-full sm:w-36 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
-              <div className="w-full h-52 sm:w-36 sm:h-36 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
+              {/* <button> y no <div onClick>: con teclado no se podía ampliar. */}
+              <button type="button"
+                aria-label={`Ampliar foto: ${fotoLabel(fotoActiva||fotos[0].key)}`}
+                className="block w-full h-52 sm:w-36 sm:h-36 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
                 onClick={() => setFotoFullscreen(item[fotoActiva||fotos[0].key])}>
-                <img src={imagenAncho(item[fotoActiva||fotos[0].key], 600)} className="w-full h-full object-contain" alt="foto" />
-              </div>
+                <img src={imagenAncho(item[fotoActiva||fotos[0].key], 600)} className="w-full h-full object-contain" alt={`${item.PRODUCTO_NOMBRE || 'Producto'} — ${fotoLabel(fotoActiva||fotos[0].key)}`} />
+              </button>
               {fotos.length > 1 && (
                 <div className="flex gap-2 flex-wrap">
                   {fotos.map(f=>(
-                    <button key={f.key} onClick={()=>setFotoActiva(f.key)}
-                      className={`flex flex-col items-center p-1 rounded-lg border transition-all ${(fotoActiva||fotos[0].key)===f.key?'border-mandarina-500':'border-gray-700'}`}>
-                      <img src={imagenAncho(item[f.key], 120)} className="w-11 h-11 sm:w-9 sm:h-9 rounded object-cover" alt={f.label}/>
+                    <button key={f.key} type="button" onClick={()=>setFotoActiva(f.key)}
+                      aria-pressed={(fotoActiva||fotos[0].key)===f.key}
+                      className={`flex flex-col items-center p-1 rounded-lg border transition-colors ${(fotoActiva||fotos[0].key)===f.key?'border-mandarina-500':'border-gray-700'}`}>
+                      <img src={imagenAncho(item[f.key], 120)} loading="lazy" className="w-11 h-11 sm:w-9 sm:h-9 rounded object-cover" alt="" />
                       <span className="text-[10px] text-gray-500">{f.label}</span>
                     </button>
                   ))}
@@ -214,12 +223,16 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
             )
           ) : editingNota ? (
             <div>
-              <textarea className="input resize-none text-sm mb-2 w-full" rows={2}
-                placeholder="Nota para este producto..."
-                value={notaText} onChange={e=>setNotaText(e.target.value)} autoFocus />
+              {/* Sin autoFocus: en el celular abría el teclado de golpe y
+                  empujaba la pantalla; el vendedor toca el cuadro cuando va
+                  a escribir. */}
+              <label htmlFor={`${uid}-nota`} className="sr-only">Nota para este producto</label>
+              <textarea id={`${uid}-nota`} className="input resize-none text-sm mb-2 w-full" rows={2}
+                placeholder="Nota para este producto…"
+                value={notaText} onChange={e=>setNotaText(e.target.value)} />
               {notaError&&<div className="text-xs text-red-400 mb-2">⚠️ {notaError}</div>}
               <div className="flex gap-2">
-                <button onClick={saveNota} disabled={savingNota} className="btn-primary text-xs px-3 py-1.5">{savingNota?'⏳ Guardando...':'💾 Guardar'}</button>
+                <button onClick={saveNota} disabled={savingNota} className="btn-primary text-xs px-3 py-1.5">{savingNota?'⏳ Guardando…':'💾 Guardar'}</button>
                 <button onClick={()=>{setEditingNota(false);setNotaText(notaGuardada);setNotaError('')}} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
               </div>
             </div>
@@ -239,7 +252,8 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
               <div className="flex gap-1">
                 {CORTE_ESTADOS.map(s => (
                   <button key={s.key} onClick={() => cambiarCorte(s.key)}
-                    className={`flex-1 py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-all
+                    aria-pressed={subestadoCorte === s.key}
+                    className={`flex-1 py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-colors
                       ${subestadoCorte === s.key ? `${s.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
                     {s.label}
                   </button>
@@ -273,7 +287,8 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
                         <div className="grid grid-cols-2 gap-1.5">
                           {SUBESTADOS_ORDEN.map(s => (
                             <button key={s} onClick={() => cambiarSubestado(s, area)}
-                              className={`py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-all ${estadoArea===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                              aria-pressed={estadoArea===s}
+                              className={`py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-colors ${estadoArea===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
                               {SUBESTADO_LABELS[s]}
                             </button>
                           ))}
@@ -296,7 +311,8 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
               <div className="grid grid-cols-2 gap-1.5">
                 {SUBESTADOS_ORDEN.map(s=>(
                   <button key={s} onClick={()=>cambiarSubestado(s, null)}
-                    className={`py-2.5 min-h-[44px] rounded-xl text-xs font-semibold transition-all ${subestadoActual===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                    aria-pressed={subestadoActual===s}
+                    className={`py-2.5 min-h-[44px] rounded-xl text-xs font-semibold transition-colors ${subestadoActual===s?`${SUBESTADO_BG[s]} text-white`:'bg-gray-800 text-gray-500 hover:text-white'}`}>
                     {SUBESTADO_LABELS[s]}
                   </button>
                 ))}
@@ -314,10 +330,19 @@ export default function ItemDetalle({ item, readOnly, canChangeSubestado, tienda
         </div>
       </div>
 
+      {/* Foto ampliada. Tocar en cualquier lado la cierra (como siempre); el ✕
+          ahora tiene su propio onClick (antes solo cerraba porque el clic
+          "caía" al fondo) y Escape también cierra. */}
       {fotoFullscreen&&(
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={()=>setFotoFullscreen(null)}>
-          <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt="fullscreen"/>
-          <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
+        <div ref={cajaFotoRef} role="dialog" aria-modal="true" aria-labelledby={`${uid}-foto-titulo`}
+          className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={()=>setFotoFullscreen(null)}>
+          <h2 id={`${uid}-foto-titulo`} className="sr-only">Foto de {item.PRODUCTO_NOMBRE || 'la prenda'}</h2>
+          <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt={`Foto ampliada de ${item.PRODUCTO_NOMBRE || 'la prenda'}`}/>
+          <button type="button" data-autofocus aria-label="Cerrar foto"
+            onClick={(e)=>{ e.stopPropagation(); setFotoFullscreen(null) }}
+            className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-11 h-11 flex items-center justify-center">
+            <span aria-hidden="true">✕</span>
+          </button>
         </div>
       )}
     </div>

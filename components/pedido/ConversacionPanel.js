@@ -2,7 +2,8 @@
 // Panel de solo lectura con la conversación de WhatsApp del cliente (MANDI e IND),
 // leída de Supabase (schema inbox). Drawer lateral en desktop, pantalla completa en
 // mobile. Las fotos se muestran directo desde media_url (bucket inbox-media), sin Meta.
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId } from 'react'
+import { useDialogo } from '@/lib/useDialogo'
 
 const hora = (ts) => {
   const d = new Date(ts)
@@ -65,6 +66,9 @@ export default function ConversacionPanel({ celular, nombreCliente, onClose }) {
   const [error, setError] = useState('')
   const [conv, setConv] = useState({ MANDI: [], IND: [] })
   const [tab, setTab] = useState('MANDI')
+  // Es un diálogo a pantalla completa: Escape lo cierra y el foco entra al ✕.
+  const cajaRef = useDialogo(true, onClose)
+  const idTitulo = useId()
 
   useEffect(() => {
     let cancel = false
@@ -90,12 +94,16 @@ export default function ConversacionPanel({ celular, nombreCliente, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/70"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="h-full w-full md:max-w-md flex flex-col border-l border-gray-800" style={{ background: '#0b141a' }}>
+      <div ref={cajaRef} role="dialog" aria-modal="true" aria-labelledby={idTitulo}
+        className="h-full w-full md:max-w-md flex flex-col border-l border-gray-800" style={{ background: '#0b141a' }}>
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-800" style={{ background: '#111c2a' }}>
-          <button onClick={onClose} className="text-gray-300 text-xl leading-none px-1">✕</button>
+          <button type="button" data-autofocus onClick={onClose} aria-label="Cerrar conversación"
+            className="text-gray-300 text-xl leading-none min-w-[44px] min-h-[44px] -ml-2 flex items-center justify-center">
+            <span aria-hidden="true">✕</span>
+          </button>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-gray-100 truncate">💬 {nombreCliente || 'Conversación'}</div>
+            <h2 id={idTitulo} className="text-sm font-semibold text-gray-100 truncate"><span aria-hidden="true">💬 </span>{nombreCliente || 'Conversación'}</h2>
             <div className="text-xs text-gray-400 truncate">{celular || 'sin celular'}</div>
           </div>
         </div>
@@ -104,8 +112,8 @@ export default function ConversacionPanel({ celular, nombreCliente, onClose }) {
         {ambos && (
           <div className="flex border-b border-gray-800">
             {['MANDI', 'IND'].map((c) => (
-              <button key={c} onClick={() => setTab(c)}
-                className={`flex-1 py-2 text-xs font-semibold ${tab === c ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-500'}`}>
+              <button key={c} type="button" onClick={() => setTab(c)} aria-pressed={tab === c}
+                className={`flex-1 py-2 min-h-[44px] text-xs font-semibold ${tab === c ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-500'}`}>
                 {c} ({conv[c].length})
               </button>
             ))}
@@ -113,7 +121,7 @@ export default function ConversacionPanel({ celular, nombreCliente, onClose }) {
         )}
 
         {/* Cuerpo */}
-        <div className="flex-1 overflow-y-auto px-3 py-3">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3">
           {loading && <div className="text-center text-gray-500 text-sm py-8">Cargando conversación…</div>}
           {error && <div className="text-center text-red-400 text-sm py-8">Error: {error}</div>}
           {vacio && <div className="text-center text-gray-500 text-sm py-10">Este cliente no tiene conversación de WhatsApp registrada.</div>}

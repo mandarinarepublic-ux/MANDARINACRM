@@ -1,25 +1,34 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useId } from 'react'
 import { subirFoto, subirArchivo } from '@/lib/subirImagen'
 import SelectorTipoPrenda from '@/components/pedido/SelectorTipoPrenda'
 import { imagenAncho } from '@/lib/imagenes'
 import { faltantesShopify, faltantesPersonalizado, personalizadoTocado } from '@/lib/productoPendiente'
+import { AREAS, TALLAS_ADULTO, TALLAS_NINO } from '@/lib/catalogo-pedido'
 
-const TALLAS = ['4XL','3XL','2XL','XL','L','M','S','XS','12','10','9','8','7','6','5','4','3','2','1 AÑO']
+// Áreas y tallas: una sola lista con la prenda ya agregada (ItemProducto), en
+// lib/catalogo-pedido.js. Antes cada archivo tenía la suya y no coincidían.
 
-const AREAS = [
-  '',                                    // ← opción vacía = SIN SELECCIÓN
-  'ESTAMPADO',
-  'SUBLIMACION',
-  'BORDADO',
-  'ESTAMPADO + SUBLIMACION',
-  'ESTAMPADO + BORDADO',
-  'SUBLIMACION + BORDADO',
-  'ESTAMPADO + SUBLIMACION + BORDADO',
-  'PREMIUM - SIN DISEÑO',               // ← nueva área
-  'PRODUCTO SIN DISEÑO',
-  'ENTREGA EN TIENDA',
-]
+/** Opciones del <select> de talla, agrupadas para no confundir "12" con adulto. */
+function OpcionesTalla() {
+  return (
+    <>
+      <option value="">— Seleccionar —</option>
+      <optgroup label="Adulto">{TALLAS_ADULTO.map(t => <option key={t}>{t}</option>)}</optgroup>
+      <optgroup label="Niño">{TALLAS_NINO.map(t => <option key={t}>{t}</option>)}</optgroup>
+    </>
+  )
+}
+
+/** Opciones del <select> de área; la vacía es "sin elegir todavía". */
+function OpcionesArea() {
+  return (
+    <>
+      <option value="">— Seleccionar área —</option>
+      {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+    </>
+  )
+}
 
 // El ítem que se agrega al pedido. Una sola fuente: lo usan el botón
 // "+ Agregar al pedido" y el agregado automático al dar "Siguiente".
@@ -77,28 +86,31 @@ export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = f
       {!soloPersonalizado && (
         <div className="flex gap-2 mb-3">
           <div className="relative flex-1">
-            <input className="input pr-10" placeholder="Buscar producto en Shopify..."
+            <input className="input pr-10" placeholder="Buscar producto en Shopify…"
+              type="search" enterKeyHint="search" autoComplete="off" spellCheck={false}
+              aria-label="Buscar producto en Shopify"
               value={query} onChange={e => setQuery(e.target.value)} />
             {loading && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2" role="status">
+                <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                <span className="sr-only">Buscando productos…</span>
               </div>
             )}
           </div>
-          <button onClick={() => setShowPersonalizado(true)} className="btn-secondary whitespace-nowrap text-sm px-3">
+          <button type="button" onClick={() => setShowPersonalizado(true)} className="btn-secondary whitespace-nowrap text-sm px-3">
             + Personalizado
           </button>
         </div>
       )}
 
       {productos.length > 0 && !selected && (
-        <div className="card divide-y divide-gray-800 max-h-64 overflow-y-auto">
+        <div className="card divide-y divide-gray-800 max-h-64 overflow-y-auto overscroll-contain">
           {productos.map(p => (
-            <button key={p.id} onClick={() => setSelected(p)}
+            <button key={p.id} type="button" onClick={() => setSelected(p)}
               className="w-full flex items-center gap-3 p-3 hover:bg-gray-800 transition-colors text-left">
               {p.image
-                ? <img src={imagenAncho(p.image, 120)} alt={p.title} loading="lazy" className="w-10 h-10 rounded-lg object-cover bg-gray-800" />
-                : <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-gray-600 text-xs">IMG</div>}
+                ? <img src={imagenAncho(p.image, 120)} alt="" loading="lazy" className="w-10 h-10 rounded-lg object-cover bg-gray-800" />
+                : <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-gray-600 text-xs" aria-hidden="true">IMG</div>}
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-white font-medium truncate">{p.title}</div>
                 <div className="text-xs text-gray-500">{p.variants?.length} variante(s)</div>
@@ -153,15 +165,17 @@ function ArchivoCloudinary({ fotos, onChange }) {
 
   return (
     <div>
-      <label className={`flex items-center gap-3 border border-dashed rounded-xl p-3 cursor-pointer transition-all
+      {/* `sr-only` y no `hidden`: con `hidden` el teclado no llegaba al input. */}
+      <label className={`flex items-center gap-3 border border-dashed rounded-xl p-3 cursor-pointer transition-colors
+        focus-within:ring-2 focus-within:ring-mandarina-500
         ${fotos.archivoDiseno ? 'border-mandarina-500 bg-mandarina-500/5' : 'border-gray-700 hover:border-gray-500'}
         ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-        <input type="file" accept=".ai,.psd,.pdf,.jpg,.png,.eps,.svg" className="hidden"
+        <input type="file" accept=".ai,.psd,.pdf,.jpg,.png,.eps,.svg" className="sr-only"
           onChange={e => handleFile(e.target.files[0])} />
         {uploading ? (
           <div className="flex items-center gap-2 w-full">
-            <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-            <span className="text-gray-400 text-sm">Subiendo a Cloudinary...</span>
+            <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin flex-shrink-0" aria-hidden="true" />
+            <span className="text-gray-400 text-sm" role="status">Subiendo a Cloudinary…</span>
           </div>
         ) : fotos.archivoDiseno ? (
           <div className="flex items-center gap-3 w-full">
@@ -170,7 +184,7 @@ function ArchivoCloudinary({ fotos, onChange }) {
               <div className="text-mandarina-400 text-sm font-medium">✓ Archivo listo en Cloudinary</div>
               <div className="text-xs text-gray-500 truncate">{fotos.archivoDiseno.split('/').pop()}</div>
             </div>
-            <a href={fotos.archivoDiseno} target="_blank" onClick={e => e.stopPropagation()}
+            <a href={fotos.archivoDiseno} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
               className="text-xs text-blue-400 hover:underline flex-shrink-0">Ver ↗</a>
           </div>
         ) : (
@@ -183,10 +197,10 @@ function ArchivoCloudinary({ fotos, onChange }) {
           </div>
         )}
       </label>
-      {error && <div className="text-red-400 text-xs mt-1">⚠️ {error}</div>}
+      {error && <div className="text-red-400 text-xs mt-1" role="alert">⚠️ {error}</div>}
       {fotos.archivoDiseno && (
         <button type="button" onClick={() => onChange({ ...fotos, archivoDiseno: null })}
-          className="text-xs text-red-400 mt-1 hover:underline">✕ Quitar archivo</button>
+          className="text-xs text-red-400 mt-1 hover:underline min-h-[40px]"><span aria-hidden="true">✕ </span>Quitar archivo</button>
       )}
     </div>
   )
@@ -218,34 +232,41 @@ function FotoUploader({ fotos, onChange }) {
     ['fotoMangaI', 'Manga izquierda'],
   ]
 
+  const idFotos = useId()
+
   return (
     <div className="space-y-2">
-      <label className="label">Fotos del diseño</label>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="label" id={idFotos}>Fotos del diseño</div>
+      <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby={idFotos}>
         {slots.map(([key, label]) => (
           <div key={key} className="flex flex-col gap-1">
-            <label className={`relative flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer transition-all overflow-hidden
+            {/* Input `sr-only` dentro del label (no `hidden`) para que el
+                teclado pueda llegar; el anillo marca el foco. */}
+            <label className={`relative flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed cursor-pointer transition-colors overflow-hidden
+              focus-within:ring-2 focus-within:ring-mandarina-500
               ${fotos[key] ? 'border-mandarina-500' : 'border-gray-700 hover:border-gray-500'}
               ${uploading[key] ? 'opacity-60 pointer-events-none' : ''}`}>
-              <input type="file" accept="image/*" className="hidden"
+              <input type="file" accept="image/*" className="sr-only"
+                aria-label={`${fotos[key] ? 'Cambiar' : 'Subir'} foto: ${label}`}
                 onChange={e => handleFoto(key, e.target.files[0])} />
               {uploading[key] ? (
-                <div className="flex flex-col items-center gap-1">
-                  <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-[10px] text-gray-500">Subiendo...</span>
+                <div className="flex flex-col items-center gap-1" role="status">
+                  <div className="w-4 h-4 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                  <span className="text-[10px] text-gray-500">Subiendo…</span>
                 </div>
               ) : fotos[key]
-                ? <img src={imagenAncho(fotos[key], 240)} className="w-full h-full object-cover" />
+                ? <img src={imagenAncho(fotos[key], 240)} alt={`Foto: ${label}`} loading="lazy" className="w-full h-full object-cover" />
                 : <span className="text-xs text-gray-500 text-center px-2">{label}</span>}
             </label>
             {fotos[key] && !uploading[key] && (
-              <button onClick={() => onChange({ ...fotos, [key]: null })}
-                className="text-xs text-red-400 hover:text-red-300 text-center">✕ quitar</button>
+              <button type="button" onClick={() => onChange({ ...fotos, [key]: null })}
+                aria-label={`Quitar foto: ${label}`}
+                className="text-xs text-red-400 hover:text-red-300 text-center min-h-[40px] transition-colors"><span aria-hidden="true">✕ </span>quitar</button>
             )}
           </div>
         ))}
       </div>
-      {error && <div className="text-red-400 text-xs">⚠️ {error}</div>}
+      {error && <div className="text-red-400 text-xs" role="alert">⚠️ {error}</div>}
       <ArchivoCloudinary fotos={fotos} onChange={onChange} />
     </div>
   )
@@ -263,6 +284,8 @@ function ProductoDetail({ producto, onAdd, onCancel, onPendiente }) {
   // salía vacío y parecía que no había foto. Se puede reemplazar subiendo otra.
   const [fotos, setFotos] = useState(producto.image ? { fotoPecho: producto.image } : {})
   const [precioEdit, setPrecioEdit] = useState(parseFloat(producto.variants[0]?.price || 0))
+  const uid = useId()
+  const idCampo = (n) => `${uid}-${n}`
 
   // Elegir un producto de Shopify ya cuenta como "tocado": si queda a medias,
   // Siguiente avisa en vez de perderlo.
@@ -285,44 +308,48 @@ function ProductoDetail({ producto, onAdd, onCancel, onPendiente }) {
   return (
     <div className="card p-4 space-y-3 mt-2">
       <div className="flex items-center gap-3">
-        {producto.image && <img src={imagenAncho(producto.image, 120)} className="w-12 h-12 rounded-xl object-cover" />}
+        {producto.image && <img src={imagenAncho(producto.image, 120)} alt="" className="w-12 h-12 rounded-xl object-cover" />}
         <div className="flex-1">
           <div className="font-medium text-white text-sm">{producto.title}</div>
           <div className="text-xs text-gray-500">Shopify: ${parseFloat(variant?.price||0).toFixed(2)}</div>
         </div>
-        <button onClick={onCancel} className="text-gray-600 hover:text-white p-1">✕</button>
+        <button type="button" onClick={onCancel} aria-label={`Cerrar ${producto.title}`}
+          className="text-gray-600 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors">
+          <span aria-hidden="true">✕</span>
+        </button>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {producto.variants?.length > 1 && (
           <div className="col-span-2">
-            <label className="label">Variante</label>
-            <select className="input" value={variant?.id}
+            <label className="label" htmlFor={idCampo('variante')}>Variante</label>
+            <select id={idCampo('variante')} className="input" value={variant?.id}
               onChange={e => handleVariantChange(e.target.value)}>
               {producto.variants.map(v => <option key={v.id} value={v.id}>{v.title} - ${v.price}</option>)}
             </select>
           </div>
         )}
         <div>
-          <label className="label">Color</label>
-          <input className="input" placeholder="Ej: Celeste/blanco" value={color}
+          {/* Color y talla SON obligatorios (el botón de abajo no agrega sin
+              ellos): ahora llevan el * como en el personalizado y la prenda. */}
+          <label className="label" htmlFor={idCampo('color')}>Color *</label>
+          <input id={idCampo('color')} className="input" placeholder="Ej: Celeste/blanco" value={color}
             onChange={e => setColor(e.target.value)} />
         </div>
         <div>
-          <label className="label">Talla</label>
-          <select className="input" value={talla} onChange={e => setTalla(e.target.value)}>
-            <option value="">— Seleccionar —</option>
-            {TALLAS.map(t => <option key={t}>{t}</option>)}
+          <label className="label" htmlFor={idCampo('talla')}>Talla *</label>
+          <select id={idCampo('talla')} className="input" value={talla} onChange={e => setTalla(e.target.value)}>
+            <OpcionesTalla />
           </select>
         </div>
         <div>
-          <label className="label">Cantidad *</label>
-          <input type="number" inputMode="numeric" className="input" min="1" placeholder="0"
+          <label className="label" htmlFor={idCampo('cantidad')}>Cantidad *</label>
+          <input id={idCampo('cantidad')} type="number" inputMode="numeric" className="input" min="1" placeholder="0"
             value={cantidad || ''}
             onChange={e => setCantidad(parseInt(e.target.value) || 0)} />
         </div>
         <div>
-          <label className="label">Precio $ *</label>
-          <input type="number" inputMode="decimal" className="input" step="0.50" min="0"
+          <label className="label" htmlFor={idCampo('precio')}>Precio $ *</label>
+          <input id={idCampo('precio')} type="number" inputMode="decimal" className="input" step="0.50" min="0"
             value={precioEdit}
             onChange={e => setPrecioEdit(parseFloat(e.target.value) || 0)} />
           {precioEdit !== parseFloat(variant?.price || 0) && (
@@ -334,15 +361,15 @@ function ProductoDetail({ producto, onAdd, onCancel, onPendiente }) {
           )}
         </div>
         <div className="col-span-2">
-          <label className="label">Área *</label>
-          <select className={`input ${!area ? 'border-yellow-500/50 text-yellow-400' : ''}`}
+          <label className="label" htmlFor={idCampo('area')}>Área *</label>
+          <select id={idCampo('area')} className={`input ${!area ? 'border-yellow-500/50 text-yellow-400' : ''}`}
             value={area} onChange={e => setArea(e.target.value)}>
-            {AREAS.map(a => <option key={a} value={a}>{a || '— Seleccionar área —'}</option>)}
+            <OpcionesArea />
           </select>
         </div>
         <div className="col-span-2">
-          <label className="label">Detalle del diseño *</label>
-          <textarea className="input resize-none" rows={2} placeholder="Descripción del diseño..."
+          <label className="label" htmlFor={idCampo('detalle')}>Detalle del diseño *</label>
+          <textarea id={idCampo('detalle')} className="input resize-none" rows={2} placeholder="Descripción del diseño…"
             value={detalle} onChange={e => setDetalle(e.target.value)} />
         </div>
       </div>
@@ -352,7 +379,7 @@ function ProductoDetail({ producto, onAdd, onCancel, onPendiente }) {
           ⚠️ Completa: {[!color && 'Color', !talla && 'Talla', !area && 'Área', cantidad < 1 && 'Cantidad', precioEdit <= 0 && 'Precio', !detalle && 'Detalle'].filter(Boolean).join(', ')}
         </div>
       )}
-      <button onClick={() => {
+      <button type="button" onClick={() => {
         if (!color)          { alert('El color es obligatorio'); return }
         if (!talla)          { alert('La talla es obligatoria'); return }
         if (!area)           { alert('Debes seleccionar un área'); return }
@@ -373,6 +400,8 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false, onPen
   const [fotos, setFotos] = useState({})
   const [creando, setCreando] = useState(false)
   const [errorCatalogo, setErrorCatalogo] = useState('')
+  const uid = useId()
+  const idCampo = (n) => `${uid}-${n}`
 
   // Solo ADMIN crea tipos de prenda. El rol de localStorage sirve solo para
   // pintar el botón: la API lo exige con requireAdmin.
@@ -437,13 +466,17 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false, onPen
       <div className="flex items-center justify-between">
         <div className="font-medium text-white text-sm">✏️ Producto personalizado</div>
         {!ocultarCancelar && (
-          <button onClick={onCancel} className="text-gray-600 hover:text-white p-1">✕</button>
+          <button type="button" onClick={onCancel} aria-label="Cerrar producto personalizado"
+            className="text-gray-600 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors">
+            <span aria-hidden="true">✕</span>
+          </button>
         )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
-          <label className="label">Nombre del producto *</label>
+          <label className="label" htmlFor={idCampo('nombre')}>Nombre del producto *</label>
           <SelectorTipoPrenda
+            id={idCampo('nombre')}
             valor={nombre}
             onChange={setNombre}
             productos={catalogoProductos}
@@ -452,44 +485,43 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false, onPen
             permitirCrear={esAdmin}
           />
           {errorCatalogo && (
-            <p className="text-xs text-red-400 mt-1">⚠️ {errorCatalogo}</p>
+            <p className="text-xs text-red-400 mt-1" role="alert">⚠️ {errorCatalogo}</p>
           )}
         </div>
         <div>
-          <label className="label">Color *</label>
-          <input className="input" placeholder="Celeste/blanco" value={data.color}
+          <label className="label" htmlFor={idCampo('color')}>Color *</label>
+          <input id={idCampo('color')} className="input" placeholder="Celeste/blanco" value={data.color}
             onChange={e => setData(p => ({...p, color: e.target.value}))} />
         </div>
         <div>
-          <label className="label">Talla *</label>
-          <select className="input" value={data.talla} onChange={e => setData(p => ({...p, talla: e.target.value}))}>
-            <option value="">— Seleccionar —</option>
-            {TALLAS.map(t => <option key={t}>{t}</option>)}
+          <label className="label" htmlFor={idCampo('talla')}>Talla *</label>
+          <select id={idCampo('talla')} className="input" value={data.talla} onChange={e => setData(p => ({...p, talla: e.target.value}))}>
+            <OpcionesTalla />
           </select>
         </div>
         <div>
-          <label className="label">Cantidad *</label>
-          <input type="number" inputMode="numeric" className="input" min="1" placeholder="0"
+          <label className="label" htmlFor={idCampo('cantidad')}>Cantidad *</label>
+          <input id={idCampo('cantidad')} type="number" inputMode="numeric" className="input" min="1" placeholder="0"
             value={data.cantidad}
             onChange={e => setData(p => ({...p, cantidad: parseInt(e.target.value) || 0}))} />
         </div>
         <div>
-          <label className="label">Precio $ *</label>
-          <input type="number" inputMode="decimal" className="input" step="0.50" min="0" placeholder="0.00"
+          <label className="label" htmlFor={idCampo('precio')}>Precio $ *</label>
+          <input id={idCampo('precio')} type="number" inputMode="decimal" className="input" step="0.50" min="0" placeholder="0.00"
             value={data.precio}
             onChange={e => setData(p => ({...p, precio: parseFloat(e.target.value) || 0}))} />
         </div>
         <div className="col-span-2">
-          <label className="label">Área *</label>
-          <select className={`input ${!data.area ? 'border-yellow-500/50' : ''}`}
+          <label className="label" htmlFor={idCampo('area')}>Área *</label>
+          <select id={idCampo('area')} className={`input ${!data.area ? 'border-yellow-500/50' : ''}`}
             value={data.area} onChange={e => setData(p => ({...p, area: e.target.value}))}>
-            {AREAS.map(a => <option key={a} value={a}>{a || '— Seleccionar área —'}</option>)}
+            <OpcionesArea />
           </select>
         </div>
         <div className="col-span-2">
-          <label className="label">Detalle / instrucciones *</label>
-          <textarea className="input resize-none" rows={3}
-            placeholder="Describe el diseño: corte, manga, estampado, colores..."
+          <label className="label" htmlFor={idCampo('detalle')}>Detalle / instrucciones *</label>
+          <textarea id={idCampo('detalle')} className="input resize-none" rows={3}
+            placeholder="Describe el diseño: corte, manga, estampado, colores…"
             value={data.detalle} onChange={e => setData(p => ({...p, detalle: e.target.value}))} />
         </div>
       </div>
@@ -508,6 +540,7 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false, onPen
         </div>
       )}
       <button
+        type="button"
         onClick={handleAgregar}
         disabled={!valido}
         className="btn-primary w-full disabled:opacity-50">

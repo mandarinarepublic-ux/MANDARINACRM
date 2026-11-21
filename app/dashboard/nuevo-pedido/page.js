@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, useId, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import MapaPicker from '@/components/maps/MapaPicker'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
@@ -18,6 +18,7 @@ import { direccionSinCiudad } from '@/lib/direccionPedido'
 import { nuevoUid } from '@/lib/itemPlegado'
 import { resolverPendientes } from '@/lib/productoPendiente'
 import { llaveBorrador, armarBorrador, borradorVigente, hayTrabajo, resumenBorrador, haceCuanto } from '@/lib/borradorPedido'
+import { useDialogo } from '@/lib/useDialogo'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
 
@@ -113,6 +114,22 @@ function NuevoPedidoContenido() {
   const [celularError, setCelularError] = useState('')
   const [clienteExistente, setClienteExistente] = useState(null)
   const refDireccion = useRef(null)
+  // Paso 1 sin regaños antes de empezar: los avisos de "falta" (bordes
+  // amarillos, "necesitas el correo") salían con el formulario VACÍO, antes de
+  // que el vendedor escribiera nada, y la pantalla arrancaba toda en amarillo.
+  // Ahora salen cuando el campo ya se visitó y se dejó (`tocados`) o después
+  // de un "Siguiente" que no pasó (`intentoAvanzar`). Los errores de formato
+  // (cédula, celular, correo mal escrito) siguen saliendo mientras se escribe.
+  const [tocados, setTocados] = useState(() => new Set())
+  const [intentoAvanzar, setIntentoAvanzar] = useState(false)
+  const marcarTocado = useCallback((campo) => {
+    setTocados(prev => (prev.has(campo) ? prev : new Set(prev).add(campo)))
+  }, [])
+  const faltaVisible = (campo) => intentoAvanzar || tocados.has(campo)
+  // Confirmación de la factura (antes un window.confirm del navegador).
+  const [confirmFactura, setConfirmFactura] = useState(false)
+  const uid = useId()
+  const idCampo = (n) => `${uid}-${n}`
   const [emitirFactura, setEmitirFactura] = useState(true)
   const [usarMapa, setUsarMapa] = useState(false)
   const [items, setItems] = useState([])
@@ -156,6 +173,16 @@ function NuevoPedidoContenido() {
   const [listoParaGuardar, setListoParaGuardar] = useState(false)
   const [avisoComprobante, setAvisoComprobante] = useState(false)
   const creadoRef = useRef(false)
+
+  // Los modales de esta pantalla se portan como diálogos (lib/useDialogo.js):
+  // el foco entra y Escape cierra cuando cerrar no pierde nada.
+  //   · ¿Recuperar el pedido? → SIN Escape: hay que contestar, o el borrador
+  //     no se vuelve a guardar (listoParaGuardar se queda en false).
+  //   · Cliente ya registrado → Escape = "No, seguir".
+  //   · Confirmar factura → Escape = Cancelar (no crea nada).
+  const cajaBorradorRef = useDialogo(!!borradorOfrecido, null)
+  const cajaClienteRef = useDialogo(!!clienteExistente, () => setClienteExistente(null))
+  const cajaFacturaRef = useDialogo(confirmFactura, () => cancelarFactura())
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -223,7 +250,7 @@ function NuevoPedidoContenido() {
   // alto por el preview del documento) al de Productos se aterrizaba al FINAL de
   // la lista, con el buscador fuera de pantalla: parecía que ya no se podían
   // agregar más prendas.
-  // En móvil scrollea el contenedor (h-screen) y en escritorio la ventana
+  // En móvil scrollea el contenedor (h-dvh) y en escritorio la ventana
   // (md:h-auto), así que se reinician los dos. Va en un efecto y dentro de un
   // rAF porque hay que esperar a que React pinte el paso nuevo: hacerlo en el
   // mismo clic no servía, el navegador reajustaba el scroll al acortarse la
@@ -516,7 +543,7 @@ function NuevoPedidoContenido() {
     if (s > step) {
       if (step === 1) {
         const err = validateStep1()
-        if (err) { setError(err); scrollToError(); return }
+        if (err) { setIntentoAvanzar(true); setError(err); scrollToError(); return }
       }
       if (step === 2) {
         // Un producto llenado y no agregado se perdía al avanzar (el paso 2 se
@@ -594,24 +621,36 @@ function NuevoPedidoContenido() {
     const err1 = validateStep1()
     const err2 = validateStep2()
     const err3 = validateStep3()
-    if (err1) { setError(err1); setStep(isYAW ? 2 : 1); return }
+    if (err1) { setIntentoAvanzar(true); setError(err1); setStep(isYAW ? 2 : 1); return }
     if (err2) { setError(err2); setStep(2); return }
     if (err3) { setError(err3); setStep(3); return }
 
     // El check "emitir factura" nace MARCADO, así que sin este aviso se emitían
     // facturas al SRI que el cliente no pidió. Se confirma con los datos reales
     // ANTES de crear el pedido, para poder volver y desmarcar si fue un error.
-    if (emitirFactura) {
-      const ok = window.confirm(
-        '🧾 Se emitirá FACTURA ELECTRÓNICA al SRI:\n\n' +
-        `Cliente: ${cliente.nombre || '(sin nombre)'}\n` +
-        `${tipoId === 'RUC' ? 'RUC' : 'Cédula'}: ${cliente.cedula}\n` +
-        `Total: $${montoTotal.toFixed(2)}\n\n` +
-        'Si el cliente NO pidió factura, dale Cancelar y desmarca "Emitir factura electrónica".'
-      )
-      if (!ok) { setStep(isYAW ? 2 : 3); return }
-    }
+    //
+    // Antes era un window.confirm: en el celular (y dentro del panel del inbox)
+    // sale con el nombre del dominio arriba, se ve como un error del navegador y
+    // no se le puede dar el color de la tienda. Ahora es el mismo modal de la
+    // pantalla; la decisión es idéntica: Cancelar → vuelve, Sí → crea.
+    if (emitirFactura) { setConfirmFactura(true); return }
 
+    await crearPedido()
+  }
+
+  // "Cancelar" en la confirmación de factura: igual que el Cancelar del
+  // window.confirm de antes, vuelve al paso de pago sin crear nada.
+  function cancelarFactura() {
+    setConfirmFactura(false)
+    setStep(isYAW ? 2 : 3)
+  }
+
+  function aceptarFactura() {
+    setConfirmFactura(false)
+    crearPedido()
+  }
+
+  async function crearPedido() {
     setLoading(true); setError('')
 
     // Una sola fuente para la dirección: la misma que se muestra en el preview y
@@ -722,6 +761,15 @@ function NuevoPedidoContenido() {
 
   if (!user) return null
 
+  // ← del encabezado. `router.back()` solo sirve si hay de dónde volver: si la
+  // pantalla se abrió directo (enlace, panel del inbox, pestaña nueva) el
+  // historial tiene una sola entrada y "atrás" sacaba del CRM o no hacía nada.
+  // Ahí se va al tablero, sin perder el modo incrustado.
+  function volverAtras() {
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back()
+    else router.push(`/dashboard${esEmbed ? '?embed=1' : ''}`)
+  }
+
   const steps = ['Cliente', 'Productos', 'Entrega y Pago', 'Revisar']
 
   // Ancho del contenido.
@@ -737,10 +785,16 @@ function NuevoPedidoContenido() {
   const anchoContenido = esEmbed ? 'w-full' : 'max-w-2xl mx-auto'
 
   return (
-    <div className="flex flex-col h-screen md:h-auto">
+    // h-dvh y no h-screen: en el celular 100vh mide la pantalla como si la
+    // barra del navegador estuviera escondida, y con la barra a la vista el
+    // final del formulario quedaba tapado.
+    <div className="flex flex-col h-dvh md:h-auto">
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3 md:static md:border-0 md:bg-transparent">
         <div className={`flex items-center gap-3 mb-4 ${anchoContenido}`}>
-          <button onClick={() => router.back()} className="text-gray-500 hover:text-white p-1">←</button>
+          <button type="button" onClick={volverAtras} aria-label="Volver"
+            className="text-gray-500 hover:text-white min-w-[44px] min-h-[44px] -ml-3 flex items-center justify-center rounded-lg transition-colors">
+            <span aria-hidden="true">←</span>
+          </button>
           <h1 className="text-xl font-display font-bold text-white">Nueva Venta</h1>
         </div>
         <div className={anchoContenido}>
@@ -749,7 +803,7 @@ function NuevoPedidoContenido() {
               <div key={s} className="flex items-center gap-1 flex-1">
                 <button onClick={() => goToStep(canGoToStep(i + 1) ? i + 1 : Math.min(i + 1, step + 1))}
                   aria-label={`Paso ${i + 1}: ${s}`} aria-current={step === i + 1 ? 'step' : undefined}
-                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all flex-shrink-0
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-colors flex-shrink-0
                     ${step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'text-white' : 'bg-gray-800 text-gray-500'}
                     ${canGoToStep(i + 1) ? '' : 'opacity-40'} cursor-pointer`}
                   style={step === i + 1 ? { backgroundColor: tiendaColor } : {}}>
@@ -772,15 +826,19 @@ function NuevoPedidoContenido() {
           con el contenido y quien se desliza es la PÁGINA. Con contain, la rueda le
           llega primero a este div, que no tiene nada que deslizar, y no se la pasa
           a la página: no se podía bajar a los botones (8-oct, desde e862e7dd). */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-y-contain md:overscroll-y-auto pb-28">
+      {/* El relleno de abajo deja ver lo último por encima de la barra fija de
+          Atrás/Siguiente, que ahora suma la zona segura del iPhone. */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-y-contain md:overscroll-y-auto"
+        style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}>
         <div className={`${anchoContenido} px-4 pt-4`}>
           {/* ¿Recuperar el pedido que se estaba llenando? */}
           {borradorOfrecido && (
             <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
-              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+              <div ref={cajaBorradorRef} role="dialog" aria-modal="true" aria-labelledby={idCampo('borrador-titulo')}
+                className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
                 <div>
-                  <div className="text-2xl mb-2">📝</div>
-                  <h3 className="text-white font-semibold text-base">¿Deseas volver a llenar el pedido?</h3>
+                  <div className="text-2xl mb-2" aria-hidden="true">📝</div>
+                  <h3 id={idCampo('borrador-titulo')} className="text-white font-semibold text-base">¿Deseas volver a llenar el pedido?</h3>
                   <p className="text-sm text-gray-400 mt-1">
                     Tenías un pedido sin terminar ({haceCuanto(borradorOfrecido.guardado)}):
                   </p>
@@ -793,13 +851,13 @@ function NuevoPedidoContenido() {
                     </p>
                   )}
                 </div>
-                <button onClick={recuperarBorrador}
+                <button type="button" onClick={recuperarBorrador} data-autofocus
                   className="w-full py-3 rounded-xl text-sm font-semibold text-white"
                   style={{ backgroundColor: tiendaColor }}>
                   ✅ Sí, recuperar el pedido
                 </button>
-                <button onClick={descartarBorrador}
-                  className="w-full py-2.5 rounded-xl text-sm font-medium text-gray-400 border border-gray-700 hover:bg-gray-800">
+                <button type="button" onClick={descartarBorrador}
+                  className="w-full py-2.5 min-h-[44px] rounded-xl text-sm font-medium text-gray-400 border border-gray-700 hover:bg-gray-800 transition-colors">
                   No, empezar uno nuevo
                 </button>
               </div>
@@ -809,7 +867,10 @@ function NuevoPedidoContenido() {
           {avisoComprobante && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-sm px-4 py-3 rounded-xl mb-4 flex items-start gap-2">
               <span className="flex-1">Pedido recuperado. Vuelve a subir la foto del comprobante de pago.</span>
-              <button onClick={() => setAvisoComprobante(false)} className="text-yellow-500 hover:text-white">✕</button>
+              <button type="button" onClick={() => setAvisoComprobante(false)} aria-label="Cerrar aviso"
+                className="text-yellow-500 hover:text-white -my-2 -mr-2 min-w-[40px] min-h-[40px] flex items-center justify-center transition-colors">
+                <span aria-hidden="true">✕</span>
+              </button>
             </div>
           )}
 
@@ -819,14 +880,47 @@ function NuevoPedidoContenido() {
             </div>
           )}
 
+          {/* Confirmar la FACTURA ELECTRÓNICA antes de crear el pedido. Mismo
+              molde que el de "cliente ya registrado"; ver handleSubmit. */}
+          {confirmFactura && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4"
+              onClick={e => e.target === e.currentTarget && cancelarFactura()}>
+              <div ref={cajaFacturaRef} role="dialog" aria-modal="true" aria-labelledby={idCampo('factura-titulo')}
+                className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl" aria-hidden="true">🧾</span>
+                  <h3 id={idCampo('factura-titulo')} className="text-white font-semibold text-base">Se emitirá FACTURA ELECTRÓNICA al SRI</h3>
+                </div>
+                <div className="bg-gray-800/60 rounded-xl px-4 py-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-4"><span className="text-gray-500">Cliente</span><span className="text-white text-right">{cliente.nombre || '(sin nombre)'}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-gray-500">{tipoId === 'RUC' ? 'RUC' : 'Cédula'}</span><span className="text-white text-right font-mono">{cliente.cedula}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-gray-500">Correo</span><span className="text-white text-right break-all">{limpiarEmail(cliente.email)}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-gray-500">Total</span><span className="text-white text-right font-bold">${montoTotal.toFixed(2)}</span></div>
+                </div>
+                <p className="text-gray-400 text-sm">
+                  Si el cliente <strong className="text-white">NO</strong> pidió factura, dale Cancelar y desmarca “Emitir factura electrónica” en el paso 1.
+                </p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={cancelarFactura} data-autofocus
+                    className="btn-secondary flex-1 py-3">Cancelar</button>
+                  <button type="button" onClick={aceptarFactura} disabled={loading}
+                    className="btn-primary flex-1 py-3" style={{ backgroundColor: tiendaColor }}>
+                    Sí, emitir factura
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Modal: cliente ya existe (reemplaza window.confirm nativo) */}
           {clienteExistente && (
             <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4"
               onClick={e => e.target === e.currentTarget && setClienteExistente(null)}>
-              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+              <div ref={cajaClienteRef} role="dialog" aria-modal="true" aria-labelledby={idCampo('existe-titulo')}
+                className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl">👤</span>
-                  <h3 className="text-white font-semibold text-base">Cliente ya registrado</h3>
+                  <span className="text-2xl" aria-hidden="true">👤</span>
+                  <h3 id={idCampo('existe-titulo')} className="text-white font-semibold text-base">Cliente ya registrado</h3>
                 </div>
                 <div className="bg-gray-800/60 rounded-xl px-4 py-3 space-y-1.5 text-sm">
                   <div className="flex justify-between gap-4"><span className="text-gray-500">Nombre</span><span className="text-white text-right">{clienteExistente.NOMBRE}</span></div>
@@ -835,9 +929,9 @@ function NuevoPedidoContenido() {
                 </div>
                 <p className="text-gray-400 text-sm">¿Autocompletar los datos de este cliente?</p>
                 <div className="flex gap-2">
-                  <button onClick={() => setClienteExistente(null)}
+                  <button type="button" onClick={() => setClienteExistente(null)}
                     className="btn-secondary flex-1 py-3">No, seguir</button>
-                  <button onClick={() => {
+                  <button type="button" data-autofocus onClick={() => {
                     const f = clienteExistente
                     setClienteId(f.CLIENTE_ID)
                     const ced = String(f.CEDULA||'')
@@ -869,38 +963,53 @@ function NuevoPedidoContenido() {
                     <span className="text-green-400 text-sm">✅</span>
                     <span className="text-green-400 text-xs font-medium">Cliente existente cargado</span>
                   </div>
-                  <button onClick={() => { setClienteId(null); setClienteKey(k => k + 1); setCliente({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: PLANTILLA_DIRECCION }); setTipoId('CEDULA'); setEmitirFactura(true) }}
-                    className="text-xs text-gray-500 hover:text-red-400">
-                    ✕ Limpiar
+                  <button type="button" onClick={() => { setClienteId(null); setClienteKey(k => k + 1); setCliente({ nombre: '', cedula: '', celular: '', email: '', ciudad: '', direccion: PLANTILLA_DIRECCION }); setTipoId('CEDULA'); setEmitirFactura(true) }}
+                    className="text-xs text-gray-500 hover:text-red-400 px-2 -my-2 -mr-2 min-h-[40px] transition-colors">
+                    <span aria-hidden="true">✕ </span>Limpiar
                   </button>
                 </div>
               )}
+              {/* ☠️ autoComplete="off" y los `name="x-…"` se quedan a propósito
+                  (commit 2790113d): el vendedor llena los datos del CLIENTE, y
+                  con "name"/"tel"/"email" el navegador le ofrecía los SUYOS. */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <label className="label">Nombre completo *</label>
-                  <input className="input" placeholder="María García" value={cliente.nombre}
-                    autoComplete="off"
+                  <label className="label" htmlFor={idCampo('nombre')}>Nombre completo *</label>
+                  <input id={idCampo('nombre')} className={`input ${faltaVisible('nombre') && !cliente.nombre.trim() ? 'border-yellow-500/50' : ''}`}
+                    placeholder="María García" value={cliente.nombre}
+                    autoComplete="off" autoCapitalize="words"
+                    aria-invalid={(faltaVisible('nombre') && !cliente.nombre.trim()) || undefined}
+                    onBlur={() => marcarTocado('nombre')}
                     onChange={e => setCliente(p => ({...p, nombre: e.target.value}))} />
                 </div>
                 <div className="col-span-2">
-                  <label className="label">Tipo de identificación *</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="label" id={idCampo('tipo-id')}>Tipo de identificación *</div>
+                  <div className="grid grid-cols-3 gap-2" role="group" aria-labelledby={idCampo('tipo-id')}>
                     {TIPOS_ID.map(t => (
                       <button key={t.key} type="button" onClick={() => cambiarTipoId(t.key)}
-                        className={`py-2.5 min-h-[44px] rounded-xl text-sm font-semibold border-2 transition-all
+                        aria-pressed={tipoId === t.key}
+                        className={`py-2.5 min-h-[44px] rounded-xl text-sm font-semibold border-2 transition-colors
                           ${tipoId === t.key ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 bg-gray-800/50 text-gray-400 hover:text-white'}`}>
                         {t.label}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="col-span-2">
-                  <label className="label">{tipoIdMeta(tipoId).label} *</label>
-                  <input className={`input ${cedulaError ? 'border-red-500' : ''}`}
+                {/* Cédula y celular: lado a lado desde sm, uno debajo del otro
+                    en el celular. Antes el celular quedaba solo en media
+                    columna con la otra mitad vacía. */}
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="label" htmlFor={idCampo('cedula')}>{tipoIdMeta(tipoId).label} *</label>
+                  <input id={idCampo('cedula')}
+                    className={`input ${cedulaError ? 'border-red-500' : faltaVisible('cedula') && !cliente.cedula.trim() ? 'border-yellow-500/50' : ''}`}
                     placeholder={tipoIdMeta(tipoId).placeholder} value={cliente.cedula}
                     autoComplete="off" inputMode={tipoIdMeta(tipoId).inputMode} name="x-cedula"
+                    autoCapitalize={tipoId === 'PASAPORTE' ? 'characters' : 'none'} spellCheck={false}
+                    aria-invalid={!!cedulaError || (faltaVisible('cedula') && !cliente.cedula.trim()) || undefined}
+                    aria-describedby={cedulaError ? idCampo('cedula-err') : undefined}
                     onChange={e => { setCliente(p => ({...p, cedula: e.target.value})); setCedulaError(validarIdentificacion(tipoId, e.target.value) || '') }}
                     onBlur={async e => {
+                      marcarTocado('cedula')
                       const ced = e.target.value.trim()
                       if (ced.length < 5) return
                       try {
@@ -910,22 +1019,32 @@ function NuevoPedidoContenido() {
                         if (found) setClienteExistente(found)
                       } catch(err) {}
                     }} />
-                  {cedulaError && <p className="text-red-400 text-xs mt-1">{cedulaError}</p>}
+                  {cedulaError && <p id={idCampo('cedula-err')} className="text-red-400 text-xs mt-1">{cedulaError}</p>}
                 </div>
-                <div>
-                  <label className="label">Celular *</label>
-                  <input className={`input ${celularError ? 'border-red-500' : ''}`}
-                    placeholder="0987654321" value={cliente.celular}
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="label" htmlFor={idCampo('celular')}>Celular *</label>
+                  <input id={idCampo('celular')}
+                    className={`input ${celularError ? 'border-red-500' : faltaVisible('celular') && !cliente.celular.trim() ? 'border-yellow-500/50' : ''}`}
+                    type="tel" placeholder="0987654321" value={cliente.celular}
                     autoComplete="off" inputMode="tel" name="x-celular"
+                    aria-invalid={!!celularError || (faltaVisible('celular') && !cliente.celular.trim()) || undefined}
+                    aria-describedby={celularError ? idCampo('celular-err') : undefined}
+                    onBlur={() => marcarTocado('celular')}
                     onChange={e => { setCliente(p => ({...p, celular: e.target.value})); setCelularError(validarCelular(e.target.value) || '') }} />
-                  {celularError && <p className="text-red-400 text-xs mt-1">{celularError}</p>}
+                  {celularError && <p id={idCampo('celular-err')} className="text-red-400 text-xs mt-1">{celularError}</p>}
                 </div>
                 <div className="col-span-2">
-                  <label className="label">Email {emitirFactura ? '* (requerido para factura)' : '(opcional)'}</label>
-                  <input className={`input ${emitirFactura && !cliente.email ? 'border-yellow-500/50' : ''}`}
-                    type="email" autoComplete="off" name="x-email" placeholder="cliente@gmail.com" value={cliente.email}
+                  <label className="label" htmlFor={idCampo('email')}>Email {emitirFactura ? '* (requerido para factura)' : '(opcional)'}</label>
+                  <input id={idCampo('email')}
+                    className={`input ${emitirFactura && !cliente.email && faltaVisible('email') ? 'border-yellow-500/50' : ''}`}
+                    type="email" inputMode="email" autoCapitalize="none" spellCheck={false}
+                    autoComplete="off" name="x-email" placeholder="cliente@gmail.com" value={cliente.email}
+                    aria-invalid={(!!cliente.email.trim() && !emailPareceValido(cliente.email)) || (emitirFactura && !cliente.email && faltaVisible('email')) || undefined}
+                    aria-describedby={idCampo('email-ayuda')}
+                    onBlur={() => marcarTocado('email')}
                     onChange={e => setCliente(p => ({...p, email: e.target.value}))} />
-                  {emitirFactura && !cliente.email && (
+                  <div id={idCampo('email-ayuda')}>
+                  {emitirFactura && !cliente.email && faltaVisible('email') && (
                     <p className="text-yellow-400 text-xs mt-1">⚠️ Necesitas el correo para emitir factura</p>
                   )}
                   {/* El aviso sale mientras escribe, no al intentar avanzar: si el
@@ -944,6 +1063,7 @@ function NuevoPedidoContenido() {
                       Se guardará como <span className="font-mono">{limpiarEmail(cliente.email)}</span>
                     </p>
                   )}
+                  </div>
                 </div>
               </div>
               {tipoId === 'PASAPORTE' ? (
@@ -955,7 +1075,7 @@ function NuevoPedidoContenido() {
                   </div>
                 </div>
               ) : (
-                <label className="flex items-center gap-3 card p-4 cursor-pointer hover:border-gray-600 transition-all">
+                <label className="flex items-center gap-3 card p-4 cursor-pointer hover:border-gray-600 transition-colors">
                   <input type="checkbox" checked={emitirFactura} onChange={e => setEmitirFactura(e.target.checked)}
                     className="w-5 h-5 accent-orange-500" />
                   <div>
@@ -966,31 +1086,37 @@ function NuevoPedidoContenido() {
               )}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="label mb-0">Dirección de entrega *</label>
-                  <button onClick={() => setUsarMapa(!usarMapa)}
-                    className={`text-xs px-3 py-1 rounded-full border transition-all ${usarMapa ? 'text-white border-transparent' : 'border-gray-700 text-gray-500'}`}
+                  <div className="label mb-0" id={idCampo('direccion-titulo')}>Dirección de entrega *</div>
+                  <button type="button" onClick={() => setUsarMapa(!usarMapa)} aria-pressed={usarMapa}
+                    className={`text-xs px-3 min-h-[36px] rounded-full border transition-colors ${usarMapa ? 'text-white border-transparent' : 'border-gray-700 text-gray-500'}`}
                     style={usarMapa ? { backgroundColor: tiendaColor } : {}}>
-                    📍 {usarMapa ? 'Mapa activo' : 'Usar mapa'}
+                    <span aria-hidden="true">📍 </span>{usarMapa ? 'Mapa activo' : 'Usar mapa'}
                   </button>
                 </div>
                 {!usarMapa ? (
                   <div className="space-y-3">
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Ciudad de entrega *</p>
-                      <input className={`input ${!cliente.ciudad.trim() ? 'border-yellow-500/40' : ''}`}
-                        autoComplete="off" name="x-ciudad" placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
+                      <label htmlFor={idCampo('ciudad')} className="block text-xs text-gray-500 mb-1">Ciudad de entrega *</label>
+                      <input id={idCampo('ciudad')}
+                        className={`input ${faltaVisible('ciudad') && !cliente.ciudad.trim() ? 'border-yellow-500/40' : ''}`}
+                        autoComplete="off" autoCapitalize="words" name="x-ciudad" placeholder="Ej: Quito, Guayaquil, Cuenca" value={cliente.ciudad}
+                        aria-invalid={(faltaVisible('ciudad') && !cliente.ciudad.trim()) || undefined}
+                        onBlur={() => marcarTocado('ciudad')}
                         onChange={e => setCliente(p => ({...p, ciudad: e.target.value}))} />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Dirección completa *</p>
+                      <label htmlFor={idCampo('direccion')} className="block text-xs text-gray-500 mb-1">Dirección completa *</label>
                       {/* Llega con las etiquetas del formato de la empresa ya
                           escritas; el vendedor completa al lado de cada una. */}
-                      <textarea ref={refDireccion} autoComplete="off" name="x-direccion" rows={4}
-                        className={`input resize-none leading-relaxed ${plantillaVacia(cliente.direccion) ? 'border-yellow-500/40' : ''}`}
+                      <textarea id={idCampo('direccion')} ref={refDireccion} autoComplete="off" name="x-direccion" rows={4}
+                        className={`input resize-none leading-relaxed ${faltaVisible('direccion') && plantillaVacia(cliente.direccion) ? 'border-yellow-500/40' : ''}`}
                         placeholder={PLANTILLA_DIRECCION}
                         value={cliente.direccion}
+                        aria-invalid={(faltaVisible('direccion') && plantillaVacia(cliente.direccion)) || undefined}
+                        aria-describedby={idCampo('direccion-ayuda')}
+                        onBlur={() => marcarTocado('direccion')}
                         onChange={e => setCliente(p => ({...p, direccion: e.target.value}))} />
-                      <p className="text-xs text-gray-600 mt-1">Completa cada línea. La ciudad se guarda aparte, en el campo de arriba.</p>
+                      <p id={idCampo('direccion-ayuda')} className="text-xs text-gray-600 mt-1">Completa cada línea. La ciudad se guarda aparte, en el campo de arriba.</p>
                     </div>
                     {buildDireccion() && (
                       <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
@@ -1015,14 +1141,14 @@ function NuevoPedidoContenido() {
                   SUCURSAL no es una tienda: es la vía de venta desde stock de
                   sucursal, así que se muestra siempre. */}
               {!isYAW && (
-                <div className="flex gap-2">
+                <div className="flex gap-2" role="group" aria-label="Tienda">
                   {[
                     { key: 'MANDARINA', label: '🍊 Mandarina', color: '#FF6B00' },
                     { key: 'INDSTORE',  label: '🏪 Indstore',  color: '#E91E8C' },
                     { key: 'SUCURSAL',  label: '🏬 Sucursal',  color: '#10B981' },
                   ].filter(t => t.key === 'SUCURSAL' || puedeVerTienda(user, t.key)).map(t => (
-                    <button key={t.key} onClick={() => setTienda(t.key)}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border
+                    <button key={t.key} type="button" onClick={() => setTienda(t.key)} aria-pressed={tienda === t.key}
+                      className={`flex-1 py-2.5 min-h-[44px] rounded-xl text-sm font-semibold transition-colors border
                         ${tienda === t.key ? 'text-white border-transparent' : 'bg-transparent text-gray-500 border-gray-700'}`}
                       style={tienda === t.key ? { backgroundColor: t.color } : {}}>
                       {t.label}
@@ -1035,8 +1161,9 @@ function NuevoPedidoContenido() {
               {tienda === 'SUCURSAL' && !isYAW && (
                 <div>
                   {loadingSucursal ? (
-                    <div className="flex justify-center py-8">
-                      <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="flex justify-center py-8" role="status">
+                      <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                      <span className="sr-only">Cargando productos de sucursal…</span>
                     </div>
                   ) : sucursalProductos.length === 0 ? (
                     <div className="card p-6 text-center text-gray-500 border-dashed">
@@ -1046,11 +1173,11 @@ function NuevoPedidoContenido() {
                   ) : (
                     <div className="grid grid-cols-2 gap-3">
                       {sucursalProductos.map(p => (
-                        <button key={p.ID} onClick={() => agregarDesdeSucursal(p)}
-                          className="card text-left hover:border-green-500/50 overflow-hidden transition-all">
+                        <button key={p.ID} type="button" onClick={() => agregarDesdeSucursal(p)}
+                          className="card text-left hover:border-green-500/50 overflow-hidden transition-colors">
                           <div className="aspect-square bg-gray-800">
                             {p.FOTO_URL
-                              ? <img src={p.FOTO_URL} alt={p.NOMBRE} className="w-full h-full object-cover" />
+                              ? <img src={p.FOTO_URL} alt="" loading="lazy" className="w-full h-full object-cover" />
                               : <div className="w-full h-full flex items-center justify-center text-3xl text-gray-600">👕</div>}
                           </div>
                           <div className="p-2">
@@ -1116,7 +1243,7 @@ function NuevoPedidoContenido() {
                   <>
                     <p className="text-white">{parseFechaCalendario(fechaEntregaPedido())?.toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                     <p className="text-xs text-gray-500 mt-1">Automática: {DIAS_ENTREGA} días laborables desde hoy.</p>
-                    <button type="button" className="text-xs text-orange-400 underline mt-2"
+                    <button type="button" className="text-xs text-orange-400 underline mt-2 min-h-[40px]"
                       onClick={() => setFechaEntrega(fechaMinimaElegida())}>
                       Cambiar fecha
                     </button>
@@ -1125,11 +1252,14 @@ function NuevoPedidoContenido() {
                   <>
                     <div className="text-xs text-gray-500 mb-2">Si la cambias, mínimo <span className="text-white">{DIAS_ENTREGA_MIN_ELEGIDA} días laborables</span>.</div>
                     <input type="date" className="input" min={fechaMinimaElegida()} value={fechaEntrega}
+                      aria-label="Fecha de entrega"
+                      aria-invalid={!!resolverFechaEntrega(fechaEntrega).error || undefined}
+                      aria-describedby={resolverFechaEntrega(fechaEntrega).error ? idCampo('fecha-err') : undefined}
                       onChange={e => setFechaEntrega(e.target.value)} />
                     {resolverFechaEntrega(fechaEntrega).error && (
-                      <p className="text-red-400 text-xs mt-2">⚠️ Lo más pronto que puedes escoger es {parseFechaCalendario(fechaMinimaElegida())?.toLocaleDateString('es-EC', { day: 'numeric', month: 'long' })}.</p>
+                      <p id={idCampo('fecha-err')} className="text-red-400 text-xs mt-2">⚠️ Lo más pronto que puedes escoger es {parseFechaCalendario(fechaMinimaElegida())?.toLocaleDateString('es-EC', { day: 'numeric', month: 'long' })}.</p>
                     )}
-                    <button type="button" className="text-xs text-orange-400 underline mt-2"
+                    <button type="button" className="text-xs text-orange-400 underline mt-2 min-h-[40px]"
                       onClick={() => setFechaEntrega('')}>
                       Volver a la automática ({DIAS_ENTREGA} días)
                     </button>
@@ -1190,8 +1320,8 @@ function NuevoPedidoContenido() {
                 </div>
               </div>
               <div>
-                <label className="label">Notas internas</label>
-                <textarea className="input resize-none" rows={3} placeholder="Instrucciones especiales para fábrica, urgencias..."
+                <label className="label" htmlFor={idCampo('notas')}>Notas internas</label>
+                <textarea id={idCampo('notas')} className="input resize-none" rows={3} placeholder="Instrucciones especiales para fábrica, urgencias…"
                   value={notasVendedor} onChange={e => setNotasVendedor(e.target.value)} />
               </div>
             </div>
@@ -1200,33 +1330,38 @@ function NuevoPedidoContenido() {
       </div>
 
       {/* La barra de Atrás / Siguiente. Ojo: acá el problema NO era un tope de
-          ancho —esta barra nunca tuvo `max-w-2xl`— sino `md:left-60`, que la
-          corre 240px a la derecha para dejarle sitio al menú lateral. En embed
-          ese menú NO existe (lo quita el layout), así que esos 240px quedaban de
-          hueco muerto y el botón Siguiente no llegaba al borde izquierdo. Los
-          botones son `flex-1`, así que al soltar la barra se estiran solos. */}
-      <div className={`fixed bottom-0 left-0 right-0 ${esEmbed ? '' : 'md:left-60'} bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-3`}>
+          ancho —esta barra nunca tuvo `max-w-2xl`— sino el corrimiento para
+          dejarle sitio al menú lateral. En embed ese menú NO existe (lo quita el
+          layout), así que ese hueco quedaba muerto y el botón Siguiente no
+          llegaba al borde izquierdo. Los botones son `flex-1`, así que al soltar
+          la barra se estiran solos.
+          El hueco es `md:left-56` = el ancho real del menú (`w-56`, 224px).
+          Antes era `md:left-60` y dejaba 16px de formulario asomando (21-nov).
+          Abajo suma la zona segura del iPhone (la barrita de inicio tapaba la
+          mitad de los botones). */}
+      <div className={`fixed bottom-0 left-0 right-0 ${esEmbed ? '' : 'md:left-56'} bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4 flex gap-3`}
+        style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
         {/* En el paso 4 "Atrás" se convierte en EDITAR: devuelve al paso de
             productos, que es lo que el cliente pide corregir el 99% de las veces. */}
         {step === 4 ? (
-          <button onClick={() => goToStep(2)} disabled={loading} className="btn-secondary flex-1">✏️ EDITAR</button>
+          <button type="button" onClick={() => goToStep(2)} disabled={loading} className="btn-secondary flex-1">✏️ EDITAR</button>
         ) : step > 1 && !(isYAW && step === 2) ? (
-          <button onClick={() => goToStep(step - 1)} className="btn-secondary flex-1">← Atrás</button>
+          <button type="button" onClick={() => goToStep(step - 1)} className="btn-secondary flex-1">← Atrás</button>
         ) : null}
         {step < 4 ? (
           // Siempre se puede tocar. Antes se apagaba en gris sin decir por qué y
           // los mensajes de goToStep («La ciudad de entrega es obligatoria»…)
           // nunca llegaban a verse. Ahora, si falta algo, lo dice y lleva ahí.
-          <button onClick={() => goToStep(step + 1)}
+          <button type="button" onClick={() => goToStep(step + 1)}
             className="btn-primary flex-1"
             style={{ backgroundColor: tiendaColor }}>
             Siguiente →
           </button>
         ) : (
-          <button onClick={handleSubmit} disabled={loading} className="btn-primary flex-1"
+          <button type="button" onClick={handleSubmit} disabled={loading || confirmFactura} className="btn-primary flex-1"
             style={{ backgroundColor: tiendaColor }}>
             {loading
-              ? <span className="flex items-center justify-center gap-2"><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Guardando...</span>
+              ? <span className="flex items-center justify-center gap-2"><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Guardando…</span>
               : '✅ DE ACUERDO'}
           </button>
         )}
