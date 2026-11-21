@@ -14,8 +14,35 @@ import BarraFiltros from '@/components/BarraFiltros'
 import { ESTADO_LABELS } from '@/lib/labels'
 import { showToast } from '@/components/ToastHost'
 import { pideConfirmacion, visibleEnTodos, MS_DESHACER_LISTO } from '@/lib/estados-finales'
+import { comparadorUrgencia, contarEntregas, pasaFiltroEntrega, plural, textoEntrega,
+         textoConteo, haceCuanto } from '@/lib/orden-produccion'
 
 const AVISO_NO_GUARDO = '⚠️ No se guardó. Revisa la conexión e intenta otra vez.'
+
+// La bandeja vive abierta toda la mañana en el taller: sin esto, lo que entra o
+// cambia otra persona no se ve hasta que alguien recarga a mano.
+const MS_REFRESCO = 90_000
+// Cada cuánto se repinta "Actualizado hace X min" (no pide nada al servidor).
+const MS_RELOJ = 30_000
+
+// Foto ampliada y vista del PDF: con teclado o lector de pantalla no hay "fondo"
+// que tocar, así que Escape es la salida que se espera de un diálogo. Al cerrar,
+// el foco vuelve a donde estaba (el botón de la foto o el del PDF) para no
+// dejar a nadie al principio de la página.
+function useCerrarConEscape(abierto, cerrar) {
+  const cerrarRef = useRef(cerrar)
+  cerrarRef.current = cerrar
+  useEffect(() => {
+    if (!abierto) return
+    const previo = typeof document !== 'undefined' ? document.activeElement : null
+    const alTeclear = (e) => { if (e.key === 'Escape') cerrarRef.current?.() }
+    window.addEventListener('keydown', alTeclear)
+    return () => {
+      window.removeEventListener('keydown', alTeclear)
+      previo?.focus?.()
+    }
+  }, [abierto])
+}
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -152,15 +179,36 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
     { key: 'CORTADO',    label: '✅ Cortado',    cls: 'bg-green-500' },
   ]
 
+  // Re-sincronizar con lo que trae el servidor.
+  //
+  // Los estados se copian de las props UNA vez, al montar. Con el refresco
+  // silencioso (cada 90 s y al volver a la pestaña) la lista trae lo nuevo, pero
+  // una tarjeta abierta seguía pintando lo que había al abrirla: alguien de otra
+  // área marcaba En proceso y aquí seguía Solicitado.
+  //
+  // Se recuerda el ÚLTIMO valor que ya se tuvo en cuenta (el que llegó o el que
+  // esta tarjeta le avisó al padre): así el eco de nuestro propio guardado no
+  // pisa los estados por área de una prenda multi-área — el padre solo guarda el
+  // estado GLOBAL — y solo un cambio de verdad re-sincroniza.
+  // Nunca mientras hay un guardado en vuelo ni durante el «Deshacer»: ahí manda
+  // lo que la persona acaba de tocar.
+  const ultimoSubestado = useRef(item.SUBESTADO)
+  const ultimoCorte = useRef(item.SUBESTADO_CORTE)
+  const [guardandoSub, setGuardandoSub] = useState(false)
+  const [guardandoCorte, setGuardandoCorte] = useState(false)
+
   async function handleCorte(s) {
     const prev = subestadoCorte; setSubestadoCorte(s)
+    setGuardandoCorte(true)
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ SUBESTADO_CORTE: s, _usuarioId: userId }),
       })
       if (!res.ok) { setSubestadoCorte(prev); showToast(AVISO_NO_GUARDO, 'error') }
+      else ultimoCorte.current = s
     } catch { setSubestadoCorte(prev); showToast(AVISO_NO_GUARDO, 'error') }
+    finally { setGuardandoCorte(false) }
   }
 
   // ✅ Listo hace que la prenda salga de «Todos». Durante unos segundos se queda
@@ -168,6 +216,21 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
   const [deshacer, setDeshacer] = useState(null)   // { s, areaRol } a restaurar
   const timerDeshacer = useRef(null)
   useEffect(() => () => clearTimeout(timerDeshacer.current), [])
+
+  useEffect(() => {
+    if (guardandoSub || deshacer) return
+    if (item.SUBESTADO === ultimoSubestado.current) return
+    ultimoSubestado.current = item.SUBESTADO
+    const p = parseSubestadoP(item.SUBESTADO, item.AREA)
+    setEstadosLocales(p?.tipo === 'multi' ? { ...p.estados } : { _s: p?.estado || 'SOLICITADO' })
+  }, [item.SUBESTADO, item.AREA, guardandoSub, deshacer])
+
+  useEffect(() => {
+    if (guardandoCorte) return
+    if (item.SUBESTADO_CORTE === ultimoCorte.current) return
+    ultimoCorte.current = item.SUBESTADO_CORTE
+    setSubestadoCorte(item.SUBESTADO_CORTE || 'PENDIENTE')
+  }, [item.SUBESTADO_CORTE, guardandoCorte])
 
   const fotos = [
     { key: 'FOTO_PECHO_URL', label: 'Pecho' },
@@ -178,6 +241,8 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
 
   const [fotoActiva, setFotoActiva] = useState(fotos[0]?.key || null)
   const [fotoFullscreen, setFotoFullscreen] = useState(null)
+  useCerrarConEscape(!!fotoFullscreen, () => setFotoFullscreen(null))
+  const fotoActual = fotos.find(f => f.key === (fotoActiva || fotos[0]?.key)) || fotos[0]
   const [editingNota, setEditingNota] = useState(false)
   const [notaText, setNotaText] = useState(item.NOTAS_AREA || '')
   const [notaGuardada, setNotaGuardada] = useState(item.NOTAS_AREA || '')
@@ -195,6 +260,7 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
     } else {
       setEstadosLocales({_s: s})
     }
+    setGuardandoSub(true)
     try {
       const res = await fetch(`/api/pedidos/item/${item.ITEM_ID}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -205,6 +271,9 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
         showToast(AVISO_NO_GUARDO, 'error')
       } else {
         const nuevoGlobal = areaRol ? globalP({...estadosLocales, [areaRol]: s}) : s
+        // Lo que el padre va a guardar en item.SUBESTADO: es nuestro propio eco,
+        // no un cambio que haya que re-sincronizar.
+        ultimoSubestado.current = nuevoGlobal
         onSubestadoChange?.(item.ITEM_ID, nuevoGlobal)
         if (s === 'LISTO') {
           setDeshacer({ s: anterior, areaRol })
@@ -214,6 +283,8 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
     } catch {
       setEstadosLocales(esMulti ? {...parsed.estados} : {_s: parsed?.estado||'SOLICITADO'})
       showToast(AVISO_NO_GUARDO, 'error')
+    } finally {
+      setGuardandoSub(false)
     }
   }
 
@@ -233,12 +304,28 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
 
   return (
     <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
           <div className="font-semibold text-white">{item.PRODUCTO_NOMBRE}</div>
-          <div className="text-xs text-gray-500 mt-0.5">{item.COLOR} · {item.TALLA} · {item.CANTIDAD} uni</div>
+          {/* Lo que la persona del taller busca de un vistazo: QUÉ talla y
+              CUÁNTAS. Antes iba en una línea gris de 12 px, igual que la fecha. */}
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            {item.COLOR && (
+              <span className="px-2 py-0.5 rounded-md bg-gray-800 border border-gray-700 text-sm font-semibold text-white">
+                {item.COLOR}
+              </span>
+            )}
+            {item.TALLA && (
+              <span className="px-2 py-0.5 rounded-md bg-gray-700 border border-gray-600 text-base font-bold text-white">
+                <span className="text-xs font-medium text-gray-300 mr-1">Talla</span>{item.TALLA}
+              </span>
+            )}
+            <span className="px-2 py-0.5 rounded-md bg-gray-700 border border-gray-600 text-base font-bold text-white">
+              {item.CANTIDAD}<span className="text-xs font-medium text-gray-300 ml-1">uni</span>
+            </span>
+          </div>
         </div>
-        <span className={`badge text-xs text-white ${SUBESTADO_CONFIG[subestadoActual]?.color || 'bg-gray-700'}`}>
+        <span className={`badge text-xs text-white flex-shrink-0 ${SUBESTADO_CONFIG[subestadoActual]?.color || 'bg-gray-700'}`}>
           {SUBESTADO_CONFIG[subestadoActual]?.label || subestadoActual}
         </span>
       </div>
@@ -259,47 +346,56 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
         <div className="w-full sm:w-40 flex-shrink-0">
           {fotos.length > 0 ? (
             <>
-              <div className="w-full h-56 sm:w-40 sm:h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer"
-                onClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
-                <img src={imagenAncho(item[fotoActiva || fotos[0].key], 600)} className="w-full h-full object-contain" alt="foto" />
-              </div>
+              {/* Un <button> y no un <div> con onClick: con teclado o lector de
+                  pantalla el div no existía. */}
+              <button type="button"
+                onClick={() => setFotoFullscreen({ url: item[fotoActual.key], label: fotoActual.label })}
+                aria-label={`Ampliar foto ${fotoActual.label} de ${item.PRODUCTO_NOMBRE || 'la prenda'}`}
+                className="block w-full h-56 sm:w-40 sm:h-40 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 mb-2 cursor-pointer hover:border-gray-500 transition-colors">
+                <img src={imagenAncho(item[fotoActual.key], 600)} className="w-full h-full object-contain"
+                  alt={`Diseño ${fotoActual.label} — ${item.PRODUCTO_NOMBRE || 'prenda'}`} />
+              </button>
               {fotos.length > 1 && (
                 <div className="flex gap-2 flex-wrap">
                   {fotos.map(f => (
-                    <button key={f.key} onClick={() => setFotoActiva(f.key)}
-                      className={`flex flex-col items-center gap-0.5 p-1 rounded-lg border transition-all
-                        ${(fotoActiva || fotos[0].key) === f.key ? 'border-mandarina-500' : 'border-gray-700'}`}>
-                      <img src={item[f.key]} className="w-11 h-11 sm:w-10 sm:h-10 rounded object-cover" alt={f.label} />
-                      <span className="text-[10px] text-gray-500">{f.label}</span>
+                    <button key={f.key} type="button" onClick={() => setFotoActiva(f.key)}
+                      aria-pressed={fotoActual.key === f.key}
+                      className={`flex flex-col items-center gap-0.5 p-1 rounded-lg border transition-colors
+                        ${fotoActual.key === f.key ? 'border-mandarina-500' : 'border-gray-700'}`}>
+                      {/* La miniatura mide 44 px: bajar la foto de 600 px por cada
+                          pestaña era gastar datos del celular del taller. */}
+                      <img src={imagenAncho(item[f.key], 120)} className="w-11 h-11 sm:w-10 sm:h-10 rounded object-cover" alt="" />
+                      <span className="text-[10px] text-gray-400">{f.label}</span>
                     </button>
                   ))}
                 </div>
               )}
-              <div className="text-xs text-gray-600 mt-1 text-center">👆 Toca para ampliar</div>
+              <div className="text-xs text-gray-400 mt-1 text-center">👆 Toca para ampliar</div>
             </>
           ) : (
             <div className="w-full h-40 sm:w-40 sm:h-40 rounded-xl border border-gray-800 bg-gray-800/50 flex items-center justify-center">
-              <span className="text-gray-600 text-xs text-center px-2">Sin fotos de diseño</span>
+              <span className="text-gray-400 text-xs text-center px-2">Sin fotos de diseño</span>
             </div>
           )}
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div className="bg-gray-800/50 rounded-xl px-3 py-2 space-y-1.5">
-            <div className="text-xs"><span className="text-gray-500">Área:</span>{' '}<span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
+            <div className="text-xs"><span className="text-gray-400">Área:</span>{' '}<span className="text-mandarina-400 font-medium">{item.AREA}</span></div>
             {item.DETALLE_PERSONALIZADO && (
-              <div className="text-xs"><span className="text-gray-500">Detalle:</span>{' '}<span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
+              <div className="text-xs"><span className="text-gray-400">Detalle:</span>{' '}<span className="text-gray-300">{item.DETALLE_PERSONALIZADO}</span></div>
             )}
           </div>
 
           {editingNota ? (
             <div>
-              <textarea className="input resize-none text-sm mb-2 w-full" rows={2} placeholder="Nota para este producto..."
+              <textarea className="input resize-none text-sm mb-2 w-full" rows={2} placeholder="Nota para este producto…"
+                aria-label={`Nota para ${item.PRODUCTO_NOMBRE || 'este producto'}`}
                 value={notaText} onChange={e => setNotaText(e.target.value)} autoFocus />
               {notaError && <div className="text-xs text-red-400 mb-2">⚠️ {notaError}</div>}
               <div className="flex gap-2">
                 <button onClick={handleGuardarNota} disabled={savingNota} className="btn-primary text-xs px-3 py-1.5">
-                  {savingNota ? '⏳ Guardando...' : 'Guardar'}
+                  {savingNota ? '⏳ Guardando…' : 'Guardar'}
                 </button>
                 <button onClick={() => {setNotaText(notaGuardada);setEditingNota(false);setNotaError('')}} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
               </div>
@@ -307,7 +403,7 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
           ) : (
             <div>
               {notaGuardada && <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 mb-1">📝 {notaGuardada}</div>}
-              <button onClick={() => {setNotaText(notaGuardada);setEditingNota(true)}} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+              <button onClick={() => {setNotaText(notaGuardada);setEditingNota(true)}} className="text-xs text-gray-400 hover:text-white transition-colors">
                 {notaGuardada ? '✏️ Editar nota' : '+ Agregar nota'}
               </button>
             </div>
@@ -318,9 +414,9 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
               <div className="text-xs font-bold text-gray-400 mb-1.5">✂️ CORTE DE TELA</div>
               <div className="flex gap-1">
                 {CORTE_CONFIG.map(s => (
-                  <button key={s.key} onClick={() => handleCorte(s.key)}
-                    className={`flex-1 py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-all
-                      ${subestadoCorte===s.key ? `${s.cls} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                  <button key={s.key} onClick={() => handleCorte(s.key)} aria-pressed={subestadoCorte===s.key}
+                    className={`flex-1 py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-colors
+                      ${subestadoCorte===s.key ? `${s.cls} text-white` : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
                     {s.label}
                   </button>
                 ))}
@@ -328,7 +424,7 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
             </div>
           ) : (
             <div className="flex items-center gap-2 rounded-xl border border-gray-800 px-3 py-2">
-              <span className="text-xs text-gray-500">✂️ Corte:</span>
+              <span className="text-xs text-gray-400">✂️ Corte:</span>
               <span className={`text-xs font-bold text-white px-2 py-0.5 rounded-full ${
                 subestadoCorte==='CORTADO' ? 'bg-green-600' : subestadoCorte==='SOLICITADO' ? 'bg-yellow-600' : 'bg-gray-600'
               }`}>
@@ -348,9 +444,9 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
                     {esMiArea ? (
                       <div className="grid grid-cols-2 gap-1.5">
                         {SUBESTADOS_ORDEN.map(s => (
-                          <button key={s} onClick={() => handleSubestado(s, area)}
-                            className={`py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-all
-                              ${estadoArea===s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                          <button key={s} onClick={() => handleSubestado(s, area)} aria-pressed={estadoArea===s}
+                            className={`py-2.5 min-h-[44px] rounded-lg text-xs font-semibold transition-colors
+                              ${estadoArea===s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
                             {SUBESTADO_CONFIG[s]?.label}
                           </button>
                         ))}
@@ -367,9 +463,9 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
           ) : (
             <div className="grid grid-cols-2 gap-1.5 mt-auto">
               {SUBESTADOS_ORDEN.map(s => (
-                <button key={s} onClick={() => handleSubestado(s, null)}
-                  className={`py-2.5 min-h-[44px] rounded-xl text-xs font-semibold transition-all
-                    ${subestadoActual===s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                <button key={s} onClick={() => handleSubestado(s, null)} aria-pressed={subestadoActual===s}
+                  className={`py-2.5 min-h-[44px] rounded-xl text-xs font-semibold transition-colors
+                    ${subestadoActual===s ? `${SUBESTADO_CONFIG[s]?.color} text-white` : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
                   {SUBESTADO_CONFIG[s]?.label}
                 </button>
               ))}
@@ -379,9 +475,19 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
       </div>
 
       {fotoFullscreen && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={() => setFotoFullscreen(null)}>
-          <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" alt="fullscreen" />
-          <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
+          role="dialog" aria-modal="true"
+          aria-label={`Foto ${fotoFullscreen.label} de ${item.PRODUCTO_NOMBRE || 'la prenda'}`}
+          onClick={() => setFotoFullscreen(null)}>
+          <img src={fotoFullscreen.url} className="max-w-full max-h-full object-contain rounded-xl"
+            alt={`Diseño ${fotoFullscreen.label} — ${item.PRODUCTO_NOMBRE || 'prenda'}, ampliado`} />
+          {/* El ✕ cerraba solo porque el clic "atravesaba" hasta el fondo. Con
+              teclado no hacía nada: ahora tiene su propio onClick. */}
+          <button type="button" autoFocus aria-label="Cerrar"
+            onClick={(e) => { e.stopPropagation(); setFotoFullscreen(null) }}
+            className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-11 h-11 flex items-center justify-center hover:bg-black/70 transition-colors">
+            <span aria-hidden="true">✕</span>
+          </button>
         </div>
       )}
     </div>
@@ -399,11 +505,15 @@ const CHIP_P = {
   filtroTienda:    (v) => ({ MANDARINA: '🍊 Mandarina', INDSTORE: '🏬 Indstore' }[v] || v),
   fechaDesde:      (v) => `Desde ${v}`,
   fechaHasta:      (v) => `Hasta ${v}`,
+  filtroEntrega:   (v) => ({ ATRASADOS: '🚨 Atrasados', PRONTO: '⏰ Vencen en ≤2 días' }[v] || v),
 }
 
 const POR_DEFECTO_P = {
   busqueda: '', filtroSubestado: 'TODOS', filtroArea: 'TODAS', filtroTienda: 'TODAS',
   fechaDesde: '', fechaHasta: '',
+  // 'TODOS' | 'ATRASADOS' | 'PRONTO'. Lo ponen los botones del aviso de entregas;
+  // como cualquier otro filtro, se restaura, enciende AvisoFiltros y sale de chip.
+  filtroEntrega: 'TODOS',
   visibles: PAGE_SIZE_P, scroll: 0, expandidos: [], panelAbierto: false,
 }
 
@@ -414,6 +524,7 @@ export default function ProduccionPage() {
   const [loading, setLoading] = useState(true)
   const [generandoPdf, setGenerandoPdf] = useState(null)
   const [pdfPreviewPedido, setPdfPreviewPedido] = useState(null)
+  useCerrarConEscape(!!pdfPreviewPedido, () => setPdfPreviewPedido(null))
 
   // Filtros, paginacion, tarjetas abiertas y scroll sobreviven a que la pantalla
   // se remonte (salir y volver, descarte de pestana, arranque en frio de la PWA).
@@ -422,6 +533,9 @@ export default function ProduccionPage() {
     useEstadoPantalla('produccion', POR_DEFECTO_P,
       { alFiltrar: { visibles: PAGE_SIZE_P, scroll: 0 }, noSonFiltro: ['visibles', 'scroll', 'expandidos', 'panelAbierto'] })
   const { busqueda, filtroSubestado, filtroArea, filtroTienda, fechaDesde, fechaHasta, visibles } = valores
+  // Un estado guardado antes de que existiera este filtro no lo trae: vale 'TODOS'.
+  const filtroEntrega = valores.filtroEntrega || 'TODOS'
+  const setFiltroEntrega  = (v) => setFiltro('filtroEntrega', v)
   const setBusqueda       = (v) => setFiltro('busqueda', v)
   const setFiltroSubestado = (v) => setFiltro('filtroSubestado', v)
   const setFiltroArea     = (v) => setFiltro('filtroArea', v)
@@ -437,6 +551,19 @@ export default function ProduccionPage() {
   // "vacío", y "vacío" significaba cinco cosas distintas.
   const [estado, setEstado] = useState('CARGANDO')
   const [errorTexto, setErrorTexto] = useState('')
+  // Para no apilar cargas: el refresco periódico se salta si ya hay una en vuelo.
+  const cargaEnCurso = useRef(false)
+  // Cuándo llegó la última lista BUENA. Un error no cuenta como "actualizado".
+  const [ultimaCarga, setUltimaCarga] = useState(null)
+  // Un refresco AUTOMÁTICO que falla (wifi del taller que parpadea) no borra la
+  // lista buena: la deja y avisa en rojo que lo que se ve es de antes. La carga
+  // normal (abrir la pantalla, Reintentar) sigue mostrando la tarjeta de ERROR.
+  const [fallaRefresco, setFallaRefresco] = useState(false)
+  // ¿Hay una lista buena en pantalla? (no CARGANDO ni ERROR). Ref para que
+  // loadItems, que es useCallback sin dependencias, la lea al día.
+  const hayListaRef = useRef(false)
+  useEffect(() => { hayListaRef.current = estado !== 'CARGANDO' && estado !== 'ERROR' }, [estado])
+  const [ahora, setAhora] = useState(() => Date.now())
 
   const contenedorRef = useRef(null)
   useScrollGuardado(contenedorRef, valores.scroll, (y) => set('scroll', y),
@@ -459,6 +586,7 @@ export default function ProduccionPage() {
   const loadItems = useCallback(async (silencioso = false) => {
     if (!silencioso) { setLoading(true); setEstado('CARGANDO') }
     setErrorTexto('')
+    cargaEnCurso.current = true
     try {
       // El servidor ya filtra por estado y por las áreas de quien pregunta (contra
       // la cookie firmada), así que acá NO se vuelve a filtrar por EN_FABRICA, ni
@@ -467,26 +595,28 @@ export default function ProduccionPage() {
       const res = await fetch('/api/produccion', { cache: 'no-store' })
       if (!res.ok) {
         const detalle = await res.json().catch(() => ({}))
+        if (silencioso && hayListaRef.current) { setFallaRefresco(true); return }
         setErrorTexto(detalle.error || `HTTP ${res.status}`)
         setPedidos([]); setEstado('ERROR')
         return
       }
       const data = await res.json()
+      // Por URGENCIA: lo atrasado arriba, después lo que vence antes. Antes iba
+      // por fecha de pedido y lo que vencía hoy podía quedar en la página 3.
+      // El comparador vive en lib/orden-produccion.js, probado aparte.
       const lista = (data.pedidos || [])
-        .sort((a, b) => {
-          const fa = parseFecha(a.FECHA_PEDIDO) || new Date(0)
-          const fb = parseFecha(b.FECHA_PEDIDO) || new Date(0)
-          if (fb - fa !== 0) return fb - fa
-          return (b.PEDIDO_ID || '').localeCompare(a.PEDIDO_ID || '')
-        })
+        .sort(comparadorUrgencia())
         .map(p => ({ ...p, itemsFiltrados: p.items || [] }))
       setPedidos(lista)
       setEstado(estadoBandeja({ ok: true, completo: data.meta?.completo, pedidos: lista }))
+      setUltimaCarga(Date.now())
+      setFallaRefresco(false)
     } catch (e) {
+      if (silencioso && hayListaRef.current) { setFallaRefresco(true); return }
       // Una respuesta que no es JSON también es un fallo, no una lista vacía.
       setErrorTexto(e?.message || 'Error de conexión')
       setPedidos([]); setEstado('ERROR')
-    } finally { setLoading(false) }
+    } finally { setLoading(false); cargaEnCurso.current = false }
   }, [])
 
   // Refresco al volver a la pestaña (decisión de Rodrigo, 19-ago-2026).
@@ -496,11 +626,32 @@ export default function ProduccionPage() {
   // así que el momento en que importa refrescar es justo cuando vuelve.
   useEffect(() => {
     function alVolver() {
-      if (document.visibilityState === 'visible') loadItems(true)   // sin spinner
+      if (document.visibilityState === 'visible' && !cargaEnCurso.current) loadItems(true)   // sin spinner
     }
     document.addEventListener('visibilitychange', alVolver)
     return () => document.removeEventListener('visibilitychange', alVolver)
   }, [loadItems])
+
+  // Refresco periódico mientras la pantalla está A LA VISTA (decisión 21-nov-2026).
+  //
+  // El taller deja la bandeja abierta en un celular o una tablet toda la mañana:
+  // volver a la pestaña no ocurre nunca, así que lo que entraba no aparecía.
+  // Con la pestaña oculta no se pide nada (ahorra datos y base); al volver ya
+  // refresca el efecto de arriba. Silencioso: no desmonta la lista ni el scroll.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      if (cargaEnCurso.current) return
+      loadItems(true)
+    }, MS_REFRESCO)
+    return () => clearInterval(id)
+  }, [loadItems])
+
+  // Solo repinta el "hace X min"; no pide nada.
+  useEffect(() => {
+    const id = setInterval(() => setAhora(Date.now()), MS_RELOJ)
+    return () => clearInterval(id)
+  }, [])
 
   // Prendas recién marcadas ✅ Listo: siguen a la vista unos segundos (con su
   // «Deshacer» en la tarjeta) aunque el filtro «Todos» esconda lo LISTO.
@@ -535,7 +686,7 @@ export default function ProduccionPage() {
     return AREAS_BASE_P.filter(a => areasU.includes(a))
   })()
 
-  const filtered = pedidos
+  const filtradoBase = pedidos
     .map(p => ({
       ...p,
       itemsFiltrados: p.itemsFiltrados.filter(item => {
@@ -583,11 +734,21 @@ export default function ProduccionPage() {
       return true
     })
 
+  // Los contadores del aviso salen de la lista ANTES del filtro de entrega: si
+  // no, al pulsar «Atrasados» el otro botón se quedaba en 0 y desaparecía, y no
+  // había forma de pasar de uno a otro sin quitar el chip primero.
+  const conteoEntrega = contarEntregas(filtradoBase)
+  const filtered = filtroEntrega === 'TODOS'
+    ? filtradoBase
+    : filtradoBase.filter(p => pasaFiltroEntrega(p, filtroEntrega))
+
   const totalPendientes = filtered.reduce((s, p) => s + p.itemsFiltrados.length, 0)
-  const urgentes = filtered.filter(p => {
-    const d = diasHastaEntrega(p.FECHA_ENTREGA_PROMETIDA)
-    return d !== null && d <= 2
-  }).length
+  const textoTotal = textoConteo(totalPendientes, filtroSubestado, { busqueda })
+  // Un botón con 0 no se pinta… salvo que sea el filtro puesto: ahí tiene que
+  // seguir a la vista (pulsado) para poder quitarlo desde el mismo sitio.
+  const verAtrasados = conteoEntrega.atrasados > 0 || filtroEntrega === 'ATRASADOS'
+  const verPronto = conteoEntrega.pronto > 0 || filtroEntrega === 'PRONTO'
+  const chipsActivos = chipsDe(CHIP_P)
 
   const areaLabel = user?.rol === 'ADMIN' ? '' :
     (user?.areas?.length > 0 && user.areas[0] !== 'TODAS') ? ` · ${user.areas.join(', ')}` : ` · ${user?.rol}`
@@ -646,14 +807,30 @@ export default function ProduccionPage() {
       <BarraFiltros
         titulo="Producción"
         insignia={(
-          <span className="text-xs text-gray-500 truncate">{totalPendientes} ítem(s) pendientes{areaLabel}</span>
+          <>
+            <span className="text-xs text-gray-400 truncate">{textoTotal}{areaLabel}</span>
+            {/* En una pantalla que pasa el día abierta, saber de cuándo es lo que
+                se ve importa tanto como lo que se ve. ⟳ recarga sin spinner. */}
+            {ultimaCarga && (
+              <button type="button" onClick={() => { if (!cargaEnCurso.current) loadItems(true) }}
+                title="Recargar ahora"
+                aria-label={fallaRefresco
+                  ? `No se pudo actualizar. Lo que ves es de ${haceCuanto(ultimaCarga, ahora)}. Reintentar`
+                  : `Actualizado ${haceCuanto(ultimaCarga, ahora)}. Recargar ahora`}
+                className={`text-xs whitespace-nowrap flex-shrink-0 min-h-[32px] px-1 transition-colors ${fallaRefresco ? 'text-red-400 hover:text-red-300 font-semibold' : 'text-gray-400 hover:text-white'}`}>
+                {fallaRefresco
+                  ? <>⚠️ <span className="hidden sm:inline">Sin actualizar · </span>{haceCuanto(ultimaCarga, ahora)} · <span aria-hidden="true">⟳</span></>
+                  : <><span className="hidden sm:inline">Actualizado </span>{haceCuanto(ultimaCarga, ahora)} · <span aria-hidden="true">⟳</span></>}
+              </button>
+            )}
+          </>
         )}
         accion={(
           <Link href="/dashboard/impresion" className="btn-secondary text-xs px-3 py-2 flex-shrink-0">🖨️ Imprimir</Link>
         )}
         busqueda={busqueda}
         onBusqueda={setBusqueda}
-        placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
+        placeholder="Buscar por pedido, producto, nombre, cédula o celular…"
         chips={chipsDe(CHIP_P)}
         onQuitarChip={quitarFiltro}
         onLimpiar={limpiarFiltros}
@@ -667,7 +844,7 @@ export default function ProduccionPage() {
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Estado</span>
               <select value={filtroSubestado} onChange={e => setFiltroSubestado(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-colors
                   ${filtroSubestado !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                 <option value="TODOS">Todos</option>
                 <option value="SOLICITADO">⏳ Solicitado</option>
@@ -682,7 +859,7 @@ export default function ProduccionPage() {
               <div className="flex flex-col gap-1">
                 <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Área</span>
                 <select value={filtroArea} onChange={e => setFiltroArea(e.target.value)}
-                  className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                  className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-colors
                     ${filtroArea !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                   <option value="TODAS">Todas</option>
                   {opcionesArea.includes('ESTAMPADO') && <option value="ESTAMPADO">🎨 Estampado</option>}
@@ -695,7 +872,7 @@ export default function ProduccionPage() {
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Tienda</span>
               <select value={filtroTienda} onChange={e => setFiltroTienda(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-colors
                   ${filtroTienda !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                 <option value="TODAS">Todas</option>
                 <option value="MANDARINA">🍊 Mandarina</option>
@@ -706,7 +883,7 @@ export default function ProduccionPage() {
             {/* Fecha */}
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha desde</span>
-              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-colors
                 ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
                 value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
             </div>
@@ -716,14 +893,38 @@ export default function ProduccionPage() {
       <div ref={contenedorRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-3">
           <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
-          {urgentes > 0 && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4">
-              <div className="text-red-400 font-semibold text-sm">🚨 {urgentes} pedido(s) urgente(s) — entrega en ≤2 días</div>
+          {/* «Urgente» mezclaba lo que YA se pasó con lo que vence pasado mañana,
+              y son trabajos distintos: lo atrasado hay que avisarlo al cliente.
+              Cada cuenta es un botón que filtra (y sale como chip). */}
+          {(verAtrasados || verPronto) && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-2 mb-4 flex flex-wrap gap-2"
+              role="group" aria-label="Pedidos por fecha de entrega">
+              {verAtrasados && (
+                <button type="button" aria-pressed={filtroEntrega === 'ATRASADOS'}
+                  onClick={() => setFiltroEntrega(filtroEntrega === 'ATRASADOS' ? 'TODOS' : 'ATRASADOS')}
+                  className={`flex-1 min-w-[140px] min-h-[44px] px-3 rounded-lg text-sm font-semibold border transition-colors
+                    ${filtroEntrega === 'ATRASADOS'
+                      ? 'bg-red-600 border-red-500 text-white'
+                      : 'bg-transparent border-red-500/40 text-red-400 hover:bg-red-500/10'}`}>
+                  🚨 {plural(conteoEntrega.atrasados, 'atrasado')}
+                </button>
+              )}
+              {verPronto && (
+                <button type="button" aria-pressed={filtroEntrega === 'PRONTO'}
+                  onClick={() => setFiltroEntrega(filtroEntrega === 'PRONTO' ? 'TODOS' : 'PRONTO')}
+                  className={`flex-1 min-w-[140px] min-h-[44px] px-3 rounded-lg text-sm font-semibold border transition-colors
+                    ${filtroEntrega === 'PRONTO'
+                      ? 'bg-amber-500 border-amber-400 text-gray-950'
+                      : 'bg-transparent border-amber-500/40 text-amber-300 hover:bg-amber-500/10'}`}>
+                  ⏰ {conteoEntrega.pronto} {conteoEntrega.pronto === 1 ? 'vence' : 'vencen'} en ≤2 días
+                </button>
+              )}
             </div>
           )}
           {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+            <div role="status" className="flex flex-col items-center gap-3 py-12">
+              <div aria-hidden="true" className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-gray-400">Cargando…</span>
             </div>
           ) : estado === 'ERROR' ? (
             /* Un fallo NO es "no hay trabajo". Antes los dos se veían igual y por
@@ -731,8 +932,8 @@ export default function ProduccionPage() {
             <div className="card p-8 text-center border-red-500/40">
               <div className="text-4xl mb-3">⚠️</div>
               <div className="font-medium text-white">No se pudo cargar la bandeja</div>
-              <div className="text-sm text-gray-500 mt-1">{errorTexto}</div>
-              <div className="text-xs text-gray-600 mt-2 max-w-sm mx-auto">
+              <div className="text-sm text-gray-400 mt-1">{errorTexto}</div>
+              <div className="text-xs text-gray-400 mt-2 max-w-sm mx-auto">
                 No es que no haya trabajo: es que no pudimos leerlo. Si sigue pasando, avisa.
               </div>
               <button onClick={() => loadItems()} className="btn-primary text-sm px-4 py-2 mt-4">
@@ -743,7 +944,7 @@ export default function ProduccionPage() {
             <div className="card p-8 text-center">
               <div className="text-4xl mb-3">✅</div>
               <div className="font-medium text-white">¡Todo al día!</div>
-              <div className="text-sm text-gray-500 mt-1">No hay ítems pendientes en tu área</div>
+              <div className="text-sm text-gray-400 mt-1">No hay ítems pendientes en tu área</div>
             </div>
           ) : (
             <>
@@ -761,24 +962,49 @@ export default function ProduccionPage() {
             )}
             {/* Expandir/Contraer se subieron a la cabecera fija, junto a los
                 filtros: acá abajo se iban con el scroll. */}
-            <div className="text-xs text-gray-600 mb-3">
-              {hayMas ? `Mostrando ${paginados.length} de ${filtered.length} pedido(s)` : `${filtered.length} pedido(s)`}
+            <div className="text-xs text-gray-400 mb-3">
+              {hayMas ? `Mostrando ${paginados.length} de ${plural(filtered.length, 'pedido')}` : plural(filtered.length, 'pedido')}
             </div>
+            {/* La carga salió bien pero los filtros no dejan nada: decirlo, con la
+                salida al lado. Sin esto la pantalla quedaba en blanco, que se lee
+                igual que "no hay trabajo". */}
+            {filtered.length === 0 && (
+              <div className="card p-6 text-center text-sm text-gray-400">
+                {chipsActivos.length > 0 ? (
+                  <>
+                    Ningún pedido con estos filtros ·{' '}
+                    <button type="button" onClick={limpiarFiltros}
+                      className="text-mandarina-400 font-semibold hover:underline min-h-[32px]">
+                      Limpiar filtros
+                    </button>
+                  </>
+                ) : 'Ningún pedido pendiente en esta vista'}
+              </div>
+            )}
             <div className="space-y-3">
               {paginados.map(pedido => {
                 const diasR = diasHastaEntrega(pedido.FECHA_ENTREGA_PROMETIDA)
                 const urgente = diasR !== null && diasR <= 2
+                const entrega = textoEntrega(diasR)
                 const isExpanded = expandedPedidos.has(pedido.PEDIDO_ID)
                 const generando = generandoPdf === pedido.PEDIDO_ID
                 const tiendaColor = TIENDA_COLORS[pedido.TIENDA_ID] || '#FF6B00'
+                const alternar = () => setExpandedPedidos(prev => { const n = new Set(prev); n.has(pedido.PEDIDO_ID) ? n.delete(pedido.PEDIDO_ID) : n.add(pedido.PEDIDO_ID); return n })
+                const nItems = pedido.itemsFiltrados.length
+                const faltan = Math.max(0, (pedido.PRENDAS_TOTAL ?? 0) - (pedido.PRENDAS_LLEGARON ?? 0))
+                const idPrendas = `prendas-${pedido.PEDIDO_ID}`
 
                 return (
                   <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${urgente ? 'border-red-500/40' : ''}`}>
-                    <div role="button" tabIndex={0}
-                      onClick={() => setExpandedPedidos(prev => { const n = new Set(prev); n.has(pedido.PEDIDO_ID) ? n.delete(pedido.PEDIDO_ID) : n.add(pedido.PEDIDO_ID); return n })}
-                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click() } }}
-                      className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left cursor-pointer">
-                      <div className="flex-1">
+                    {/* La fila era un div role="button" con un Link, un select y
+                        botones DENTRO: controles anidados que el lector de
+                        pantalla no sabe anunciar y que el teclado activaba dos
+                        veces. Ahora el ▼ es el botón de verdad (aria-expanded) y
+                        el resto son hermanos. El clic en cualquier zona libre
+                        de la fila sigue abriendo, por comodidad con el dedo. */}
+                    <div onClick={alternar}
+                      className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-colors text-left cursor-pointer">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <Link href={`/dashboard/pedido/${pedido.PEDIDO_ID}`}
                             onClick={e => e.stopPropagation()}
@@ -808,13 +1034,36 @@ export default function ProduccionPage() {
                                   : x))
                               }}
                               className="badge bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30">
-                              ⟳ Cargar las {Math.max(0, (pedido.PRENDAS_TOTAL ?? 0) - (pedido.PRENDAS_LLEGARON ?? 0))} prendas que faltan
+                              ⟳ {faltan === 1 ? 'Cargar la prenda que falta' : `Cargar las ${faltan} prendas que faltan`}
                             </button>
                           )}
-                          <span className="text-xs text-gray-600">{pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>
+                          <span className="text-xs" role="img" aria-label={pedido.TIENDA_ID === 'MANDARINA' ? 'Mandarina' : 'Indstore'}>
+                            {pedido.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}
+                          </span>
                         </div>
-                        <div className="text-xs text-gray-500">
-                          {pedido.itemsFiltrados.length} ítem(s){diasR !== null && ` · ${diasR}d restantes`} · {formatFechaDia(pedido.FECHA_PEDIDO)}
+                        {/* Con la fila plegada todas se veían iguales ("2 ítems ·
+                            5d restantes"): el nombre de la primera prenda dice de
+                            qué pedido se trata sin abrirlo. */}
+                        {nItems > 0 && (
+                          <div className="text-sm text-gray-300 truncate">
+                            {pedido.itemsFiltrados[0]?.PRODUCTO_NOMBRE || 'Prenda'}
+                            {nItems > 1 && <span className="text-gray-400"> y {nItems - 1} más</span>}
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-400">
+                          {plural(nItems, 'ítem')}
+                          {entrega && (
+                            <>
+                              {' · '}
+                              <span className={
+                                entrega.tono === 'atrasado' ? 'text-red-400 font-semibold'
+                                : entrega.tono === 'hoy' ? 'text-amber-300 font-semibold'
+                                : ''}>
+                                {entrega.txt}
+                              </span>
+                            </>
+                          )}
+                          {' · '}{formatFechaDia(pedido.FECHA_PEDIDO)}
                         </div>
                       </div>
 
@@ -828,22 +1077,28 @@ export default function ProduccionPage() {
                       <button
                         onClick={e => handleVerPdf(e, pedido)}
                         disabled={generando}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex-shrink-0
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors flex-shrink-0
                           ${generando
                             ? 'border-gray-700 text-gray-600 cursor-not-allowed'
                             : 'border-gray-600 text-gray-300 hover:border-white hover:text-white hover:bg-gray-800'}`}
-                        title="Ver hoja de confección PDF">
+                        title="Ver hoja de confección PDF" aria-label={`Ver hoja de confección PDF de ${pedido.PEDIDO_ID}`}>
                         {generando
-                          ? <span className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
-                          : '👁️'}
-                        <span className="hidden sm:inline">{generando ? 'PDF...' : 'PDF'}</span>
+                          ? <span aria-hidden="true" className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
+                          : <span aria-hidden="true">👁️</span>}
+                        <span className="hidden sm:inline">{generando ? 'PDF…' : 'PDF'}</span>
                       </button>
 
-                      <span className="text-gray-600 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
+                      <button type="button"
+                        onClick={e => { e.stopPropagation(); alternar() }}
+                        aria-expanded={isExpanded} aria-controls={idPrendas}
+                        aria-label={`${isExpanded ? 'Ocultar' : 'Ver'} prendas de ${pedido.PEDIDO_ID}`}
+                        className="text-gray-400 hover:text-white text-sm flex-shrink-0 w-9 h-11 -mr-2 flex items-center justify-center rounded-lg transition-colors">
+                        <span aria-hidden="true">{isExpanded ? '▲' : '▼'}</span>
+                      </button>
                     </div>
 
                     {isExpanded && (
-                      <div className="border-t border-gray-800 divide-y divide-gray-800">
+                      <div id={idPrendas} className="border-t border-gray-800 divide-y divide-gray-800">
                         {pedido.itemsFiltrados.map(item => (
                           <ItemCard
                             key={item.ITEM_ID}
@@ -862,7 +1117,7 @@ export default function ProduccionPage() {
             {hayMas && (
               <button
                 onClick={() => setVisibles(v => v + PAGE_SIZE_P)}
-                className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
+                className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-colors">
                 Cargar más ({filtered.length - visibles} restantes)
               </button>
             )}
@@ -874,18 +1129,22 @@ export default function ProduccionPage() {
       {/* Modal preview PDF */}
       {pdfPreviewPedido && (
         <div className="fixed inset-0 bg-black/90 z-50 overflow-auto p-4"
+          role="dialog" aria-modal="true" aria-labelledby="pdf-prod-titulo"
           onClick={e => e.target === e.currentTarget && setPdfPreviewPedido(null)}>
           <div className="max-w-3xl mx-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-semibold">{pdfPreviewPedido.PEDIDO_ID}</h3>
+              <h3 id="pdf-prod-titulo" className="text-white font-semibold">
+                <span className="sr-only">Hoja de confección </span>{pdfPreviewPedido.PEDIDO_ID}
+              </h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => handleDescargarPdf(pdfPreviewPedido)}
                   disabled={generandoPdf === pdfPreviewPedido.PEDIDO_ID}
                   className="btn-primary text-sm px-4 py-2">
-                  {generandoPdf === pdfPreviewPedido.PEDIDO_ID ? '⏳...' : '⬇️ Descargar'}
+                  {generandoPdf === pdfPreviewPedido.PEDIDO_ID ? '⏳…' : '⬇️ Descargar'}
                 </button>
-                <button onClick={() => setPdfPreviewPedido(null)} className="btn-secondary text-sm px-4 py-2">✕</button>
+                <button type="button" autoFocus onClick={() => setPdfPreviewPedido(null)} aria-label="Cerrar"
+                  className="btn-secondary text-sm px-4 py-2"><span aria-hidden="true">✕</span></button>
               </div>
             </div>
             <div className="bg-white rounded-xl overflow-hidden">
