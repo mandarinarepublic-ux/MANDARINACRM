@@ -53,7 +53,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-mandarina-500 rounded-2xl mb-4 text-3xl">
+          <div aria-hidden="true" className="inline-flex items-center justify-center w-16 h-16 bg-mandarina-500 rounded-2xl mb-4 text-3xl">
             🍊
           </div>
           <h1 className="text-2xl font-display font-bold text-white">Mandarina Pro</h1>
@@ -63,30 +63,45 @@ export default function LoginPage() {
         <div className="card p-6">
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Usuario</label>
+              {/* htmlFor + id: tocar la etiqueta enfoca el campo y el lector de
+                  pantalla dice "Usuario". name + autoComplete: el gestor de
+                  contraseñas del celular/PC reconoce el formulario y ofrece
+                  guardar y rellenar (en PCs compartidas, cada quien decide). */}
+              <label htmlFor="login-usuario" className="block text-xs font-medium text-gray-400 mb-1.5">Usuario</label>
               <input
+                id="login-usuario"
+                name="username"
                 type="text"
+                autoComplete="username"
+                spellCheck={false}
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 placeholder="ANDRES"
-                autoCapitalize="characters"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-mandarina-500 transition-colors text-sm"
+                autoCapitalize="none"
+                autoCorrect="off"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-mandarina-500 focus:ring-1 focus:ring-mandarina-500 transition-colors text-sm"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Contraseña</label>
+              <label htmlFor="login-clave" className="block text-xs font-medium text-gray-400 mb-1.5">Contraseña</label>
               <input
+                id="login-clave"
+                name="password"
                 type="password"
+                autoComplete="current-password"
+                spellCheck={false}
+                autoCapitalize="none"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-mandarina-500 transition-colors text-sm"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-mandarina-500 focus:ring-1 focus:ring-mandarina-500 transition-colors text-sm"
                 required
               />
             </div>
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+              // role="alert": el error se anuncia apenas aparece.
+              <div role="alert" className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
                 <p className="text-red-400 text-sm">{error}</p>
               </div>
             )}
@@ -97,8 +112,8 @@ export default function LoginPage() {
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Ingresando...
+                  <span aria-hidden="true" className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Ingresando…
                 </span>
               ) : 'Ingresar'}
             </button>

@@ -31,11 +31,16 @@ export default function ConnectionBanner() {
     }
   }, [])
 
+  // Con la PWA a pantalla completa (viewport-fit=cover) la franja empezaba
+  // DEBAJO de la hora/notch y el texto quedaba tapado: se suma el margen seguro.
+  const arriba = { paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }
+
   if (!online) {
+    // role="alert": perder internet a media venta es urgente, se anuncia ya.
     return (
-      <div className="fixed top-0 left-0 right-0 z-[200] bg-red-500 text-white text-center text-sm font-medium py-2 px-4 shadow-2xl">
+      <div role="alert" style={arriba} className="fixed top-0 left-0 right-0 z-[200] bg-red-500 text-white text-center text-sm font-medium py-2 px-4 shadow-2xl">
         <span className="inline-flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <span aria-hidden="true" className="w-2 h-2 rounded-full bg-white animate-pulse motion-reduce:animate-none" />
           Sin conexión a internet — revisa tu WiFi o datos
         </span>
       </div>
@@ -44,8 +49,9 @@ export default function ConnectionBanner() {
 
   if (reconectado) {
     return (
-      <div className="fixed top-0 left-0 right-0 z-[200] bg-green-600 text-white text-center text-sm font-medium py-2 px-4 shadow-2xl">
-        ✅ Conexión restablecida
+      // role="status": es una buena noticia, se anuncia sin interrumpir.
+      <div role="status" style={arriba} className="fixed top-0 left-0 right-0 z-[200] bg-green-600 text-white text-center text-sm font-medium py-2 px-4 shadow-2xl">
+        <span aria-hidden="true">✅</span> Conexión restablecida
       </div>
     )
   }

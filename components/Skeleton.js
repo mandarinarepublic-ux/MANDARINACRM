@@ -3,11 +3,14 @@
 // ─── Skeletons de carga ───────────────────────────────────────────────────────
 // Placeholders gris con la forma real de las tarjetas. Se sienten más rápidos
 // que un spinner porque el usuario ya ve la estructura mientras Sheets responde.
+//
+// aria-hidden: son cajas grises sin contenido; leídas en voz alta solo hacen
+// ruido. motion-reduce:animate-none: el pulso es decorativo.
 
 // Una tarjeta de pedido (misma forma que el Link del historial)
 export function SkeletonCard() {
   return (
-    <div className="card p-4 flex items-center gap-4 animate-pulse">
+    <div aria-hidden="true" className="card p-4 flex items-center gap-4 animate-pulse motion-reduce:animate-none">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-2">
           <div className="h-4 w-20 bg-gray-800 rounded" />
@@ -26,7 +29,7 @@ export function SkeletonCard() {
 // Lista de skeletons (usar mientras loading === true)
 export function SkeletonList({ count = 6 }) {
   return (
-    <div className="space-y-2">
+    <div aria-hidden="true" className="space-y-2">
       {Array.from({ length: count }).map((_, i) => <SkeletonCard key={i} />)}
     </div>
   )
@@ -35,7 +38,7 @@ export function SkeletonList({ count = 6 }) {
 // KPI / stat genérico (por si lo quieres usar en dashboards)
 export function SkeletonStat() {
   return (
-    <div className="card p-4 animate-pulse">
+    <div aria-hidden="true" className="card p-4 animate-pulse motion-reduce:animate-none">
       <div className="h-7 w-16 bg-gray-800 rounded mb-2" />
       <div className="h-3 w-20 bg-gray-800 rounded mb-1" />
       <div className="h-3 w-12 bg-gray-800 rounded" />

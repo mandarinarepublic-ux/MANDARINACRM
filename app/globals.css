@@ -8,18 +8,88 @@
     --indstore: #1A1A2E;
   }
   * { box-sizing: border-box; }
-  body { font-family: var(--font-inter), system-ui, sans-serif; }
+  /* La misma pila que `font-sans` (tailwind.config.js), que es la que de verdad
+     pinta el <body>. Antes decía var(--font-inter), pero la clase font-sans del
+     body siempre le ganaba: se deja igual a lo que se VE para no engañar. */
+  body { font-family: theme('fontFamily.sans'); }
+
+  /* El CRM es oscuro siempre: con esto los controles nativos (barras de scroll,
+     calendario de <input type="date">, <select> abierto, autocompletado) también
+     salen oscuros en vez de blancos. */
+  html { color-scheme: dark; }
+
+  /* El destello azul/gris de Android al tocar se suma al :active de cada botón y
+     se ve como un rectángulo encima de botones redondeados. */
+  html { -webkit-tap-highlight-color: transparent; }
+
+  /* Quita la espera de doble toque (zoom) en celulares viejos: el toque se
+     registra al instante. No impide el zoom con dos dedos. */
+  a, button, input, select, textarea, label, summary, [role="button"] { touch-action: manipulation; }
+
+  /* ── Foco visible con TECLADO ──
+     Las PCs compartidas de fábrica se usan mucho con Tab/Enter. Sin esto, varias
+     pantallas tienen `outline-none` y el foco desaparece: no se sabe dónde está.
+     :focus-visible solo aparece con teclado (no al tocar o hacer clic).
+     El !important existe para ganarle a `outline-none`/`focus:outline-none`
+     de las utilidades, que tienen más especificidad. */
+  button:focus-visible,
+  a:focus-visible,
+  select:focus-visible,
+  summary:focus-visible,
+  [role="button"]:focus-visible,
+  [role="switch"]:focus-visible,
+  [tabindex]:not([tabindex="-1"]):focus-visible,
+  input[type="checkbox"]:focus-visible,
+  input[type="radio"]:focus-visible {
+    outline: 2px solid #f97316 !important;
+    outline-offset: 2px;
+  }
+  /* Los campos de texto NO llevan contorno: un rectángulo naranja sobre un campo
+     redondeado ya se rechazó en otra app. Los que ya tienen su anillo (.input,
+     focus:ring-*) lo conservan: esta regla pesa 0 por el :where() y cualquier
+     utilidad le gana. Solo da un anillo redondeado (box-shadow sigue el
+     border-radius) a los campos que hoy no tienen NINGUNA señal de foco. */
+  :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea):focus-visible {
+    box-shadow: 0 0 0 1px #f97316;
+  }
+
+  /* Alto de la cabecera fija del celular (app/dashboard/layout.js). Con la PWA
+     en viewport-fit=cover + black-translucent, la página empieza DEBAJO de la
+     hora/notch: la cabecera suma ese margen y el contenido baja lo mismo. Una
+     sola variable para los tres que dependen de ella (contenido, avisos, banner). */
+  :root { --alto-cabecera-movil: calc(4rem + env(safe-area-inset-top, 0px)); }
 }
 
 @layer components {
+  /* Transiciones solo de lo que cambia (color, fondo, borde, sombra, opacidad,
+     escala). `transition-all` también animaba alto/ancho/padding cuando cambia
+     el texto del botón o la letra grande, y eso se ve como un salto. */
   .btn-primary {
-    @apply bg-mandarina-500 hover:bg-mandarina-600 text-white font-semibold py-2.5 px-5 rounded-xl transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-mandarina-500 hover:bg-mandarina-600 text-white font-semibold py-2.5 px-5 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-150 motion-safe:active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-secondary {
-    @apply bg-gray-800 hover:bg-gray-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-150;
+    @apply bg-gray-800 hover:bg-gray-700 text-white font-medium py-2.5 px-5 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity] duration-150;
   }
   .btn-ghost {
-    @apply text-gray-400 hover:text-white hover:bg-gray-800 font-medium py-2 px-4 rounded-lg transition-all duration-150;
+    @apply text-gray-400 hover:text-white hover:bg-gray-800 font-medium py-2 px-4 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity] duration-150;
+  }
+
+  /* El contenido del dashboard baja lo que mide la cabecera fija del celular
+     (incluido el notch). En escritorio no hay cabecera: `md:pt-0` lo anula. */
+  .contenido-bajo-cabecera { padding-top: var(--alto-cabecera-movil); }
+
+  /* Dónde salen los avisos de "Nuevo pedido" (components/NotifToast.js).
+     Antes iban abajo a la derecha y tapaban 8 s las barras fijas de abajo
+     (Imprimir, Siguiente, la barra del pedido). Ahora: en celular, arriba a lo
+     ancho y justo debajo de la cabecera (+ notch); en escritorio, arriba a la
+     derecha. */
+  .avisos-arriba {
+    top: calc(var(--alto-cabecera-movil) + 0.5rem);
+    left: 1rem;
+    right: 1rem;
+  }
+  @media (min-width: 768px) {
+    .avisos-arriba { top: 1.5rem; right: 1.5rem; left: auto; }
   }
   .input {
     @apply w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-500 rounded-xl px-4 py-3 focus:outline-none focus:border-mandarina-500 focus:ring-1 focus:ring-mandarina-500 transition-colors;
@@ -121,4 +191,28 @@ html.letra-grande .text-2xl { font-size: 1.6rem  !important; }
    igual se ve: el color y el texto del botón cambian aparte de la sacudida. */
 @media (prefers-reduced-motion: reduce) {
   .temblar { animation: none; }
+}
+
+/* Entrada de los avisos de "Nuevo pedido" (components/NotifToast.js).
+   Antes tenían `animate-in slide-in-from-right-full`, clases del plugin
+   tailwindcss-animate que este repo NO tiene: no hacían nada. Esta es la
+   versión mínima: baja 8px y aparece. */
+@keyframes aviso-entra {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.aviso-entra { animation: aviso-entra 200ms ease-out; }
+
+/* ── Menos movimiento, para quien lo pidió en su sistema ──
+   - animate-pulse / ping / bounce son DECORATIVOS (esqueletos, puntitos): se
+     apagan. Lo que comunican (cargando, sin conexión) ya lo dice el texto o la
+     forma.
+   - animate-spin NO se apaga: un círculo con un hueco quieto parece roto, y es
+     la única señal de "estoy trabajando" en muchos botones. Gira 3× más lento,
+     que ya no marea.
+   - La entrada de los avisos se quita: aparecen directamente. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse, .animate-ping, .animate-bounce { animation: none !important; }
+  .animate-spin { animation-duration: 3s !important; }
+  .aviso-entra { animation: none; }
 }

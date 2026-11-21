@@ -1,6 +1,6 @@
 'use client'
 // v2
-import { useState, useEffect, Suspense, useCallback } from 'react'
+import { useState, useEffect, useRef, Suspense, useCallback } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useNuevosPedidos } from '@/lib/useNuevosPedidos'
@@ -117,34 +117,70 @@ function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
       <a href={item.href} target="_blank" rel="noopener noreferrer"
          onClick={() => setMenuOpen(false)}
          className={variant === 'menu'
-           ? 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-all'
-           : 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-all'}>
-        <span>{item.icon}</span>
+           ? 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors'
+           : 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors'}>
+        <span aria-hidden="true">{item.icon}</span>
         <span className="text-sm">{item.label}</span>
-        <span className="ml-auto text-xs text-gray-600">↗</span>
+        {/* La flecha solo se VE; el lector de pantalla necesita oírlo. */}
+        <span aria-hidden="true" className="ml-auto text-xs text-gray-600">↗</span>
+        <span className="sr-only">(abre en otra pestaña)</span>
       </a>
     )
   }
 
+  // aria-current: la pantalla actual se anuncia como tal, no solo con color.
   if (variant === 'sidebar') {
     return (
-      <Link href={item.href}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
+      <Link href={item.href} aria-current={active ? 'page' : undefined}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors
           ${active ? 'bg-mandarina-500/20 text-mandarina-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
-        <span className="text-base">{item.icon}</span>{item.label}
+        <span aria-hidden="true" className="text-base">{item.icon}</span>{item.label}
       </Link>
     )
   }
   if (variant === 'menu') {
     return (
-      <Link href={item.href} onClick={() => setMenuOpen(false)}
-        className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-medium transition-all
+      <Link href={item.href} onClick={() => setMenuOpen(false)} aria-current={active ? 'page' : undefined}
+        className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-medium transition-colors
           ${active ? 'bg-mandarina-500 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
-        <span className="text-xl w-7 text-center">{item.icon}</span>{item.label}
+        <span aria-hidden="true" className="text-xl w-7 text-center">{item.icon}</span>{item.label}
       </Link>
     )
   }
   return null
+}
+
+// Spinner de pantalla completa mientras se lee la sesión. role="status" + texto
+// oculto: sin eso un lector de pantalla no dice nada y parece colgado.
+function CargandoPantalla() {
+  return (
+    <div role="status" className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div aria-hidden="true" className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+      <span className="sr-only">Cargando…</span>
+    </div>
+  )
+}
+
+// "Letra grande" como INTERRUPTOR de verdad (role="switch" + aria-checked): el
+// lector dice "Letra grande, activado". Va en el menú del celular y TAMBIÉN en
+// la barra lateral de escritorio: las PCs compartidas de fábrica son las que
+// más lo necesitan y antes solo existía en el celular.
+function InterruptorLetraGrande({ activo, onCambiar, compacto = false }) {
+  return (
+    <button type="button" role="switch" aria-checked={activo} onClick={onCambiar}
+      className={compacto
+        ? 'w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors'
+        : 'w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium text-gray-300 hover:bg-gray-800 transition-colors'}>
+      <span className={compacto ? 'flex items-center gap-2' : 'flex items-center gap-4'}>
+        <span aria-hidden="true" className={compacto ? '' : 'text-xl w-7 text-center'}>🔡</span>
+        Letra grande
+      </span>
+      <span aria-hidden="true"
+        className={`${compacto ? 'w-9 h-5' : 'w-11 h-6'} rounded-full transition-colors flex items-center px-0.5 flex-shrink-0 ${activo ? 'bg-mandarina-500' : 'bg-gray-700'}`}>
+        <span className={`${compacto ? 'w-4 h-4' : 'w-5 h-5'} rounded-full bg-white shadow motion-safe:transition-transform ${activo ? (compacto ? 'translate-x-4' : 'translate-x-5') : 'translate-x-0'}`} />
+      </span>
+    </button>
+  )
 }
 
 function DashboardChrome({ children }) {
@@ -157,6 +193,43 @@ function DashboardChrome({ children }) {
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [letraGrande, setLetraGrande] = useState(false)
+
+  // Foco del menú del celular: al abrir entra al menú (✕), al cerrar vuelve al
+  // ☰. Sin esto, con teclado o lector de pantalla el foco quedaba DETRÁS del
+  // menú abierto, recorriendo una página tapada.
+  const botonMenuRef = useRef(null)
+  const cajonRef = useRef(null)
+  const cerrarMenuRef = useRef(null)
+  const estabaAbierto = useRef(false)
+
+  useEffect(() => {
+    if (menuOpen) {
+      estabaAbierto.current = true
+      cerrarMenuRef.current?.focus()
+      const alTeclear = (e) => {
+        if (e.key === 'Escape') { setMenuOpen(false); return }
+        // Tab no se escapa del menú mientras está abierto (es modal).
+        if (e.key !== 'Tab' || !cajonRef.current) return
+        const enfocables = cajonRef.current.querySelectorAll('a[href], button:not([disabled])')
+        if (!enfocables.length) return
+        const primero = enfocables[0]
+        const ultimo = enfocables[enfocables.length - 1]
+        if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus() }
+        else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus() }
+      }
+      document.addEventListener('keydown', alTeclear)
+      return () => document.removeEventListener('keydown', alTeclear)
+    }
+    if (estabaAbierto.current) {
+      estabaAbierto.current = false
+      // Solo se devuelve el foco si estaba en el menú (o perdido): si alguien ya
+      // tocó otra cosa, no se le arrebata.
+      const activo = document.activeElement
+      if (!activo || activo === document.body || cajonRef.current?.contains(activo)) {
+        botonMenuRef.current?.focus()
+      }
+    }
+  }, [menuOpen])
 
   useEffect(() => {
     const lg = localStorage.getItem('mp_letra_grande') === 'true'
@@ -189,37 +262,48 @@ function DashboardChrome({ children }) {
   const handleNuevoPedido = useCallback((pedido) => addNotif(pedido), [addNotif])
   useNuevosPedidos(user, handleNuevoPedido)
 
-  if (!user) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  )
+  if (!user) return <CargandoPantalla />
 
   if (esEmbed) {
     // Ojo: se conserva el fondo para que el iframe no se vea blanco sobre el
     // panel oscuro del inbox mientras carga.
-    return <main className="min-h-screen bg-gray-950">{children}</main>
+    return <main id="contenido" className="min-h-screen bg-gray-950">{children}</main>
   }
 
   const navItems = getNavItems(user)
 
   return (
     <div className="min-h-screen bg-gray-950">
+      {/* Primer elemento con Tab: salta el menú (20+ enlaces) y va directo a la
+          pantalla. Invisible hasta que recibe el foco. */}
+      <a href="#contenido"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-[calc(0.5rem+env(safe-area-inset-top,0px))] focus:z-[300] focus:px-4 focus:py-2 focus:rounded-xl focus:bg-mandarina-500 focus:text-white focus:text-sm focus:font-semibold">
+        Saltar al contenido
+      </a>
+
       {/* Banner de conexión (offline / reconectado) — fijo arriba */}
       <ConnectionBanner />
 
-      {/* MOBILE TOP BAR */}
-      <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-gray-900 border-b border-gray-800">
+      {/* MOBILE TOP BAR
+          paddingTop = margen seguro: con la PWA a pantalla completa
+          (viewport-fit=cover + black-translucent) la barra quedaba debajo de la
+          hora/notch. El contenido baja lo mismo con .contenido-bajo-cabecera. */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-gray-900 border-b border-gray-800"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center justify-between px-4 py-3">
           <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-mandarina-500 flex items-center justify-center text-white font-bold text-sm">M</div>
+            <div aria-hidden="true" className="w-8 h-8 rounded-xl bg-mandarina-500 flex items-center justify-center text-white font-bold text-sm">M</div>
             <div>
               <div className="text-white font-semibold text-sm leading-none">Mandarina Pro</div>
               <div className="text-gray-500 text-xs">{user.nombre}</div>
             </div>
           </Link>
-          <button onClick={() => setMenuOpen(!menuOpen)} className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white rounded-xl hover:bg-gray-800 transition-all text-xl">
-            {menuOpen ? '✕' : '☰'}
+          {/* 40×40: el ☰ medía 36px, justo por debajo de lo que se toca bien. */}
+          <button ref={botonMenuRef} type="button" onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={menuOpen} aria-controls="menu-movil"
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-xl hover:bg-gray-800 transition-colors text-xl">
+            <span aria-hidden="true">{menuOpen ? '✕' : '☰'}</span>
           </button>
         </div>
       </header>
@@ -227,20 +311,34 @@ function DashboardChrome({ children }) {
       {/* MOBILE DRAWER — deslizable de izquierda a derecha */}
       {/* Fondo oscuro semitransparente */}
       <div
-        className={`md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300
+        aria-hidden="true"
+        className={`md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 motion-reduce:transition-none
           ${menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setMenuOpen(false)}
       />
-      {/* Panel lateral */}
+      {/* Panel lateral.
+          - Abierto: diálogo modal (role="dialog" + aria-modal), Escape lo cierra.
+          - Cerrado: `inert`. Solo se corre fuera de la pantalla, y sin inert sus
+            25 enlaces seguían recibiendo Tab y el lector los leía, invisibles.
+            React 18 no conoce `inert` como booleano: con "" el atributo se
+            pone, con undefined se quita.
+          - Márgenes seguros arriba y abajo por el notch y la barra de gestos. */}
       <div
+        id="menu-movil"
+        ref={cajonRef}
+        role={menuOpen ? 'dialog' : undefined}
+        aria-modal={menuOpen ? true : undefined}
+        aria-label="Menú"
+        inert={menuOpen ? undefined : ''}
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         className={`md:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-gray-900 flex flex-col
-          shadow-2xl transition-transform duration-300 ease-in-out
+          shadow-2xl transition-transform duration-300 ease-in-out motion-reduce:transition-none
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         {/* Header del drawer */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-mandarina-500 flex items-center justify-center text-white font-bold text-base">
+            <div aria-hidden="true" className="w-10 h-10 rounded-xl bg-mandarina-500 flex items-center justify-center text-white font-bold text-base">
               {user.nombre?.[0]?.toUpperCase() || 'U'}
             </div>
             <div>
@@ -249,17 +347,22 @@ function DashboardChrome({ children }) {
             </div>
           </div>
           <button
+            ref={cerrarMenuRef}
+            type="button"
             onClick={() => setMenuOpen(false)}
-            className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white rounded-lg hover:bg-gray-800 transition-all text-lg"
-          >✕</button>
+            aria-label="Cerrar menú"
+            className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-white rounded-lg hover:bg-gray-800 transition-colors text-lg"
+          ><span aria-hidden="true">✕</span></button>
         </div>
 
         {/* Nav items */}
-        {/* min-h-0 es CRUCIAL en flex-col: permite que flex-1 comprima el nav en lugar de estirarlo */}
-        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1">
+        {/* min-h-0 es CRUCIAL en flex-col: permite que flex-1 comprima el nav en lugar de estirarlo.
+            overscroll-contain: al llegar al final de la lista, el dedo no arrastra
+            la página de atrás (ni dispara el "tirar para recargar"). */}
+        <nav aria-label="Menú principal" className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 space-y-1">
           {navItems.map(item => (
             <Suspense key={item.href} fallback={
-              <div className="flex items-center gap-4 px-4 py-3.5 text-gray-500 text-sm">{item.icon} {item.label}</div>
+              <div className="flex items-center gap-4 px-4 py-3.5 text-gray-500 text-sm"><span aria-hidden="true">{item.icon}</span> {item.label}</div>
             }>
               <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="menu" />
             </Suspense>
@@ -268,21 +371,9 @@ function DashboardChrome({ children }) {
 
         {/* Footer del drawer */}
         <div className="border-t border-gray-800 px-3 py-4 space-y-1">
-          {/* Toggle letra grande */}
-          <button
-            onClick={toggleLetraGrande}
-            className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium text-gray-300 hover:bg-gray-800 transition-all"
-          >
-            <span className="flex items-center gap-4">
-              <span className="text-xl w-7 text-center">🔡</span>
-              Letra grande
-            </span>
-            <span className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${letraGrande ? 'bg-mandarina-500' : 'bg-gray-700'}`}>
-              <span className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${letraGrande ? 'translate-x-5' : 'translate-x-0'}`} />
-            </span>
-          </button>
-          <button onClick={logout} className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all">
-            <span className="text-xl w-7 text-center">🚪</span>Cerrar sesión
+          <InterruptorLetraGrande activo={letraGrande} onCambiar={toggleLetraGrande} />
+          <button type="button" onClick={logout} className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors">
+            <span aria-hidden="true" className="text-xl w-7 text-center">🚪</span>Cerrar sesión
           </button>
         </div>
       </div>
@@ -291,17 +382,17 @@ function DashboardChrome({ children }) {
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex flex-col w-56 bg-gray-900 border-r border-gray-800 p-4 fixed h-full z-30">
         <Link href="/dashboard" className="flex items-center gap-3 mb-8 px-2 hover:opacity-80 transition-opacity">
-          <div className="w-9 h-9 rounded-xl bg-mandarina-500 flex items-center justify-center text-white font-bold text-sm">M</div>
+          <div aria-hidden="true" className="w-9 h-9 rounded-xl bg-mandarina-500 flex items-center justify-center text-white font-bold text-sm">M</div>
           <div>
             <div className="text-white font-display font-semibold text-sm">Mandarina Pro</div>
             <div className="text-gray-500 text-xs truncate">{user.nombre}</div>
           </div>
         </Link>
         {/* min-h-0 es CRUCIAL en flex-col: permite que flex-1 comprima el nav en lugar de estirarlo */}
-        <nav className="flex-1 min-h-0 overflow-y-auto space-y-1">
+        <nav aria-label="Menú principal" className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1">
           {navItems.map(item => (
             <Suspense key={item.href} fallback={
-              <div className="flex items-center gap-3 px-3 py-2.5 text-gray-500 text-sm">{item.icon} {item.label}</div>
+              <div className="flex items-center gap-3 px-3 py-2.5 text-gray-500 text-sm"><span aria-hidden="true">{item.icon}</span> {item.label}</div>
             }>
               <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="sidebar" />
             </Suspense>
@@ -312,15 +403,21 @@ function DashboardChrome({ children }) {
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">ROL</div>
             <div className="text-sm text-gray-300">{user.rol}</div>
           </div>
-          <button onClick={logout} className="w-full text-left px-3 py-2 text-sm text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all">
-            🚪 Cerrar sesión
+          <div className="mb-1">
+            <InterruptorLetraGrande activo={letraGrande} onCambiar={toggleLetraGrande} compacto />
+          </div>
+          <button type="button" onClick={logout} className="w-full text-left px-3 py-2 text-sm text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors">
+            <span aria-hidden="true">🚪</span> Cerrar sesión
           </button>
         </div>
       </aside>
 
-      <main className="md:ml-56 pt-16 md:pt-0 min-h-screen">{children}</main>
+      {/* tabIndex=-1: el "Saltar al contenido" mueve el foco aquí de verdad (sin
+          él, algunos navegadores solo hacen scroll y el siguiente Tab vuelve al
+          menú). No muestra contorno: no es un control. */}
+      <main id="contenido" tabIndex={-1} className="md:ml-56 contenido-bajo-cabecera md:pt-0 min-h-screen focus:outline-none">{children}</main>
 
-      {/* Notificaciones de nuevos pedidos — esquina inferior derecha */}
+      {/* Notificaciones de nuevos pedidos — arriba (ver .avisos-arriba en globals.css) */}
       <NotifContainer notifs={notifs} onClose={removeNotif} />
 
       {/* Toasts de confirmación (✅ Guardado en cambios de producción) */}
@@ -333,11 +430,7 @@ function DashboardChrome({ children }) {
 // que ActiveLink, más arriba en este archivo.
 export default function DashboardLayout({ children }) {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
+    <Suspense fallback={<CargandoPantalla />}>
       <DashboardChrome>{children}</DashboardChrome>
     </Suspense>
   )

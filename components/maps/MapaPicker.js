@@ -1,5 +1,8 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+// Maps ya no viene del layout (lo bajaban todas las páginas): se pide aquí,
+// la primera vez que alguien abre el mapa. Ver lib/cargarGoogleMaps.js.
+import { cargarGoogleMaps } from '@/lib/cargarGoogleMaps'
 
 export default function MapaPicker({ onSelect, initialAddress = '' }) {
   const mapRef = useRef(null)
@@ -8,11 +11,29 @@ export default function MapaPicker({ onSelect, initialAddress = '' }) {
   const [marker, setMarker] = useState(null)
   const [address, setAddress] = useState(initialAddress)
   const [showMap, setShowMap] = useState(false)
+  // '' = listo o cerrado · 'cargando' · 'error'. Antes, si Maps no había
+  // terminado de bajar, el recuadro quedaba gris para siempre sin decir nada.
+  const [estadoMapa, setEstadoMapa] = useState('')
+  // Un solo Autocomplete por campo: crear uno cada vez que se abría el mapa
+  // apilaba listas de sugerencias repetidas sobre el mismo input.
+  const autocompleteRef = useRef(null)
 
   useEffect(() => {
     if (!showMap) return
-    if (typeof window === 'undefined' || !window.google) return
+    let cancelado = false
+    setEstadoMapa(window.google?.maps?.places ? '' : 'cargando')
+    cargarGoogleMaps()
+      .then(() => {
+        // Si lo cerraron mientras bajaba, no se pinta nada.
+        if (cancelado || !mapRef.current) return
+        setEstadoMapa('')
+        iniciarMapa()
+      })
+      .catch(() => { if (!cancelado) setEstadoMapa('error') })
+    return () => { cancelado = true }
+  }, [showMap])
 
+  function iniciarMapa() {
     const quito = { lat: -0.1807, lng: -78.4678 }
     const m = new window.google.maps.Map(mapRef.current, {
       center: quito,
@@ -46,11 +67,16 @@ export default function MapaPicker({ onSelect, initialAddress = '' }) {
       geocodeLatLng(e.latLng.lat(), e.latLng.lng(), m)
     })
 
-    // Autocomplete
-    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      componentRestrictions: { country: 'ec' },
-      fields: ['formatted_address', 'geometry'],
-    })
+    // Autocomplete: se crea una vez; en cada apertura solo se le cambia a qué
+    // mapa mueve, porque el mapa sí se crea de nuevo.
+    if (!autocompleteRef.current) {
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+        componentRestrictions: { country: 'ec' },
+        fields: ['formatted_address', 'geometry'],
+      })
+    }
+    const autocomplete = autocompleteRef.current
+    window.google.maps.event.clearInstanceListeners(autocomplete)
 
     autocomplete.addListener('place_changed', () => {
       const place = autocomplete.getPlace()
@@ -66,7 +92,7 @@ export default function MapaPicker({ onSelect, initialAddress = '' }) {
 
     setMap(m)
     setMarker(mk)
-  }, [showMap])
+  }
 
   function geocodeLatLng(lat, lng, m) {
     const geocoder = new window.google.maps.Geocoder()
@@ -82,27 +108,44 @@ export default function MapaPicker({ onSelect, initialAddress = '' }) {
   return (
     <div className="space-y-2">
       <div className="relative">
+        {/* Sin etiqueta visible (el formulario ya dice qué es), pero el lector
+            de pantalla necesita un nombre: el placeholder no cuenta. */}
         <input
           ref={inputRef}
           className="input pr-12"
-          placeholder="Buscar dirección..."
+          aria-label="Buscar dirección"
+          autoComplete="off"
+          placeholder="Buscar dirección…"
           value={address}
           onChange={e => setAddress(e.target.value)}
           onFocus={() => setShowMap(true)}
         />
+        {/* 40×40 para que se pueda tocar con el dedo; antes medía lo que el emoji. */}
         <button
           type="button"
           onClick={() => setShowMap(!showMap)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-mandarina-400 transition-colors text-lg">
-          📍
+          aria-label={showMap ? 'Ocultar mapa' : 'Mostrar mapa'}
+          aria-expanded={showMap}
+          title={showMap ? 'Ocultar mapa' : 'Mostrar mapa'}
+          className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-lg text-gray-500 hover:text-mandarina-400 transition-colors text-lg">
+          <span aria-hidden="true">📍</span>
         </button>
       </div>
 
       {showMap && (
         <div className="rounded-xl overflow-hidden border border-gray-700">
-          <div ref={mapRef} style={{ height: 260, width: '100%' }} />
+          <div className="relative">
+            <div ref={mapRef} style={{ height: 260, width: '100%' }} />
+            {estadoMapa && (
+              <div role="status" className="absolute inset-0 flex items-center justify-center bg-gray-900 text-xs text-gray-400 px-4 text-center">
+                {estadoMapa === 'cargando'
+                  ? 'Cargando mapa…'
+                  : 'No se pudo cargar el mapa. Revisa la conexión y vuelve a abrirlo, o escribe la dirección.'}
+              </div>
+            )}
+          </div>
           <div className="bg-gray-800 px-3 py-2 text-xs text-gray-400 flex items-center gap-2">
-            <span>📌</span>
+            <span aria-hidden="true">📌</span>
             <span>{address || 'Toca el mapa para seleccionar la dirección'}</span>
           </div>
         </div>

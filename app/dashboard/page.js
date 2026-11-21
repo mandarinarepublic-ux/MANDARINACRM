@@ -6,6 +6,9 @@ import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
 import { parseFecha, fechaISOEcuador, hoyEcuador, formatFechaDia } from '@/lib/parseFecha'
 import GraficosVentas from '@/components/GraficosVentas'
 import { filasSeleccionables, totalFilas, etiquetaMesLarga } from '@/lib/grafico'
+// La plata se escribe como en el Reporte de pagos (es-EC, con miles): antes
+// se armaba a mano con toFixed y daba "$12345"; en YAW ni llevaba el "$".
+import { formatoUSD } from '@/lib/dinero'
 
 // Nombre y color de cada tienda. NO es la lista de tiendas que se pintan —esa
 // sale de los datos—, solo el vestuario de las que conocemos.
@@ -73,9 +76,12 @@ export default function DashboardPage() {
     } finally { setLoading(false); setRefrescando(false) }
   }
 
+  // role="status" + texto oculto: sin esto un lector de pantalla no anuncia
+  // nada mientras carga y la pantalla parece vacía.
   if (!user || loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+    <div role="status" className="flex items-center justify-center h-64">
+      <div aria-hidden="true" className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+      <span className="sr-only">Cargando…</span>
     </div>
   )
 
@@ -154,7 +160,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
   return (
     <div className="p-4 max-w-4xl mx-auto">
       <div className="mb-6 pt-2">
-        <h1 className="text-2xl font-display font-bold text-white">Dashboard Admin</h1>
+        <h1 className="text-2xl font-display font-bold text-white">Panel de administración</h1>
         <p className="text-gray-500 text-sm capitalize">{new Date().toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
       </div>
 
@@ -165,7 +171,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           la casa. Este repo ya pagó por confundir «filtrado» con «todo». */}
       {hayFiltro && (
         <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 mb-4 flex items-center gap-3 flex-wrap">
-          <span className="text-xl flex-shrink-0">🔎</span>
+          <span aria-hidden="true" className="text-xl flex-shrink-0">🔎</span>
           <div className="min-w-0 flex-1">
             <div className="text-amber-300 font-semibold text-sm">No estás viendo todo</div>
             <div className="text-xs text-gray-400">
@@ -175,20 +181,23 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           <div className="flex items-center gap-2 flex-wrap">
             {filtro.vendedor && (
               <button type="button" onClick={() => alternar('vendedor', filtro.vendedor)}
-                className="text-xs bg-gray-800 hover:bg-gray-700 text-white rounded-full px-3 py-1 flex items-center gap-1.5 transition-all">
-                👤 {filtro.vendedor} <span className="text-gray-500">×</span>
+                aria-label={`Quitar filtro de vendedor: ${filtro.vendedor}`}
+                className="text-xs bg-gray-800 hover:bg-gray-700 text-white rounded-full px-3 py-1 flex items-center gap-1.5 transition-colors">
+                <span aria-hidden="true">👤</span> {filtro.vendedor} <span aria-hidden="true" className="text-gray-500">×</span>
               </button>
             )}
             {filtro.tienda && (
               <button type="button" onClick={() => alternar('tienda', filtro.tienda)}
-                className="text-xs bg-gray-800 hover:bg-gray-700 text-white rounded-full px-3 py-1 flex items-center gap-1.5 transition-all">
-                🏪 {filtro.tienda} <span className="text-gray-500">×</span>
+                aria-label={`Quitar filtro de tienda: ${filtro.tienda}`}
+                className="text-xs bg-gray-800 hover:bg-gray-700 text-white rounded-full px-3 py-1 flex items-center gap-1.5 transition-colors">
+                <span aria-hidden="true">🏪</span> {filtro.tienda} <span aria-hidden="true" className="text-gray-500">×</span>
               </button>
             )}
             {mesElegido && (
               <button type="button" onClick={() => setFiltro((f) => ({ ...f, mes: null }))}
-                className="text-xs bg-gray-800 hover:bg-gray-700 text-white rounded-full px-3 py-1 flex items-center gap-1.5 transition-all">
-                📅 {mesVisto} <span className="text-gray-500">×</span>
+                aria-label={`Quitar filtro de mes: ${mesVisto}`}
+                className="text-xs bg-gray-800 hover:bg-gray-700 text-white rounded-full px-3 py-1 flex items-center gap-1.5 transition-colors">
+                <span aria-hidden="true">📅</span> {mesVisto} <span aria-hidden="true" className="text-gray-500">×</span>
               </button>
             )}
             <button type="button" onClick={limpiar} className="btn-secondary text-xs px-3 py-1.5 flex-shrink-0">
@@ -209,24 +218,24 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           // anterior pasa a ser el PROMEDIO POR DÍA, que además es lo que sirve
           // para comparar meses.
           (mesElegido && !esMesEnCurso)
-            ? { label:'Promedio por día', value:`$${promedioDia.toFixed(0)}`,    sub:`${diasDelMes} días`,           color:'text-mandarina-400' }
-            : { label:'Ventas hoy',       value:`$${data.ventasHoy.toFixed(0)}`, sub:`${data.pedidosHoy} pedido(s)`, color:'text-mandarina-400' },
+            ? { label:'Promedio por día', value:formatoUSD(promedioDia, { decimales: 0 }),    sub:`${diasDelMes} días`,           color:'text-mandarina-400' }
+            : { label:'Ventas hoy',       value:formatoUSD(data.ventasHoy, { decimales: 0 }), sub:`${data.pedidosHoy} pedido(s)`, color:'text-mandarina-400' },
           { label: mesElegido ? `Ventas de ${mesVisto}` : 'Ventas del mes',
-            value:`$${data.ventasMes.toFixed(0)}`,
+            value:formatoUSD(data.ventasMes, { decimales: 0 }),
             // Sin mes elegido el subtítulo sigue siendo el conteo de SIEMPRE
             // (todos los pedidos). Con mes elegido, los de ese mes.
             sub: mesElegido ? `${data.pedidosMes ?? 0} pedidos` : `${data.totalPedidos} total`,
             color:'text-white' },
           { label: mesElegido ? `Cobrado en ${mesVisto}` : 'Cobrado mes',
-            value:`$${data.cobradoMes.toFixed(0)}`,
+            value:formatoUSD(data.cobradoMes, { decimales: 0 }),
             sub:`${Math.round(data.cobradoMes/(data.ventasMes||1)*100)}%`, color:'text-green-400' },
           { label: mesElegido ? `Por cobrar de ${mesVisto}` : 'Por cobrar',
-            value:`$${data.pendienteTotal.toFixed(0)}`,
+            value:formatoUSD(data.pendienteTotal, { decimales: 0 }),
             sub: mesElegido ? 'de ese mes' : 'saldo pendiente',
             color:data.pendienteTotal>0?'text-yellow-400':'text-green-400' },
         ].map(k => (
           <div key={k.label} className="card p-4">
-            <div className={`text-2xl font-bold font-display ${k.color}`}>{k.value}</div>
+            <div className={`text-2xl font-bold font-display tabular-nums ${k.color}`}>{k.value}</div>
             <div className="text-xs text-gray-500 mt-1">{k.label}</div>
             <div className="text-xs text-gray-600">{k.sub}</div>
           </div>
@@ -246,7 +255,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
               { label:'Para despacho',          key:'DESPACHO',          color:'bg-purple-500', href:'/dashboard/despacho' },
               { label:'Entregados',             key:'ENTREGADO',         color:'bg-green-500',  href:'/dashboard/historial' },
             ].map(e => (
-              <Link key={e.key} href={e.href} className="flex items-center gap-3 hover:bg-gray-800/50 px-2 py-1.5 rounded-lg transition-all">
+              <Link key={e.key} href={e.href} className="flex items-center gap-3 hover:bg-gray-800/50 px-2 py-1.5 rounded-lg transition-colors">
                 <div className={`w-2 h-2 rounded-full ${e.color}`} />
                 <span className="text-gray-400 text-xs flex-1">{e.label}</span>
                 <span className="text-white font-bold">{data.porEstado[e.key] || 0}</span>
@@ -275,10 +284,10 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
             return (
               <button key={t.clave} type="button" aria-pressed={sel}
                 onClick={() => alternar('tienda', t.clave)}
-                className={`w-full text-left mb-2 px-2 py-1.5 -mx-2 rounded-lg transition-all ${sel ? 'bg-mandarina-500/10 ring-1 ring-mandarina-500/40' : 'hover:bg-gray-800/50'}`}>
+                className={`w-full text-left mb-2 px-2 py-1.5 -mx-2 rounded-lg transition-colors ${sel ? 'bg-mandarina-500/10 ring-1 ring-mandarina-500/40' : 'hover:bg-gray-800/50'}`}>
                 <div className="flex justify-between text-sm mb-1 gap-2">
                   <span className={`truncate ${sel ? 'text-mandarina-400 font-medium' : 'text-gray-400'}`}>{meta.label}</span>
-                  <span className="text-white flex-shrink-0">${t.monto.toFixed(0)}</span>
+                  <span className="text-white flex-shrink-0 tabular-nums">{formatoUSD(t.monto, { decimales: 0 })}</span>
                 </div>
                 <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                   <div className="h-full rounded-full" style={{width:`${pct}%`,backgroundColor:meta.color}} />
@@ -298,9 +307,9 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
               return (
                 <button key={v.clave} type="button" aria-pressed={sel}
                   onClick={() => alternar('vendedor', v.clave)}
-                  className={`w-full flex justify-between items-center text-xs gap-2 px-2 py-1.5 -mx-2 rounded-lg transition-all ${sel ? 'bg-mandarina-500/10 ring-1 ring-mandarina-500/40' : 'hover:bg-gray-800/50'}`}>
+                  className={`w-full flex justify-between items-center text-xs gap-2 px-2 py-1.5 -mx-2 rounded-lg transition-colors ${sel ? 'bg-mandarina-500/10 ring-1 ring-mandarina-500/40' : 'hover:bg-gray-800/50'}`}>
                   <span className={`font-mono truncate ${sel ? 'text-mandarina-400 font-medium' : 'text-gray-400'}`}>{v.clave}</span>
-                  <span className="text-white flex-shrink-0">${v.monto.toFixed(0)} · {v.pedidos} pedidos</span>
+                  <span className="text-white flex-shrink-0 tabular-nums">{formatoUSD(v.monto, { decimales: 0 })} · {v.pedidos} pedidos</span>
                 </button>
               )
             })}
@@ -308,7 +317,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           </div>
         </div>
       </div>
-      <Link href="/dashboard/plan-fabrica" className="card p-4 mb-3 flex items-center gap-4 border-mandarina-500/30 hover:border-mandarina-500/60 transition-all group">
+      <Link href="/dashboard/plan-fabrica" className="card p-4 mb-3 flex items-center gap-4 border-mandarina-500/30 hover:border-mandarina-500/60 transition-colors group">
         <div className="w-11 h-11 rounded-xl bg-mandarina-500/20 flex items-center justify-center text-xl flex-shrink-0">🏭</div>
         <div className="flex-1">
           <div className="font-semibold text-white text-sm">Plan de fábrica</div>
@@ -316,7 +325,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
         </div>
         <span className="text-gray-600 group-hover:text-mandarina-400 text-xl">→</span>
       </Link>
-      <Link href="/dashboard/tablero" className="card p-4 mb-3 flex items-center gap-4 border-mandarina-500/30 hover:border-mandarina-500/60 transition-all group">
+      <Link href="/dashboard/tablero" className="card p-4 mb-3 flex items-center gap-4 border-mandarina-500/30 hover:border-mandarina-500/60 transition-colors group">
         <div className="w-11 h-11 rounded-xl bg-mandarina-500/20 flex items-center justify-center text-xl flex-shrink-0">📊</div>
         <div className="flex-1">
           <div className="font-semibold text-white text-sm">Tablero de Producción</div>
@@ -338,7 +347,7 @@ function DashboardAdmin({ data, user, filtro, setFiltro, refrescando }) {
           {href:'/dashboard/auto',icon:'🤖',label:'AUTO'},
           {href:'/dashboard/tareas',icon:'⏱️',label:'Tareas automáticas'},
         ].map(a=>(
-          <Link key={a.href} href={a.href} className="card p-4 flex flex-col items-center gap-2 hover:border-gray-600 transition-all">
+          <Link key={a.href} href={a.href} className="card p-4 flex flex-col items-center gap-2 hover:border-gray-600 transition-colors">
             <span className="text-2xl">{a.icon}</span>
             <span className="text-xs text-gray-400 text-center">{a.label}</span>
           </Link>
@@ -372,31 +381,31 @@ function DashboardVendedor({ data, user, filtro, setFiltro }) {
         <h1 className="text-2xl font-display font-bold text-white">Hola, {user.nombre.split(' ')[0]} 👋</h1>
         <p className="text-gray-500 text-sm">{new Date().toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'})}</p>
       </div>
-      <Link href="/dashboard/nuevo-pedido" className="flex items-center gap-4 card p-5 mb-6 border-mandarina-500/30 hover:border-mandarina-500/60 transition-all group">
-        <div className="w-12 h-12 bg-mandarina-500 rounded-xl flex items-center justify-center text-xl group-hover:scale-105 transition-transform">➕</div>
+      <Link href="/dashboard/nuevo-pedido" className="flex items-center gap-4 card p-5 mb-6 border-mandarina-500/30 hover:border-mandarina-500/60 transition-colors group">
+        <div className="w-12 h-12 bg-mandarina-500 rounded-xl flex items-center justify-center text-xl motion-safe:group-hover:scale-105 motion-safe:transition-transform">➕</div>
         <div><div className="font-semibold text-white">Nueva Venta</div><div className="text-gray-500 text-sm">Registrar un pedido nuevo</div></div>
         <div className="ml-auto text-gray-600 group-hover:text-mandarina-400 text-xl">→</div>
       </Link>
       {/* Link de pago Payphone, justo debajo de Nueva Venta (10-nov-2026). */}
-      <Link href="/dashboard/link-pago" className="flex items-center gap-4 card p-4 -mt-3 mb-6 border-emerald-500/30 hover:border-emerald-500/60 transition-all group">
-        <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-lg group-hover:scale-105 transition-transform">💳</div>
+      <Link href="/dashboard/link-pago" className="flex items-center gap-4 card p-4 -mt-3 mb-6 border-emerald-500/30 hover:border-emerald-500/60 transition-colors group">
+        <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-lg motion-safe:group-hover:scale-105 motion-safe:transition-transform">💳</div>
         <div><div className="font-semibold text-white">Link de pago</div><div className="text-gray-500 text-sm">Cobrar con tarjeta por WhatsApp</div></div>
         <div className="ml-auto text-gray-600 group-hover:text-emerald-400 text-xl">→</div>
       </Link>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[
           (mesElegido && !esMesEnCurso)
-            ? {label:'Promedio por día', value:`$${promedioDia.toFixed(0)}`,     sub:`${diasDelMes} días`,           color:'text-mandarina-400'}
-            : {label:'Mis ventas hoy',   value:`$${data.ventasHoy.toFixed(0)}`,  sub:`${data.pedidosHoy} pedidos`,   color:'text-mandarina-400'},
-          {label: mesElegido ? `Mis ventas de ${mesVisto}` : 'Mes actual', value:`$${data.ventasMes.toFixed(0)}`,
+            ? {label:'Promedio por día', value:formatoUSD(promedioDia, { decimales: 0 }),     sub:`${diasDelMes} días`,           color:'text-mandarina-400'}
+            : {label:'Mis ventas hoy',   value:formatoUSD(data.ventasHoy, { decimales: 0 }),  sub:`${data.pedidosHoy} pedidos`,   color:'text-mandarina-400'},
+          {label: mesElegido ? `Mis ventas de ${mesVisto}` : 'Mes actual', value:formatoUSD(data.ventasMes, { decimales: 0 }),
            sub: mesElegido ? `${data.pedidosMes ?? 0} pedidos` : `${data.totalPedidos} pedidos`, color:'text-white'},
-          {label:'Cobrado', value:`$${data.cobradoMes.toFixed(0)}`,
+          {label:'Cobrado', value:formatoUSD(data.cobradoMes, { decimales: 0 }),
            sub: mesElegido ? `en ${mesVisto}` : 'este mes', color:'text-green-400'},
-          {label:'Por cobrar', value:`$${data.pendienteTotal.toFixed(0)}`,
+          {label:'Por cobrar', value:formatoUSD(data.pendienteTotal, { decimales: 0 }),
            sub: mesElegido ? 'de ese mes' : 'saldo pendiente', color:data.pendienteTotal>0?'text-yellow-400':'text-green-400'},
         ].map(k=>(
           <div key={k.label} className="card p-4">
-            <div className={`text-xl font-bold font-display ${k.color}`}>{k.value}</div>
+            <div className={`text-xl font-bold font-display tabular-nums ${k.color}`}>{k.value}</div>
             <div className="text-xs text-gray-500 mt-1">{k.label}</div>
             <div className="text-xs text-gray-600">{k.sub}</div>
           </div>
@@ -417,14 +426,14 @@ function DashboardVendedor({ data, user, filtro, setFiltro }) {
           ? <div className="p-8 text-center text-gray-600 text-sm">No hay pedidos aún</div>
           : <div className="divide-y divide-gray-800">
               {data.misRecientes.map(p=>(
-                <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-all block">
+                <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-colors block">
                   <div>
                     <div className="font-mono text-sm text-white">{p.PEDIDO_ID}</div>
                     <div className="text-xs text-gray-500">{formatFechaDia(p.FECHA_PEDIDO)}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTADO_COLORS[p.ESTADO_PEDIDO]||'text-gray-400 bg-gray-800'}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO]||p.ESTADO_PEDIDO}</span>
-                    <span className="text-white text-sm font-medium">${parseFloat(p.MONTO_TOTAL||0).toFixed(0)}</span>
+                    <span className="text-white text-sm font-medium">{formatoUSD(p.MONTO_TOTAL, { decimales: 0 })}</span>
                   </div>
                 </Link>
               ))}
@@ -455,11 +464,11 @@ function DashboardDespacho({ data, user }) {
         <div className="card p-4 text-center"><div className="text-3xl font-bold text-yellow-400">{listos}</div><div className="text-xs text-gray-500 mt-1">Listos para despacho</div></div>
         <div className="card p-4 text-center"><div className="text-3xl font-bold text-purple-400">{enDespacho}</div><div className="text-xs text-gray-500 mt-1">En despacho</div></div>
       </div>
-      <Link href="/dashboard/despacho" className="card p-4 flex items-center justify-between hover:border-gray-700 transition-all block mb-3">
+      <Link href="/dashboard/despacho" className="card p-4 flex items-center justify-between hover:border-gray-700 transition-colors block mb-3">
         <div className="flex items-center gap-3"><span className="text-2xl">🚚</span><div><div className="text-white font-semibold text-sm">Módulo de despacho</div><div className="text-xs text-gray-500">Gestionar guías y entregas</div></div></div>
         <span className="text-gray-600">→</span>
       </Link>
-      <Link href="/dashboard/historial" className="card p-4 flex items-center justify-between hover:border-gray-700 transition-all block">
+      <Link href="/dashboard/historial" className="card p-4 flex items-center justify-between hover:border-gray-700 transition-colors block">
         <div className="flex items-center gap-3"><span className="text-2xl">📋</span><div><div className="text-white font-semibold text-sm">Historial</div><div className="text-xs text-gray-500">Ver todos los pedidos</div></div></div>
         <span className="text-gray-600">→</span>
       </Link>
@@ -475,25 +484,25 @@ function DashboardYAW({ data, user }) {
         <h1 className="text-2xl font-display font-bold text-white">YAW</h1>
         <p className="text-gray-500 text-sm capitalize">{new Date().toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
       </div>
-      <Link href="/dashboard/nuevo-pedido" className="flex items-center gap-4 card p-5 mb-6 border-purple-500/30 hover:border-purple-500/60 transition-all group">
-        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-xl group-hover:scale-105 transition-transform" style={{backgroundColor:'#6C3FC5'}}>➕</div>
+      <Link href="/dashboard/nuevo-pedido" className="flex items-center gap-4 card p-5 mb-6 border-purple-500/30 hover:border-purple-500/60 transition-colors group">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-xl motion-safe:group-hover:scale-105 motion-safe:transition-transform" style={{backgroundColor:'#6C3FC5'}}>➕</div>
         <div><div className="font-semibold text-white">Nueva Venta</div><div className="text-gray-500 text-sm">Registrar un pedido nuevo</div></div>
         <div className="ml-auto text-gray-600 group-hover:text-purple-400 text-xl">→</div>
       </Link>
-      <Link href="/dashboard/link-pago" className="flex items-center gap-4 card p-4 -mt-3 mb-6 border-emerald-500/30 hover:border-emerald-500/60 transition-all group">
-        <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-lg group-hover:scale-105 transition-transform">💳</div>
+      <Link href="/dashboard/link-pago" className="flex items-center gap-4 card p-4 -mt-3 mb-6 border-emerald-500/30 hover:border-emerald-500/60 transition-colors group">
+        <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-lg motion-safe:group-hover:scale-105 motion-safe:transition-transform">💳</div>
         <div><div className="font-semibold text-white">Link de pago</div><div className="text-gray-500 text-sm">Cobrar con tarjeta por WhatsApp</div></div>
         <div className="ml-auto text-gray-600 group-hover:text-emerald-400 text-xl">→</div>
       </Link>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[
-          {label:'Ventas hoy',    value:`${data.ventasHoy.toFixed(0)}`,       sub:`${data.pedidosHoy} pedidos`,   color:'text-purple-400'},
-          {label:'Mes actual',    value:`${data.ventasMes.toFixed(0)}`,        sub:`${data.totalPedidos} pedidos`, color:'text-white'},
-          {label:'Cobrado',       value:`${data.cobradoMes.toFixed(0)}`,       sub:'este mes',                     color:'text-green-400'},
-          {label:'Por cobrar',    value:`${data.pendienteTotal.toFixed(0)}`,   sub:'saldo pendiente',              color:data.pendienteTotal>0?'text-yellow-400':'text-green-400'},
+          {label:'Ventas hoy',    value:formatoUSD(data.ventasHoy, { decimales: 0 }),       sub:`${data.pedidosHoy} pedidos`,   color:'text-purple-400'},
+          {label:'Mes actual',    value:formatoUSD(data.ventasMes, { decimales: 0 }),        sub:`${data.totalPedidos} pedidos`, color:'text-white'},
+          {label:'Cobrado',       value:formatoUSD(data.cobradoMes, { decimales: 0 }),       sub:'este mes',                     color:'text-green-400'},
+          {label:'Por cobrar',    value:formatoUSD(data.pendienteTotal, { decimales: 0 }),   sub:'saldo pendiente',              color:data.pendienteTotal>0?'text-yellow-400':'text-green-400'},
         ].map(k=>(
           <div key={k.label} className="card p-4">
-            <div className={`text-xl font-bold font-display ${k.color}`}>{k.value}</div>
+            <div className={`text-xl font-bold font-display tabular-nums ${k.color}`}>{k.value}</div>
             <div className="text-xs text-gray-500 mt-1">{k.label}</div>
             <div className="text-xs text-gray-600">{k.sub}</div>
           </div>
@@ -529,14 +538,14 @@ function DashboardYAW({ data, user }) {
           ? <div className="p-8 text-center text-gray-600 text-sm">No hay pedidos aún</div>
           : <div className="divide-y divide-gray-800">
               {data.misRecientes.map(p=>(
-                <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-all block">
+                <Link key={p.PEDIDO_ID} href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-colors block">
                   <div>
                     <div className="font-mono text-sm text-white">{p.PEDIDO_ID}</div>
                     <div className="text-xs text-gray-500">{formatFechaDia(p.FECHA_PEDIDO)}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTADO_COLORS[p.ESTADO_PEDIDO]||'text-gray-400 bg-gray-800'}`}>{ESTADO_LABELS[p.ESTADO_PEDIDO]||p.ESTADO_PEDIDO}</span>
-                    <span className="text-white text-sm font-medium">${parseFloat(p.MONTO_TOTAL||0).toFixed(0)}</span>
+                    <span className="text-white text-sm font-medium">{formatoUSD(p.MONTO_TOTAL, { decimales: 0 })}</span>
                   </div>
                 </Link>
               ))}
@@ -593,7 +602,7 @@ function DashboardDiseno({ data, user }) {
         </div>
       )}
       {totalPendientes===0 && <div className="card p-8 text-center"><div className="text-4xl mb-3">✅</div><div className="font-semibold text-white mb-1">¡Todo al día!</div><div className="text-gray-500 text-sm">No hay prendas pendientes</div></div>}
-      <Link href="/dashboard/produccion" className="flex items-center gap-4 card p-5 mt-4 hover:border-gray-600 transition-all group">
+      <Link href="/dashboard/produccion" className="flex items-center gap-4 card p-5 mt-4 hover:border-gray-600 transition-colors group">
         <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-xl">🏭</div>
         <div><div className="font-semibold text-white">Ver producción</div><div className="text-gray-500 text-sm">Gestionar prendas pendientes</div></div>
         <div className="ml-auto text-gray-600 group-hover:text-white text-xl">→</div>

@@ -18,6 +18,11 @@ module.exports = {
           600: '#16213E',
         }
       },
+      // ⚠️ 'Inter' aquí es el NOMBRE de una fuente instalada, no la webfont de
+      // next/font (esa vive en var(--font-inter) y solo la usa la cotización:
+      // ver app/layout.js). O sea: la interfaz se ve en system-ui salvo en PCs
+      // con Inter instalado. Cambiar a `var(--font-inter)` es una decisión
+      // VISUAL aparte (anchos, cortes de línea): no tocar de pasada.
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         display: ['Space Grotesk', 'system-ui', 'sans-serif'],
