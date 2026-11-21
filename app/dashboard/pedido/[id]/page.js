@@ -1087,7 +1087,7 @@ export default function PedidoDetailPage() {
             cambia un ADMIN (el vendedor aprobó el pedido antes de crearlo). */}
         {user?.rol==='ADMIN' && (
           <div className="flex gap-2 mb-2">
-            <Link href={`/dashboard/editar-pedido/${pedido.PEDIDO_ID}`}
+            <Link href={`/dashboard/editar-pedido/${pedido.PEDIDO_ID}${esEmbed ? '?embed=1' : ''}`}
               className="w-full py-2 rounded-xl text-sm font-medium border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 text-center transition-all">
               ✏️ Editar productos del pedido
             </Link>

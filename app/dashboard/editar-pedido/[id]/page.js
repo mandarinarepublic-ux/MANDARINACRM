@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import BuscadorProductos from '@/components/pedido/BuscadorProductos'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
@@ -85,6 +85,9 @@ function ItemEditor({ item, onSave }) {
 export default function EditarPedidoPage() {
   const router = useRouter()
   const params = useParams()
+  // Dentro del panel del inbox (?embed=1) se queda en modo incrustado al salir:
+  // sin esto caía en el CRM completo, con menú lateral, en la columna angosta.
+  const embed = useSearchParams()?.get('embed') === '1' ? '?embed=1' : ''
   const [user, setUser] = useState(null)
   const [pedido, setPedido] = useState(null)
   const [cliente, setCliente] = useState(null)
@@ -119,7 +122,7 @@ export default function EditarPedidoPage() {
     // revisa y aprueba antes de crearlo (paso 4 de Nueva Venta); después ve el
     // detalle en modo lectura. El servidor vuelve a comprobarlo (requireAdmin),
     // esto solo evita mostrar una pantalla que no va a poder guardar.
-    if (u.rol !== 'ADMIN') { router.replace(`/dashboard/pedido/${params.id}`); return }
+    if (u.rol !== 'ADMIN') { router.replace(`/dashboard/pedido/${params.id}${embed}`); return }
     setUser(u)
     loadPedido()
   }, [])
