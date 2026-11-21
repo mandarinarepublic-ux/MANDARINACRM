@@ -487,6 +487,23 @@ suyo». Los agentes de WhatsApp crean **pedidos**, no cotizaciones.
 
 ---
 
+## Sesión 20-21 nov-2026 (cambios en el CRM)
+
+El detalle de la sesión está en `wa-inbox-next/docs/HANDOFF-2026-11-21-ux-firma-dashboard.md`.
+
+- `c557f1dd` — **🔎 Guías** (`/dashboard/guias`): consulta con qué guía salió un pedido. Se
+  busca por guía, nombre, celular, cédula, dirección o pedido. El alcance es el mismo del
+  Historial (`aplicarAlcance`). Roles: ADMIN, VENDEDOR, VENDEDOR_YAW, DESPACHO o acceso VENTAS.
+  **Falta probarla con una sesión de VENDEDOR.**
+- `cde52b9e` — `pauta_dia` paginada con `lib/leerTodo.js`. La pantalla de artes escondía 38
+  de 89 anuncios.
+  ☠️ La guardia `lecturas-acotadas` cortaba cada consulta en el primer `;` y por eso no veía
+  nada en este repo, que casi no usa punto y coma. Ahora lee la cadena entera.
+- `b2865b6c` — «✏️ Editar productos del pedido» dentro del inbox abría el CRM completo, porque
+  el enlace perdía `?embed=1`. Estaba así desde julio.
+
+---
+
 ## Pendientes vivos
 
 | # | qué | cómo se cierra |
