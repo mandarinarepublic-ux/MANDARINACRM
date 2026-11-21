@@ -24,7 +24,34 @@ const PEQUENAS = new Set([
   'productos_catalogo',  // 188
   'uso_tipos_prenda',    // 208 — vista agrupada, una fila por nombre
   'cotizaciones',        // 1
+  'conexiones_estado',   // 12 — una fila por servicio (medido 20-nov-2026)
+  'tareas_auto',         // 4  — una fila por rutina (medido 20-nov-2026)
 ])
+
+// Consultas que se ARMAN en partes y se acotan más abajo (la cadena no lo muestra).
+// Cada una con la prueba de que el tope sigue ahí.
+const ARMADAS_EN_PARTES = new Map([
+  ['lib/db/historial.js -> pedidos', /consulta[\s\S]*\.range\(primera, primera \+ TAMANO_PAGINA - 1\)/],
+])
+
+/**
+ * La consulta que empieza en `from('x')`: la cadena entera, hasta la primera
+ * línea que ya no la continúa. Los comentarios dentro de la cadena se saltan.
+ *
+ * ☠️ Antes se cortaba en el primer `;` dentro de 400 caracteres. Este repo casi
+ * no usa punto y coma: sin `;` cerca la consulta NI SE MIRABA. Así se escapó
+ * `/api/pauta/arte`, que con 1.382 filas escondía 38 de 89 anuncios (20-nov-2026).
+ */
+function consultaDesde(src, i) {
+  const lineas = src.slice(i).split('\n')
+  const out = [lineas[0]]
+  for (const l of lineas.slice(1)) {
+    if (/^\s*(\/\/|\*|\/\*)/.test(l)) continue
+    if (/^\s*(\.|\)|\])/.test(l)) out.push(l)
+    else break
+  }
+  return out.join('\n')
+}
 
 // Lo que hace que una consulta esté acotada.
 const ACOTADA = /\.limit\(|\.range\(|\.eq\(|\.in\(|\.single\(|\.maybeSingle\(|head:\s*true|\.gte\(|\.lte\(|\.not\(|\.or\(|\.like\(|\.ilike\(/
@@ -47,13 +74,18 @@ test('ninguna lectura de una tabla grande viene sin acotar', () => {
 
   for (const ruta of [...archivos(raiz('lib')), ...archivos(raiz('app'))]) {
     const src = readFileSync(ruta, 'utf8')
-    for (const m of src.matchAll(/from\('([a-z_]+)'\)[\s\S]{0,400}?;/g)) {
-      const consulta = m[0]
+    for (const m of src.matchAll(/from\('([a-z_]+)'\)/g)) {
+      const consulta = consultaDesde(src, m.index)
       const tabla = m[1]
       if (PEQUENAS.has(tabla)) continue
       if (ESCRITURA.test(consulta)) continue
       if (ACOTADA.test(consulta)) continue
-      culpables.push(`${ruta.split(sep).slice(-3).join('/')} -> ${tabla}`)
+      // `leerTodo(() => sb.from(...))` (lib/leerTodo.js) le pone el `.range()` y pagina.
+      if (/leerTodo\(\s*\(\)\s*=>[\s\S]{0,60}$/.test(src.slice(Math.max(0, m.index - 80), m.index))) continue
+      const clave = `${ruta.split(sep).slice(-3).join('/')} -> ${tabla}`
+      const armada = [...ARMADAS_EN_PARTES].find(([k]) => clave.endsWith(k))
+      if (armada && armada[1].test(src)) continue
+      culpables.push(clave)
     }
   }
 
@@ -68,4 +100,19 @@ test('la lista blanca no esconde una tabla que crece', () => {
   for (const grande of ['pedidos', 'detalle_pedido', 'clientes', 'pagos', 'logs_pedidos', 'eventos_sistema', 'guias_despacho', 'pauta_dia', 'productos_shopify']) {
     assert.ok(!PEQUENAS.has(grande), `${grande} crece: no puede estar en la lista blanca`)
   }
+})
+
+test('☠️ la guardia VE una consulta sin punto y coma (así se escapó /api/pauta/arte)', () => {
+  const src = [
+    "    const { data, error } = await sb",
+    "      .from('pauta_dia')",
+    "      // un comentario en medio de la cadena",
+    "      .select('ad_id, fecha')",
+    "      .order('fecha', { ascending: false })",
+    "    if (error) throw error",
+  ].join('\n')
+  const c = consultaDesde(src, src.indexOf("from('pauta_dia')"))
+  assert.ok(c.includes(".order('fecha'"), 'la cadena se lee entera, saltando el comentario')
+  assert.ok(!c.includes('if (error)'), 'y termina donde termina la cadena')
+  assert.ok(!ACOTADA.test(c), 'esta consulta es SIN tope: la guardia tiene que marcarla')
 })

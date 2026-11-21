@@ -43,17 +43,13 @@ roturas que **ya no van a pasar**: se blindaron antes de la fecha prevista.
 | `crm.clientes` | **966** | ✅ no — todas las lecturas acotadas; `idsClientesQueCoinciden` avisa con el `count` si trunca |
 | `crm.pagos` | 834 | ✅ no — siempre por `pedido_id` |
 | `crm.pedidos` | 808 | ✅ no — `listPedidoIds()` **se borró**; el número sale de `siguienteNumeroPedido()`, que lee UNA fila |
-| `crm.pauta_dia` | 749 (375 por tienda) | ⚠️ **el único frente abierto**, ver abajo |
+| `crm.pauta_dia` | 1382 (655 IND · 727 MANDI, 20-nov) | ✅ no — paginado con `lib/leerTodo.js` desde el 20-nov |
 
-### El único que queda: `pauta_dia`
+### `pauta_dia`: cerrado el 20-nov-2026
 
-`lib/pauta/consultas.js:29` (`gastoPorAnuncio`) lee con `.eq(tienda)` +
-rango de fechas y **sin `.range()`**. Hoy son 375 filas por tienda, creciendo a
-**8/día**: una tienda cruzaría las 1000 hacia el **~16-nov-2026**, y solo si el
-tablero pide el rango completo.
+La predicción del ~16-nov apuntaba a `gastoPorAnuncio` (por tienda), que todavía no cruzaba. El que SÍ estaba roto era otro: **`GET /api/pauta/arte`** (`/dashboard/pauta/artes`) leía la tabla ENTERA sin rango y, con 1.382 filas, **escondía 38 de 89 anuncios y $765 de $2.949 de gasto**. Los tres lectores van ahora por `leerTodo` (orden total `fecha + ad_id`).
 
-No es urgente, pero es el que hay que vigilar. El síntoma sería un gasto de pauta
-**subestimado en silencio** — no un error.
+☠️ La guardia `tests/lecturas-acotadas.test.js` no lo vio porque cortaba cada consulta en el primer `;` y este repo casi no usa punto y coma: sin `;` cerca, la consulta ni se miraba. Ahora lee la cadena entera y tiene una prueba de sí misma.
 
 > **Cómo se comprueba, siempre:** `select count(*)` contra la tabla, no leer un
 > documento. Las cifras de arriba caducan solas.
@@ -500,7 +496,7 @@ suyo». Los agentes de WhatsApp crean **pedidos**, no cotizaciones.
 | 3 | El desplegable de Área cae solo en una 2.ª fila del panel | Cosmético |
 | 4 | `AREAS` desincronizada entre `lib/pedidos.js` y `lib/pedidos-client.js` (`PREMIUM - SIN DISEÑO`) | Bomba, no incendio: hoy no rompe nada |
 | 5 | `lib/useNuevosPedidos.js` avisa mal | Compara `PEDIDO_ID` como texto: **96% de silencio** medido sobre 531 pedidos |
-| 6 | `pauta_dia` sin `.range()` | Ver arriba. ~16-nov-2026 |
+| 6 | ~~`pauta_dia` sin `.range()`~~ ✅ 20-nov: paginado + guardia arreglada | — |
 | 7 | `todosItemsListos` usa `.every()` | Un pedido **sin ítems** devuelve `true` y se auto-despacha. Mina armada, hoy no se dispara |
 | 8 | ~~El webhook de Shopify no ha procesado ni un pedido real~~ ✅ **cerrado**: ya entraron 5 reales (`MAN-WEB-5903`, `MAN-WEB-6241`, `IND-WEB-5862/6312/6315`, medido 20-oct) | — |
 | 9 | **El panel de productos no se ha probado con un producto real** | Subir uno a MANDARINA y mirarlo en la tienda |

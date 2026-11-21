@@ -7,6 +7,7 @@ import { traerGastoDiario, traerDetalleAnuncios } from '@/lib/pauta/meta'
 import { archivarArtePendiente } from '@/lib/pauta/arte'
 import { evaluarSaludPauta, textoAviso, DIAS_BASE } from '@/lib/pauta/salud'
 import { hoyEcuador, isoMasDias } from '@/lib/parseFecha'
+import { leerTodo } from '@/lib/leerTodo'
 
 // Baja el gasto de Meta a crm.pauta_dia.
 //
@@ -46,10 +47,11 @@ function autorizado(req) {
  * arte, devuelve la lista vacía y no hace ninguna llamada a Meta.
  */
 async function adsSinArte(sb, adAccountId) {
-  const { data } = await sb
+  const data = await leerTodo(() => sb
     .from('pauta_dia').select('ad_id')
     .eq('ad_account_id', adAccountId).is('arte_url', null)
-  return [...new Set((data || []).map((f) => f.ad_id))]
+    .order('fecha', { ascending: true }).order('ad_id', { ascending: true }))
+  return [...new Set(data.map((f) => f.ad_id))]
 }
 
 /**

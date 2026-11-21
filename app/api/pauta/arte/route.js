@@ -14,6 +14,7 @@ import { requireAdmin } from '@/lib/auth'
 import { getSupabase } from '@/lib/supabase'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { registrarEvento } from '@/lib/eventos'
+import { leerTodo } from '@/lib/leerTodo'
 
 const CARPETA = 'mandarina-pro/pauta'
 
@@ -48,14 +49,16 @@ export async function GET(req) {
   try {
     const sb = getSupabase()
     // Una fila por anuncio: la más reciente, que es la que muestra el tablero.
-    const { data, error } = await sb
+    // ☠️ La tabla ENTERA, paginada: sin rango se cortaba en 1000 y escondía
+    // los anuncios más viejos (38 de 89 el 20-nov-2026). Orden TOTAL: fecha + ad_id.
+    const data = await leerTodo(() => sb
       .from('pauta_dia')
       .select('ad_id, ad_nombre, tienda_id, arte_url, arte_tipo, arte_titular, arte_archivada_at, fecha, gasto')
       .order('fecha', { ascending: false })
-    if (error) throw error
+      .order('ad_id', { ascending: true }))
 
     const porAd = new Map()
-    for (const f of data || []) {
+    for (const f of data) {
       const a = porAd.get(f.ad_id)
       if (!a) {
         porAd.set(f.ad_id, {
