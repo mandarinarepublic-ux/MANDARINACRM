@@ -202,7 +202,10 @@ export default function TableroPage() {
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-white p-1">←</button>
+              <button onClick={() => router.push('/dashboard')} aria-label="Volver al inicio"
+                className="text-gray-500 hover:text-white min-w-[40px] min-h-[40px] -ml-2 flex items-center justify-center rounded-lg">
+                <span aria-hidden="true">←</span>
+              </button>
               <div>
                 <h1 className="text-xl font-display font-bold text-white">🧵 Pendientes por área</h1>
                 <p className="text-xs text-gray-500">
@@ -211,29 +214,31 @@ export default function TableroPage() {
                 </p>
               </div>
             </div>
-            <button onClick={cargar} disabled={loading} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
-              {loading ? <span className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" /> : '🔄'}
+            <button onClick={cargar} disabled={loading} aria-label="Actualizar" className="btn-secondary text-xs px-3 py-2 min-h-[40px] flex items-center gap-1.5">
+              {loading ? <span className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" /> : <span aria-hidden="true">🔄</span>}
               <span className="hidden sm:inline">Actualizar</span>
             </button>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2">
-            <input className="input flex-1" placeholder="Buscar por pedido, nombre, cédula o celular..."
+            {/* Solo placeholder no basta: al escribir desaparece y el lector no lo lee siempre. */}
+            <input className="input flex-1" placeholder="Buscar por pedido, nombre, cédula o celular…"
+              aria-label="Buscar pedido" autoComplete="off" spellCheck={false}
               value={busqueda} onChange={e => setFiltro('busqueda', e.target.value)} />
-            <select value={filtroTienda} onChange={e => setFiltro('filtroTienda', e.target.value)}
-              className={`bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer
+            <select value={filtroTienda} onChange={e => setFiltro('filtroTienda', e.target.value)} aria-label="Tienda"
+              className={`bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer
                 ${filtroTienda !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
               <option value="TODAS">🏬 Todas las tiendas</option>
               <option value="MANDARINA">🍊 Mandarina</option>
               <option value="INDSTORE">🏪 Indstore</option>
               <option value="YAW">🟣 YAW</option>
             </select>
-            <button onClick={() => set('mostrarFiltros', !mostrarFiltros)}
+            <button onClick={() => set('mostrarFiltros', !mostrarFiltros)} aria-expanded={mostrarFiltros}
               className={`text-sm px-3 py-2.5 min-h-[44px] rounded-xl border whitespace-nowrap flex items-center justify-center gap-1.5
                 ${filtrosFechaActivos > 0 ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 text-gray-400 hover:text-white'}`}>
               📅 Fechas
               {filtrosFechaActivos > 0 && <span className="bg-mandarina-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{filtrosFechaActivos}</span>}
-              <span className="text-[10px]">{mostrarFiltros ? '▲' : '▼'}</span>
+              <span className="text-[10px]" aria-hidden="true">{mostrarFiltros ? '▲' : '▼'}</span>
             </button>
           </div>
 
@@ -266,7 +271,7 @@ export default function TableroPage() {
 
         {/* ── Tarjetas por sub-área ── */}
         {estado === 'CARGANDO' ? (
-          <div className="text-center text-gray-600 text-sm py-10">Cargando…</div>
+          <div className="text-center text-gray-600 text-sm py-10" role="status">Cargando…</div>
         ) : visibles.length === 0 ? (
           <div className="card p-8 text-center">
             <div className="text-3xl mb-2 opacity-50">🧵</div>
@@ -287,11 +292,11 @@ export default function TableroPage() {
                   <button key={s.sub}
                     onClick={() => { set('subActiva', s.sub); set('verTodos', false) }}
                     aria-expanded={activa}
-                    className={`card p-3 text-left transition-all border-t-4 hover:bg-gray-800/40
+                    className={`card p-3 text-left transition-colors border-t-4 hover:bg-gray-800/40
                       ${activa ? 'ring-1 ring-gray-600' : 'opacity-80 hover:opacity-100'}`}
                     style={{ borderTopColor: COLOR_SUB[s.sub] }}>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <span>{s.icon}</span>
+                      <span aria-hidden="true">{s.icon}</span>
                       <span className="text-sm font-display font-bold" style={{ color: COLOR_SUB[s.sub] }}>{s.label}</span>
                     </div>
                     <div className="flex items-end gap-3">
@@ -335,8 +340,8 @@ export default function TableroPage() {
                       {abierta.prendas} prendas · {abierta.unidades} und
                       {abierta.sinCorte > 0 && ` · ${abierta.sinCorte} sin marca de corte`}
                     </span>
-                    <select value={orden} onChange={e => set('orden', e.target.value)}
-                      className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-[11px] text-gray-300 outline-none cursor-pointer">
+                    <select value={orden} onChange={e => set('orden', e.target.value)} aria-label="Ordenar pedidos"
+                      className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-[11px] text-gray-300 outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer">
                       {Object.entries(ORDENES).map(([k, o]) => <option key={k} value={k}>{o.label}</option>)}
                     </select>
                   </div>
@@ -410,8 +415,9 @@ export default function TableroPage() {
         )}
 
         <div className="flex items-center justify-between mt-4">
-          <button onClick={() => set('incluirDespachados', !incluirDespachados)}
-            className={`text-xs px-3 py-2 rounded-xl border transition-all
+          {/* Es un interruptor: aria-pressed dice si está prendido sin depender del verde. */}
+          <button onClick={() => set('incluirDespachados', !incluirDespachados)} aria-pressed={incluirDespachados}
+            className={`text-xs px-3 py-2 rounded-xl border transition-colors
               ${incluirDespachados ? 'border-green-500/50 bg-green-500/10 text-green-400' : 'border-gray-700 text-gray-400 hover:text-white'}`}>
             {incluirDespachados ? '✅ Con cerrados' : '➕ Ver también los cerrados'}
           </button>
@@ -438,13 +444,15 @@ function Chip({ tono, children }) {
 
 function Rango({ titulo, desde, hasta, onDesde, onHasta }) {
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">{titulo}</div>
+    // Dos fechas sin etiqueta propia: el lector oía "fecha, fecha". Cada una dice
+    // ahora de qué rango es y si es el inicio o el fin.
+    <div role="group" aria-label={titulo}>
+      <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1" aria-hidden="true">{titulo}</div>
       <div className="flex gap-2">
-        <input type="date" value={desde} onChange={e => onDesde(e.target.value)}
-          className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-2 py-2 text-xs text-gray-200 outline-none" />
-        <input type="date" value={hasta} onChange={e => onHasta(e.target.value)}
-          className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-2 py-2 text-xs text-gray-200 outline-none" />
+        <input type="date" value={desde} onChange={e => onDesde(e.target.value)} aria-label={`${titulo}: desde`}
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-2 py-2 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-mandarina-500/60" />
+        <input type="date" value={hasta} onChange={e => onHasta(e.target.value)} aria-label={`${titulo}: hasta`}
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-2 py-2 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-mandarina-500/60" />
       </div>
     </div>
   )

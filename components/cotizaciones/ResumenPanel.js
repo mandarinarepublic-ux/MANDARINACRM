@@ -36,7 +36,8 @@ export default function ResumenPanel({ productos, descuento, onDescuento, totale
           <div className="flex items-center gap-1">
             <span className="text-gray-500">-$</span>
             <input
-              type="number" min={0} step="0.01"
+              type="number" min={0} step="0.01" inputMode="decimal"
+              aria-label="Descuento en dólares"
               value={descuento}
               onChange={(e) => onDescuento(parseFloat(e.target.value) || 0)}
               className="w-24 bg-gray-800 border border-gray-700 text-white text-right font-mono rounded-lg px-2 py-1 focus:outline-none focus:border-mandarina-500 focus:ring-1 focus:ring-mandarina-500"

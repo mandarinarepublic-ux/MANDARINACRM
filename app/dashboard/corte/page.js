@@ -12,6 +12,7 @@ import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import { showToast } from '@/components/ToastHost'
 import AvisoFiltros from '@/components/AvisoFiltros'
 import BarraFiltros from '@/components/BarraFiltros'
+import { useTeclaEscape } from '@/lib/useTeclaEscape'
 
 const CORTE_CONFIG = {
   PENDIENTE:   { label: '✂️ Pendiente',  color: 'bg-gray-600' },
@@ -19,6 +20,11 @@ const CORTE_CONFIG = {
   CORTADO:     { label: '✅ Cortado',    color: 'bg-green-500' },
 }
 const CORTE_ORDEN = ['PENDIENTE', 'SOLICITADO', 'CORTADO']
+// Nombre de cada foto para el lector de pantalla (los botones son solo miniaturas).
+const ETIQUETA_FOTO = {
+  FOTO_PECHO_URL: 'del pecho', FOTO_ESPALDA_URL: 'de la espalda',
+  FOTO_MANGA_D_URL: 'de la manga derecha', FOTO_MANGA_I_URL: 'de la manga izquierda',
+}
 
 
 /**
@@ -75,13 +81,13 @@ function AccionesCortePedido({ pedido, onAccion }) {
           <textarea
             className="input w-full text-base" rows={2} autoFocus
             maxLength={TOPE_NOTA} value={nota} onChange={(e) => setNota(e.target.value)}
-            placeholder="Ej: no hay tela roja, falta la talla M..." />
+            placeholder="Ej: no hay tela roja, falta la talla M…" />
           <div className="flex gap-2">
             <button
               onClick={() => ejecutar('FALTA', nota)}
               disabled={guardando || !nota.trim()}
               className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-bold disabled:opacity-40">
-              {guardando ? 'Guardando...' : '⏸ Dejar pendiente'}
+              {guardando ? 'Guardando…' : '⏸ Dejar pendiente'}
             </button>
             <button
               onClick={() => { setAbierto(false); setNota(''); setError('') }}
@@ -96,19 +102,19 @@ function AccionesCortePedido({ pedido, onAccion }) {
           <button
             onClick={() => ejecutar('CORTADO')}
             disabled={guardando || total === 0}
-            className="py-3 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-500 transition-all disabled:opacity-40">
-            {guardando ? '...' : `✅ Cortar ${total === 1 ? 'la prenda' : `las ${total}`}`}
+            className="py-3 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-500 transition-colors disabled:opacity-40">
+            {guardando ? '…' : `✅ Cortar ${total === 1 ? 'la prenda' : `las ${total}`}`}
           </button>
           <button
             onClick={() => { setNota(notaDeTraba(pedido)); setAbierto(true) }}
             disabled={guardando}
-            className="py-3 rounded-xl bg-gray-800 text-gray-300 text-sm font-bold hover:text-white hover:bg-gray-700 transition-all disabled:opacity-40">
+            className="py-3 rounded-xl bg-gray-800 text-gray-300 text-sm font-bold hover:text-white hover:bg-gray-700 transition-colors disabled:opacity-40">
             ✂️ Falta algo
           </button>
         </div>
       )}
 
-      {error && <div className="text-xs text-red-400">{error}</div>}
+      {error && <div role="alert" className="text-xs text-red-400">{error}</div>}
     </div>
   )
 }
@@ -119,6 +125,7 @@ function CorteCard({ item, userId, onCorteChange }) {
     .map(k => ({ key: k, url: item[k] })).filter(f => f.url)
   const [fotoActiva, setFotoActiva] = useState(fotos[0]?.key || null)
   const [fotoFullscreen, setFotoFullscreen] = useState(null)
+  useTeclaEscape(!!fotoFullscreen, () => setFotoFullscreen(null))
 
   async function handleCorte(s) {
     const prev = subestadoCorte
@@ -175,16 +182,20 @@ function CorteCard({ item, userId, onCorteChange }) {
         <div className="flex-shrink-0">
           {fotos.length > 0 ? (
             <>
-              <div className="w-28 h-28 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 cursor-pointer mb-2"
+              {/* <button> y no <div onClick>: así se amplía también con teclado. */}
+              <button type="button" aria-label="Ampliar foto"
+                className="block w-28 h-28 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 cursor-pointer mb-2 outline-none focus-visible:ring-2 focus-visible:ring-mandarina-500/60"
                 onClick={() => setFotoFullscreen(item[fotoActiva || fotos[0].key])}>
-                <img src={imagenAncho(item[fotoActiva || fotos[0].key], 600)} loading="lazy" className="w-full h-full object-cover" alt="foto" />
-              </div>
+                <img src={imagenAncho(item[fotoActiva || fotos[0].key], 600)} loading="lazy" className="w-full h-full object-cover" alt={`Foto de ${item.PRODUCTO_NOMBRE || 'la prenda'}`} />
+              </button>
               {fotos.length > 1 && (
                 <div className="flex gap-1 justify-center flex-wrap">
                   {fotos.map(f => (
+                    // aria-pressed: la foto elegida no puede marcarse solo con el color del borde.
                     <button key={f.key} onClick={() => setFotoActiva(f.key)}
-                      className={`p-0.5 rounded border transition-all ${(fotoActiva||fotos[0].key)===f.key ? 'border-mandarina-500' : 'border-gray-700'}`}>
-                      <img src={f.url} loading="lazy" className="w-8 h-8 rounded object-cover" />
+                      aria-label={`Ver foto ${ETIQUETA_FOTO[f.key] || ''}`} aria-pressed={(fotoActiva||fotos[0].key)===f.key}
+                      className={`p-0.5 rounded border transition-colors ${(fotoActiva||fotos[0].key)===f.key ? 'border-mandarina-500' : 'border-gray-700'}`}>
+                      <img src={f.url} loading="lazy" alt="" className="w-8 h-8 rounded object-cover" />
                     </button>
                   ))}
                 </div>
@@ -202,8 +213,8 @@ function CorteCard({ item, userId, onCorteChange }) {
       {/* Botones de corte — ancho completo, grandes para mobile */}
       <div className="grid grid-cols-3 gap-2">
         {CORTE_ORDEN.map(s => (
-          <button key={s} onClick={() => handleCorte(s)}
-            className={`py-3 rounded-xl text-sm font-bold transition-all
+          <button key={s} onClick={() => handleCorte(s)} aria-pressed={subestadoCorte === s}
+            className={`py-3 rounded-xl text-sm font-bold transition-colors
               ${subestadoCorte === s
                 ? `${CORTE_CONFIG[s].color} text-white shadow-lg ring-2 ring-white/20`
                 : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'}`}>
@@ -213,9 +224,16 @@ function CorteCard({ item, userId, onCorteChange }) {
       </div>
 
       {fotoFullscreen && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={() => setFotoFullscreen(null)}>
-          <img src={fotoFullscreen} className="max-w-full max-h-full object-contain rounded-xl" />
-          <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
+        // El ✕ tiene su propio onClick: antes cerraba solo porque el clic subía al
+        // fondo. Escape también cierra (useTeclaEscape arriba).
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
+          role="dialog" aria-modal="true" aria-label={`Foto de ${item.PRODUCTO_NOMBRE || 'la prenda'}`}
+          onClick={() => setFotoFullscreen(null)}>
+          <img src={fotoFullscreen} alt={`Foto de ${item.PRODUCTO_NOMBRE || 'la prenda'}`} className="max-w-full max-h-full object-contain rounded-xl" />
+          <button onClick={(e) => { e.stopPropagation(); setFotoFullscreen(null) }} aria-label="Cerrar foto"
+            className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">
+            <span aria-hidden="true">✕</span>
+          </button>
         </div>
       )}
     </div>
@@ -436,7 +454,7 @@ export default function CortePage() {
   const hayMas = filtered.length > visibles
 
   return (
-    <div className="flex flex-col h-screen md:h-auto">
+    <div className="flex flex-col h-dvh md:h-auto">
       <BarraFiltros
         titulo="✂️ Corte de Tela"
         insignia={(
@@ -452,12 +470,14 @@ export default function CortePage() {
           </span>
         )}
         accion={(
-          <button onClick={() => loadItems()} title="Actualizar"
-            className="text-gray-500 hover:text-white text-lg px-2 py-1 flex-shrink-0">⟳</button>
+          <button onClick={() => loadItems()} title="Actualizar" aria-label="Actualizar la bandeja"
+            className="text-gray-500 hover:text-white text-lg min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg flex-shrink-0">
+            <span aria-hidden="true">⟳</span>
+          </button>
         )}
         busqueda={busqueda}
         onBusqueda={setBusqueda}
-        placeholder="Buscar por pedido, producto, nombre, cédula o celular..."
+        placeholder="Buscar por pedido, producto, nombre, cédula o celular…"
         chips={chipsDe(CHIP_C)}
         onQuitarChip={quitarFiltro}
         onLimpiar={limpiarFiltros}
@@ -472,10 +492,10 @@ export default function CortePage() {
                 { key: 'SOLICITADO', label: 'Solicitado',     icon: '🛒', count: contadores.SOLICITADO||0, cls: 'bg-yellow-500 border-yellow-400' },
                 { key: 'CORTADO',    label: 'Cortado',        icon: '✅', count: contadores.CORTADO||0,    cls: 'bg-green-500 border-green-400' },
               ].map(f => (
-                <button key={f.key} onClick={() => setFiltro(f.key)}
-                  className={`flex flex-col items-center py-3 px-2 rounded-xl border-2 text-white transition-all
+                <button key={f.key} onClick={() => setFiltro(f.key)} aria-pressed={filtro === f.key}
+                  className={`flex flex-col items-center py-3 px-2 rounded-xl border-2 text-white transition-colors
                     ${filtro === f.key ? f.cls : 'border-gray-700 bg-gray-800/50 text-gray-500 hover:text-gray-300'}`}>
-                  <span className="text-xl mb-1">{f.icon}</span>
+                  <span className="text-xl mb-1" aria-hidden="true">{f.icon}</span>
                   <span className="text-lg font-black">{f.count}</span>
                   <span className="text-xs font-medium">{f.label}</span>
                 </button>
@@ -483,12 +503,14 @@ export default function CortePage() {
             </div>
         )}
       >
-          {/* Orden y rango de fechas. Mismo formato que Producción y Despacho. */}
+          {/* Orden y rango de fechas. Mismo formato que Producción y Despacho.
+              Títulos como <label htmlFor> para que el lector nombre cada campo; el
+              borde naranja dice "filtro activo", el anillo dice "aquí está el foco". */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
             <div className="flex flex-col gap-1 col-span-2 sm:col-span-2">
-              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Orden</span>
-              <select value={orden} onChange={e => setOrden(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+              <label htmlFor="corte-orden" className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Orden</label>
+              <select id="corte-orden" value={orden} onChange={e => setOrden(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                   ${orden !== ORDEN_POR_DEFECTO ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                 {Object.entries(ORDENES).map(([k, o]) => (
                   <option key={k} value={k}>{o.label}</option>
@@ -496,15 +518,15 @@ export default function CortePage() {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Pedido desde</span>
-              <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+              <label htmlFor="corte-desde" className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Pedido desde</label>
+              <input type="date" id="corte-desde" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                   ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`} />
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Pedido hasta</span>
-              <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+              <label htmlFor="corte-hasta" className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Pedido hasta</label>
+              <input type="date" id="corte-hasta" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                   ${fechaHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`} />
             </div>
           </div>
@@ -514,7 +536,7 @@ export default function CortePage() {
               filtrada sin que nadie lo note. */}
           {hayFecha && (
             <button onClick={() => { setFechaDesde(''); setFechaHasta('') }}
-              className="w-full mb-3 min-h-[40px] text-xs text-mandarina-400 hover:text-white bg-mandarina-500/10 border border-mandarina-500/40 rounded-xl px-3 transition-all">
+              className="w-full mb-3 min-h-[40px] text-xs text-mandarina-400 hover:text-white bg-mandarina-500/10 border border-mandarina-500/40 rounded-xl px-3 transition-colors">
               ✕ Quitar el filtro de fechas — estás viendo {enVista.length} de {pedidos.length} pedido(s)
             </button>
           )}
@@ -524,8 +546,9 @@ export default function CortePage() {
         <div className="max-w-3xl mx-auto px-4 py-3">
           <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {estado === 'CARGANDO' ? (
-            <div className="flex justify-center py-12">
-              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+            <div className="flex justify-center py-12" role="status">
+              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+              <span className="sr-only">Cargando…</span>
             </div>
           ) : estado === 'ERROR' ? (
             /* Un fallo NO es "no hay nada que cortar". Antes los dos se veían igual. */
@@ -601,12 +624,20 @@ export default function CortePage() {
 
                 return (
                   <div key={pedido.PEDIDO_ID} className={`card overflow-hidden ${trabado ? 'border-red-500/60' : urgente ? 'border-red-500/40' : ''}`}>
-                    <button onClick={() => setExpandedPedido(isExpanded ? null : pedido.PEDIDO_ID)}
-                      className="w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-all text-left">
+                    {/* ☠️ Antes la cabecera entera era un <button> con un <Link> y otro
+                        <button> adentro: HTML inválido (el navegador puede partir el
+                        árbol y el lector no sabe qué control es cuál). Ahora el botón
+                        de expandir es una capa que cubre la fila (absolute inset-0) y
+                        el link y "Cargar las prendas" son HERMANOS que quedan por
+                        encima (relative z-10). Se ve y se toca igual que antes. */}
+                    <div className="relative w-full flex items-center gap-3 p-4 hover:bg-gray-800/30 transition-colors text-left">
+                      <button type="button" onClick={() => setExpandedPedido(isExpanded ? null : pedido.PEDIDO_ID)}
+                        aria-expanded={isExpanded} aria-label={`Prendas del pedido ${pedido.PEDIDO_ID}`}
+                        className="absolute inset-0 w-full h-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mandarina-500/60" />
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <Link href={`/dashboard/pedido/${pedido.PEDIDO_ID}`} onClick={e => e.stopPropagation()}
-                            className="font-mono text-sm font-medium text-mandarina-400 hover:underline">
+                            className="relative z-10 font-mono text-sm font-medium text-mandarina-400 hover:underline">
                             {pedido.PEDIDO_ID}
                           </Link>
                           {urgente && <span className="badge bg-red-500/20 text-red-400 text-xs">🚨 Urgente</span>}
@@ -634,7 +665,7 @@ export default function CortePage() {
                                   ? { ...x, itemsFiltrados: todas, PRENDAS_LLEGARON: todas.length, COMPLETO: true }
                                   : x))
                               }}
-                              className="badge bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30">
+                              className="relative z-10 badge bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30">
                               ⟳ Cargar las {Math.max(0, (pedido.PRENDAS_TOTAL ?? 0) - (pedido.PRENDAS_LLEGARON ?? 0))} prendas que faltan
                             </button>
                           )}
@@ -660,8 +691,8 @@ export default function CortePage() {
                           {' · '}{formatFechaDia(pedido.FECHA_PEDIDO)}
                         </div>
                       </div>
-                      <span className="text-gray-600 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
-                    </button>
+                      <span className="text-gray-600 text-sm flex-shrink-0" aria-hidden="true">{isExpanded ? '▲' : '▼'}</span>
+                    </div>
 
                     {/* Las dos acciones del pedido entero: siempre a la vista, sin
                         tener que expandir. Ese era el trabajo de más. */}
@@ -681,7 +712,7 @@ export default function CortePage() {
             {hayMas && (
               <button
                 onClick={() => setVisibles(v => v + PAGE_SIZE_C)}
-                className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
+                className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-colors">
                 Cargar más ({filtered.length - visibles} restantes)
               </button>
             )}

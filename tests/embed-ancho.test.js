@@ -4,7 +4,7 @@
 // `nuevo-pedido` y se aterriza en `pedido/[id]`. Las dos tienen el mismo par de
 // problemas cuando se las mete en un iframe angosto:
 //   1. `max-w-2xl mx-auto` (tope de 672px) solo agrega vacío a los lados.
-//   2. `md:left-60` corre la barra fija 240px para dejarle sitio a un menú
+//   2. `md:left-56` corre la barra fija 224px (= menú w-56) para dejarle sitio a un menú
 //      lateral que en embed NO existe.
 //
 // La restricción dura es que SIN `embed=1` las dos queden idénticas: con una se
@@ -14,7 +14,7 @@
 //
 // Son pruebas de fuente, no de render, porque montar los componentes pediría
 // todo el bundler de Next. Lo que vigilan es barato y concreto: que nadie borre
-// el `max-w-2xl` creyendo que estorba, ni suelte el `md:left-60` que le deja
+// el `max-w-2xl` creyendo que estorba, ni suelte el `md:left-56` que le deja
 // sitio al menú.
 import test from 'node:test'
 import assert from 'node:assert'
@@ -63,12 +63,12 @@ for (const p of PANTALLAS) {
 
   test(`[${p.nombre}] la barra fija conserva el hueco del menú SOLO fuera de embed`, () => {
     assert.ok(
-      /esEmbed \? '' : 'md:left-60'/.test(src),
-      'la barra debe soltar md:left-60 solo en embed',
+      /esEmbed \? '' : 'md:left-56'/.test(src),
+      'la barra debe soltar md:left-56 (ancho del menú w-56) solo en embed',
     )
     assert.ok(
-      !/right-0 md:left-60/.test(src),
-      'quedó un md:left-60 fijo, sin condicionar al modo',
+      !/right-0 md:left-(56|60)/.test(src),
+      'quedó un md:left-* fijo, sin condicionar al modo',
     )
   })
 

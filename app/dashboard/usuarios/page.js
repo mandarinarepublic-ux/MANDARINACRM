@@ -181,12 +181,15 @@ export default function UsuariosPage() {
     DESPACHO: 'text-green-400 bg-green-500/20',
   }
 
+  // Los tres pickers son checkboxes pintados como chips. El input va `sr-only` y no
+  // `hidden`: con `hidden` sale del orden del Tab y con teclado no se podía marcar
+  // nada. focus-within dibuja el anillo en el chip que tiene el foco.
   const AreasPicker = ({ valor, onChange }) => (
     <div className="flex gap-2 flex-wrap">
       {AREAS.map(a => (
-        <label key={a} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all
+        <label key={a} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-mandarina-500/60
           ${valor.includes(a) ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 text-gray-500'}`}>
-          <input type="checkbox" className="hidden" checked={valor.includes(a)}
+          <input type="checkbox" className="sr-only" checked={valor.includes(a)}
             onChange={e => onChange(e.target.checked ? [...valor, a] : valor.filter(x => x !== a))} />
           <span className="text-sm">{a}</span>
         </label>
@@ -197,9 +200,9 @@ export default function UsuariosPage() {
   const TiendasPicker = ({ valor, onChange }) => (
     <div className="flex gap-2">
       {['MANDARINA', 'INDSTORE'].map(t => (
-        <label key={t} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all
+        <label key={t} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-mandarina-500/60
           ${valor.includes(t) ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 text-gray-500'}`}>
-          <input type="checkbox" className="hidden" checked={valor.includes(t)}
+          <input type="checkbox" className="sr-only" checked={valor.includes(t)}
             onChange={e => onChange(e.target.checked ? [...valor, t] : valor.filter(x => x !== t))} />
           <span className="text-sm">{t === 'MANDARINA' ? '🍊 Mandarina' : '🏪 Indstore'}</span>
         </label>
@@ -226,9 +229,9 @@ export default function UsuariosPage() {
         ['CLUB_MANDARINA', '🎁 Club Mandarina'],
         ['CLUB_INDSTORE',  '🎁 Club IND'],
       ].map(([clave, etiqueta]) => (
-        <label key={clave} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all
+        <label key={clave} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-mandarina-500/60
           ${valor.includes(clave) ? 'border-mandarina-500 bg-mandarina-500/10 text-mandarina-400' : 'border-gray-700 text-gray-500'}`}>
-          <input type="checkbox" className="hidden" checked={valor.includes(clave)}
+          <input type="checkbox" className="sr-only" checked={valor.includes(clave)}
             onChange={e => onChange(e.target.checked ? [...valor, clave] : valor.filter(x => x !== clave))} />
           <span className="text-sm">{etiqueta}</span>
         </label>
@@ -246,9 +249,12 @@ export default function UsuariosPage() {
       </div>
 
       {aviso && (
-        <div className="mb-4 flex items-center justify-between gap-3 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3">
+        <div role="status" className="mb-4 flex items-center justify-between gap-3 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3">
           <span className="text-sm text-green-300">✅ {aviso}</span>
-          <button onClick={() => setAviso('')} className="text-green-400 hover:text-green-200 text-xs">✕</button>
+          <button onClick={() => setAviso('')} aria-label="Cerrar aviso"
+            className="text-green-400 hover:text-green-200 text-xs min-w-[40px] min-h-[40px] -my-2 -mr-2 flex items-center justify-center rounded-lg">
+            <span aria-hidden="true">✕</span>
+          </button>
         </div>
       )}
 
@@ -259,18 +265,18 @@ export default function UsuariosPage() {
           <form onSubmit={handleCreate} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="label">Nombre completo *</label>
-                <input className="input" required placeholder="Juan Pérez" value={form.nombre}
+                <label className="label" htmlFor="nu-nombre">Nombre completo *</label>
+                <input id="nu-nombre" className="input" required placeholder="Juan Pérez" value={form.nombre}
                   onChange={e => setForm(f => ({...f, nombre: e.target.value}))} />
               </div>
               <div>
-                <label className="label">Código (3 letras) *</label>
-                <input className="input" required maxLength={3} placeholder="JUA" value={form.codigo}
+                <label className="label" htmlFor="nu-codigo">Código (3 letras) *</label>
+                <input id="nu-codigo" className="input" required maxLength={3} placeholder="JUA" autoComplete="off" spellCheck={false} value={form.codigo}
                   onChange={e => setForm(f => ({...f, codigo: e.target.value.toUpperCase()}))} />
               </div>
               <div>
-                <label className="label">Usuario para entrar *</label>
-                <input className="input" required placeholder="JUAN" value={form.username}
+                <label className="label" htmlFor="nu-usuario">Usuario para entrar *</label>
+                <input id="nu-usuario" className="input" required placeholder="JUAN" autoComplete="off" spellCheck={false} value={form.username}
                   onChange={e => setForm(f => ({...f, username: e.target.value.toUpperCase().trim()}))} />
               </div>
               <div className="col-span-2 -mt-1">
@@ -280,19 +286,19 @@ export default function UsuariosPage() {
                 </p>
               </div>
               <div className="col-span-2">
-                <label className="label">Rol *</label>
-                <select className="input" value={form.rol} onChange={e => setForm(f => ({...f, rol: e.target.value}))}>
+                <label className="label" htmlFor="nu-rol">Rol *</label>
+                <select id="nu-rol" className="input" value={form.rol} onChange={e => setForm(f => ({...f, rol: e.target.value}))}>
                   {ROLES.map(r => <option key={r} value={r}>{ROL_LABEL[r] || r}</option>)}
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="label">Email *</label>
-                <input className="input" type="email" required placeholder="juan@mandarina.com" value={form.email}
+                <label className="label" htmlFor="nu-email">Email *</label>
+                <input id="nu-email" className="input" type="email" required placeholder="juan@mandarina.com" autoComplete="off" spellCheck={false} autoCapitalize="none" value={form.email}
                   onChange={e => setForm(f => ({...f, email: e.target.value}))} />
               </div>
               <div className="col-span-2">
-                <label className="label">Contraseña *</label>
-                <input className="input" type="password" required minLength={6} autoComplete="new-password"
+                <label className="label" htmlFor="nu-clave">Contraseña *</label>
+                <input id="nu-clave" className="input" type="password" required minLength={6} autoComplete="new-password"
                   placeholder="Mínimo 6 caracteres" value={form.password}
                   onChange={e => setForm(f => ({...f, password: e.target.value}))} />
               </div>
@@ -329,7 +335,7 @@ export default function UsuariosPage() {
             )}
 
             <button type="submit" disabled={saving} className="btn-primary w-full">
-              {saving ? '⏳ Creando...' : 'Crear usuario'}
+              {saving ? '⏳ Creando…' : 'Crear usuario'}
             </button>
           </form>
         </div>
@@ -337,8 +343,9 @@ export default function UsuariosPage() {
 
       {/* Lista */}
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+        <div className="flex justify-center py-12" role="status">
+          <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+          <span className="sr-only">Cargando…</span>
         </div>
       ) : loadError ? (
         <div className="card p-8 text-center">
@@ -396,13 +403,13 @@ export default function UsuariosPage() {
                 <div className="px-4 pb-4 bg-gray-900/40 border-t border-gray-800 pt-3 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="label">Usuario para entrar</label>
-                      <input className="input" value={editForm.username}
+                      <label className="label" htmlFor={`ed-usuario-${u.USUARIO_ID}`}>Usuario para entrar</label>
+                      <input id={`ed-usuario-${u.USUARIO_ID}`} autoComplete="off" spellCheck={false} className="input" value={editForm.username}
                         onChange={e => setEditForm(f => ({ ...f, username: e.target.value.toUpperCase().trim() }))} />
                     </div>
                     <div>
-                      <label className="label">Email</label>
-                      <input className="input" type="email" value={editForm.email}
+                      <label className="label" htmlFor={`ed-email-${u.USUARIO_ID}`}>Email</label>
+                      <input id={`ed-email-${u.USUARIO_ID}`} autoComplete="off" spellCheck={false} className="input" type="email" value={editForm.email}
                         onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
                     </div>
                   </div>
@@ -416,8 +423,8 @@ export default function UsuariosPage() {
                   </p>
 
                   <div>
-                    <label className="label">Nueva contraseña</label>
-                    <input className="input" type="password" autoComplete="new-password"
+                    <label className="label" htmlFor={`ed-clave-${u.USUARIO_ID}`}>Nueva contraseña</label>
+                    <input id={`ed-clave-${u.USUARIO_ID}`} className="input" type="password" autoComplete="new-password"
                       placeholder="Dejar vacío para no cambiarla" value={editForm.password}
                       onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} />
                     <p className="text-xs text-gray-500 mt-1">
@@ -426,8 +433,8 @@ export default function UsuariosPage() {
                   </div>
 
                   <div>
-                    <label className="label">Rol</label>
-                    <select className="input" value={editForm.rol}
+                    <label className="label" htmlFor={`ed-rol-${u.USUARIO_ID}`}>Rol</label>
+                    <select id={`ed-rol-${u.USUARIO_ID}`} className="input" value={editForm.rol}
                       onChange={e => setEditForm(f => ({ ...f, rol: e.target.value }))}>
                       {ROLES.map(r => <option key={r} value={r}>{ROL_LABEL[r] || r}</option>)}
                     </select>
@@ -479,7 +486,7 @@ export default function UsuariosPage() {
 
                   <div className="flex gap-2">
                     <button onClick={handleUpdate} disabled={savingEdit} className="btn-primary flex-1">
-                      {savingEdit ? '⏳ Guardando...' : '💾 Guardar cambios'}
+                      {savingEdit ? '⏳ Guardando…' : '💾 Guardar cambios'}
                     </button>
                     <button onClick={() => setEditForm(null)} className="btn-secondary px-4">Cancelar</button>
                   </div>

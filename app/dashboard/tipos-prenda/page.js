@@ -138,7 +138,8 @@ export default function TiposPrendaPage() {
         Desactivar un tipo lo saca del selector sin tocar los pedidos ya hechos.
       </p>
 
-      <input className="input mb-2" placeholder="Buscar tipo de prenda…"
+      <input className="input mb-2" placeholder="Buscar tipo de prenda…" aria-label="Buscar tipo de prenda"
+        autoComplete="off" spellCheck={false}
         value={busqueda} onChange={e => setBusqueda(e.target.value)} />
 
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
@@ -146,10 +147,11 @@ export default function TiposPrendaPage() {
           <input type="checkbox" checked={verInactivos} onChange={e => setVerInactivos(e.target.checked)} />
           <span className="text-xs text-gray-400">Mostrar también los desactivados</span>
         </label>
-        <div className="flex gap-1 p-0.5 bg-gray-900 rounded-lg">
+        {/* aria-pressed: el orden elegido no puede decirse solo con el naranja. */}
+        <div className="flex gap-1 p-0.5 bg-gray-900 rounded-lg" role="group" aria-label="Ordenar">
           {[{ v: 'alfabetico', l: 'A–Z' }, { v: 'usos', l: 'Más usados' }].map(o => (
-            <button key={o.v} onClick={() => setOrden(o.v)}
-              className={`px-2.5 py-1 rounded-md text-xs transition-all
+            <button key={o.v} onClick={() => setOrden(o.v)} aria-pressed={orden === o.v}
+              className={`px-2.5 py-1 rounded-md text-xs transition-colors
                 ${orden === o.v ? 'bg-mandarina-500 text-white' : 'text-gray-400 hover:text-white'}`}>
               {o.l}
             </button>
@@ -158,20 +160,24 @@ export default function TiposPrendaPage() {
       </div>
 
       {aviso && (
-        <div className="mb-3 flex items-center justify-between gap-3 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5">
+        <div role="status" className="mb-3 flex items-center justify-between gap-3 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5">
           <span className="text-sm text-green-300">✅ {aviso}</span>
-          <button onClick={() => setAviso('')} className="text-green-400 hover:text-green-200 text-xs">✕</button>
+          <button onClick={() => setAviso('')} aria-label="Cerrar aviso"
+            className="text-green-400 hover:text-green-200 text-xs min-w-[40px] min-h-[40px] -my-2 -mr-2 flex items-center justify-center rounded-lg">
+            <span aria-hidden="true">✕</span>
+          </button>
         </div>
       )}
       {error && (
-        <div className="mb-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2.5">
+        <div role="alert" className="mb-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2.5">
           <span className="text-sm text-red-400">⚠️ {error}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+        <div className="flex justify-center py-12" role="status">
+          <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+          <span className="sr-only">Cargando…</span>
         </div>
       ) : filtrados.length === 0 ? (
         <div className="card p-8 text-center text-gray-600">Sin resultados</div>
@@ -181,7 +187,10 @@ export default function TiposPrendaPage() {
             <div key={p.NOMBRE} className="p-3">
               {editando?.nombre === p.NOMBRE ? (
                 <div className="space-y-2">
-                  <input className="input" autoFocus value={editando.nuevoNombre}
+                  {/* autoFocus se queda A PROPÓSITO: aparece solo porque alguien tocó ✏️,
+                      y lo siguiente que quiere es escribir el nombre nuevo. */}
+                  <input className="input" autoFocus value={editando.nuevoNombre} aria-label={`Nuevo nombre para ${p.NOMBRE}`}
+                    autoComplete="off" spellCheck={false}
                     onChange={e => setEditando(f => ({ ...f, nuevoNombre: e.target.value.toUpperCase() }))}
                     onKeyDown={e => { if (e.key === 'Enter') guardarNombre(); if (e.key === 'Escape') setEditando(null) }} />
                   <div className="flex gap-2">
@@ -205,22 +214,26 @@ export default function TiposPrendaPage() {
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button onClick={() => setEditando({ nombre: p.NOMBRE, nuevoNombre: p.NOMBRE })}
-                      title="Renombrar"
-                      className="text-xs text-mandarina-400 hover:text-mandarina-300 px-2 py-1">✏️</button>
+                      title="Renombrar" aria-label={`Renombrar ${p.NOMBRE}`}
+                      className="text-xs text-mandarina-400 hover:text-mandarina-300 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg">
+                      <span aria-hidden="true">✏️</span>
+                    </button>
                     <button
                       onClick={() => patch(p.NOMBRE, { activo: !p.ACTIVO },
                         p.ACTIVO ? `"${p.NOMBRE}" desactivado` : `"${p.NOMBRE}" activado`)}
                       disabled={guardando === p.NOMBRE}
-                      title={p.ACTIVO ? 'Desactivar' : 'Activar'}
-                      className={`text-xs px-2 py-1 disabled:opacity-50 ${p.ACTIVO ? 'text-gray-400 hover:text-white' : 'text-green-400 hover:text-green-300'}`}>
-                      {p.ACTIVO ? '🚫' : '✅'}
+                      title={p.ACTIVO ? 'Desactivar' : 'Activar'} aria-label={`${p.ACTIVO ? 'Desactivar' : 'Activar'} ${p.NOMBRE}`}
+                      className={`text-xs min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg disabled:opacity-50 ${p.ACTIVO ? 'text-gray-400 hover:text-white' : 'text-green-400 hover:text-green-300'}`}>
+                      <span aria-hidden="true">{p.ACTIVO ? '🚫' : '✅'}</span>
                     </button>
                     {/* Borrar solo si nunca se usó: si no, el histórico quedaría
                         apuntando a un tipo que ya no existe. */}
                     {p.USOS === 0 && (
                       <button onClick={() => borrar(p)} disabled={guardando === p.NOMBRE}
-                        title="Borrar (nunca usado)"
-                        className="text-xs text-red-400 hover:text-red-300 px-2 py-1 disabled:opacity-50">🗑️</button>
+                        title="Borrar (nunca usado)" aria-label={`Borrar ${p.NOMBRE}`}
+                        className="text-xs text-red-400 hover:text-red-300 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg disabled:opacity-50">
+                        <span aria-hidden="true">🗑️</span>
+                      </button>
                     )}
                   </div>
                 </div>

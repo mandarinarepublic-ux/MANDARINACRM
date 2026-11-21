@@ -17,6 +17,7 @@ export default function OpcionesTabs({ opciones, activa, onActiva, onAdd, onRemo
             key={o.id}
             type="button"
             onClick={() => onActiva(i)}
+            aria-pressed={i === activa}
             className={`px-3 py-1.5 rounded-lg text-sm ${
               i === activa ? 'bg-mandarina-500 text-white' : 'bg-gray-800 text-gray-300'
             }`}

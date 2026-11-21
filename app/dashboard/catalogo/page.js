@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { imagenAncho } from '@/lib/imagenes'
+import { useTeclaEscape } from '@/lib/useTeclaEscape'
 
 // Redimensiona y comprime la foto en el navegador ANTES de subirla.
 // Evita el 413 de Vercel (límite 4.5MB de body) con fotos de celular grandes.
@@ -209,9 +210,16 @@ export default function CatalogoPage() {
 
   const tallasOpciones = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'U']
 
+  // Escape cierra el modal abierto (solo puede haber uno a la vez).
+  useTeclaEscape(!!(selected || modalEditar || modalAgregar), () => {
+    if (modalEditar) setModalEditar(false)
+    else if (modalAgregar) setModalAgregar(false)
+    else setSelected(null)
+  })
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-screen md:h-auto">
+    <div className="flex flex-col h-dvh md:h-auto">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
         <div className="max-w-4xl mx-auto">
@@ -222,14 +230,14 @@ export default function CatalogoPage() {
             <div className="flex items-center gap-2">
               {tienda === 'SUCURSAL' && (
                 <button onClick={() => setModalAgregar(true)}
-                  className="text-xs px-3 py-1.5 rounded-xl bg-mandarina-500 text-white font-semibold hover:bg-mandarina-600 transition-all">
+                  className="text-xs px-3 py-1.5 rounded-xl bg-mandarina-500 text-white font-semibold hover:bg-mandarina-600 transition-colors">
                   + Agregar
                 </button>
               )}
               {tienda !== 'SUCURSAL' && (
                 <button onClick={handleSync} disabled={sincronizando}
                   title="Trae los productos más recientes desde Shopify"
-                  className="text-xs px-3 py-1.5 rounded-xl border border-gray-700 text-gray-300 font-semibold hover:border-gray-500 transition-all disabled:opacity-50 min-h-[44px] md:min-h-0">
+                  className="text-xs px-3 py-1.5 rounded-xl border border-gray-700 text-gray-300 font-semibold hover:border-gray-500 transition-colors disabled:opacity-50 min-h-[44px] md:min-h-0">
                   {sincronizando ? 'Actualizando…' : '↻ Actualizar'}
                 </button>
               )}
@@ -246,8 +254,10 @@ export default function CatalogoPage() {
               { key: 'INDSTORE',  label: '🏪 Indstore',  color: '#E91E8C' },
               { key: 'SUCURSAL',  label: '🏬 Sucursal',  color: '#10B981' },
             ].map(t => (
+              // aria-pressed: la tienda elegida no puede decirse solo con el color de fondo.
               <button key={t.key} onClick={() => { setTienda(t.key); setSelected(null); setBusqueda('') }}
-                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border
+                aria-pressed={tienda === t.key}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors border
                   ${tienda === t.key ? 'text-white border-transparent' : 'border-gray-700 text-gray-500'}`}
                 style={tienda === t.key ? { backgroundColor: t.color } : {}}>
                 {t.label}
@@ -256,7 +266,8 @@ export default function CatalogoPage() {
           </div>
 
           {tienda !== 'SUCURSAL' && (
-            <input className="input" placeholder="Buscar producto..."
+            <input className="input" placeholder="Buscar producto…" aria-label="Buscar producto"
+              autoComplete="off" spellCheck={false}
               value={busqueda} onChange={e => handleBusqueda(e.target.value)} />
           )}
         </div>
@@ -269,27 +280,31 @@ export default function CatalogoPage() {
           {/* ── Vista Sucursal ── */}
           {tienda === 'SUCURSAL' && (
             loadingSuc ? (
-              <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+              <div className="flex justify-center py-12" role="status">
+                <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                <span className="sr-only">Cargando…</span>
               </div>
             ) : sucursal.length === 0 ? (
               <div className="card p-8 text-center text-gray-600">
                 <div className="text-3xl mb-3">🏬</div>
                 <p className="text-sm">Sin productos en sucursal todavía</p>
                 <button onClick={() => setModalAgregar(true)}
-                  className="mt-4 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-all">
+                  className="mt-4 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors">
                   + Agregar primer producto
                 </button>
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {sucursal.filter(p => parseInt(p.STOCK) > 0).map(p => (
-                    <div key={p.ID} className="card overflow-hidden transition-all hover:border-gray-600">
+                    // content-visibility: la grilla no se pagina; el navegador se salta
+                    // pintar las tarjetas que están fuera de pantalla. No cambia nada visible.
+                    <div key={p.ID} className="card overflow-hidden transition-colors hover:border-gray-600"
+                      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 300px' }}>
                       {/* Imagen */}
                       <div className="aspect-square bg-gray-800 relative">
                         {p.FOTO_URL
                           ? <img src={p.FOTO_URL} alt={p.NOMBRE} loading="lazy" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center text-gray-600 text-3xl">👕</div>}
+                          : <div className="w-full h-full flex items-center justify-center text-gray-600 text-3xl" aria-hidden="true">👕</div>}
                         {/* Badge tienda */}
                         <div className="absolute top-2 right-2">
                           <span className="text-xs px-1.5 py-0.5 rounded-full text-white"
@@ -322,13 +337,13 @@ export default function CatalogoPage() {
                             }))
                             router.push('/dashboard/nuevo-pedido')
                           }}
-                          className="w-full mt-2 py-1.5 rounded-lg text-xs font-bold text-white transition-all"
+                          className="w-full mt-2 py-1.5 rounded-lg text-xs font-bold text-white transition-colors"
                           style={{ backgroundColor: p.TIENDA === 'Mandarina' ? '#FF6B00' : '#E91E8C' }}>
                           Comprar
                         </button>
                         <button
                           onClick={() => abrirEditar(p)}
-                          className="w-full mt-1 py-2 text-center text-xs text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-all">
+                          className="w-full mt-1 py-2 text-center text-xs text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">
                           ✏️ Editar
                         </button>
                       </div>
@@ -341,8 +356,9 @@ export default function CatalogoPage() {
           {/* ── Vista Shopify ── */}
           {tienda !== 'SUCURSAL' && (
             loading ? (
-              <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+              <div className="flex justify-center py-12" role="status">
+                <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                <span className="sr-only">Cargando…</span>
               </div>
             ) : filtered.length === 0 ? (
               <div className="card p-8 text-center text-gray-600">
@@ -353,12 +369,13 @@ export default function CatalogoPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {filtered.map(p => (
                   <button key={p.id} onClick={() => setSelected(selected?.id === p.id ? null : p)}
-                    className={`card text-left transition-all hover:border-gray-600 overflow-hidden
+                    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 280px' }}
+                    className={`card text-left transition-colors hover:border-gray-600 overflow-hidden
                       ${selected?.id === p.id ? 'border-mandarina-500' : ''}`}>
                     <div className="aspect-square bg-gray-800 relative">
                       {p.image
                         ? <img src={imagenAncho(p.image, 300)} alt={p.title} loading="lazy" className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-gray-600 text-3xl">👕</div>}
+                        : <div className="w-full h-full flex items-center justify-center text-gray-600 text-3xl" aria-hidden="true">👕</div>}
                       <div className="absolute top-2 right-2">
                         <span className="text-xs px-1.5 py-0.5 rounded-full text-white"
                           style={{ backgroundColor: tienda === 'MANDARINA' ? '#FF6B00' : '#E91E8C' }}>
@@ -384,12 +401,19 @@ export default function CatalogoPage() {
 
           {/* Product detail panel (Shopify) */}
           {selected && tienda !== 'SUCURSAL' && (
+            // En el celular es una hoja que sale de abajo: margen seguro para la barra
+            // de gestos y overscroll-contain para que el scroll no arrastre la grilla.
             <div className="fixed inset-0 bg-black/80 z-50 flex items-end md:items-center justify-center p-4"
+              style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
               onClick={e => e.target === e.currentTarget && setSelected(null)}>
-              <div className="bg-gray-900 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+              <div className="bg-gray-900 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto overscroll-contain"
+                role="dialog" aria-modal="true" aria-labelledby="titulo-producto-shopify">
                 <div className="sticky top-0 bg-gray-900 flex items-center justify-between p-4 border-b border-gray-800">
-                  <h3 className="font-semibold text-white text-sm">{selected.title}</h3>
-                  <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white p-1">✕</button>
+                  <h3 id="titulo-producto-shopify" className="font-semibold text-white text-sm">{selected.title}</h3>
+                  <button onClick={() => setSelected(null)} aria-label="Cerrar"
+                    className="text-gray-500 hover:text-white min-w-[40px] min-h-[40px] -mr-2 flex items-center justify-center rounded-lg">
+                    <span aria-hidden="true">✕</span>
+                  </button>
                 </div>
                 {selected.image && (
                   <div className="aspect-video bg-gray-800">
@@ -418,7 +442,7 @@ export default function CatalogoPage() {
                     </div>
                   )}
                   <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Variantes</div>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto overscroll-contain">
                     {selected.variants?.map(v => (
                       <div key={v.id} className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2">
                         <div>
@@ -442,41 +466,50 @@ export default function CatalogoPage() {
       {/* ── Modal Editar Sucursal ── */}
       {modalEditar && editForm && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-end md:items-center justify-center p-4"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
           onClick={e => e.target === e.currentTarget && setModalEditar(false)}>
-          <div className="bg-gray-900 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-gray-900 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto overscroll-contain"
+            role="dialog" aria-modal="true" aria-labelledby="titulo-editar-sucursal">
             <div className="sticky top-0 bg-gray-900 flex items-center justify-between p-4 border-b border-gray-800">
-              <h3 className="font-semibold text-white">Editar producto</h3>
-              <button onClick={() => setModalEditar(false)} className="text-gray-500 hover:text-white">✕</button>
+              <h3 id="titulo-editar-sucursal" className="font-semibold text-white">Editar producto</h3>
+              <button onClick={() => setModalEditar(false)} aria-label="Cerrar"
+                className="text-gray-500 hover:text-white min-w-[40px] min-h-[40px] -mr-2 flex items-center justify-center rounded-lg">
+                <span aria-hidden="true">✕</span>
+              </button>
             </div>
             <div className="p-4 space-y-4">
 
               {/* Foto */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Foto del producto</label>
-                <div onClick={() => editFileRef.current?.click()}
-                  className="w-full h-36 rounded-xl border-2 border-dashed border-gray-700 flex items-center justify-center cursor-pointer hover:border-gray-500 overflow-hidden transition-all">
+                <label htmlFor="editar-foto" className="text-xs text-gray-400 mb-1 block">Foto del producto</label>
+                {/* <label> y no <div onClick>: el input queda sr-only (no `hidden`), así
+                    se llega con Tab y el anillo de focus-within muestra dónde está el foco. */}
+                <label htmlFor="editar-foto"
+                  className="w-full h-36 rounded-xl border-2 border-dashed border-gray-700 flex items-center justify-center cursor-pointer hover:border-gray-500 overflow-hidden transition-colors focus-within:ring-2 focus-within:ring-mandarina-500/60">
                   {editForm.foto_preview
-                    ? <img src={editForm.foto_preview} className="w-full h-full object-cover" />
-                    : <div className="text-center text-gray-600"><div className="text-2xl mb-1">📷</div><div className="text-xs">Subir imagen</div></div>
+                    ? <img src={editForm.foto_preview} alt="Foto del producto" className="w-full h-full object-cover" />
+                    : <div className="text-center text-gray-600"><div className="text-2xl mb-1" aria-hidden="true">📷</div><div className="text-xs">Subir imagen</div></div>
                   }
-                </div>
-                <input ref={editFileRef} type="file" accept="image/*" className="hidden" onChange={handleFotoEditar} />
+                  <input id="editar-foto" ref={editFileRef} type="file" accept="image/*" className="sr-only" onChange={handleFotoEditar} />
+                </label>
               </div>
 
               {/* Nombre */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Nombre *</label>
-                <input className="input" value={editForm.nombre}
+                <label htmlFor="editar-nombre" className="text-xs text-gray-400 mb-1 block">Nombre *</label>
+                <input id="editar-nombre" className="input" value={editForm.nombre}
                   onChange={e => setEditForm(f => ({ ...f, nombre: e.target.value }))} />
               </div>
 
               {/* Tienda */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Tienda *</label>
-                <div className="flex gap-2">
+                {/* Un <label> sin campo no nombra nada: el título nombra al GRUPO de
+                    botones y cada botón dice con aria-pressed si es el elegido. */}
+                <div id="editar-etq-tienda" className="text-xs text-gray-400 mb-1 block">Tienda *</div>
+                <div className="flex gap-2" role="group" aria-labelledby="editar-etq-tienda">
                   {['Mandarina', 'Indstore'].map(t => (
-                    <button key={t} onClick={() => setEditForm(f => ({ ...f, tienda: t }))}
-                      className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all
+                    <button key={t} onClick={() => setEditForm(f => ({ ...f, tienda: t }))} aria-pressed={editForm.tienda === t}
+                      className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors
                         ${editForm.tienda === t ? 'text-white border-transparent' : 'border-gray-700 text-gray-500'}`}
                       style={editForm.tienda === t ? { backgroundColor: t === 'Mandarina' ? '#FF6B00' : '#E91E8C' } : {}}>
                       {t === 'Mandarina' ? '🍊 Mandarina' : '🏣 Indstore'}
@@ -487,11 +520,11 @@ export default function CatalogoPage() {
 
               {/* Talla */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Talla</label>
-                <div className="flex gap-2 flex-wrap">
+                <div id="editar-etq-talla" className="text-xs text-gray-400 mb-1 block">Talla</div>
+                <div className="flex gap-2 flex-wrap" role="group" aria-labelledby="editar-etq-talla">
                   {tallasOpciones.map(t => (
-                    <button key={t} onClick={() => setEditForm(f => ({ ...f, talla: t }))}
-                      className={`px-3 py-1.5 rounded-xl text-sm font-semibold border transition-all
+                    <button key={t} onClick={() => setEditForm(f => ({ ...f, talla: t }))} aria-pressed={editForm.talla === t}
+                      className={`px-3 py-1.5 rounded-xl text-sm font-semibold border transition-colors
                         ${editForm.talla === t ? 'bg-gray-600 border-gray-500 text-white' : 'border-gray-700 text-gray-500'}`}>
                       {t}
                     </button>
@@ -501,21 +534,21 @@ export default function CatalogoPage() {
 
               {/* Color */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Color</label>
-                <input className="input" placeholder="Ej: Negro, Rojo..." value={editForm.color}
+                <label htmlFor="editar-color" className="text-xs text-gray-400 mb-1 block">Color</label>
+                <input id="editar-color" className="input" placeholder="Ej: Negro, Rojo…" value={editForm.color}
                   onChange={e => setEditForm(f => ({ ...f, color: e.target.value }))} />
               </div>
 
               {/* Stock y Precio */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Stock *</label>
-                  <input className="input" type="number" min="0" value={editForm.stock}
+                  <label htmlFor="editar-stock" className="text-xs text-gray-400 mb-1 block">Stock *</label>
+                  <input id="editar-stock" inputMode="numeric" className="input" type="number" min="0" value={editForm.stock}
                     onChange={e => setEditForm(f => ({ ...f, stock: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Precio $</label>
-                  <input className="input" type="number" step="0.01" value={editForm.precio}
+                  <label htmlFor="editar-precio" className="text-xs text-gray-400 mb-1 block">Precio $</label>
+                  <input id="editar-precio" inputMode="decimal" className="input" type="number" step="0.01" value={editForm.precio}
                     onChange={e => setEditForm(f => ({ ...f, precio: e.target.value }))} />
                 </div>
               </div>
@@ -523,12 +556,12 @@ export default function CatalogoPage() {
               {/* Botones */}
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setModalEditar(false)}
-                  className="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-semibold hover:border-gray-500 transition-all">
+                  className="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-semibold hover:border-gray-500 transition-colors">
                   Cancelar
                 </button>
                 <button onClick={handleGuardarEdicion} disabled={editando}
-                  className="flex-1 py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-all disabled:opacity-50">
-                  {editando ? 'Guardando...' : 'Guardar cambios'}
+                  className="flex-1 py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50">
+                  {editando ? 'Guardando…' : 'Guardar cambios'}
                 </button>
               </div>
             </div>
@@ -539,44 +572,52 @@ export default function CatalogoPage() {
       {/* ── Modal Agregar Sucursal ── */}
       {modalAgregar && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-end md:items-center justify-center p-4"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
           onClick={e => e.target === e.currentTarget && setModalAgregar(false)}>
-          <div className="bg-gray-900 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-gray-900 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto overscroll-contain"
+            role="dialog" aria-modal="true" aria-labelledby="titulo-agregar-sucursal">
             <div className="sticky top-0 bg-gray-900 flex items-center justify-between p-4 border-b border-gray-800">
-              <h3 className="font-semibold text-white">Agregar a Sucursal</h3>
-              <button onClick={() => setModalAgregar(false)} className="text-gray-500 hover:text-white">✕</button>
+              <h3 id="titulo-agregar-sucursal" className="font-semibold text-white">Agregar a Sucursal</h3>
+              <button onClick={() => setModalAgregar(false)} aria-label="Cerrar"
+                className="text-gray-500 hover:text-white min-w-[40px] min-h-[40px] -mr-2 flex items-center justify-center rounded-lg">
+                <span aria-hidden="true">✕</span>
+              </button>
             </div>
             <div className="p-4 space-y-4">
 
               {/* Foto */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Foto del producto</label>
-                <div onClick={() => fileRef.current?.click()}
-                  className="w-full h-36 rounded-xl border-2 border-dashed border-gray-700 flex items-center justify-center cursor-pointer hover:border-gray-500 overflow-hidden transition-all">
+                <label htmlFor="agregar-foto" className="text-xs text-gray-400 mb-1 block">Foto del producto</label>
+                {/* Igual que en Editar: label + input sr-only para que se pueda con teclado. */}
+                <label htmlFor="agregar-foto"
+                  className="w-full h-36 rounded-xl border-2 border-dashed border-gray-700 flex items-center justify-center cursor-pointer hover:border-gray-500 overflow-hidden transition-colors focus-within:ring-2 focus-within:ring-mandarina-500/60">
                   {form.foto_preview
-                    ? <img src={form.foto_preview} className="w-full h-full object-cover" />
+                    ? <img src={form.foto_preview} alt="Foto del producto" className="w-full h-full object-cover" />
                     : <div className="text-center text-gray-600">
-                        <div className="text-2xl mb-1">📷</div>
+                        <div className="text-2xl mb-1" aria-hidden="true">📷</div>
                         <div className="text-xs">Subir imagen</div>
                       </div>
                   }
-                </div>
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFoto} />
+                  <input id="agregar-foto" ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={handleFoto} />
+                </label>
               </div>
 
               {/* Nombre */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Nombre *</label>
-                <input className="input" placeholder="Ej: Hoodie Naruto" value={form.nombre}
+                <label htmlFor="agregar-nombre" className="text-xs text-gray-400 mb-1 block">Nombre *</label>
+                <input id="agregar-nombre" className="input" placeholder="Ej: Hoodie Naruto" value={form.nombre}
                   onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} />
               </div>
 
               {/* Tienda */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Tienda *</label>
-                <div className="flex gap-2">
+                {/* Un <label> sin campo no nombra nada: el título nombra al GRUPO de
+                    botones y cada botón dice con aria-pressed si es el elegido. */}
+                <div id="agregar-etq-tienda" className="text-xs text-gray-400 mb-1 block">Tienda *</div>
+                <div className="flex gap-2" role="group" aria-labelledby="agregar-etq-tienda">
                   {['Mandarina', 'Indstore'].map(t => (
-                    <button key={t} onClick={() => setForm(f => ({ ...f, tienda: t }))}
-                      className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all
+                    <button key={t} onClick={() => setForm(f => ({ ...f, tienda: t }))} aria-pressed={form.tienda === t}
+                      className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors
                         ${form.tienda === t ? 'text-white border-transparent' : 'border-gray-700 text-gray-500'}`}
                       style={form.tienda === t ? { backgroundColor: t === 'Mandarina' ? '#FF6B00' : '#E91E8C' } : {}}>
                       {t === 'Mandarina' ? '🍊 Mandarina' : '🏪 Indstore'}
@@ -587,11 +628,11 @@ export default function CatalogoPage() {
 
               {/* Talla */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Talla</label>
-                <div className="flex gap-2 flex-wrap">
+                <div id="agregar-etq-talla" className="text-xs text-gray-400 mb-1 block">Talla</div>
+                <div className="flex gap-2 flex-wrap" role="group" aria-labelledby="agregar-etq-talla">
                   {tallasOpciones.map(t => (
-                    <button key={t} onClick={() => setForm(f => ({ ...f, talla: t }))}
-                      className={`px-3 py-1.5 rounded-xl text-sm font-semibold border transition-all
+                    <button key={t} onClick={() => setForm(f => ({ ...f, talla: t }))} aria-pressed={form.talla === t}
+                      className={`px-3 py-1.5 rounded-xl text-sm font-semibold border transition-colors
                         ${form.talla === t ? 'bg-gray-600 border-gray-500 text-white' : 'border-gray-700 text-gray-500'}`}>
                       {t}
                     </button>
@@ -601,21 +642,21 @@ export default function CatalogoPage() {
 
               {/* Color */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Color</label>
-                <input className="input" placeholder="Ej: Negro, Rojo..." value={form.color}
+                <label htmlFor="agregar-color" className="text-xs text-gray-400 mb-1 block">Color</label>
+                <input id="agregar-color" className="input" placeholder="Ej: Negro, Rojo…" value={form.color}
                   onChange={e => setForm(f => ({ ...f, color: e.target.value }))} />
               </div>
 
               {/* Stock y Precio */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Stock *</label>
-                  <input className="input" type="number" min="1" placeholder="0" value={form.stock}
+                  <label htmlFor="agregar-stock" className="text-xs text-gray-400 mb-1 block">Stock *</label>
+                  <input id="agregar-stock" inputMode="numeric" className="input" type="number" min="1" placeholder="0" value={form.stock}
                     onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Precio $</label>
-                  <input className="input" type="number" step="0.01" placeholder="0.00" value={form.precio}
+                  <label htmlFor="agregar-precio" className="text-xs text-gray-400 mb-1 block">Precio $</label>
+                  <input id="agregar-precio" inputMode="decimal" className="input" type="number" step="0.01" placeholder="0.00" value={form.precio}
                     onChange={e => setForm(f => ({ ...f, precio: e.target.value }))} />
                 </div>
               </div>
@@ -623,12 +664,12 @@ export default function CatalogoPage() {
               {/* Botones */}
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setModalAgregar(false)}
-                  className="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-semibold hover:border-gray-500 transition-all">
+                  className="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-semibold hover:border-gray-500 transition-colors">
                   Cancelar
                 </button>
                 <button onClick={handleGuardar} disabled={guardando}
-                  className="flex-1 py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-all disabled:opacity-50">
-                  {guardando ? 'Guardando...' : 'Guardar'}
+                  className="flex-1 py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50">
+                  {guardando ? 'Guardando…' : 'Guardar'}
                 </button>
               </div>
             </div>

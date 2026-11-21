@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { ESTADO_COT_LABEL, ESTADO_COT_CLASES, rangoTotales, fmtUSD } from '@/lib/cotizacion'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ESTADO_LABELS, ESTADO_COLORS } from '@/lib/labels'
+import { ESTADO_LABELS, ESTADO_COLORS, SUBESTADO_LABELS } from '@/lib/labels'
 import { parseFecha, formatFechaCorta, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { SkeletonList } from '@/components/Skeleton'
 import { imagenAncho } from '@/lib/imagenes'
@@ -244,7 +244,7 @@ export default function HistorialPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen md:h-auto">
+    <div className="flex flex-col h-dvh md:h-auto">
       <BarraFiltros
         titulo={isYAW ? 'Historial YAW' : 'Historial de Ventas'}
         accion={(user?.rol === 'ADMIN' || user?.rol === 'VENDEDOR' || isYAW) && (
@@ -264,13 +264,16 @@ export default function HistorialPage() {
         onContraer={!loading && filtered.length > 0 ? contraerTodos : undefined}
       >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {/* Los títulos son <label htmlFor>: el lector nombra cada select y tocar el
+                texto lo abre. El borde naranja marca "filtro activo", no el foco:
+                por eso el anillo propio en focus. */}
             {/* Estado */}
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Estado</span>
-              <select
+              <label htmlFor="hist-filtro-estado" className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Estado</label>
+              <select id="hist-filtro-estado"
                 value={filtroEstado}
                 onChange={e => setFiltroEstado(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                   ${filtroEstado !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                 <option value="TODOS">Todos</option>
                 <option value="PENDIENTE_FABRICA">Pend. Fábrica</option>
@@ -284,11 +287,11 @@ export default function HistorialPage() {
             {/* Tienda */}
             {!isYAW && (
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Tienda</span>
-                <select
+                <label htmlFor="hist-filtro-tienda" className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Tienda</label>
+                <select id="hist-filtro-tienda"
                   value={filtroTienda}
                   onChange={e => setFiltroTienda(e.target.value)}
-                  className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                  className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                     ${filtroTienda !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                   <option value="TODAS">Todas</option>
                   <option value="MANDARINA">🍊 Mandarina</option>
@@ -298,11 +301,11 @@ export default function HistorialPage() {
             )}
             {/* Pago */}
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Pago</span>
-              <select
+              <label htmlFor="hist-filtro-pago" className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Pago</label>
+              <select id="hist-filtro-pago"
                 value={filtroPago}
                 onChange={e => setFiltroPago(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                   ${filtroPago !== 'TODOS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                 <option value="TODOS">Todos</option>
                 <option value="PENDIENTE">⚠ Pendiente</option>
@@ -313,11 +316,11 @@ export default function HistorialPage() {
             {/* Área. La lista sale de lib/areas-filtrables.js — una sola, para que
                 la pantalla y el servidor no puedan desincronizarse. */}
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Área</span>
-              <select
+              <label htmlFor="hist-filtro-area" className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Área</label>
+              <select id="hist-filtro-area"
                 value={filtroArea}
                 onChange={e => setFiltroArea(e.target.value)}
-                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+                className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                   ${filtroArea !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
                 <option value="TODAS">Todas</option>
                 {AREAS_FILTRABLES.map(a => <option key={a} value={a}>{ETIQUETA_AREA[a] || a}</option>)}
@@ -336,7 +339,7 @@ export default function HistorialPage() {
               describe lo que hay debajo — no es una acción. */}
           <div className="text-xs text-gray-600 mb-3">
             {loading
-              ? 'Cargando...'
+              ? 'Cargando…'
               : totalServidor !== null
                 ? `Mostrando ${filtered.length} de ${totalServidor} pedido(s)`
                 : `${paginados.length} registro(s)`}
@@ -374,7 +377,7 @@ export default function HistorialPage() {
                     const c = row.c
                     return (
                       <Link key={`cot-${c.id}`} href={`/dashboard/cotizacion/${c.id}`}
-                        className="card overflow-hidden block p-4 hover:bg-gray-800/20 transition-all">
+                        className="card overflow-hidden block p-4 hover:bg-gray-800/20 transition-colors">
                         <div className="flex items-center gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -419,12 +422,13 @@ export default function HistorialPage() {
                     <div key={p.PEDIDO_ID} className="card overflow-hidden">
                       {/* Fila principal — clic expande inline */}
                       <button
+                        aria-expanded={isExpanded}
                         onClick={() => setExpandedPedidos(prev => {
                           const n = new Set(prev)
                           n.has(p.PEDIDO_ID) ? n.delete(p.PEDIDO_ID) : n.add(p.PEDIDO_ID)
                           return n
                         })}
-                        className="w-full p-4 flex items-center gap-4 text-left hover:bg-gray-800/20 transition-all">
+                        className="w-full p-4 flex items-center gap-4 text-left hover:bg-gray-800/20 transition-colors">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
@@ -453,7 +457,7 @@ export default function HistorialPage() {
                             )}
                           </div>
                         </div>
-                        <span className="text-gray-600 text-xs flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
+                        <span className="text-gray-600 text-xs flex-shrink-0" aria-hidden="true">{isExpanded ? '▲' : '▼'}</span>
                       </button>
 
                       {/* Items expandidos inline */}
@@ -468,7 +472,7 @@ export default function HistorialPage() {
                           ) : itemsActivos.map(item => (
                             <div key={item.ITEM_ID} className="flex items-center gap-3 bg-gray-800/40 rounded-xl px-3 py-2">
                               {item.FOTO_PECHO_URL
-                                ? <img src={imagenAncho(item.FOTO_PECHO_URL, 120)} loading="lazy" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
+                                ? <img src={imagenAncho(item.FOTO_PECHO_URL, 120)} loading="lazy" alt={`Foto de ${item.PRODUCTO_NOMBRE || 'la prenda'}`} className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
                                 : <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0"><span className="text-gray-600 text-sm">👕</span></div>}
                               <div className="flex-1 min-w-0">
                                 <div className="text-xs text-white font-medium truncate">{item.PRODUCTO_NOMBRE}</div>
@@ -478,7 +482,11 @@ export default function HistorialPage() {
                                 item.SUBESTADO === 'LISTO'       ? 'bg-green-500/20 text-green-400' :
                                 item.SUBESTADO === 'EN_PROCESO'  ? 'bg-blue-500/20 text-blue-400' :
                                                                     'bg-yellow-500/20 text-yellow-400'
-                              }`}>{item.SUBESTADO || 'SOLICITADO'}</span>
+                              }`}>
+                                {/* Se mostraba el código crudo (EN_PROCESO). Las mismas etiquetas que
+                                    el resto del CRM; si llega un código nuevo, se ve tal cual. */}
+                                {SUBESTADO_LABELS[item.SUBESTADO || 'SOLICITADO'] || item.SUBESTADO}
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -493,9 +501,9 @@ export default function HistorialPage() {
                 <button
                   onClick={() => cargarPagina(paginaActual + 1, false)}
                   disabled={cargandoMas}
-                  className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all disabled:opacity-50">
+                  className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-colors disabled:opacity-50">
                   {cargandoMas
-                    ? 'Cargando...'
+                    ? 'Cargando…'
                     : `Cargar más${totalServidor !== null ? ` (${Math.max(0, totalServidor - filtered.length)} restantes)` : ''}`}
                 </button>
               )}

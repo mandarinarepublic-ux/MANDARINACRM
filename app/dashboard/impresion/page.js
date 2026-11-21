@@ -302,7 +302,7 @@ export default function ImpresionPage() {
     setPrinting(true)
     cancelarRef.current = false
     setCancelando(false)
-    setPrintProgress('Preparando...')
+    setPrintProgress('Preparando…')
 
     const ids = Array.from(selected)
     const okIds = []            // pedidos capturados completos → se registran
@@ -346,14 +346,14 @@ export default function ImpresionPage() {
 
           for (let gi = 0; gi < nPagCliente; gi++) {
             paginaActual++
-            setPrintProgress(`Generando hoja ${paginaActual} de ${totalPaginas}...`)
+            setPrintProgress(`Generando hoja ${paginaActual} de ${totalPaginas}…`)
             await dejarPintar()
             hojas.push(await capturarElemento(html2canvas, `pdf-${pedidoId}-gracias-${gi}`))
           }
 
           for (let pi = 0; pi < nPagConf; pi++) {
             paginaActual++
-            setPrintProgress(`Generando hoja ${paginaActual} de ${totalPaginas}...`)
+            setPrintProgress(`Generando hoja ${paginaActual} de ${totalPaginas}…`)
             await dejarPintar()
             hojas.push(await capturarElemento(html2canvas, `pdf-${pedidoId}-conf-${pi}`))
           }
@@ -388,7 +388,7 @@ export default function ImpresionPage() {
       pdf.save(`pedidos_${new Date().toISOString().split('T')[0]}.pdf`)
 
       // ── Registrar la impresión SOLO de los pedidos que sí salieron en el PDF ──
-      setPrintProgress('Registrando impresión...')
+      setPrintProgress('Registrando impresión…')
       let usuario = {}
       try { usuario = JSON.parse(localStorage.getItem('mp_user') || '{}') } catch {}
       // El NOMBRE, no el id: este valor se guarda en IMPRESO_POR y se muestra tal
@@ -397,7 +397,7 @@ export default function ImpresionPage() {
 
       const registrados = []
       for (let i = 0; i < okIds.length; i++) {
-        setPrintProgress(`Registrando ${i + 1} de ${okIds.length}...`)
+        setPrintProgress(`Registrando ${i + 1} de ${okIds.length}…`)
         await dejarPintar()
         let ok = false, detalle = ''
         try {
@@ -423,7 +423,7 @@ export default function ImpresionPage() {
 
       // Releer del servidor en vez de inventar la fecha en el cliente: así el
       // badge muestra el MISMO valor que quedó guardado, sin un tercer formato.
-      setPrintProgress('Actualizando lista...')
+      setPrintProgress('Actualizando lista…')
       const frescos = await loadPedidos()
 
       // Un PATCH puede haberse guardado y perderse la respuesta (timeout). Se
@@ -471,7 +471,9 @@ export default function ImpresionPage() {
   const pedidosARenderizar = pedidos.filter(p => renderIds.includes(p.PEDIDO_ID))
 
   return (
-    <div className="flex flex-col h-screen md:h-auto">
+    // h-dvh y no h-screen: en el celular 100vh cuenta la barra del navegador y
+    // la lista quedaba cortada por debajo de la barra fija de "Imprimir".
+    <div className="flex flex-col h-dvh md:h-auto">
       <BarraFiltros
         titulo="🖨️ Imprimir Pedidos"
         insignia={(
@@ -495,13 +497,16 @@ export default function ImpresionPage() {
            llevas seleccionados no se puede imprimir con cabeza. */
         debajo={(
           <>
-            <div className="flex gap-1 mb-2 p-1 bg-gray-900 rounded-xl">
+            {/* Son pestañas: role=tablist/tab + aria-selected, igual que en Reporte de
+                pagos. Así la elegida no se distingue solo por el color naranja. */}
+            <div className="flex gap-1 mb-2 p-1 bg-gray-900 rounded-xl" role="tablist" aria-label="Qué pedidos ver">
               {[
                 { v: F_PENDIENTES, label: '📋 Pendientes' },
                 { v: F_IMPRESOS,   label: '🖨️ Ya impresos' },
               ].map(op => (
                 <button key={op.v} onClick={() => setFiltroImpresion(op.v)} disabled={printing}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all disabled:opacity-50
+                  role="tab" aria-selected={filtroImpresion === op.v}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50
                     ${filtroImpresion === op.v ? 'bg-mandarina-500 text-white' : 'text-gray-400 hover:text-white'}`}>
                   {op.label}
                 </button>
@@ -537,8 +542,8 @@ export default function ImpresionPage() {
       >
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div>
-              <label className="label">Tienda</label>
-              <select className="input py-2 text-sm" value={filtroTienda} disabled={printing}
+              <label className="label" htmlFor="impr-tienda">Tienda</label>
+              <select id="impr-tienda" className="input py-2 text-sm" value={filtroTienda} disabled={printing}
                 onChange={e => setFiltroTienda(e.target.value)}>
                 <option value="TODAS">Todas las tiendas</option>
                 <option value="MANDARINA">🍊 Mandarina Republic</option>
@@ -546,15 +551,15 @@ export default function ImpresionPage() {
               </select>
             </div>
             <div>
-              <label className="label">Desde</label>
-              <input type="date" className="input py-2 text-sm" value={fechaDesde} disabled={printing}
+              <label className="label" htmlFor="impr-desde">Desde</label>
+              <input id="impr-desde" type="date" className="input py-2 text-sm" value={fechaDesde} disabled={printing}
                 onChange={e => setFechaDesde(e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div>
-              <label className="label">Hasta</label>
-              <input type="date" className="input py-2 text-sm" value={fechaHasta} disabled={printing}
+              <label className="label" htmlFor="impr-hasta">Hasta</label>
+              <input id="impr-hasta" type="date" className="input py-2 text-sm" value={fechaHasta} disabled={printing}
                 onChange={e => setFechaHasta(e.target.value)} />
             </div>
             <div className="flex items-end">
@@ -569,8 +574,9 @@ export default function ImpresionPage() {
         <div className="max-w-3xl mx-auto px-4 py-3">
           <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+            <div className="flex justify-center py-12" role="status">
+              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+              <span className="sr-only">Cargando…</span>
             </div>
           ) : loadError ? (
             <div className="card p-8 text-center">
@@ -593,13 +599,17 @@ export default function ImpresionPage() {
                 const isSelected = selected.has(p.PEDIDO_ID)
                 const yaImpreso = !!p.FECHA_IMPRESION_PRODUCCION
                 return (
+                  // content-visibility: la lista no se pagina (puede tener cientos);
+                  // el navegador se salta pintar las tarjetas fuera de pantalla.
+                  // No cambia qué se muestra ni el orden.
                   <button key={p.PEDIDO_ID} onClick={() => toggleSelect(p)} disabled={printing}
                     aria-pressed={isSelected}
-                    className={`w-full card p-4 flex items-center gap-4 transition-all text-left
+                    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 88px' }}
+                    className={`w-full card p-4 flex items-center gap-4 transition-colors text-left
                       ${isSelected ? 'border-mandarina-500 bg-mandarina-500/5' : yaImpreso ? 'border-amber-700/40' : 'hover:border-gray-700'}`}>
-                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all
+                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-colors
                       ${isSelected ? 'bg-mandarina-500 border-mandarina-500' : 'border-gray-600'}`}>
-                      {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+                      {isSelected && <span className="text-white text-xs font-bold" aria-hidden="true">✓</span>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -617,7 +627,7 @@ export default function ImpresionPage() {
                         )}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {cliente.NOMBRE || '...'} · {p.items?.length || 0} prendas · ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
+                        {cliente.NOMBRE || '…'} · {p.items?.length || 0} prendas · ${parseFloat(p.MONTO_TOTAL||0).toFixed(2)}
                       </div>
                     </div>
                     <div className="text-right text-xs text-gray-500 flex-shrink-0">
@@ -631,16 +641,21 @@ export default function ImpresionPage() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 md:left-56 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4">
+      {/* Margen seguro abajo: en el iPhone la barra de gestos tapaba el botón. */}
+      <div className="fixed bottom-0 left-0 right-0 md:left-56 bg-gray-950/95 backdrop-blur border-t border-gray-800 p-4"
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
         <button onClick={printSelected} disabled={selected.size === 0 || printing}
           className="btn-primary w-full flex items-center justify-center gap-2"
           style={{ opacity: selected.size === 0 ? 0.5 : 1 }}>
-          {printing ? `⏳ ${printProgress || 'Preparando...'}` : `🖨️ Imprimir ${selected.size > 0 ? `${selected.size} pedido(s)` : ''}`}
+          {printing ? `⏳ ${printProgress || 'Preparando…'}` : `🖨️ Imprimir ${selected.size > 0 ? `${selected.size} pedido(s)` : ''}`}
         </button>
+        {/* El avance ("Generando hoja 2 de 5…") cambia dentro de un botón
+            deshabilitado y el lector no lo anuncia; esta copia invisible sí. */}
+        <span className="sr-only" aria-live="polite">{printing ? (printProgress || 'Preparando…') : ''}</span>
         {printing ? (
           <button onClick={() => { cancelarRef.current = true; setCancelando(true) }}
             className="w-full text-center text-gray-500 hover:text-white text-xs mt-2">
-            {cancelando ? 'Cancelando al terminar el pedido actual...' : 'Cancelar'}
+            {cancelando ? 'Cancelando al terminar el pedido actual…' : 'Cancelar'}
           </button>
         ) : selected.size === 0 && (
           <p className="text-center text-gray-600 text-xs mt-2">Selecciona al menos un pedido</p>

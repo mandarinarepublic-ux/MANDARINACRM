@@ -86,33 +86,36 @@ export default function SoltarFotos({ fotos, onCambio }) {
           arrastrando ? 'border-mandarina-500 bg-mandarina-500/10' : 'border-gray-700 bg-gray-800/40'
         } ${subiendo ? 'opacity-50' : ''}`}
       >
-        <p className="text-sm text-gray-300 mb-3">
+        <p className="text-sm text-gray-300 mb-3" aria-live="polite">
           {subiendo ? 'Subiendo…' : 'Arrastra aquí las fotos del producto'}
         </p>
         <input type="file" accept="image/*" multiple disabled={subiendo}
+          aria-label="Elegir fotos del producto"
           onChange={(e) => agregar(e.target.files)}
           className="text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600 file:cursor-pointer" />
       </div>
 
-      {error && <p className="text-red-400 text-xs mt-2">⚠️ {error}</p>}
+      {error && <p role="alert" className="text-red-400 text-xs mt-2">⚠️ {error}</p>}
 
       {!!fotos.length && (
         <div className="flex gap-3 mt-4 flex-wrap">
           {fotos.map((f, i) => (
             <div key={f.url} className={`w-28 rounded-xl p-1.5 ${i === 0 ? 'ring-2 ring-mandarina-500' : ''}`}>
-              <img src={f.url} alt="" className="w-full rounded-lg" />
+              <img src={f.url} alt={`Foto ${i + 1} del producto`} loading="lazy" className="w-full rounded-lg" />
               <div className="mt-1 text-center">
                 {i === 0
                   ? <span className="badge bg-mandarina-500/20 text-mandarina-400 text-[10px]">Principal</span>
                   : <span className="text-[10px] text-gray-500">#{i + 1}</span>}
               </div>
               <div className="flex justify-center gap-1 mt-1">
-                <button type="button" onClick={() => mover(i, -1)} disabled={i === 0}
-                  className="btn-ghost text-xs py-0.5 px-2 disabled:opacity-30">←</button>
-                <button type="button" onClick={() => mover(i, 1)} disabled={i === fotos.length - 1}
-                  className="btn-ghost text-xs py-0.5 px-2 disabled:opacity-30">→</button>
-                <button type="button" onClick={() => onCambio(fotos.filter((_, j) => j !== i))}
-                  className="btn-ghost text-xs py-0.5 px-2 text-red-400 hover:text-red-300">✕</button>
+                {/* Botones de solo flecha: nombre para el lector y área táctil de 40px
+                    (padding vertical); se ven igual de compactos. */}
+                <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} aria-label={`Mover foto ${i + 1} a la izquierda`}
+                  className="btn-ghost text-xs py-0.5 px-2 min-h-[40px] disabled:opacity-30"><span aria-hidden="true">←</span></button>
+                <button type="button" onClick={() => mover(i, 1)} disabled={i === fotos.length - 1} aria-label={`Mover foto ${i + 1} a la derecha`}
+                  className="btn-ghost text-xs py-0.5 px-2 min-h-[40px] disabled:opacity-30"><span aria-hidden="true">→</span></button>
+                <button type="button" onClick={() => onCambio(fotos.filter((_, j) => j !== i))} aria-label={`Quitar foto ${i + 1}`}
+                  className="btn-ghost text-xs py-0.5 px-2 min-h-[40px] text-red-400 hover:text-red-300"><span aria-hidden="true">✕</span></button>
               </div>
             </div>
           ))}

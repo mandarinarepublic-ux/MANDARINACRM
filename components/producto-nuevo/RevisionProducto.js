@@ -61,8 +61,8 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
     <div className="space-y-5">
       <div className="card p-5 space-y-4">
         <div>
-          <div className="label">Título</div>
-          <input className="input" value={ficha.titulo || ''}
+          <label htmlFor="pn-titulo" className="label block">Título</label>
+          <input id="pn-titulo" className="input" value={ficha.titulo || ''}
             onChange={(e) => {
               const t = e.target.value
               // El handle sigue al titulo mientras nadie lo haya editado. Sin
@@ -75,30 +75,30 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
         </div>
 
         <div>
-          <div className="label">URL del producto</div>
-          <input className="input font-mono text-sm" value={ficha.handle || ''}
+          <label htmlFor="pn-url-del-producto" className="label block">URL del producto</label>
+          <input id="pn-url-del-producto" className="input font-mono text-sm" value={ficha.handle || ''}
             onChange={(e) => { setHandleTocado(true); set('handle', e.target.value) }} />
           <p className="text-[11px] text-gray-500 mt-1">{dominio}/{rutaProducto}</p>
         </div>
 
         <div>
-          <div className="label">Descripción</div>
-          <textarea className="input min-h-[160px]" rows={8} value={ficha.descripcionHtml || ''}
+          <label htmlFor="pn-descripcion" className="label block">Descripción</label>
+          <textarea id="pn-descripcion" className="input min-h-[160px]" rows={8} value={ficha.descripcionHtml || ''}
             onChange={(e) => set('descripcionHtml', e.target.value)} />
         </div>
 
         <div>
           <div className="label flex items-center justify-between mb-1.5">
-            <span>Título SEO</span><Contador texto={ficha.seoTitulo} tope={60} />
+            <label htmlFor="pn-seo-titulo">Título SEO</label><Contador texto={ficha.seoTitulo} tope={60} />
           </div>
-          <input className="input" value={ficha.seoTitulo || ''} onChange={(e) => set('seoTitulo', e.target.value)} />
+          <input id="pn-seo-titulo" className="input" value={ficha.seoTitulo || ''} onChange={(e) => set('seoTitulo', e.target.value)} />
         </div>
 
         <div>
           <div className="label flex items-center justify-between mb-1.5">
-            <span>Descripción SEO</span><Contador texto={ficha.seoDescripcion} tope={155} />
+            <label htmlFor="pn-seo-descripcion">Descripción SEO</label><Contador texto={ficha.seoDescripcion} tope={155} />
           </div>
-          <textarea className="input min-h-[60px]" rows={2} value={ficha.seoDescripcion || ''}
+          <textarea id="pn-seo-descripcion" className="input min-h-[60px]" rows={2} value={ficha.seoDescripcion || ''}
             onChange={(e) => set('seoDescripcion', e.target.value)} />
         </div>
 
@@ -117,28 +117,29 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
           `tipoProducto` ademas alimenta el feed de anuncios. */}
       <div className="card p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <div className="label">Tipo de producto</div>
-          <input className="input" value={ficha.tipoProducto || ''} onChange={(e) => set('tipoProducto', e.target.value)} />
+          <label htmlFor="pn-tipo-de-producto" className="label block">Tipo de producto</label>
+          <input id="pn-tipo-de-producto" className="input" value={ficha.tipoProducto || ''} onChange={(e) => set('tipoProducto', e.target.value)} />
         </div>
         <div>
-          <div className="label">Marca (vendor)</div>
-          <input className="input" value={ficha.vendor || ''} onChange={(e) => set('vendor', e.target.value)} />
+          <label htmlFor="pn-marca-vendor" className="label block">Marca (vendor)</label>
+          <input id="pn-marca-vendor" className="input" value={ficha.vendor || ''} onChange={(e) => set('vendor', e.target.value)} />
         </div>
       </div>
 
       <div className="card p-5">
-        <div className="label">Tags</div>
+        <label htmlFor="pn-nuevo-tag" className="label block">Tags</label>
         <div className="flex gap-2 flex-wrap mb-2">
           {(ficha.tags || []).map((t) => (
             <span key={t} className="badge bg-gray-800 text-gray-300">
               {t}
               <button type="button" aria-label={`Quitar ${t}`}
                 onClick={() => set('tags', (ficha.tags || []).filter((x) => x !== t))}
-                className="ml-1.5 text-gray-500 hover:text-red-400">✕</button>
+                className="ml-1.5 text-gray-500 hover:text-red-400"><span aria-hidden="true">✕</span></button>
             </span>
           ))}
         </div>
         <input
+          id="pn-nuevo-tag"
           className="input"
           value={nuevoTag}
           placeholder="Agregar tag y Enter"
@@ -161,12 +162,13 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
           : <p className="text-red-400 text-sm mb-2">⚠️ Sin categoría. Sin ella el producto no sirve para los anuncios.</p>}
         <div className="flex gap-2">
           <input className="input" value={termino} onChange={(e) => setTermino(e.target.value)}
+            aria-label="Buscar categoría"
             placeholder="Buscar en español (ej: Chaquetas)" />
           <button type="button" onClick={buscarCategoria} disabled={buscando} className="btn-secondary whitespace-nowrap">
             {buscando ? 'Buscando…' : 'Buscar'}
           </button>
         </div>
-        {errorCat && <p className="text-red-400 text-xs mt-2">{errorCat}</p>}
+        {errorCat && <p role="alert" className="text-red-400 text-xs mt-2">{errorCat}</p>}
         {buscado && !buscando && candidatas.length === 0 && (
           <p className="text-gray-500 text-xs mt-2">
             Sin resultados. ⚠️ La taxonomía de Shopify está en español: prueba con &quot;Chaquetas&quot; en vez de &quot;jacket&quot;.
@@ -210,6 +212,7 @@ export default function RevisionProducto({ ficha, onCambio, tienda }) {
             <div key={f.url} className="flex gap-3 items-center">
               <img src={f.url} alt="" className="w-12 h-12 rounded-lg object-cover" />
               <input className="input flex-1" value={f.alt || ''} placeholder="Describe la foto"
+                aria-label={`Texto alternativo de la foto ${i + 1}`}
                 onChange={(e) => {
                   const copia = [...ficha.fotos]
                   copia[i] = { ...copia[i], alt: e.target.value }

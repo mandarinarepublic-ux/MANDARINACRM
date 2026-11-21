@@ -15,6 +15,7 @@ import { enviarHojaPedido, avisarHojaFallida } from '@/lib/aviso-padre'
 import { botonFactura } from '@/lib/facturas-visibilidad'
 import { MOTIVOS, etiquetaMotivo } from '@/lib/motivos-factura'
 import { pideConfirmacion } from '@/lib/estados-finales'
+import { useTeclaEscape } from '@/lib/useTeclaEscape'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -92,6 +93,19 @@ export default function PedidoDetailPage() {
 
   // Al desmontar la pantalla, soltar el observador de la barra.
   useEffect(() => () => observadorBarra.current?.disconnect(), [])
+
+  // Escape cierra el diálogo que esté ENCIMA (la foto se abre sobre los otros).
+  // Va antes de los `return` tempranos: un hook no puede quedar detrás de un if.
+  // Mientras se guarda una corrección no se cierra, igual que al tocar el fondo.
+  useTeclaEscape(
+    !!(fotoComprobanteAbierta || pagoEditando || showModalAbono || showPdfPreview),
+    () => {
+      if (fotoComprobanteAbierta) return setFotoComprobanteAbierta(null)
+      if (pagoEditando) { if (!guardandoEdicionPago) setPagoEditando(null); return }
+      if (showModalAbono) return setShowModalAbono(false)
+      if (showPdfPreview) return setShowPdfPreview(false)
+    }
+  )
 
   const [descartandoFactura, setDescartandoFactura] = useState(false)
   const [eligiendoMotivo, setEligiendoMotivo] = useState(false)
@@ -364,8 +378,10 @@ export default function PedidoDetailPage() {
   )
 
   if (loading || !pedido) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+    // role=status: sin él, un lector de pantalla no anuncia que algo está cargando.
+    <div className="flex items-center justify-center h-64" role="status">
+      <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+      <span className="sr-only">Cargando…</span>
     </div>
   )
 
@@ -517,11 +533,17 @@ export default function PedidoDetailPage() {
   const anchoContenido = esEmbed ? 'w-full' : 'max-w-2xl mx-auto'
 
   return (
-    <div className="flex flex-col h-screen md:h-auto">
+    // h-dvh y no h-screen: en el celular 100vh incluye la barra del navegador y
+    // el final de la página quedaba escondido detrás de ella.
+    <div className="flex flex-col h-dvh md:h-auto">
       <div className="sticky top-0 z-20 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
         <div className={anchoContenido}>
           <div className="flex items-center gap-3 mb-3">
-            <button onClick={() => router.back()} className="text-gray-500 hover:text-white p-1 text-lg">←</button>
+            {/* Botón solo con flecha: necesita nombre para el lector y 40px de área táctil. */}
+            <button onClick={() => router.back()} aria-label="Volver"
+              className="text-gray-500 hover:text-white text-lg min-w-[40px] min-h-[40px] -ml-2 flex items-center justify-center rounded-lg">
+              <span aria-hidden="true">←</span>
+            </button>
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-display font-bold text-white">{pedido.PEDIDO_ID}</h1>
@@ -583,7 +605,7 @@ export default function PedidoDetailPage() {
           {isNew && (
             <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4">
               <div className="font-semibold text-green-400 mb-3">🎉 Pedido creado exitosamente</div>
-              <Link href="/dashboard/nuevo-pedido" className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-mandarina-500 text-white font-medium hover:bg-mandarina-600 transition-all">
+              <Link href="/dashboard/nuevo-pedido" className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-mandarina-500 text-white font-medium hover:bg-mandarina-600 transition-colors">
                 ➕ Nueva Venta
               </Link>
             </div>
@@ -603,8 +625,13 @@ export default function PedidoDetailPage() {
                   </div>
                 </div>
                 {pedido.GUIA_FOTO_URL && (
-                  <img src={pedido.GUIA_FOTO_URL} onClick={() => window.open(pedido.GUIA_FOTO_URL, '_blank')}
-                    className="w-20 h-20 rounded-xl object-cover border-2 border-green-500/40 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0" />
+                  // Enlace y no img con onClick: así se llega con teclado y el
+                  // navegador ofrece "abrir en pestaña nueva" como con cualquier link.
+                  <a href={pedido.GUIA_FOTO_URL} target="_blank" rel="noopener noreferrer"
+                    className="flex-shrink-0 rounded-xl focus-visible:ring-2 focus-visible:ring-mandarina-500/60 outline-none">
+                    <img src={pedido.GUIA_FOTO_URL} alt={`Foto de la guía ${pedido.GUIA_NUMERO || ''}`}
+                      className="w-20 h-20 rounded-xl object-cover border-2 border-green-500/40 cursor-pointer hover:opacity-80 transition-opacity" />
+                  </a>
                 )}
               </div>
             </div>
@@ -629,7 +656,7 @@ export default function PedidoDetailPage() {
                     <TextoLineas texto={pedido.DIRECCION_TEXTO||pedido.DIRECCION_PEDIDO} style={{ textAlign:"right" }} />
                   </div>
                 )}
-                {pedido.LATITUD && <a href={`https://maps.google.com/?q=${pedido.LATITUD},${pedido.LONGITUD}`} target="_blank" className="text-mandarina-400 text-xs hover:underline">📍 Ver en Google Maps</a>}
+                {pedido.LATITUD && <a href={`https://maps.google.com/?q=${pedido.LATITUD},${pedido.LONGITUD}`} target="_blank" rel="noopener noreferrer" className="text-mandarina-400 text-xs hover:underline">📍 Ver en Google Maps</a>}
               </div>
             </div>
           )}
@@ -688,7 +715,7 @@ export default function PedidoDetailPage() {
                 <h3 className="text-base font-semibold text-white">💳 Pagos</h3>
                 {canAddAbono && pedido.ESTADO_PEDIDO !== 'CANCELADO' && (
                   <button onClick={() => setShowModalAbono(true)}
-                    className="text-xs px-3 py-1.5 rounded-lg font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-all">
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
                     + Abono
                   </button>
                 )}
@@ -748,9 +775,9 @@ export default function PedidoDetailPage() {
                         )}
                       </div>
                       {canEditarAbono && pago.PAGO_ID && (
-                        <button onClick={() => abrirEdicionPago(pago)} title="Corregir este pago"
-                          className="flex-shrink-0 text-gray-400 hover:text-white p-2 -mr-1 rounded-lg hover:bg-gray-700/50">
-                          ✏️
+                        <button onClick={() => abrirEdicionPago(pago)} title="Corregir este pago" aria-label="Corregir este pago"
+                          className="flex-shrink-0 text-gray-400 hover:text-white p-2 -mr-1 rounded-lg hover:bg-gray-700/50 min-w-[40px] min-h-[40px]">
+                          <span aria-hidden="true">✏️</span>
                         </button>
                       )}
                     </div>
@@ -768,7 +795,7 @@ export default function PedidoDetailPage() {
                 <div className="text-xs text-gray-500">Sin pagos registrados</div>
               </div>
               <button onClick={() => setShowModalAbono(true)}
-                className="text-sm px-4 py-2 rounded-xl font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-all">
+                className="text-sm px-4 py-2 rounded-xl font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
                 + Agregar pago
               </button>
             </div>
@@ -776,36 +803,44 @@ export default function PedidoDetailPage() {
 
           {/* Modal de nuevo abono */}
           {showModalAbono && (
-            <div className="fixed inset-0 bg-black/90 z-50 flex items-end justify-center p-4" onClick={e => e.target === e.currentTarget && setShowModalAbono(false)}>
-              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+            // Hoja de abajo: role=dialog para que el lector sepa que es un diálogo
+            // y el margen seguro para que el botón no quede bajo la barra del iPhone.
+            <div className="fixed inset-0 bg-black/90 z-50 flex items-end justify-center p-4"
+              style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+              onClick={e => e.target === e.currentTarget && setShowModalAbono(false)}>
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4"
+                role="dialog" aria-modal="true" aria-labelledby="titulo-registrar-pago">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-white font-semibold text-base">💰 Registrar pago</h3>
-                  <button onClick={() => setShowModalAbono(false)} className="text-gray-500 hover:text-white text-lg">✕</button>
+                  <h3 id="titulo-registrar-pago" className="text-white font-semibold text-base">💰 Registrar pago</h3>
+                  <button onClick={() => setShowModalAbono(false)} aria-label="Cerrar"
+                    className="text-gray-500 hover:text-white text-lg min-w-[40px] min-h-[40px] -mr-2 flex items-center justify-center rounded-lg">
+                    <span aria-hidden="true">✕</span>
+                  </button>
                 </div>
 
-                {/* Tipo */}
-                <div>
-                  <div className="text-xs text-gray-500 mb-2">Tipo de pago</div>
+                {/* Tipo — aria-pressed: el elegido no puede decirse solo con el color */}
+                <div role="group" aria-labelledby="etq-tipo-abono">
+                  <div id="etq-tipo-abono" className="text-xs text-gray-500 mb-2">Tipo de pago</div>
                   <div className="grid grid-cols-3 gap-2">
                     {[['EFECTIVO','💵','Efectivo'],['TRANSFERENCIA','🏦','Transferencia'],['LINK_PAGO','🔗','Link']].map(([val,icon,label]) => (
-                      <button key={val} onClick={() => setAbonoTipo(val)}
-                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-medium transition-all ${
+                      <button key={val} onClick={() => setAbonoTipo(val)} aria-pressed={abonoTipo === val}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-medium transition-colors ${
                           abonoTipo === val ? 'border-mandarina-500 bg-mandarina-500/20 text-mandarina-400' : 'border-gray-700 bg-gray-800/50 text-gray-400'
                         }`}>
-                        <span className="text-xl">{icon}</span>
+                        <span className="text-xl" aria-hidden="true">{icon}</span>
                         {label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Monto */}
+                {/* Monto — inputMode=decimal: en el celular sale el teclado numérico con punto */}
                 <div>
-                  <div className="text-xs text-gray-500 mb-2">Monto ($)</div>
+                  <label htmlFor="abono-monto" className="block text-xs text-gray-500 mb-2">Monto ($)</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
-                    <input type="number" step="0.01" min="0" placeholder="0.00" value={abonoMonto} onChange={e => setAbonoMonto(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-7 pr-4 py-3 text-sm focus:border-mandarina-500 focus:outline-none" />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium" aria-hidden="true">$</span>
+                    <input id="abono-monto" type="number" step="0.01" min="0" inputMode="decimal" placeholder="0.00" value={abonoMonto} onChange={e => setAbonoMonto(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-7 pr-4 py-3 text-sm focus:border-mandarina-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-mandarina-500/60" />
                   </div>
                   {montoPendiente > 0.01 && (
                     <div className="text-xs text-yellow-400 mt-1">Saldo pendiente: ${montoPendiente.toFixed(2)}
@@ -820,15 +855,21 @@ export default function PedidoDetailPage() {
                     <div className="text-xs text-gray-500 mb-2">Foto comprobante <span className="text-red-400">*</span></div>
                     {abonoFotoPreview ? (
                       <div className="relative">
-                        <img src={abonoFotoPreview} className="w-full h-32 object-cover rounded-xl border border-gray-700" />
-                        <button onClick={() => { setAbonoFoto(null); setAbonoFotoPreview(null) }}
-                          className="absolute top-2 right-2 bg-black/70 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm">✕</button>
+                        <img src={abonoFotoPreview} alt="Comprobante elegido" className="w-full h-32 object-cover rounded-xl border border-gray-700" />
+                        {/* Se ve de 28px pero el área táctil es de 40px (el padding transparente). */}
+                        <button onClick={() => { setAbonoFoto(null); setAbonoFotoPreview(null) }} aria-label="Quitar foto del comprobante"
+                          className="absolute top-0 right-0 p-1.5 rounded-full">
+                          <span aria-hidden="true" className="bg-black/70 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm">✕</span>
+                        </button>
                       </div>
                     ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer hover:border-mandarina-500 transition-colors">
-                        <span className="text-2xl">📸</span>
+                      // sr-only y no hidden: con `hidden` el input sale del orden del
+                      // tabulador y no hay forma de elegir la foto con teclado.
+                      // focus-within dibuja el anillo en la zona cuando el input tiene el foco.
+                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer hover:border-mandarina-500 transition-colors focus-within:ring-2 focus-within:ring-mandarina-500/60">
+                        <span className="text-2xl" aria-hidden="true">📸</span>
                         <span className="text-xs text-gray-500 mt-1">Toca para subir foto</span>
-                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAbonoFoto} />
+                        <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={handleAbonoFoto} />
                       </label>
                     )}
                   </div>
@@ -836,15 +877,15 @@ export default function PedidoDetailPage() {
 
                 {/* Notas */}
                 <div>
-                  <div className="text-xs text-gray-500 mb-2">Notas (opcional)</div>
-                  <input type="text" placeholder="Ej: Saldo pendiente, abono parcial..." value={abonoNotas} onChange={e => setAbonoNotas(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:border-mandarina-500 focus:outline-none" />
+                  <label htmlFor="abono-notas" className="block text-xs text-gray-500 mb-2">Notas (opcional)</label>
+                  <input id="abono-notas" type="text" placeholder="Ej: Saldo pendiente, abono parcial…" value={abonoNotas} onChange={e => setAbonoNotas(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:border-mandarina-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-mandarina-500/60" />
                 </div>
 
                 <button onClick={guardarAbono} disabled={guardandoAbono}
-                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
                   style={{ backgroundColor: '#22c55e' }}>
-                  {guardandoAbono ? '⏳ Guardando...' : '✅ Registrar pago'}
+                  {guardandoAbono ? '⏳ Guardando…' : '✅ Registrar pago'}
                 </button>
               </div>
             </div>
@@ -852,26 +893,32 @@ export default function PedidoDetailPage() {
 
           {/* Modal: corregir un pago ya registrado (solo ADMIN) */}
           {pagoEditando && (
-            <div className="fixed inset-0 bg-black/90 z-50 flex items-end justify-center p-4" onClick={e => e.target === e.currentTarget && !guardandoEdicionPago && setPagoEditando(null)}>
-              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+            <div className="fixed inset-0 bg-black/90 z-50 flex items-end justify-center p-4"
+              style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+              onClick={e => e.target === e.currentTarget && !guardandoEdicionPago && setPagoEditando(null)}>
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4"
+                role="dialog" aria-modal="true" aria-labelledby="titulo-corregir-pago">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-white font-semibold text-base">✏️ Corregir pago</h3>
-                  <button onClick={() => setPagoEditando(null)} disabled={guardandoEdicionPago} className="text-gray-500 hover:text-white text-lg">✕</button>
+                  <h3 id="titulo-corregir-pago" className="text-white font-semibold text-base">✏️ Corregir pago</h3>
+                  <button onClick={() => setPagoEditando(null)} disabled={guardandoEdicionPago} aria-label="Cerrar"
+                    className="text-gray-500 hover:text-white text-lg min-w-[40px] min-h-[40px] -mr-2 flex items-center justify-center rounded-lg">
+                    <span aria-hidden="true">✕</span>
+                  </button>
                 </div>
                 <div className="text-xs text-gray-500">
                   Registrado: {pagoEditando.original.TIPO_PAGO} ${parseFloat(pagoEditando.original.MONTO || 0).toFixed(2)}
                   {pagoEditando.original.FECHA_PAGO && ` · ${String(pagoEditando.original.FECHA_PAGO).split(/[ T]/)[0]}`}
                 </div>
 
-                <div>
-                  <div className="text-xs text-gray-500 mb-2">Tipo de pago</div>
+                <div role="group" aria-labelledby="etq-tipo-corregir">
+                  <div id="etq-tipo-corregir" className="text-xs text-gray-500 mb-2">Tipo de pago</div>
                   <div className="grid grid-cols-3 gap-2">
                     {[['EFECTIVO','💵','Efectivo'],['TRANSFERENCIA','🏦','Transferencia'],['LINK_PAGO','🔗','Link']].map(([val,icon,label]) => (
-                      <button key={val} onClick={() => setPagoEditando(p => ({ ...p, tipo: val }))}
-                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-medium transition-all ${
+                      <button key={val} onClick={() => setPagoEditando(p => ({ ...p, tipo: val }))} aria-pressed={pagoEditando.tipo === val}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-medium transition-colors ${
                           pagoEditando.tipo === val ? 'border-mandarina-500 bg-mandarina-500/20 text-mandarina-400' : 'border-gray-700 bg-gray-800/50 text-gray-400'
                         }`}>
-                        <span className="text-xl">{icon}</span>
+                        <span className="text-xl" aria-hidden="true">{icon}</span>
                         {label}
                       </button>
                     ))}
@@ -879,29 +926,29 @@ export default function PedidoDetailPage() {
                 </div>
 
                 <div>
-                  <div className="text-xs text-gray-500 mb-2">Monto ($)</div>
+                  <label htmlFor="corregir-monto" className="block text-xs text-gray-500 mb-2">Monto ($)</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
-                    <input type="number" step="0.01" min="0" inputMode="decimal" value={pagoEditando.monto}
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium" aria-hidden="true">$</span>
+                    <input id="corregir-monto" type="number" step="0.01" min="0" inputMode="decimal" value={pagoEditando.monto}
                       onChange={e => setPagoEditando(p => ({ ...p, monto: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-7 pr-4 py-3 text-sm focus:border-mandarina-500 focus:outline-none" />
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-7 pr-4 py-3 text-sm focus:border-mandarina-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-mandarina-500/60" />
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-gray-500 mb-2">Notas</div>
-                  <input type="text" value={pagoEditando.notas}
+                  <label htmlFor="corregir-notas" className="block text-xs text-gray-500 mb-2">Notas</label>
+                  <input id="corregir-notas" type="text" value={pagoEditando.notas}
                     onChange={e => setPagoEditando(p => ({ ...p, notas: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:border-mandarina-500 focus:outline-none" />
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:border-mandarina-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-mandarina-500/60" />
                 </div>
 
                 <button onClick={guardarEdicionPago} disabled={guardandoEdicionPago}
-                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
                   style={{ backgroundColor: '#22c55e' }}>
-                  {guardandoEdicionPago ? '⏳ Guardando...' : '✅ Guardar corrección'}
+                  {guardandoEdicionPago ? '⏳ Guardando…' : '✅ Guardar corrección'}
                 </button>
                 <button onClick={eliminarPago} disabled={guardandoEdicionPago}
-                  className="w-full py-2.5 rounded-xl text-sm font-medium text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-all disabled:opacity-50">
+                  className="w-full py-2.5 rounded-xl text-sm font-medium text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-50">
                   🗑️ Eliminar este pago
                 </button>
               </div>
@@ -910,10 +957,16 @@ export default function PedidoDetailPage() {
 
           {/* Modal foto comprobante de pago */}
           {fotoComprobanteAbierta && (
+            // El ✕ cerraba solo porque el clic "burbujeaba" al fondo; con teclado
+            // (Enter/Espacio) eso no pasa igual en todos lados, así que tiene su onClick.
             <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
+              role="dialog" aria-modal="true" aria-label="Foto del comprobante"
               onClick={() => setFotoComprobanteAbierta(null)}>
               <img src={fotoComprobanteAbierta} className="max-w-full max-h-full object-contain rounded-xl" alt="Comprobante" />
-              <button className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">✕</button>
+              <button onClick={(e) => { e.stopPropagation(); setFotoComprobanteAbierta(null) }} aria-label="Cerrar foto"
+                className="absolute top-4 right-4 text-white text-2xl bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">
+                <span aria-hidden="true">✕</span>
+              </button>
             </div>
           )}
 
@@ -975,7 +1028,7 @@ export default function PedidoDetailPage() {
 
           {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
             <div className="card overflow-hidden">
-              <button onClick={()=>setShowConversacion(true)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-all">
+              <button onClick={()=>setShowConversacion(true)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-colors">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-white">💬 Conversación de WhatsApp</span>
                 </div>
@@ -991,18 +1044,19 @@ export default function PedidoDetailPage() {
           )}
 
           <div className="card overflow-hidden">
-            <button onClick={() => setShowBitacora(b=>!b)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-all">
+            <button onClick={() => setShowBitacora(b=>!b)} aria-expanded={showBitacora}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-colors">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-white">📋 Bitácora</span>
                 {logs.length > 0 && <span className="text-xs text-gray-500">{logs.length} evento(s)</span>}
               </div>
-              <span className="text-gray-500">{showBitacora?'▲':'▼'}</span>
+              <span className="text-gray-500" aria-hidden="true">{showBitacora?'▲':'▼'}</span>
             </button>
             {showBitacora && (
               <div className="border-t border-gray-800 px-4 py-3">
                 {logs.length === 0
                   ? <div className="text-xs text-gray-600 text-center py-4">Sin eventos</div>
-                  : <div className="space-y-3 max-h-80 overflow-y-auto">
+                  : <div className="space-y-3 max-h-80 overflow-y-auto overscroll-contain">
                       {logs.map((log,i)=>(
                         <div key={i} className="flex gap-3 text-xs">
                           <div className="flex-shrink-0 w-1 bg-gray-700 rounded-full" />
@@ -1051,13 +1105,13 @@ export default function PedidoDetailPage() {
       </div>
 
       {showPdfPreview && (
-        <div className="fixed inset-0 bg-black/90 z-50 overflow-auto p-4" onClick={e=>e.target===e.currentTarget&&setShowPdfPreview(false)}>
-          <div className="max-w-3xl mx-auto">
+        <div className="fixed inset-0 bg-black/90 z-50 overflow-auto overscroll-contain p-4" onClick={e=>e.target===e.currentTarget&&setShowPdfPreview(false)}>
+          <div className="max-w-3xl mx-auto" role="dialog" aria-modal="true" aria-labelledby="titulo-vista-pdf">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-semibold">{pedido.PEDIDO_ID}</h3>
+              <h3 id="titulo-vista-pdf" className="text-white font-semibold">{pedido.PEDIDO_ID}</h3>
               <div className="flex gap-2">
-                {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR')&&<button onClick={()=>{setShowPdfPreview(false);generatePDF()}} disabled={generatingPdf} className="btn-primary text-sm px-4 py-2">{generatingPdf?'⏳...':'⬇️ Descargar'}</button>}
-                <button onClick={()=>setShowPdfPreview(false)} className="btn-secondary text-sm px-4 py-2">✕</button>
+                {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR')&&<button onClick={()=>{setShowPdfPreview(false);generatePDF()}} disabled={generatingPdf} className="btn-primary text-sm px-4 py-2">{generatingPdf?'⏳…':'⬇️ Descargar'}</button>}
+                <button onClick={()=>setShowPdfPreview(false)} aria-label="Cerrar vista previa" className="btn-secondary text-sm px-4 py-2"><span aria-hidden="true">✕</span></button>
               </div>
             </div>
             <div className="bg-white rounded-xl overflow-hidden">
@@ -1087,18 +1141,21 @@ export default function PedidoDetailPage() {
         ))}
       </div>
 
-      {/* `md:left-60` corre la barra 240px para dejarle sitio al menú lateral. En
+      {/* `md:left-56` corre la barra 224px (= menú `w-56`) para dejarle sitio al menú lateral. En
           embed ese menú no existe (lo quita el layout), así que ese hueco quedaba
           muerto y los botones no llegaban al borde izquierdo. Mismo arreglo que
-          en nuevo-pedido. */}
+          en nuevo-pedido.
+          El padding de abajo respeta la barra de gestos del iPhone; el alto que
+          mide `barraRef` ya lo incluye, así que el hueco del contenido sigue cuadrando. */}
       <div ref={barraRef}
-        className={`fixed bottom-0 left-0 right-0 ${esEmbed ? '' : 'md:left-60'} bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3`}>
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        className={`fixed bottom-0 left-0 right-0 ${esEmbed ? '' : 'md:left-56'} bg-gray-950/95 backdrop-blur border-t border-gray-800 p-3`}>
         {/* Mandarle la hoja al cliente por el chat. Solo dentro del inbox: suelto
             en el CRM no hay a quién pasársela y sería un botón que no hace nada. */}
         {esEmbed && (
           <>
             {hojaEstado && (
-              <div className={`mb-2 rounded-xl px-3 py-2 text-xs border ${
+              <div role={hojaEstado.tipo === 'ok' ? 'status' : 'alert'} className={`mb-2 rounded-xl px-3 py-2 text-xs border ${
                 hojaEstado.tipo === 'ok'
                   ? 'bg-green-500/10 border-green-500/30 text-green-400'
                   : 'bg-red-500/10 border-red-500/30 text-red-400'
@@ -1113,9 +1170,9 @@ export default function PedidoDetailPage() {
                   verde se ve de un vistazo que sale del sistema. */}
               <button onClick={enviarHojaAlInbox} disabled={enviandoHoja}
                 aria-busy={enviandoHoja}
-                className="w-full py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 disabled:cursor-wait"
+                className="w-full py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-60 disabled:cursor-wait"
                 style={{ backgroundColor: '#25D366' }}>
-                {enviandoHoja ? '⏳ Preparando la hoja...' : '📤 Enviar al cliente'}
+                {enviandoHoja ? '⏳ Preparando la hoja…' : '📤 Enviar al cliente'}
               </button>
             </div>
           </>
@@ -1131,7 +1188,7 @@ export default function PedidoDetailPage() {
           )}
           {(user?.rol==='ADMIN'||user?.rol==='VENDEDOR')&&(
             <button onClick={generatePDF} disabled={generatingPdf} className="btn-primary flex-1 text-sm" style={{backgroundColor:tiendaColor}}>
-              {generatingPdf?'⏳...':'⬇️ PDF'}
+              {generatingPdf?'⏳…':'⬇️ PDF'}
             </button>
           )}
         </div>
@@ -1140,7 +1197,7 @@ export default function PedidoDetailPage() {
         {user?.rol==='ADMIN' && (
           <div className="flex gap-2 mb-2">
             <Link href={`/dashboard/editar-pedido/${pedido.PEDIDO_ID}${esEmbed ? '?embed=1' : ''}`}
-              className="w-full py-2 rounded-xl text-sm font-medium border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 text-center transition-all">
+              className="w-full py-2 rounded-xl text-sm font-medium border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 text-center transition-colors">
               ✏️ Editar productos del pedido
             </Link>
           </div>
@@ -1153,8 +1210,8 @@ export default function PedidoDetailPage() {
             <button onClick={emitirFactura} disabled={enviandoFactura}
               className={botonFactura(pedido, user?.rol) === 'PENDIENTE'
                 ? 'w-full py-2 rounded-xl text-sm font-medium border border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
-                : 'w-full py-2 rounded-xl text-sm font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all'}>
-              {enviandoFactura ? '⏳ Emitiendo...' : '🧾 Generar FACTURA SRI'}
+                : 'w-full py-2 rounded-xl text-sm font-medium border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-colors'}>
+              {enviandoFactura ? '⏳ Emitiendo…' : '🧾 Generar FACTURA SRI'}
             </button>
           </div>
         )}
@@ -1177,20 +1234,23 @@ export default function PedidoDetailPage() {
                   {pedido.FACTURA_DESCARTADA_POR && <> · {pedido.FACTURA_DESCARTADA_POR}</>}
                 </div>
                 <button onClick={() => cambiarDescarteFactura(false)} disabled={descartandoFactura}
-                  className="w-full py-2 rounded-xl text-xs font-medium border border-gray-700 text-gray-500 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
-                  {descartandoFactura ? '⏳...' : '↩︎ Volver a marcarla como pendiente'}
+                  className="w-full py-2 rounded-xl text-xs font-medium border border-gray-700 text-gray-500 hover:text-white hover:border-gray-500 transition-colors disabled:opacity-50">
+                  {descartandoFactura ? '⏳…' : '↩︎ Volver a marcarla como pendiente'}
                 </button>
               </>
             ) : eligiendoMotivo ? (
               <div className="flex flex-col gap-1.5">
-                <select value={motivoFactura} onChange={e => setMotivoFactura(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none">
+                {/* La primera opción hace de etiqueta: al elegir otra desaparece, por eso aria-label.
+                    outline-none sin reemplazo dejaba sin ver dónde está el foco: va el anillo. */}
+                <select value={motivoFactura} onChange={e => setMotivoFactura(e.target.value)} aria-label="Motivo para no emitir la factura"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-mandarina-500/60">
                   <option value="">¿Por qué no se va a emitir?</option>
                   {MOTIVOS.map(m => <option key={m.codigo} value={m.codigo}>{m.label}</option>)}
                 </select>
                 <input value={notaFactura} onChange={e => setNotaFactura(e.target.value)} maxLength={300}
+                  aria-label="Nota sobre la factura"
                   placeholder={motivoFactura === 'OTRO' ? 'Explica el caso (obligatorio)' : 'Nota (opcional)'}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none" />
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-mandarina-500/60" />
                 <div className="flex gap-2">
                   <button onClick={() => { setEligiendoMotivo(false); setMotivoFactura(''); setNotaFactura('') }}
                     className="flex-1 py-2 rounded-xl text-xs border border-gray-800 text-gray-500 hover:text-gray-300">
@@ -1199,13 +1259,13 @@ export default function PedidoDetailPage() {
                   <button onClick={() => cambiarDescarteFactura(true)}
                     disabled={descartandoFactura || !motivoFactura || (motivoFactura === 'OTRO' && !notaFactura.trim())}
                     className="flex-1 py-2 rounded-xl text-xs font-medium border border-yellow-500/40 text-yellow-400 bg-yellow-500/10 disabled:opacity-40 disabled:cursor-not-allowed">
-                    {descartandoFactura ? '⏳...' : 'Confirmar'}
+                    {descartandoFactura ? '⏳…' : 'Confirmar'}
                   </button>
                 </div>
               </div>
             ) : (
               <button onClick={() => setEligiendoMotivo(true)}
-                className="w-full py-2 rounded-xl text-xs font-medium border border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600 transition-all">
+                className="w-full py-2 rounded-xl text-xs font-medium border border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600 transition-colors">
                 ✓ Esta factura no se va a emitir
               </button>
             )}

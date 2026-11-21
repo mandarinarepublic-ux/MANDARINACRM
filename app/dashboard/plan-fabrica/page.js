@@ -39,7 +39,7 @@ function Cajita({ t, enHoy, posicion, onHoy, onQuitar, onSubir, onBajar, onDragS
     return (
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-3 text-xs text-gray-500 flex items-center justify-between gap-2">
         <span><span className="line-through font-mono">{t.id}</span> · ✅ ya salió</span>
-        {puedeEditar && <button onClick={onQuitar} className="text-gray-500 hover:text-red-400 px-2">✕</button>}
+        {puedeEditar && <button onClick={onQuitar} aria-label={`Quitar ${t.id} del plan`} className="text-gray-500 hover:text-red-400 px-2"><span aria-hidden="true">✕</span></button>}
       </div>
     )
   }
@@ -81,12 +81,14 @@ function Cajita({ t, enHoy, posicion, onHoy, onQuitar, onSubir, onBajar, onDragS
         <div className="flex justify-end gap-1 pt-0.5">
           {enHoy ? (
             <>
-              <button onClick={onSubir} title="Subir" className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-2.5 py-1.5">↑</button>
-              <button onClick={onBajar} title="Bajar" className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-2.5 py-1.5">↓</button>
-              <button onClick={onQuitar} title="Sacar de hoy" className="text-xs bg-gray-800 hover:bg-red-500/20 text-gray-300 hover:text-red-300 rounded-lg px-2.5 py-1.5">✕ Sacar</button>
+              {/* Solo flecha: el lector necesita el nombre. Sin cambiar tamaños porque
+                  esta pantalla se imprime tal cual con window.print(). */}
+              <button onClick={onSubir} title="Subir" aria-label={`Subir ${p.PEDIDO_ID}`} className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-2.5 py-1.5"><span aria-hidden="true">↑</span></button>
+              <button onClick={onBajar} title="Bajar" aria-label={`Bajar ${p.PEDIDO_ID}`} className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg px-2.5 py-1.5"><span aria-hidden="true">↓</span></button>
+              <button onClick={onQuitar} title="Sacar de hoy" aria-label={`Sacar ${p.PEDIDO_ID} de hoy`} className="text-xs bg-gray-800 hover:bg-red-500/20 text-gray-300 hover:text-red-300 rounded-lg px-2.5 py-1.5">✕ Sacar</button>
             </>
           ) : (
-            <button onClick={onHoy} className="text-xs font-semibold text-mandarina-400 border border-mandarina-500/40 hover:bg-mandarina-500/10 rounded-lg px-2.5 py-1.5">→ Hoy</button>
+            <button onClick={onHoy} aria-label={`Pasar ${p.PEDIDO_ID} a hoy`} className="text-xs font-semibold text-mandarina-400 border border-mandarina-500/40 hover:bg-mandarina-500/10 rounded-lg px-2.5 py-1.5">→ Hoy</button>
           )}
         </div>
       )}
@@ -204,19 +206,19 @@ export default function PlanFabricaPage() {
           <p className="text-xs text-gray-500">Guía para el jefe de fábrica. Mover una cajita NO cambia el pedido.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => setFecha(hoy)} className={`text-sm px-3 py-2 rounded-xl border ${fecha === hoy ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>Hoy</button>
-          <button onClick={() => setFecha(isoMasDias(hoy, 1))} className={`text-sm px-3 py-2 rounded-xl border ${fecha === isoMasDias(hoy, 1) ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>Mañana</button>
-          <input type="date" className="input text-sm py-2 w-auto" value={fecha} onChange={(e) => e.target.value && setFecha(e.target.value)} />
-          <button onClick={() => cargar(fecha)} className="text-sm px-3 py-2 rounded-xl border border-gray-700 text-gray-300">↻</button>
+          <button onClick={() => setFecha(hoy)} aria-pressed={fecha === hoy} className={`text-sm px-3 py-2 rounded-xl border ${fecha === hoy ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>Hoy</button>
+          <button onClick={() => setFecha(isoMasDias(hoy, 1))} aria-pressed={fecha === isoMasDias(hoy, 1)} className={`text-sm px-3 py-2 rounded-xl border ${fecha === isoMasDias(hoy, 1) ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>Mañana</button>
+          <input type="date" aria-label="Fecha del plan" className="input text-sm py-2 w-auto" value={fecha} onChange={(e) => e.target.value && setFecha(e.target.value)} />
+          <button onClick={() => cargar(fecha)} aria-label="Recargar" title="Recargar" className="text-sm px-3 py-2 rounded-xl border border-gray-700 text-gray-300"><span aria-hidden="true">↻</span></button>
           <button onClick={() => window.print()} className="btn-primary text-sm px-4 py-2">🖨️ IMPRIMIR</button>
         </div>
       </div>
 
-      {error && <div className="card p-3 mb-3 text-red-400 text-sm">⚠️ {error}</div>}
+      {error && <div role="alert" className="card p-3 mb-3 text-red-400 text-sm">⚠️ {error}</div>}
       {datos && datos.completo === false && (
         <div className="card p-3 mb-3 text-yellow-400 text-sm">⚠️ No llegaron todos los pedidos. Recarga antes de armar el plan.</div>
       )}
-      {cargando && !datos && <div className="text-gray-500 text-sm">Cargando…</div>}
+      {cargando && !datos && <div role="status" className="text-gray-500 text-sm">Cargando…</div>}
 
       {datos && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 items-start">
@@ -240,9 +242,9 @@ export default function PlanFabricaPage() {
                       const cerrado = abiertas[k] === false
                       return (
                         <div key={k}>
-                          <button onClick={() => setAbiertas((a) => ({ ...a, [k]: cerrado }))}
+                          <button onClick={() => setAbiertas((a) => ({ ...a, [k]: cerrado }))} aria-expanded={!cerrado}
                             className="w-full flex items-center justify-between text-xs font-semibold text-gray-300 uppercase tracking-wide py-1">
-                            <span>{cerrado ? '▶' : '▼'} {META_TECNICA[k]}</span>
+                            <span><span aria-hidden="true">{cerrado ? '▶' : '▼'}</span> {META_TECNICA[k]}</span>
                             <span className="text-gray-500">{grupo.length}</span>
                           </button>
                           {!cerrado && <div className="space-y-2">{grupo.map((t, i) => <Cajita key={t.id} {...props(t, false, i)} />)}</div>}

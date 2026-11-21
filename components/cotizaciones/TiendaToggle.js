@@ -8,7 +8,8 @@ export default function TiendaToggle({ tienda, onChange }) {
     { key: 'indstore', label: '🏪 Indstore' },
   ]
   return (
-    <div className="inline-flex bg-gray-800 rounded-lg p-0.5 gap-0.5">
+    // aria-pressed en cada botón: la tienda elegida no puede decirse solo con el color.
+    <div className="inline-flex bg-gray-800 rounded-lg p-0.5 gap-0.5" role="group" aria-label="Tienda">
       {opts.map((o) => {
         const active = tienda === o.key
         const th = themeFor(o.key)
@@ -17,7 +18,8 @@ export default function TiendaToggle({ tienda, onChange }) {
             key={o.key}
             type="button"
             onClick={() => onChange(o.key)}
-            className="px-3 py-1 rounded-md text-xs font-bold transition-all"
+            aria-pressed={active}
+            className="px-3 py-1 rounded-md text-xs font-bold transition-colors"
             style={active
               ? { background: th.accent, color: '#fff' }
               : { background: 'transparent', color: '#9ca3af' }}

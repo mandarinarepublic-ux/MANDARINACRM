@@ -163,6 +163,13 @@ export default function DespachosPage() {
   const paginados = filtered.slice(0, visibles)
   const hayMas = filtered.length > visibles
 
+  // Cuántos hay en cada grupo ("listos" / "en producción"), contados UNA vez.
+  // Antes cada encabezado de grupo recorría `filtered` entero dentro del .map de
+  // la lista: con cientos de pedidos eso es n² en cada tecla del buscador.
+  // Mismo número que antes (sale del mismo `filtered`), solo que en una pasada.
+  const conteoGrupo = { [LISTO_PARA_SALIR]: 0, [SIGUE_EN_FABRICA]: 0 }
+  for (const x of filtered) conteoGrupo[prioridadDespacho(x)]++
+
   function expandirTodos() { setExpandedPedidos(new Set(paginados.map(p => p.PEDIDO_ID))) }
   function contraerTodos()  { setExpandedPedidos(new Set()) }
 
@@ -203,7 +210,7 @@ export default function DespachosPage() {
     )) return
 
     setSaving(true)
-    setSavingMsg('Cerrando pedido...')
+    setSavingMsg('Cerrando pedido…')
     try {
       const res = await fetch(`/api/pedidos/${p.PEDIDO_ID}`, {
         method: 'PATCH',
@@ -226,7 +233,7 @@ export default function DespachosPage() {
   async function registrarDespacho(pedidoId) {
     if (!guia.numero.trim()) { alert('El número de guía es obligatorio'); return }
     setSaving(true)
-    setSavingMsg(guia.fotoBase64 ? 'Subiendo foto...' : 'Guardando...')
+    setSavingMsg(guia.fotoBase64 ? 'Subiendo foto…' : 'Guardando…')
     try {
       const res = await fetch(`/api/pedidos/${pedidoId}`, {
         method: 'PATCH',
@@ -249,7 +256,7 @@ export default function DespachosPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen md:h-auto">
+    <div className="flex flex-col h-dvh md:h-auto">
       <BarraFiltros
         titulo="Despachos"
         insignia={pendienteCount > 0 && (
@@ -259,7 +266,7 @@ export default function DespachosPage() {
         )}
         accion={(
           <Link href="/dashboard/historial?estado=COMPLETADO"
-            className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded-xl px-3 py-2 transition-all flex-shrink-0">
+            className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded-xl px-3 py-2 transition-colors flex-shrink-0">
             ✅ Ver despachados{cerradosCount != null ? ` (${cerradosCount})` : ''} →
           </Link>
         )}
@@ -274,15 +281,18 @@ export default function DespachosPage() {
         onContraer={contraerTodos}
       >
           <div className="grid grid-cols-2 gap-2">
+            {/* <label htmlFor> y no <span>: tocar el texto enfoca el campo y el lector
+                lo nombra. El borde naranja ya marca "con filtro", no el foco: por eso
+                el anillo propio en focus. */}
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha desde</span>
-              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+              <label htmlFor="despacho-fecha-desde" className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha desde</label>
+              <input id="despacho-fecha-desde" type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                 ${fechaDesde ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
                 value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha hasta</span>
-              <input type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+              <label htmlFor="despacho-fecha-hasta" className="text-[11px] text-gray-400 uppercase tracking-wider px-1">Fecha hasta</label>
+              <input id="despacho-fecha-hasta" type="date" className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                 ${fechaHasta ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}
                 value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
             </div>
@@ -293,8 +303,9 @@ export default function DespachosPage() {
         <div className="max-w-3xl mx-auto px-4 py-3">
           <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {estado === 'CARGANDO' ? (
-            <div className="flex justify-center py-12">
-              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+            <div className="flex justify-center py-12" role="status">
+              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+              <span className="sr-only">Cargando…</span>
             </div>
           ) : estado === 'ERROR' ? (
             /* Un fallo NO es "todo despachado". Antes los dos se veían igual. */
@@ -357,12 +368,12 @@ export default function DespachosPage() {
                   <Fragment key={p.PEDIDO_ID}>
                   {abreGrupo && (
                     <div className={`flex items-center gap-2 pt-3 pb-1 ${i === 0 ? '' : 'mt-3 border-t border-gray-800'}`}>
-                      <span className="text-sm">{listo ? '📦' : '🏭'}</span>
+                      <span className="text-sm" aria-hidden="true">{listo ? '📦' : '🏭'}</span>
                       <span className={`text-xs font-semibold uppercase tracking-wider ${listo ? 'text-yellow-400' : 'text-blue-400'}`}>
                         {listo ? 'Listos para salir' : 'Todavía en producción'}
                       </span>
                       <span className="text-xs text-gray-600">
-                        · {filtered.filter(x => prioridadDespacho(x) === prioridadDespacho(p)).length}
+                        · {conteoGrupo[prioridadDespacho(p)]}
                       </span>
                     </div>
                   )}
@@ -370,13 +381,15 @@ export default function DespachosPage() {
                     className={`card overflow-hidden border-l-4 ${esCompletado ? 'border-l-green-500' : 'border-l-yellow-500'}`}>
 
                     {/* Cabecera — siempre visible, clic para expandir */}
+                    {/* aria-expanded: el lector anuncia si el detalle está abierto o cerrado */}
                     <button
+                      aria-expanded={isExpanded}
                       onClick={() => setExpandedPedidos(prev => {
                         const n = new Set(prev)
                         n.has(p.PEDIDO_ID) ? n.delete(p.PEDIDO_ID) : n.add(p.PEDIDO_ID)
                         return n
                       })}
-                      className="w-full p-4 flex items-center gap-3 hover:bg-gray-800/30 transition-all text-left">
+                      className="w-full p-4 flex items-center gap-3 hover:bg-gray-800/30 transition-colors text-left">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="font-mono font-bold text-white">{p.PEDIDO_ID}</span>
@@ -394,7 +407,7 @@ export default function DespachosPage() {
                           {p.GUIA_NUMERO && <span className="text-green-400 ml-2">· Guía #{p.GUIA_NUMERO}</span>}
                         </div>
                       </div>
-                      <span className="text-gray-600 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
+                      <span className="text-gray-600 text-sm flex-shrink-0" aria-hidden="true">{isExpanded ? '▲' : '▼'}</span>
                     </button>
 
                     {/* Acciones SIEMPRE visibles: con ~150 pedidos pendientes,
@@ -406,7 +419,7 @@ export default function DespachosPage() {
                         <button
                           onClick={() => completarSinGuia(p)}
                           disabled={saving}
-                          className="flex-1 bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl transition-all disabled:opacity-50">
+                          className="flex-1 bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-2.5 rounded-xl transition-colors disabled:opacity-50">
                           ✅ Entregado sin guía
                         </button>
                         <button
@@ -414,7 +427,7 @@ export default function DespachosPage() {
                             setSelectedPedido(p.PEDIDO_ID === selectedPedido ? null : p.PEDIDO_ID)
                             setExpandedPedidos(prev => new Set(prev).add(p.PEDIDO_ID))
                           }}
-                          className="flex-1 bg-mandarina-500 hover:bg-mandarina-600 text-white text-xs font-bold px-3 py-2.5 rounded-xl transition-all">
+                          className="flex-1 bg-mandarina-500 hover:bg-mandarina-600 text-white text-xs font-bold px-3 py-2.5 rounded-xl transition-colors">
                           🚚 Registrar guía
                         </button>
                       </div>
@@ -436,7 +449,7 @@ export default function DespachosPage() {
                           {itemsActivos.map(item => (
                             <div key={item.ITEM_ID} className="flex items-center gap-3 bg-gray-800/40 rounded-xl px-3 py-2">
                               {item.FOTO_PECHO_URL
-                                ? <img src={imagenAncho(item.FOTO_PECHO_URL, 150)} loading="lazy" className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
+                                ? <img src={imagenAncho(item.FOTO_PECHO_URL, 150)} loading="lazy" alt={`Foto de ${item.PRODUCTO_NOMBRE || 'la prenda'}`} className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-gray-700" />
                                 : <div className="w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0"><span className="text-gray-600 text-lg">👕</span></div>}
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm text-white font-medium truncate">{item.PRODUCTO_NOMBRE}</div>
@@ -458,8 +471,13 @@ export default function DespachosPage() {
                               <div className="text-xs text-gray-400">{p.GUIA_TRANSPORTISTA}{p.GUIA_FECHA ? ` · ${formatFechaCorta(p.GUIA_FECHA) || p.GUIA_FECHA}` : ''}</div>
                             </div>
                             {p.GUIA_FOTO_URL && (
-                              <img src={p.GUIA_FOTO_URL} onClick={() => window.open(p.GUIA_FOTO_URL, '_blank')}
-                                className="w-14 h-14 rounded-xl object-cover border border-green-500/30 cursor-pointer hover:opacity-80 transition-opacity" />
+                              // Enlace en vez de img con onClick: se alcanza con teclado
+                              // y se puede abrir en otra pestaña como cualquier link.
+                              <a href={p.GUIA_FOTO_URL} target="_blank" rel="noopener noreferrer"
+                                className="flex-shrink-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-mandarina-500/60">
+                                <img src={p.GUIA_FOTO_URL} alt={`Foto de la guía ${p.GUIA_NUMERO || ''}`} loading="lazy"
+                                  className="w-14 h-14 rounded-xl object-cover border border-green-500/30 cursor-pointer hover:opacity-80 transition-opacity" />
+                              </a>
                             )}
                           </div>
                         )}
@@ -469,39 +487,48 @@ export default function DespachosPage() {
                             <div className="text-sm font-semibold text-white">📝 Registrar guía de envío</div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="label">Número de guía *</label>
-                                <input className="input" placeholder="ej: 7890123456"
+                                {/* Teclado numérico en el celular, sin autocorrector ni
+                                    sugerencias (un número de guía no es una palabra).
+                                    Sin autoFocus: en el celular abría el teclado de golpe
+                                    y tapaba media pantalla al tocar "Registrar guía". */}
+                                <label className="label" htmlFor={`guia-numero-${p.PEDIDO_ID}`}>Número de guía *</label>
+                                <input id={`guia-numero-${p.PEDIDO_ID}`} className="input" placeholder="ej: 7890123456"
+                                  inputMode="numeric" autoComplete="off" spellCheck={false}
                                   value={guia.numero}
-                                  onChange={e => setGuia(g => ({ ...g, numero: e.target.value }))}
-                                  autoFocus />
+                                  onChange={e => setGuia(g => ({ ...g, numero: e.target.value }))} />
                               </div>
                               <div>
-                                <label className="label">Transportista</label>
-                                <select className="input" value={guia.transportista}
+                                <label className="label" htmlFor={`guia-transp-${p.PEDIDO_ID}`}>Transportista</label>
+                                <select id={`guia-transp-${p.PEDIDO_ID}`} className="input" value={guia.transportista}
                                   onChange={e => setGuia(g => ({ ...g, transportista: e.target.value }))}>
                                   {['SERVIENTREGA','TRAMACO','LAAR','RETIRO_TIENDA'].map(t => <option key={t}>{t}</option>)}
                                 </select>
                               </div>
                             </div>
 
-                            <label className={`flex items-center gap-3 border-2 border-dashed rounded-xl p-3 cursor-pointer transition-all
+                            {/* sr-only y no hidden: con `hidden` el input no recibe foco y
+                                la foto no se podía elegir con teclado. focus-within pinta el
+                                anillo en la zona. Sin `capture`: así se puede elegir de la galería (21-nov). */}
+                            <label className={`flex items-center gap-3 border-2 border-dashed rounded-xl p-3 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-mandarina-500/60
                               ${guia.fotoPreview ? 'border-green-500 bg-green-500/5' : 'border-gray-700 hover:border-gray-500'}`}>
-                              <input type="file" accept="image/*" className="hidden"
+                              <input type="file" accept="image/*" className="sr-only"
                                 onChange={e => handleFotoGuia(e.target.files[0])} />
                               {guia.fotoPreview ? (
                                 <div className="flex items-center gap-3 w-full">
-                                  <img src={guia.fotoPreview} className="w-14 h-14 rounded-xl object-cover" />
+                                  <img src={guia.fotoPreview} alt="Foto de la guía elegida" className="w-14 h-14 rounded-xl object-cover" />
                                   <div className="flex-1">
                                     <div className="text-green-400 text-sm font-medium">✓ Foto cargada</div>
                                     <div className="text-gray-500 text-xs">Toca para cambiar</div>
                                   </div>
-                                  <button type="button"
+                                  <button type="button" aria-label="Quitar foto de la guía"
                                     onClick={e => { e.preventDefault(); setGuia(g => ({...g, fotoBase64: null, fotoPreview: null})) }}
-                                    className="text-red-400 text-xs p-1">✕</button>
+                                    className="text-red-400 text-xs min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg">
+                                    <span aria-hidden="true">✕</span>
+                                  </button>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-3">
-                                  <span className="text-2xl">📷</span>
+                                  <span className="text-2xl" aria-hidden="true">📷</span>
                                   <div>
                                     <div className="text-gray-300 text-sm">Foto de la guía Servientrega</div>
                                     <div className="text-gray-600 text-xs">Opcional · sube a Cloudinary</div>
@@ -513,12 +540,15 @@ export default function DespachosPage() {
                             <button
                               onClick={() => registrarDespacho(p.PEDIDO_ID)}
                               disabled={saving || !guia.numero.trim()}
-                              className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all
+                              className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-colors
                                 bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed">
                               {saving
-                                ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{savingMsg}</>
+                                ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />{savingMsg}</>
                                 : '✅ Confirmar despacho → Completado'}
                             </button>
+                            {/* El texto de avance ("Subiendo foto…") cambia DENTRO de un botón
+                                deshabilitado: el lector no lo anuncia. Esta copia invisible sí. */}
+                            <span className="sr-only" aria-live="polite">{saving ? savingMsg : ''}</span>
                           </div>
                         )}
                       </div>
@@ -531,7 +561,7 @@ export default function DespachosPage() {
             {hayMas && (
               <button
                 onClick={() => setVisibles(v => v + PAGE_SIZE_D)}
-                className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-all">
+                className="w-full mt-3 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm font-medium hover:bg-gray-800 hover:text-white transition-colors">
                 Cargar más ({filtered.length - visibles} restantes)
               </button>
             )}

@@ -232,14 +232,14 @@ export default function ErroresPage() {
           {eventos.some(e => e.fuente === 'meta' && e.nivel === 'error' && !e.resuelto && e.pedido_id) && (
             <button onClick={reenviarTodos} disabled={!!reenviando || !!activo || cola.length > 0}
               className="text-xs px-3 py-2 rounded-xl border border-blue-600 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50">
-              {reenviando === 'TODOS' ? '⏳ enviando...' : '🔄 Reintentar Meta'}
+              {reenviando === 'TODOS' ? '⏳ enviando…' : '🔄 Reintentar Meta'}
             </button>
           )}
           {/* Una alarma que nunca se prueba es una alarma que no tienes: esta
               misma ruta estuvo rota en silencio (los eventos no llegaban a la
               tabla ni a Telegram). Esto la dispara de verdad. */}
           <button onClick={probarAlerta} disabled={probando} className="btn-secondary text-xs px-3 py-2">
-            {probando ? '⏳ probando...' : '🔔 Probar alerta'}
+            {probando ? '⏳ probando…' : '🔔 Probar alerta'}
           </button>
           <button onClick={() => cargar()} disabled={loading} className="btn-secondary text-xs px-3 py-2">↻ Actualizar</button>
           <button onClick={() => router.back()} className="text-gray-500 hover:text-white text-sm px-2">← Volver</button>
@@ -281,7 +281,8 @@ export default function ErroresPage() {
                   </span>
                   <button
                     onClick={() => { setEligiendo(eligiendo === p.pedido_id ? null : p.pedido_id); setMotivo(''); setNota('') }}
-                    className="text-[10px] px-2 py-1 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all whitespace-nowrap">
+                    aria-expanded={eligiendo === p.pedido_id}
+                    className="text-[10px] px-2 py-1 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-colors whitespace-nowrap">
                     {eligiendo === p.pedido_id ? '✕ cancelar' : '✓ no facturar'}
                   </button>
                 </div>
@@ -290,19 +291,22 @@ export default function ErroresPage() {
                     primero, un "lo lleno luego" deja el registro mudo para siempre. */}
                 {eligiendo === p.pedido_id && (
                   <div className="px-2 pb-2 flex flex-col gap-1.5 bg-gray-900/40">
-                    <select value={motivo} onChange={e => setMotivo(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-200 outline-none">
+                    {/* La 1.ª opción hace de etiqueta y desaparece al elegir: aria-label.
+                        outline-none sin reemplazo escondía el foco: va el anillo. */}
+                    <select value={motivo} onChange={e => setMotivo(e.target.value)} aria-label={`Motivo para no facturar ${p.pedido_id}`}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-200 outline-none focus:ring-2 focus:ring-mandarina-500/60">
                       <option value="">¿Por qué no se va a emitir?</option>
                       {MOTIVOS.map(m => <option key={m.codigo} value={m.codigo}>{m.label}</option>)}
                     </select>
                     <input value={nota} onChange={e => setNota(e.target.value)} maxLength={300}
+                      aria-label="Nota sobre la factura"
                       placeholder={motivo === 'OTRO' ? 'Explica el caso (obligatorio)' : 'Nota (opcional)'}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-200 outline-none" />
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-200 outline-none focus:ring-2 focus:ring-mandarina-500/60" />
                     <button
                       onClick={() => descartarFactura(p.pedido_id)}
                       disabled={descartando === p.pedido_id || !motivo || (motivo === 'OTRO' && !nota.trim())}
-                      className="text-[11px] px-2 py-1.5 rounded-lg border border-yellow-500/40 text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                      {descartando === p.pedido_id ? '⏳ guardando...' : 'Confirmar que no se factura'}
+                      className="text-[11px] px-2 py-1.5 rounded-lg border border-yellow-500/40 text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                      {descartando === p.pedido_id ? '⏳ guardando…' : 'Confirmar que no se factura'}
                     </button>
                   </div>
                 )}
@@ -359,11 +363,12 @@ export default function ErroresPage() {
 
       {/* Filtros */}
       <div className="flex gap-2 mb-3 flex-wrap">
-        <select className="input py-2 text-sm w-auto" value={fFuente} onChange={e => setFFuente(e.target.value)}>
+        {/* Sin título visible: aria-label para que el lector diga qué filtra cada uno. */}
+        <select className="input py-2 text-sm w-auto" value={fFuente} onChange={e => setFFuente(e.target.value)} aria-label="Fuente">
           <option value="">Todas las fuentes</option>
           {Object.entries(FUENTE_META).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
         </select>
-        <select className="input py-2 text-sm w-auto" value={fNivel} onChange={e => setFNivel(e.target.value)}>
+        <select className="input py-2 text-sm w-auto" value={fNivel} onChange={e => setFNivel(e.target.value)} aria-label="Nivel">
           <option value="error">Solo errores</option>
           <option value="aviso">Solo avisos</option>
           <option value="ok">Solo OK</option>
@@ -372,20 +377,21 @@ export default function ErroresPage() {
       </div>
 
       {aviso && (
-        <div className="mb-3 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5">
+        <div role="status" className="mb-3 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5">
           <span className="text-sm text-green-400">{aviso}</span>
         </div>
       )}
 
       {error && (
-        <div className="mb-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2.5">
+        <div role="alert" className="mb-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2.5">
           <span className="text-sm text-red-400">⚠️ {error}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+        <div className="flex justify-center py-12" role="status">
+          <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+          <span className="sr-only">Cargando…</span>
         </div>
       ) : eventos.length === 0 ? (
         <div className="card p-8 text-center text-gray-600">
@@ -514,7 +520,7 @@ function DetalleEvento({ evento }) {
           onClick={() => setAbierto(v => !v)}
           aria-expanded={abierto}
           className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors">
-          {abierto ? '▾' : '▸'} {abierto ? 'Ocultar' : 'Ver'} detalle ({filas.length})
+          <span aria-hidden="true">{abierto ? '▾' : '▸'}</span> {abierto ? 'Ocultar' : 'Ver'} detalle ({filas.length})
         </button>
         {abierto && (
           <button onClick={copiar} className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors">

@@ -17,7 +17,8 @@ export default function ResultadoPublicacion({ res, onDespublicar, onCorregir, o
 
   return (
     <div className="card p-5 space-y-4">
-      <p className={`text-sm font-semibold px-4 py-3 rounded-xl border ${titulo.clase}`}>{titulo.texto}</p>
+      {/* role=status: el resultado de publicar se anuncia apenas aparece. */}
+      <p role="status" className={`text-sm font-semibold px-4 py-3 rounded-xl border ${titulo.clase}`}>{titulo.texto}</p>
 
       {!res.ok && (
         <ul className="text-red-400 text-sm list-disc pl-5 space-y-1">
@@ -31,9 +32,9 @@ export default function ResultadoPublicacion({ res, onDespublicar, onCorregir, o
       )}
 
       <div className="space-y-1 text-sm">
-        {res.urlAdmin && <p><a href={res.urlAdmin} target="_blank" rel="noreferrer" className="text-mandarina-400 hover:underline">Abrir en Shopify</a></p>}
+        {res.urlAdmin && <p><a href={res.urlAdmin} target="_blank" rel="noopener noreferrer" className="text-mandarina-400 hover:underline">Abrir en Shopify</a></p>}
         {res.urlTienda
-          ? <p><a href={res.urlTienda} target="_blank" rel="noreferrer" className="text-mandarina-400 hover:underline">Ver en la tienda →</a></p>
+          ? <p><a href={res.urlTienda} target="_blank" rel="noopener noreferrer" className="text-mandarina-400 hover:underline">Ver en la tienda →</a></p>
           : <p className="text-gray-500">Todavía no tiene página pública en la tienda.</p>}
       </div>
 

@@ -14,6 +14,7 @@ export default function TallasGrid({ tallas, onChange }) {
             type="number"
             min={0}
             inputMode="numeric"
+            aria-label={`Cantidad talla ${LABEL[t]}`}
             value={tallas?.[t] || 0}
             onChange={(e) => onChange(t, e.target.value)}
             className="w-full bg-gray-800 border border-gray-700 text-white text-center rounded-lg px-1 py-1.5 text-sm focus:outline-none focus:border-mandarina-500 focus:ring-1 focus:ring-mandarina-500"

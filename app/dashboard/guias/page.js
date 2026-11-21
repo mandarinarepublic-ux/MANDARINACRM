@@ -61,19 +61,24 @@ export default function GuiasPage() {
       </p>
 
       <div className="flex gap-2 mt-4">
-        <input className="input flex-1" value={q} autoFocus enterKeyHint="search"
+        {/* Sin autoFocus: en el celular abría el teclado de entrada y tapaba la
+            explicación de qué se puede buscar. aria-label porque solo tenía placeholder. */}
+        <input className="input flex-1" value={q} enterKeyHint="search"
+          aria-label="Buscar por guía, cliente, celular, cédula, dirección o pedido"
+          autoComplete="off" spellCheck={false}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && buscar()}
           placeholder="Ej: 9036835780 · Ámbar Rosado · 0986979499 · MAN-AND-6314" />
         <button onClick={buscar} disabled={buscando} className="btn-primary px-4 disabled:opacity-60">
-          {buscando ? '…' : '🔍 Buscar'}
+          {buscando ? <span role="status">…<span className="sr-only">Buscando</span></span> : '🔍 Buscar'}
         </button>
       </div>
-      {error && <div className="mt-3 text-sm text-red-400">⚠️ {error}</div>}
+      {/* role=alert: el error se anuncia apenas aparece, sin tener que ir a buscarlo. */}
+      {error && <div role="alert" className="mt-3 text-sm text-red-400">⚠️ {error}</div>}
 
       {res && (
         <div className="mt-5">
-          <div className="text-xs text-gray-500 mb-2">
+          <div className="text-xs text-gray-500 mb-2" aria-live="polite">
             {res.length
               ? <>Resultados para “{buscado}”: {res.length} pedido{res.length === 1 ? '' : 's'} · {conGuia} con guía</>
               : <>Nada para “{buscado}”. Prueba con otro dato: un apellido, el celular o el número de pedido.</>}
@@ -110,7 +115,7 @@ export default function GuiasPage() {
                         </div>
                       </div>
                       {g.foto && (
-                        <a href={g.foto} target="_blank" rel="noreferrer" className="text-xs text-mandarina-400 hover:underline shrink-0">ver foto</a>
+                        <a href={g.foto} target="_blank" rel="noopener noreferrer" className="text-xs text-mandarina-400 hover:underline shrink-0 min-h-[40px] inline-flex items-center px-1">ver foto</a>
                       )}
                     </div>
                   )) : (

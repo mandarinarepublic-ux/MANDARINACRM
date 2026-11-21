@@ -10,6 +10,7 @@ import { puedeVerTienda } from '@/lib/tiendasUsuario'
 import { seImprime } from '@/lib/prenda-se-fabrica'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
+import { useTeclaEscape } from '@/lib/useTeclaEscape'
 
 // Color por tienda para la orden de confección (mismo criterio que Producción).
 const TIENDA_COLORS = { MANDARINA: '#FF6B00', INDSTORE: '#E91E8C', YAW: '#6C3FC5' }
@@ -98,6 +99,8 @@ function MultiSelect({ icon, opciones, sel, onChange, resumen }) {
     document.addEventListener('click', h)
     return () => document.removeEventListener('click', h)
   }, [])
+  // Escape cierra el desplegable, como cualquier menú del sistema.
+  useTeclaEscape(open, () => setOpen(false))
   function toggle(val) {
     const s = new Set(sel)
     s.has(val) ? s.delete(val) : s.add(val)
@@ -105,9 +108,10 @@ function MultiSelect({ icon, opciones, sel, onChange, resumen }) {
   }
   return (
     <div className="relative" ref={ref}>
-      <button type="button" onClick={() => setOpen(o => !o)}
-        className="bg-gray-800 border border-gray-700 text-gray-300 rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer hover:border-gray-600 transition-all flex items-center gap-1.5 whitespace-nowrap">
-        <span>{icon}</span><span>{resumen}</span><span className="opacity-60 text-xs">▾</span>
+      {/* outline-none sin reemplazo escondía el foco: va el anillo. aria-expanded dice si está abierto. */}
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+        className="bg-gray-800 border border-gray-700 text-gray-300 rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus-visible:ring-2 focus-visible:ring-mandarina-500/60 cursor-pointer hover:border-gray-600 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+        <span aria-hidden="true">{icon}</span><span>{resumen}</span><span className="opacity-60 text-xs" aria-hidden="true">▾</span>
       </button>
       {open && (
         <div className="absolute top-[calc(100%+6px)] right-0 z-40 min-w-[210px] bg-gray-900 border border-gray-700 rounded-xl p-1.5 shadow-2xl">
@@ -188,6 +192,11 @@ export default function CalendarioPage() {
   const [pdfPedido, setPdfPedido] = useState(null)   // pedido montado off-screen para descargar
   const [generandoPdf, setGenerandoPdf] = useState(null)
   const [cargandoPreview, setCargandoPreview] = useState(null)
+  // Escape cierra lo que esté ENCIMA: primero la hoja de producción, luego el día.
+  useTeclaEscape(!!(previewPedido || selDia), () => {
+    if (previewPedido) setPreviewPedido(null)
+    else setSelDia(null)
+  })
 
   /**
    * Abre la hoja de confección de un pedido.
@@ -435,13 +444,16 @@ export default function CalendarioPage() {
   const pedidosDia = selDia ? (porDia[selDia] || []) : []
 
   return (
-    <div className="flex flex-col h-screen md:h-auto md:min-h-screen">
+    <div className="flex flex-col h-dvh md:h-auto md:min-h-screen">
       {/* Cabecera */}
       <div className="sticky top-0 z-20 bg-gray-950 border-b border-gray-800 px-4 pt-4 pb-3">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
             <div className="flex items-center gap-3">
-              <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-white p-1">←</button>
+              <button onClick={() => router.push('/dashboard')} aria-label="Volver al inicio"
+                className="text-gray-500 hover:text-white min-w-[40px] min-h-[40px] -ml-2 flex items-center justify-center rounded-lg">
+                <span aria-hidden="true">←</span>
+              </button>
               <div>
                 <h1 className="text-xl font-display font-bold text-white">📅 Calendario de Entregas</h1>
                 <p className="text-xs text-gray-500">
@@ -451,13 +463,13 @@ export default function CalendarioPage() {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1">
-                <button onClick={() => irMes(-1)} className="w-9 h-9 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all text-lg">‹</button>
-                <span className="min-w-[140px] text-center text-sm font-semibold text-white capitalize">{MESES[cur.getMonth()]} {cur.getFullYear()}</span>
-                <button onClick={() => irMes(1)} className="w-9 h-9 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all text-lg">›</button>
+                <button onClick={() => irMes(-1)} aria-label="Mes anterior" className="w-10 h-10 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-lg"><span aria-hidden="true">‹</span></button>
+                <span className="min-w-[140px] text-center text-sm font-semibold text-white capitalize" aria-live="polite">{MESES[cur.getMonth()]} {cur.getFullYear()}</span>
+                <button onClick={() => irMes(1)} aria-label="Mes siguiente" className="w-10 h-10 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-lg"><span aria-hidden="true">›</span></button>
               </div>
-              <button onClick={irHoy} className="text-sm px-3 py-2.5 min-h-[44px] rounded-xl border border-gray-700 text-mandarina-400 hover:bg-gray-800 transition-all">Hoy</button>
-              <button onClick={loadPedidos} disabled={loading} className="btn-secondary text-xs px-3 py-2.5 min-h-[44px] flex items-center gap-1.5">
-                {loading ? <span className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" /> : '🔄'}
+              <button onClick={irHoy} className="text-sm px-3 py-2.5 min-h-[44px] rounded-xl border border-gray-700 text-mandarina-400 hover:bg-gray-800 transition-colors">Hoy</button>
+              <button onClick={loadPedidos} disabled={loading} aria-label="Actualizar" className="btn-secondary text-xs px-3 py-2.5 min-h-[44px] flex items-center gap-1.5">
+                {loading ? <span className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" /> : <span aria-hidden="true">🔄</span>}
                 <span className="hidden sm:inline">Actualizar</span>
               </button>
             </div>
@@ -465,8 +477,9 @@ export default function CalendarioPage() {
 
           {/* Filtros */}
           <div className="flex items-center gap-2 flex-wrap">
-            <select value={filtroTienda} onChange={e => setFiltroTienda(e.target.value)}
-              className={`bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none cursor-pointer transition-all
+            {/* La primera opción hace de etiqueta: aria-label para que el select tenga nombre. */}
+            <select value={filtroTienda} onChange={e => setFiltroTienda(e.target.value)} aria-label="Tienda"
+              className={`bg-gray-800 border rounded-xl px-3 py-2.5 min-h-[44px] text-sm outline-none focus:ring-2 focus:ring-mandarina-500/60 cursor-pointer transition-colors
                 ${filtroTienda !== 'TODAS' ? 'border-mandarina-500 text-mandarina-400' : 'border-gray-700 text-gray-300'}`}>
               <option value="TODAS">🏬 Todas las tiendas</option>
               {/* Solo las tiendas que el usuario puede ver: a un vendedor de YAW
@@ -483,7 +496,7 @@ export default function CalendarioPage() {
               opciones={AREAS_BASE.map(a => ({ value: a, label: AREA_META[a].label, icon: AREA_META[a].icon }))} />
 
             <button onClick={imprimirPendientes}
-              className="text-sm px-3 py-2.5 min-h-[44px] rounded-xl border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-all flex items-center gap-1.5 whitespace-nowrap">
+              className="text-sm px-3 py-2.5 min-h-[44px] rounded-xl border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors flex items-center gap-1.5 whitespace-nowrap">
               🖨️ <span className="hidden sm:inline">Imprimir pendientes</span><span className="sm:hidden">PDF</span>
             </button>
           </div>
@@ -511,8 +524,9 @@ export default function CalendarioPage() {
         <div className="max-w-6xl mx-auto px-4 py-4">
           <AvisoFiltros visible={avisoFiltro} onLimpiar={limpiarFiltros} onOcultar={ocultarAviso} />
           {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" />
+            <div className="flex justify-center py-16" role="status">
+              <div className="w-8 h-8 border-2 border-mandarina-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+              <span className="sr-only">Cargando…</span>
             </div>
           ) : (
             <>
@@ -541,7 +555,8 @@ export default function CalendarioPage() {
                       const esWE = c.dow === 0 || c.dow === 6
                       return (
                         <button key={idx} onClick={() => setSelDia(c.iso)}
-                          className={`min-h-[118px] rounded-xl border p-1.5 text-left flex flex-col gap-1 transition-all
+                          aria-label={`${fmtLargo(c.iso)}: ${peds.length ? `${peds.length} entrega(s)` : 'sin entregas'}`}
+                          className={`min-h-[118px] rounded-xl border p-1.5 text-left flex flex-col gap-1 transition-colors
                             ${esHoy ? 'border-mandarina-500/50 ring-1 ring-mandarina-500/40' : 'border-gray-800'}
                             ${esWE ? 'bg-gray-900/70' : 'bg-gray-900'} hover:border-gray-600
                             ${selDia === c.iso ? 'ring-1 ring-mandarina-500' : ''}`}>
@@ -581,17 +596,22 @@ export default function CalendarioPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
           onClick={() => setSelDia(null)}>
           <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
+            role="dialog" aria-modal="true" aria-labelledby="titulo-dia-calendario"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
               <div>
-                <div className="text-sm font-bold text-white capitalize">{fmtLargo(selDia)}</div>
+                <h2 id="titulo-dia-calendario" className="text-sm font-bold text-white capitalize">{fmtLargo(selDia)}</h2>
                 <div className="text-xs text-gray-500">
                   {pedidosDia.length ? `${pedidosDia.length} pedido(s) para entregar` : 'Sin entregas'}
                 </div>
               </div>
-              <button onClick={() => setSelDia(null)} className="text-gray-500 hover:text-white text-2xl leading-none px-1">✕</button>
+              <button onClick={() => setSelDia(null)} aria-label="Cerrar"
+                className="text-gray-500 hover:text-white text-2xl leading-none min-w-[40px] min-h-[40px] -mr-2 flex items-center justify-center rounded-lg">
+                <span aria-hidden="true">✕</span>
+              </button>
             </div>
-            <div className="p-2 overflow-y-auto">
+            {/* overscroll-contain: al llegar al final de la lista no arrastra el calendario de atrás */}
+            <div className="p-2 overflow-y-auto overscroll-contain">
               {pedidosDia.length === 0 ? (
                 <div className="p-8 text-center text-gray-600 text-sm">📭 No hay pedidos con entrega este día.</div>
               ) : pedidosDia.map(p => {
@@ -602,7 +622,7 @@ export default function CalendarioPage() {
                   <div key={p.PEDIDO_ID}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-xl m-1 ${ESTADO_META[k].chip}`}
                     style={{ borderLeft: `3px solid ${ESTADO_META[k].hex}` }}>
-                    <Link href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="flex-1 min-w-0 hover:brightness-125 transition-all">
+                    <Link href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="flex-1 min-w-0 hover:brightness-125 transition-[filter]">
                       <div className="text-sm font-bold text-white">
                         {TIENDA_META[p.TIENDA_ID]?.emoji} {p.PEDIDO_ID} <span className="text-mandarina-400 font-black">×{prendas}</span>
                       </div>
@@ -619,7 +639,10 @@ export default function CalendarioPage() {
                       className="flex-shrink-0 text-xs font-bold px-2.5 py-2 rounded-lg bg-gray-800 border border-gray-700 text-mandarina-400 hover:bg-gray-700">
                       👁️ Ver
                     </button>
-                    <Link href={`/dashboard/pedido/${p.PEDIDO_ID}`} className="text-gray-600 text-lg flex-shrink-0 hover:text-white">›</Link>
+                    <Link href={`/dashboard/pedido/${p.PEDIDO_ID}`} aria-label={`Abrir pedido ${p.PEDIDO_ID}`}
+                      className="text-gray-600 text-lg flex-shrink-0 hover:text-white min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg">
+                      <span aria-hidden="true">›</span>
+                    </Link>
                   </div>
                 )
               })}
@@ -632,11 +655,11 @@ export default function CalendarioPage() {
           Muestra la orden escalada para que se vea en cualquier tamaño; el botón
           descarga genera el PDF real desde la zona oculta. */}
       {previewPedido && (
-        <div className="fixed inset-0 bg-black/90 z-50 overflow-auto p-4"
+        <div className="fixed inset-0 bg-black/90 z-50 overflow-auto overscroll-contain p-4"
           onClick={e => e.target === e.currentTarget && setPreviewPedido(null)}>
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto" role="dialog" aria-modal="true" aria-labelledby="titulo-hoja-calendario">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-semibold">
+              <h3 id="titulo-hoja-calendario" className="text-white font-semibold">
                 {TIENDA_META[previewPedido.TIENDA_ID]?.emoji} {previewPedido.PEDIDO_ID}
                 <span className="text-gray-500 text-sm font-normal ml-2">Orden de producción</span>
               </h3>
@@ -644,9 +667,9 @@ export default function CalendarioPage() {
                 <button onClick={() => descargarPdfConfeccion(previewPedido)}
                   disabled={generandoPdf === previewPedido.PEDIDO_ID}
                   className="btn-primary text-sm px-4 py-2 disabled:opacity-50">
-                  {generandoPdf === previewPedido.PEDIDO_ID ? '⏳...' : '⬇️ Descargar PDF'}
+                  {generandoPdf === previewPedido.PEDIDO_ID ? '⏳…' : '⬇️ Descargar PDF'}
                 </button>
-                <button onClick={() => setPreviewPedido(null)} className="btn-secondary text-sm px-4 py-2">✕</button>
+                <button onClick={() => setPreviewPedido(null)} aria-label="Cerrar vista previa" className="btn-secondary text-sm px-4 py-2"><span aria-hidden="true">✕</span></button>
               </div>
             </div>
             <div className="bg-white rounded-xl overflow-hidden">
