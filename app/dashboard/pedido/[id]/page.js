@@ -14,6 +14,7 @@ import { capturarHojasComoJpg, pesoKbDataUrl, dejarPintar } from '@/lib/generarP
 import { enviarHojaPedido, avisarHojaFallida } from '@/lib/aviso-padre'
 import { botonFactura } from '@/lib/facturas-visibilidad'
 import { MOTIVOS, etiquetaMotivo } from '@/lib/motivos-factura'
+import { pideConfirmacion } from '@/lib/estados-finales'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -244,6 +245,11 @@ export default function PedidoDetailPage() {
   }, [autoEnviar, loading, pedido])
 
   const [enviandoFactura, setEnviandoFactura] = useState(false)
+  // Cambio de estado del pedido (combo de ADMIN). Los estados finales se
+  // confirman en línea, y si el servidor lo rechaza se dice por qué.
+  const [estadoPorConfirmar, setEstadoPorConfirmar] = useState(null)
+  const [guardandoEstado, setGuardandoEstado] = useState(false)
+  const [estadoAviso, setEstadoAviso] = useState(null)   // { tipo: 'ok'|'error', texto }
   const [facturaEnviada, setFacturaEnviada]   = useState(false)
   const [facturaError,   setFacturaError]     = useState('')
 
@@ -314,12 +320,36 @@ export default function PedidoDetailPage() {
     }
   }
 
+  function elegirEstado(nuevoEstado) {
+    setEstadoAviso(null)
+    if (pideConfirmacion(pedido.ESTADO_PEDIDO, nuevoEstado)) { setEstadoPorConfirmar(nuevoEstado); return }
+    updateEstado(nuevoEstado)
+  }
+
+  // Antes: no miraba la respuesta ni mandaba quién lo hizo. Un 409 («falta
+  // confirmar la transferencia») se tragaba en silencio y la bitácora decía SISTEMA.
   async function updateEstado(nuevoEstado) {
-    await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ESTADO_PEDIDO: nuevoEstado }),
-    })
-    loadPedido()
+    setEstadoPorConfirmar(null)
+    if (!nuevoEstado || nuevoEstado === pedido.ESTADO_PEDIDO) return
+    setGuardandoEstado(true); setEstadoAviso(null)
+    try {
+      const res = await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ESTADO_PEDIDO: nuevoEstado, _usuarioId: user?.id }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setEstadoAviso({ tipo: 'error', texto: `No se cambió el estado. ${d.error || `Error ${res.status}`}` })
+      } else {
+        setEstadoAviso({ tipo: 'ok', texto: `✓ Estado: ${ESTADO_LABELS_LARGO[nuevoEstado] || nuevoEstado}` })
+        setTimeout(() => setEstadoAviso(a => (a?.tipo === 'ok' ? null : a)), 3000)
+      }
+    } catch {
+      setEstadoAviso({ tipo: 'error', texto: 'No se cambió el estado: sin conexión. Intenta otra vez.' })
+    } finally {
+      setGuardandoEstado(false)
+      loadPedido()
+    }
   }
 
   if (!loading && noEncontrado) return (
@@ -508,10 +538,32 @@ export default function PedidoDetailPage() {
             </div>
           </div>
           {user?.rol === 'ADMIN' && !fromHistorial ? (
-            <select className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-3 py-2.5"
-              value={pedido.ESTADO_PEDIDO} onChange={e => updateEstado(e.target.value)}>
-              {Object.entries(ESTADO_LABELS_LARGO).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
+            <div className="space-y-2">
+              <select className={`w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-3 py-2.5 ${guardandoEstado ? 'opacity-50' : ''}`}
+                aria-label="Estado del pedido" disabled={guardandoEstado || !!estadoPorConfirmar}
+                value={pedido.ESTADO_PEDIDO} onChange={e => elegirEstado(e.target.value)}>
+                {Object.entries(ESTADO_LABELS_LARGO).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+              {estadoPorConfirmar && (
+                <div role="group" aria-label="Confirmar cambio de estado"
+                  className="flex items-center gap-2 flex-wrap rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                  <span className="text-sm text-amber-200 flex-1 min-w-[180px]">
+                    ¿Pasar {pedido.PEDIDO_ID} a <b>{ESTADO_LABELS_LARGO[estadoPorConfirmar] || estadoPorConfirmar}</b>? Sale de las bandejas del taller.
+                  </span>
+                  <button onClick={() => updateEstado(estadoPorConfirmar)}
+                    className="px-4 min-h-[40px] rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-500">Sí, cambiar</button>
+                  <button onClick={() => setEstadoPorConfirmar(null)} autoFocus
+                    className="px-4 min-h-[40px] rounded-lg text-sm font-semibold bg-gray-700 text-white hover:bg-gray-600">No</button>
+                </div>
+              )}
+              {estadoAviso && (
+                <div role={estadoAviso.tipo === 'error' ? 'alert' : 'status'}
+                  className={`text-sm rounded-xl px-3 py-2 ${estadoAviso.tipo === 'error'
+                    ? 'bg-red-500/10 border border-red-500/30 text-red-300' : 'text-green-400'}`}>
+                  {estadoAviso.tipo === 'error' ? '⚠️ ' : ''}{estadoAviso.texto}
+                </div>
+              )}
+            </div>
           ) : (
             <div className={`flex items-center gap-3 border rounded-xl px-4 py-2.5 ${banner.bg}`}>
               <span className="text-2xl">{banner.icon}</span>

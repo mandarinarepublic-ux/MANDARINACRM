@@ -12,6 +12,10 @@ import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
 import BarraFiltros from '@/components/BarraFiltros'
 import { ESTADO_LABELS } from '@/lib/labels'
+import { showToast } from '@/components/ToastHost'
+import { pideConfirmacion, visibleEnTodos, MS_DESHACER_LISTO } from '@/lib/estados-finales'
+
+const AVISO_NO_GUARDO = '⚠️ No se guardó. Revisa la conexión e intenta otra vez.'
 
 const SUBESTADO_CONFIG = {
   SOLICITADO:         { label: '⏳ Solicitado',          color: 'bg-yellow-500' },
@@ -68,9 +72,18 @@ function ComboEstadoPedido({ pedido, user, onCambio }) {
   const [estado, setEstado] = useState(pedido.ESTADO_PEDIDO || 'EN_FABRICA')
   const [guardando, setGuardando] = useState(false)
   const [aviso, setAviso] = useState('')
+  // Completado / Entregado / Cancelado sacan el pedido de la lista: se piden con
+  // un "¿Seguro?" en línea, nunca de un solo toque.
+  const [porConfirmar, setPorConfirmar] = useState(null)
   if (user?.rol !== 'ADMIN') return null
 
+  function elegir(nuevo) {
+    if (pideConfirmacion(estado, nuevo)) { setPorConfirmar(nuevo); return }
+    cambiar(nuevo)
+  }
+
   async function cambiar(nuevo) {
+    setPorConfirmar(null)
     if (!nuevo || nuevo === estado) return
     const antes = estado
     setEstado(nuevo); setGuardando(true); setAviso('')
@@ -79,23 +92,39 @@ function ComboEstadoPedido({ pedido, user, onCambio }) {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ESTADO_PEDIDO: nuevo, _usuarioId: user?.id }),
       })
-      if (!res.ok) throw new Error(`Error ${res.status}`)
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || `Error ${res.status}`)
+      }
       setAviso('✓')
       onCambio(nuevo)
     } catch (e) {
       setEstado(antes)
       setAviso('⚠️ No se guardó')
+      showToast(`⚠️ ${pedido.PEDIDO_ID}: no se cambió el estado. ${e.message || ''}`.trim(), 'error')
     } finally {
       setGuardando(false)
       setTimeout(() => setAviso(''), 3000)
     }
   }
 
+  if (porConfirmar) return (
+    <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end" role="group"
+      aria-label={`Confirmar cambio de estado de ${pedido.PEDIDO_ID}`}
+      onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      <span className="text-xs text-amber-300">¿Pasar a {ESTADO_LABELS[porConfirmar] || porConfirmar}? Sale de la lista.</span>
+      <button onClick={() => cambiar(porConfirmar)}
+        className="px-3 min-h-[36px] rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500">Sí, cambiar</button>
+      <button onClick={() => setPorConfirmar(null)} autoFocus
+        className="px-3 min-h-[36px] rounded-lg text-xs font-semibold bg-gray-700 text-white hover:bg-gray-600">No</button>
+    </div>
+  )
+
   return (
     <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
       {aviso && <span className={`text-[11px] ${aviso.startsWith('⚠️') ? 'text-red-400' : 'text-green-400'}`}>{aviso}</span>}
-      <select value={estado} disabled={guardando} onChange={e => cambiar(e.target.value)}
-        title="Estado del pedido"
+      <select value={estado} disabled={guardando} onChange={e => elegir(e.target.value)}
+        title="Estado del pedido" aria-label={`Estado del pedido ${pedido.PEDIDO_ID}`}
         className={`bg-gray-800 border rounded-xl px-2 py-1.5 text-xs outline-none cursor-pointer max-w-[150px]
           ${guardando ? 'opacity-50 border-gray-700 text-gray-500' : 'border-gray-600 text-gray-200 hover:border-white'}`}>
         {Object.entries(ESTADO_LABELS).filter(([k]) => k !== 'PENDIENTE_FABRICA' || k === estado)
@@ -130,9 +159,15 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ SUBESTADO_CORTE: s, _usuarioId: userId }),
       })
-      if (!res.ok) setSubestadoCorte(prev)
-    } catch { setSubestadoCorte(prev) }
+      if (!res.ok) { setSubestadoCorte(prev); showToast(AVISO_NO_GUARDO, 'error') }
+    } catch { setSubestadoCorte(prev); showToast(AVISO_NO_GUARDO, 'error') }
   }
+
+  // ✅ Listo hace que la prenda salga de «Todos». Durante unos segundos se queda
+  // a la vista con «Deshacer», por si el toque fue sin querer.
+  const [deshacer, setDeshacer] = useState(null)   // { s, areaRol } a restaurar
+  const timerDeshacer = useRef(null)
+  useEffect(() => () => clearTimeout(timerDeshacer.current), [])
 
   const fotos = [
     { key: 'FOTO_PECHO_URL', label: 'Pecho' },
@@ -150,8 +185,11 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
   const [notaError, setNotaError] = useState('')
 
   async function handleSubestado(s, areaRol) {
+    const anterior = areaRol ? (estadosLocales[areaRol] || 'SOLICITADO') : (estadosLocales._s || 'SOLICITADO')
+    if (s === anterior) return
     const body = { SUBESTADO: s, _usuarioId: userId }
     if (areaRol) body.AREA_ROL = areaRol
+    clearTimeout(timerDeshacer.current); setDeshacer(null)
     if (areaRol) {
       setEstadosLocales(prev => ({...prev, [areaRol]: s}))
     } else {
@@ -164,12 +202,18 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
       })
       if (!res.ok) {
         setEstadosLocales(esMulti ? {...parsed.estados} : {_s: parsed?.estado||'SOLICITADO'})
+        showToast(AVISO_NO_GUARDO, 'error')
       } else {
         const nuevoGlobal = areaRol ? globalP({...estadosLocales, [areaRol]: s}) : s
         onSubestadoChange?.(item.ITEM_ID, nuevoGlobal)
+        if (s === 'LISTO') {
+          setDeshacer({ s: anterior, areaRol })
+          timerDeshacer.current = setTimeout(() => setDeshacer(null), MS_DESHACER_LISTO)
+        }
       }
     } catch {
       setEstadosLocales(esMulti ? {...parsed.estados} : {_s: parsed?.estado||'SOLICITADO'})
+      showToast(AVISO_NO_GUARDO, 'error')
     }
   }
 
@@ -198,6 +242,18 @@ function ItemCard({ item, userId, user, onSubestadoChange }) {
           {SUBESTADO_CONFIG[subestadoActual]?.label || subestadoActual}
         </span>
       </div>
+
+      {deshacer && (
+        <div role="status" className="flex items-center justify-between gap-3 mb-4 rounded-xl border border-green-500/40 bg-green-500/10 px-3 py-2">
+          <span className="text-sm text-green-300 font-medium">
+            ✅ Marcado Listo{deshacer.areaRol ? ` en ${deshacer.areaRol}` : ''}
+          </span>
+          <button onClick={() => handleSubestado(deshacer.s, deshacer.areaRol)}
+            className="px-4 min-h-[40px] rounded-lg text-sm font-semibold bg-gray-800 text-white border border-gray-600 hover:border-white">
+            Deshacer
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="w-full sm:w-40 flex-shrink-0">
@@ -446,7 +502,21 @@ export default function ProduccionPage() {
     return () => document.removeEventListener('visibilitychange', alVolver)
   }, [loadItems])
 
+  // Prendas recién marcadas ✅ Listo: siguen a la vista unos segundos (con su
+  // «Deshacer» en la tarjeta) aunque el filtro «Todos» esconda lo LISTO.
+  const [recienListos, setRecienListos] = useState(() => new Set())
   function handleSubestadoChange(itemId, nuevoSubestado) {
+    setRecienListos(prev => {
+      const n = new Set(prev)
+      if (nuevoSubestado === 'LISTO') n.add(itemId); else n.delete(itemId)
+      return n
+    })
+    if (nuevoSubestado === 'LISTO') {
+      setTimeout(() => setRecienListos(prev => {
+        if (!prev.has(itemId)) return prev
+        const n = new Set(prev); n.delete(itemId); return n
+      }), MS_DESHACER_LISTO)
+    }
     setPedidos(prev => prev.map(p => ({
       ...p,
       itemsFiltrados: p.itemsFiltrados.map(item =>
@@ -487,7 +557,7 @@ export default function ProduccionPage() {
           }
           return item.SUBESTADO
         })()
-        if (filtroSubestado === 'TODOS') return busqueda ? true : estadoGlobal !== 'LISTO'
+        if (filtroSubestado === 'TODOS') return visibleEnTodos(estadoGlobal, { busqueda, recienListo: recienListos.has(item.ITEM_ID) })
         return estadoGlobal === filtroSubestado
       })
     }))
@@ -729,8 +799,8 @@ export default function ProduccionPage() {
                                 e.stopPropagation()
                                 // /api/pedidos/{id} trae UN pedido: sus prendas no
                                 // pueden truncarse.
-                                const r = await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`)
-                                if (!r.ok) return
+                                const r = await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`).catch(() => null)
+                                if (!r?.ok) { showToast(`⚠️ No se pudieron cargar las prendas de ${pedido.PEDIDO_ID}. Intenta otra vez.`, 'error'); return }
                                 const d = await r.json()
                                 const todas = d.pedido?.items || []
                                 setPedidos(prev => prev.map(x => x.PEDIDO_ID === pedido.PEDIDO_ID

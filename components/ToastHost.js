@@ -22,7 +22,8 @@ export default function ToastHost() {
       const id = ++idRef.current
       const { mensaje, tipo } = e.detail || {}
       setToasts(prev => [...prev.slice(-3), { id, mensaje, tipo }])
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 2200)
+      // Un error se lee con calma: 5 s en vez de 2,2 s.
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), tipo === 'error' ? 5000 : 2200)
     }
     window.addEventListener('mp:toast', onToast)
 
@@ -67,11 +68,11 @@ export default function ToastHost() {
   }
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex flex-col items-center gap-2 pointer-events-none mb-safe">
+    <div role="status" aria-live="polite" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex flex-col items-center gap-2 pointer-events-none mb-safe">
       {toasts.map(t => (
         <div
           key={t.id}
-          className={`pointer-events-auto px-4 py-2.5 rounded-xl border bg-gray-900 text-sm font-medium shadow-2xl
+          className={`px-4 py-2.5 rounded-xl border bg-gray-900 text-sm font-medium shadow-2xl
             animate-in fade-in slide-in-from-bottom-2 duration-200 ${estilos[t.tipo] || estilos.info}`}
         >
           {t.mensaje}

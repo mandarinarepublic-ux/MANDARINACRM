@@ -747,10 +747,11 @@ function NuevoPedidoContenido() {
           <div className="flex items-center gap-1 mb-2">
             {steps.map((s, i) => (
               <div key={s} className="flex items-center gap-1 flex-1">
-                <button onClick={() => goToStep(i + 1)}
+                <button onClick={() => goToStep(canGoToStep(i + 1) ? i + 1 : Math.min(i + 1, step + 1))}
+                  aria-label={`Paso ${i + 1}: ${s}`} aria-current={step === i + 1 ? 'step' : undefined}
                   className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all flex-shrink-0
                     ${step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'text-white' : 'bg-gray-800 text-gray-500'}
-                    ${canGoToStep(i + 1) ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
+                    ${canGoToStep(i + 1) ? '' : 'opacity-40'} cursor-pointer`}
                   style={step === i + 1 ? { backgroundColor: tiendaColor } : {}}>
                   {step > i + 1 ? '✓' : i + 1}
                 </button>
@@ -813,7 +814,7 @@ function NuevoPedidoContenido() {
           )}
 
           {error && (
-            <div ref={errorRef} className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4 scroll-mt-20">
+            <div ref={errorRef} role="alert" className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-4 scroll-mt-20">
               {error}
             </div>
           )}
@@ -1213,11 +1214,12 @@ function NuevoPedidoContenido() {
           <button onClick={() => goToStep(step - 1)} className="btn-secondary flex-1">← Atrás</button>
         ) : null}
         {step < 4 ? (
-          <button onClick={() => goToStep(step + 1)} disabled={!canGoToStep(step + 1)}
+          // Siempre se puede tocar. Antes se apagaba en gris sin decir por qué y
+          // los mensajes de goToStep («La ciudad de entrega es obligatoria»…)
+          // nunca llegaban a verse. Ahora, si falta algo, lo dice y lleva ahí.
+          <button onClick={() => goToStep(step + 1)}
             className="btn-primary flex-1"
-            style={canGoToStep(step + 1)
-              ? { backgroundColor: tiendaColor }
-              : { backgroundColor: '#374151', cursor: 'not-allowed', opacity: 0.5 }}>
+            style={{ backgroundColor: tiendaColor }}>
             Siguiente →
           </button>
         ) : (

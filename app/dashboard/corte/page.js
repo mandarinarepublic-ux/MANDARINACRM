@@ -9,6 +9,7 @@ import { imagenAncho } from '@/lib/imagenes'
 import { estadoBandeja } from '@/lib/bandeja-estado'
 import { comparadorCorte, ORDENES, ORDEN_POR_DEFECTO } from '@/lib/orden-corte'
 import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
+import { showToast } from '@/components/ToastHost'
 import AvisoFiltros from '@/components/AvisoFiltros'
 import BarraFiltros from '@/components/BarraFiltros'
 
@@ -127,9 +128,9 @@ function CorteCard({ item, userId, onCorteChange }) {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ SUBESTADO_CORTE: s, _usuarioId: userId }),
       })
-      if (!res.ok) setSubestadoCorte(prev)
+      if (!res.ok) { setSubestadoCorte(prev); showToast('⚠️ No se guardó el corte. Intenta otra vez.', 'error') }
       else onCorteChange?.(item.ITEM_ID, s)
-    } catch { setSubestadoCorte(prev) }
+    } catch { setSubestadoCorte(prev); showToast('⚠️ No se guardó el corte: sin conexión.', 'error') }
   }
 
   return (
@@ -624,8 +625,8 @@ export default function CortePage() {
                                 e.stopPropagation()
                                 // /api/pedidos/{id} trae UN pedido: sus prendas no
                                 // pueden truncarse.
-                                const r = await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`)
-                                if (!r.ok) return
+                                const r = await fetch(`/api/pedidos/${pedido.PEDIDO_ID}`).catch(() => null)
+                                if (!r?.ok) { showToast(`⚠️ No se pudieron cargar las prendas de ${pedido.PEDIDO_ID}. Intenta otra vez.`, 'error'); return }
                                 const d = await r.json()
                                 const todas = (d.pedido?.items || [])
                                   .filter(i => i.SUBESTADO !== 'ELIMINADO' && i.SUBESTADO !== 'ENTREGADO_TIENDA')
