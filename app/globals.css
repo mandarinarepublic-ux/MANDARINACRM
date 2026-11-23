@@ -52,6 +52,13 @@
   :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea):focus-visible {
     box-shadow: 0 0 0 1px #f97316;
   }
+  /* Campo o botón metido DENTRO de una caja que ya se enciende sola
+     (focus-within, p. ej. SelectorTipoPrenda): sin esto salía un borde
+     naranja dentro del otro. */
+  .sin-contorno:focus-visible {
+    outline: none !important;
+    box-shadow: none;
+  }
 
   /* Alto de la cabecera fija del celular (app/dashboard/layout.js). Con la PWA
      en viewport-fit=cover + black-translucent, la página empieza DEBAJO de la

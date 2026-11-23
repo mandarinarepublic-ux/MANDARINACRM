@@ -11,6 +11,7 @@ import { formatFechaDia } from '@/lib/parseFecha'
 import { emailPareceValido, limpiarEmail } from '@/lib/email-cliente'
 import { direccionSinCiudad } from '@/lib/direccionPedido'
 import { AREAS, TALLAS, TALLAS_ADULTO, TALLAS_NINO, opcionesConValor, valorFueraDeLista } from '@/lib/catalogo-pedido'
+import InputDinero from '@/components/InputDinero'
 
 // Áreas y tallas: las MISMAS del pedido nuevo (lib/catalogo-pedido.js). Esta
 // pantalla tenía su propia lista, sin `PREMIUM - SIN DISEÑO`: al abrir una
@@ -74,7 +75,7 @@ function ItemEditor({ item, onSave, onDirty }) {
           </select>
         </div>
         <div><label className="label" htmlFor={idCampo('cantidad')}>Cantidad</label><input id={idCampo('cantidad')} type="number" min="1" inputMode="numeric" className="input text-sm" value={data.CANTIDAD} onChange={e=>setData(d=>({...d,CANTIDAD:e.target.value}))} /></div>
-        <div><label className="label" htmlFor={idCampo('precio')}>Precio $</label><input id={idCampo('precio')} type="number" min="0" step="0.5" inputMode="decimal" className="input text-sm" value={data.PRECIO_UNIT} onChange={e=>setData(d=>({...d,PRECIO_UNIT:e.target.value}))} /></div>
+        <div><label className="label" htmlFor={idCampo('precio')}>Precio $</label><InputDinero id={idCampo('precio')} className="input text-sm" value={data.PRECIO_UNIT} onChange={e=>setData(d=>({...d,PRECIO_UNIT:e.target.value}))} /></div>
         <div className="col-span-2"><label className="label" htmlFor={idCampo('area')}>Área</label><select id={idCampo('area')} className="input text-sm" value={data.AREA} onChange={e=>setData(d=>({...d,AREA:e.target.value}))}>{opcionesConValor(AREAS, data.AREA).map(a=><option key={a} value={a}>{a}</option>)}</select></div>
         <div className="col-span-2"><label className="label" htmlFor={idCampo('detalle')}>Detalle / instrucciones</label><textarea id={idCampo('detalle')} className="input resize-none text-sm" rows={2} value={data.DETALLE_PERSONALIZADO} onChange={e=>setData(d=>({...d,DETALLE_PERSONALIZADO:e.target.value}))} /></div>
       </div>
@@ -126,6 +127,7 @@ export default function EditarPedidoPage() {
   // FIX #10: estados separados para evitar stale closure
   const [ciudadEdit, setCiudadEdit] = useState('')
   const [direccionEdit, setDireccionEdit] = useState('')
+  const [nombreEdit, setNombreEdit] = useState('')
   const [emailEdit, setEmailEdit] = useState('')
   const [celularEdit, setCelularEdit] = useState('')
   const [cedulaEdit, setCedulaEdit] = useState('')
@@ -191,9 +193,11 @@ export default function EditarPedidoPage() {
       originalRef.current = {
         direccion: direccionSinCiudad(p.DIRECCION_TEXTO || p.DIRECCION_PEDIDO || ''),
         ciudad: p.CIUDAD_PEDIDO || c?.CIUDAD || '',
+        nombre: c?.NOMBRE || '',
         email: c?.EMAIL || '', celular: c?.CELULAR || '', cedula: c ? String(c.CEDULA || '') : '',
       }
       if (c) {
+        setNombreEdit(c.NOMBRE||'')
         setCiudadEdit(prev => p.CIUDAD_PEDIDO || prev || c.CIUDAD || ''); setEmailEdit(c.EMAIL||''); setCelularEdit(c.CELULAR||'')
         const ced = String(c.CEDULA||''); setCedulaEdit(ced); setTipoIdEdit(inferirTipo(ced)); setCedulaErrorEdit('')
       }
@@ -206,7 +210,7 @@ export default function EditarPedidoPage() {
 
   const o = originalRef.current
   const direccionSucia = editingDireccion && !!o && (
-    direccionEdit !== o.direccion || ciudadEdit !== o.ciudad || emailEdit !== o.email ||
+    nombreEdit !== o.nombre || direccionEdit !== o.direccion || ciudadEdit !== o.ciudad || emailEdit !== o.email ||
     String(celularEdit) !== String(o.celular) || cedulaEdit !== o.cedula
   )
   const pagoSucio = showPago && !!String(nuevoPago.monto || '').trim()
@@ -231,19 +235,22 @@ export default function EditarPedidoPage() {
     // Validar la identificación según el tipo antes de guardar
     const errId = validarIdentificacion(tipoIdEdit, cedulaEdit)
     if (errId) { setCedulaErrorEdit(errId); setError(`Identificación: ${errId}`); return }
+    if (cliente && !nombreEdit.trim()) { setError('El nombre del cliente es obligatorio'); return }
     setSaving(true); setError(''); setSuccess('')
     try {
-      await fetch(`/api/pedidos/${params.id}`, {
+      const rp = await fetch(`/api/pedidos/${params.id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ DIRECCION_TEXTO:direccionEdit, CIUDAD_PEDIDO:ciudadEdit.trim(), _usuarioId:user?.id }),
       })
+      if (!rp.ok) throw new Error((await rp.json().catch(()=>({}))).error || 'No se pudo guardar la dirección')
       if (cliente) {
-        await fetch(`/api/clientes/${cliente.CLIENTE_ID}`, {
+        const rc = await fetch(`/api/clientes/${cliente.CLIENTE_ID}`, {
           method:'PATCH', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ NOMBRE:cliente.NOMBRE, CEDULA:String(cedulaEdit||''), CELULAR:celularEdit, EMAIL:emailEdit, CIUDAD:ciudadEdit, DIRECCION:direccionEdit }),
+          body: JSON.stringify({ NOMBRE:nombreEdit.trim(), CEDULA:String(cedulaEdit||''), CELULAR:celularEdit, EMAIL:emailEdit, CIUDAD:ciudadEdit, DIRECCION:direccionEdit }),
         })
+        if (!rc.ok) throw new Error((await rc.json().catch(()=>({}))).error || 'No se pudieron guardar los datos del cliente')
       }
-      setSuccess('Dirección actualizada')
+      setSuccess('Datos del cliente actualizados')
       setEditingDireccion(false)
       loadPedido()
     } catch(e) { setError(e.message) }
@@ -314,15 +321,25 @@ export default function EditarPedidoPage() {
 
           <div className="card p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-white text-sm">📍 Dirección de entrega</h3>
+              <h3 className="font-semibold text-white text-sm">📍 Cliente y entrega</h3>
               <button type="button" onClick={() => setEditingDireccion(e=>!e)} aria-expanded={editingDireccion}
                 className="text-xs text-mandarina-400 hover:underline px-2 -mr-2 min-h-[40px]">
                 {editingDireccion ? '✕ Cancelar' : '✏️ Editar'}
               </button>
             </div>
-            {cliente && <div className="text-xs text-gray-500 mb-2">{cliente.NOMBRE} · {tipoIdMeta(tipoIdEdit).label} {cedulaEdit} · {celularEdit}{emailEdit&&` · ${emailEdit}`}</div>}
+            {cliente && <div className="text-xs text-gray-500 mb-2">{nombreEdit || cliente.NOMBRE} · {tipoIdMeta(tipoIdEdit).label} {cedulaEdit} · {celularEdit}{emailEdit&&` · ${emailEdit}`}</div>}
             {editingDireccion ? (
               <div className="space-y-2 mb-3">
+                {cliente && (
+                  <div>
+                    <label className="label" htmlFor={idCampo('nombre-cliente')}>Nombre del cliente</label>
+                    <input id={idCampo('nombre-cliente')} className={`input text-sm ${!nombreEdit.trim() ? 'border-red-500' : ''}`}
+                      value={nombreEdit} placeholder="María García"
+                      autoComplete="off" autoCapitalize="words"
+                      aria-invalid={!nombreEdit.trim() || undefined}
+                      onChange={e => setNombreEdit(e.target.value)} />
+                  </div>
+                )}
                 {/* Antes los campos solo tenían placeholder: al empezar a
                     escribir desaparecía y no quedaba claro qué era cada cuadro
                     (celular y cédula se confundían). Ahora cada uno tiene su
@@ -463,7 +480,7 @@ export default function EditarPedidoPage() {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <input type="number" step="0.50" min="0" max={montoPendiente} inputMode="decimal" aria-label="Monto del pago"
+                  <InputDinero aria-label="Monto del pago"
                     className="input flex-1" placeholder={`Máx. $${montoPendiente.toFixed(2)}`} value={nuevoPago.monto} onChange={e=>setNuevoPago(p=>({...p,monto:e.target.value}))} />
                   <button type="button" onClick={addPago} disabled={saving||!nuevoPago.monto} className="btn-primary px-4 text-sm">{saving?<span aria-label="Guardando">⏳</span>:'Registrar'}</button>
                 </div>

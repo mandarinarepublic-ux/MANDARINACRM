@@ -16,6 +16,7 @@ import { botonFactura } from '@/lib/facturas-visibilidad'
 import { MOTIVOS, etiquetaMotivo } from '@/lib/motivos-factura'
 import { pideConfirmacion } from '@/lib/estados-finales'
 import { useTeclaEscape } from '@/lib/useTeclaEscape'
+import InputDinero from '@/components/InputDinero'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -839,7 +840,7 @@ export default function PedidoDetailPage() {
                   <label htmlFor="abono-monto" className="block text-xs text-gray-500 mb-2">Monto ($)</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium" aria-hidden="true">$</span>
-                    <input id="abono-monto" type="number" step="0.01" min="0" inputMode="decimal" placeholder="0.00" value={abonoMonto} onChange={e => setAbonoMonto(e.target.value)}
+                    <InputDinero id="abono-monto" placeholder="0.00" value={abonoMonto} onChange={e => setAbonoMonto(e.target.value)}
                       className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-7 pr-4 py-3 text-sm focus:border-mandarina-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-mandarina-500/60" />
                   </div>
                   {montoPendiente > 0.01 && (
@@ -929,7 +930,7 @@ export default function PedidoDetailPage() {
                   <label htmlFor="corregir-monto" className="block text-xs text-gray-500 mb-2">Monto ($)</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium" aria-hidden="true">$</span>
-                    <input id="corregir-monto" type="number" step="0.01" min="0" inputMode="decimal" value={pagoEditando.monto}
+                    <InputDinero id="corregir-monto" value={pagoEditando.monto}
                       onChange={e => setPagoEditando(p => ({ ...p, monto: e.target.value }))}
                       className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-7 pr-4 py-3 text-sm focus:border-mandarina-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-mandarina-500/60" />
                   </div>

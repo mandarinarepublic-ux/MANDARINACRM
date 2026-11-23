@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { imagenAncho } from '@/lib/imagenes'
 import { useTeclaEscape } from '@/lib/useTeclaEscape'
+import InputDinero from '@/components/InputDinero'
 
 // Redimensiona y comprime la foto en el navegador ANTES de subirla.
 // Evita el 413 de Vercel (límite 4.5MB de body) con fotos de celular grandes.
@@ -548,7 +549,7 @@ export default function CatalogoPage() {
                 </div>
                 <div>
                   <label htmlFor="editar-precio" className="text-xs text-gray-400 mb-1 block">Precio $</label>
-                  <input id="editar-precio" inputMode="decimal" className="input" type="number" step="0.01" value={editForm.precio}
+                  <InputDinero id="editar-precio" className="input" value={editForm.precio}
                     onChange={e => setEditForm(f => ({ ...f, precio: e.target.value }))} />
                 </div>
               </div>
@@ -656,7 +657,7 @@ export default function CatalogoPage() {
                 </div>
                 <div>
                   <label htmlFor="agregar-precio" className="text-xs text-gray-400 mb-1 block">Precio $</label>
-                  <input id="agregar-precio" inputMode="decimal" className="input" type="number" step="0.01" placeholder="0.00" value={form.precio}
+                  <InputDinero id="agregar-precio" className="input" placeholder="0.00" value={form.precio}
                     onChange={e => setForm(f => ({ ...f, precio: e.target.value }))} />
                 </div>
               </div>

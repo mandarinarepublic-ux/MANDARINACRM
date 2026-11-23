@@ -1,5 +1,6 @@
 'use client'
 import { calcSubtotalProducto, fmtUSD, IVA_RATE } from '@/lib/cotizacion'
+import InputDinero from '@/components/InputDinero'
 
 // Panel de resumen económico (modo edición): lista de prendas + totales.
 export default function ResumenPanel({ productos, descuento, onDescuento, totales, rango }) {
@@ -35,8 +36,7 @@ export default function ResumenPanel({ productos, descuento, onDescuento, totale
           <span className="text-gray-400">Descuento</span>
           <div className="flex items-center gap-1">
             <span className="text-gray-500">-$</span>
-            <input
-              type="number" min={0} step="0.01" inputMode="decimal"
+            <InputDinero
               aria-label="Descuento en dólares"
               value={descuento}
               onChange={(e) => onDescuento(parseFloat(e.target.value) || 0)}

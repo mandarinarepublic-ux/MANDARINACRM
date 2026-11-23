@@ -183,6 +183,9 @@ function NuevoPedidoContenido() {
   const cajaBorradorRef = useDialogo(!!borradorOfrecido, null)
   const cajaClienteRef = useDialogo(!!clienteExistente, () => setClienteExistente(null))
   const cajaFacturaRef = useDialogo(confirmFactura, () => cancelarFactura())
+  // «Cancelar» del primer paso: con algo escrito pregunta antes de borrarlo.
+  const [confirmCancelar, setConfirmCancelar] = useState(false)
+  const cajaCancelarRef = useDialogo(confirmCancelar, () => setConfirmCancelar(false))
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -437,6 +440,15 @@ function NuevoPedidoContenido() {
     try { if (llave) localStorage.removeItem(llave) } catch {}
   }
 
+  // Cancelar el pedido: se borra el borrador (si no, al volver a entrar
+  // ofrecería recuperarlo) y se sale como con la flecha ←.
+  function cancelarPedido() {
+    creadoRef.current = true // que el guardado automático no lo vuelva a escribir
+    borrarBorrador()
+    setConfirmCancelar(false)
+    volverAtras()
+  }
+
   const montoTotal = items.reduce((s, i) => s + (parseFloat(i.precioUnit || 0) * parseInt(i.cantidad || 1)), 0)
   const montoAbonado = pagos.reduce((s, p) => s + parseFloat(p.monto || 0), 0)
   const tiendaColor = TIENDA_COLORS[tienda] || '#6C3FC5'
@@ -560,7 +572,7 @@ function NuevoPedidoContenido() {
         if (err) {
           setError(err)
           setTimeout(() => pagoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100)
-          setTimeout(() => pagoRef.current?.querySelector('input[type="number"]')?.focus(), 300)
+          setTimeout(() => pagoRef.current?.querySelector('input[inputmode="decimal"]')?.focus(), 300)
           return
         }
       }
@@ -831,6 +843,25 @@ function NuevoPedidoContenido() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-y-contain md:overscroll-y-auto"
         style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}>
         <div className={`${anchoContenido} px-4 pt-4`}>
+          {confirmCancelar && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4"
+              onClick={() => setConfirmCancelar(false)}>
+              <div ref={cajaCancelarRef} role="dialog" aria-modal="true" aria-labelledby={idCampo('cancelar-titulo')}
+                onClick={e => e.stopPropagation()}
+                className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4">
+                <div>
+                  <h3 id={idCampo('cancelar-titulo')} className="text-white font-semibold text-base">¿Cancelar este pedido?</h3>
+                  <p className="text-sm text-gray-400 mt-1">Se borra lo que ya llenaste. No se guarda nada.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" data-autofocus onClick={() => setConfirmCancelar(false)}
+                    className="btn-secondary flex-1 py-3">No, seguir</button>
+                  <button type="button" onClick={cancelarPedido}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-500 transition-colors">Sí, cancelar</button>
+                </div>
+              </div>
+            </div>
+          )}
           {/* ¿Recuperar el pedido que se estaba llenando? */}
           {borradorOfrecido && (
             <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
@@ -1347,7 +1378,11 @@ function NuevoPedidoContenido() {
           <button type="button" onClick={() => goToStep(2)} disabled={loading} className="btn-secondary flex-1">✏️ EDITAR</button>
         ) : step > 1 && !(isYAW && step === 2) ? (
           <button type="button" onClick={() => goToStep(step - 1)} className="btn-secondary flex-1">← Atrás</button>
-        ) : null}
+        ) : (
+          // Primer paso: no hay "Atrás", así que va Cancelar (21-nov, pedido de Rodrigo).
+          <button type="button" onClick={() => conTrabajo ? setConfirmCancelar(true) : cancelarPedido()}
+            className="btn-secondary flex-1">✕ Cancelar</button>
+        )}
         {step < 4 ? (
           // Siempre se puede tocar. Antes se apagaba en gris sin decir por qué y
           // los mensajes de goToStep («La ciudad de entrega es obligatoria»…)

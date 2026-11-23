@@ -1,5 +1,6 @@
 'use client'
 import { useState, useId } from 'react'
+import InputDinero from '@/components/InputDinero'
 
 const TIPOS = ['EFECTIVO', 'TRANSFERENCIA', 'LINK_PAGO']
 
@@ -48,7 +49,7 @@ function PagoItem({ pago, index, onChange, onRemove, montoTotal, totalOtrosPagos
       {/* Monto */}
       <div>
         <label className="label" htmlFor={idCampo('monto')}>Monto recibido $</label>
-        <input id={idCampo('monto')} type="number" step="0.50" min="0" inputMode="decimal"
+        <InputDinero id={idCampo('monto')}
           className={`input text-xl font-bold ${superaTotal ? 'border-red-500' : ''}`}
           aria-invalid={superaTotal || undefined}
           aria-describedby={superaTotal ? idCampo('monto-err') : undefined}

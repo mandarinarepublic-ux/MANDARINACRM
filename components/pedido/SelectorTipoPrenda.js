@@ -186,7 +186,7 @@ export default function SelectorTipoPrenda({ id, valor, onChange, productos, onC
               aria-haspopup="listbox" aria-expanded={false}
               onClick={e => { e.stopPropagation(); abrir() }}
               onKeyDown={teclasBoton}
-              className="flex-1 min-w-0 text-left text-white truncate outline-none">
+              className="flex-1 min-w-0 text-left text-white truncate outline-none sin-contorno">
               {valor}
             </button>
           )
@@ -202,7 +202,7 @@ export default function SelectorTipoPrenda({ id, valor, onChange, productos, onC
               autoComplete="off"
               spellCheck={false}
               enterKeyHint="search"
-              className="flex-1 bg-transparent outline-none text-white placeholder-gray-600 min-w-0"
+              className="flex-1 bg-transparent outline-none text-white placeholder-gray-600 min-w-0 sin-contorno"
               placeholder={valor || 'Escribe para buscar…'}
               value={texto}
               onChange={e => { setTexto(e.target.value); setAbierto(true) }}

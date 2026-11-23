@@ -5,6 +5,7 @@ import SelectorTipoPrenda from '@/components/pedido/SelectorTipoPrenda'
 import { imagenAncho } from '@/lib/imagenes'
 import { faltantesShopify, faltantesPersonalizado, personalizadoTocado } from '@/lib/productoPendiente'
 import { AREAS, TALLAS_ADULTO, TALLAS_NINO } from '@/lib/catalogo-pedido'
+import InputDinero from '@/components/InputDinero'
 
 // Áreas y tallas: una sola lista con la prenda ya agregada (ItemProducto), en
 // lib/catalogo-pedido.js. Antes cada archivo tenía la suya y no coincidían.
@@ -349,7 +350,7 @@ function ProductoDetail({ producto, onAdd, onCancel, onPendiente }) {
         </div>
         <div>
           <label className="label" htmlFor={idCampo('precio')}>Precio $ *</label>
-          <input id={idCampo('precio')} type="number" inputMode="decimal" className="input" step="0.50" min="0"
+          <InputDinero id={idCampo('precio')} className="input"
             value={precioEdit}
             onChange={e => setPrecioEdit(parseFloat(e.target.value) || 0)} />
           {precioEdit !== parseFloat(variant?.price || 0) && (
@@ -507,7 +508,7 @@ function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false, onPen
         </div>
         <div>
           <label className="label" htmlFor={idCampo('precio')}>Precio $ *</label>
-          <input id={idCampo('precio')} type="number" inputMode="decimal" className="input" step="0.50" min="0" placeholder="0.00"
+          <InputDinero id={idCampo('precio')} className="input" placeholder="0.00"
             value={data.precio}
             onChange={e => setData(p => ({...p, precio: parseFloat(e.target.value) || 0}))} />
         </div>

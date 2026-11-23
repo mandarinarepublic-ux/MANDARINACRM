@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { TECNICAS, tecnicaLabel, calcSubtotalProducto, fmtUSD, precioUnitarioConIva } from '@/lib/cotizacion'
 import { subirFoto } from '@/lib/subirImagen'
 import TallasGrid from './TallasGrid'
+import InputDinero from '@/components/InputDinero'
 
 const TECNICA_ICON = { sublimacion: '🖨️', bordado: '🧵', dtf: '🎨' }
 
@@ -96,7 +97,7 @@ export default function ProductoCard({ index, producto: p, onUpd, onTalla, onTog
           </div>
           <div>
             <label htmlFor={`cot-precio-unitario-${p.id}`} className="label block">Precio unitario</label>
-            <input id={`cot-precio-unitario-${p.id}`} className="input font-mono" type="number" min={0} step="0.01" inputMode="decimal" value={p.precio} onChange={set('precio')} placeholder="0.00" />
+            <InputDinero id={`cot-precio-unitario-${p.id}`} className="input font-mono" value={p.precio} onChange={set('precio')} placeholder="0.00" />
           </div>
           <div>
             <div className="label">Subtotal y precio unitario</div>

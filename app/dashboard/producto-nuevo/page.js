@@ -6,6 +6,7 @@ import { fichaEnBlanco, MARCA_POR_TIENDA } from '@/lib/shopifyProducto'
 import SoltarFotos from '@/components/producto-nuevo/SoltarFotos'
 import RevisionProducto from '@/components/producto-nuevo/RevisionProducto'
 import ResultadoPublicacion from '@/components/producto-nuevo/ResultadoPublicacion'
+import InputDinero from '@/components/InputDinero'
 
 // Color del número de paso: mismo patrón que components/cotizaciones/CotizacionForm.js
 // (líneas 216-235). Se queda con estilo en línea porque el sistema de diseño no
@@ -146,12 +147,12 @@ export default function ProductoNuevoPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <div className="label">Precio $</div>
-                <input className="input" type="number" min="0.01" step="0.01" value={precio}
+                <InputDinero className="input" value={precio}
                   onChange={(e) => setPrecio(e.target.value)} placeholder="0.00" />
               </div>
               <div>
                 <div className="label">Precio tachado $ (opcional)</div>
-                <input className="input" type="number" min="0" step="0.01" value={precioTachado}
+                <InputDinero className="input" value={precioTachado}
                   onChange={(e) => setPrecioTachado(e.target.value)} placeholder="0.00" />
               </div>
             </div>

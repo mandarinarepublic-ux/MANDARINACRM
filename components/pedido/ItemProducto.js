@@ -4,6 +4,7 @@ import { subirFoto, subirArchivo } from '@/lib/subirImagen'
 import { imagenAncho } from '@/lib/imagenes'
 import { nacePlegado } from '@/lib/itemPlegado'
 import { AREAS, TALLAS_ADULTO, TALLAS_NINO, TALLAS, opcionesConValor, valorFueraDeLista, areaSinFotos } from '@/lib/catalogo-pedido'
+import InputDinero from '@/components/InputDinero'
 
 // Las listas salen de lib/catalogo-pedido.js, las MISMAS que el buscador: antes
 // esta tenía 8 áreas y el buscador 11, y al abrir una prenda con
@@ -147,7 +148,7 @@ export default function ItemProducto({ item, index, onChange, onRemove, onDuplic
             </div>
             <div>
               <label className="label" htmlFor={idCampo('precio')}>Precio $ *</label>
-              <input id={idCampo('precio')} type="number" min="0" step="0.5" inputMode="decimal"
+              <InputDinero id={idCampo('precio')}
                 className={`input text-sm py-3 ${!precioValido ? 'border-red-500' : ''}`}
                 aria-invalid={!precioValido || undefined}
                 aria-describedby={!precioValido ? idCampo('precio-err') : undefined}
