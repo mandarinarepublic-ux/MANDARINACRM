@@ -1,11 +1,14 @@
 'use client'
-import { useState, useId } from 'react'
+import { useState, useId, useEffect } from 'react'
 import InputDinero from '@/components/InputDinero'
 
 const TIPOS = ['EFECTIVO', 'TRANSFERENCIA', 'LINK_PAGO']
 
 function PagoItem({ pago, index, onChange, onRemove, montoTotal, totalOtrosPagos }) {
   const [foto, setFoto] = useState(pago.fotoComprobante || null)
+  // La foto también puede llegar de AFUERA con el pago ya montado (📌 PAGO del
+  // inbox, lib/fotoDesdeInbox.js): sin esto se guardaba pero no se veía.
+  useEffect(() => { if (pago.fotoComprobante) setFoto(pago.fotoComprobante) }, [pago.fotoComprobante])
 
   function handleFoto(file) {
     const reader = new FileReader()

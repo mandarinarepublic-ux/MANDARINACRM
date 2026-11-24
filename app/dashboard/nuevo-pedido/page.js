@@ -19,6 +19,7 @@ import { nuevoUid } from '@/lib/itemPlegado'
 import { resolverPendientes } from '@/lib/productoPendiente'
 import { llaveBorrador, armarBorrador, borradorVigente, hayTrabajo, resumenBorrador, haceCuanto } from '@/lib/borradorPedido'
 import { useDialogo } from '@/lib/useDialogo'
+import { fotosDeUrl, leerFotoPedido, agregarFotoPago } from '@/lib/fotoDesdeInbox'
 
 const TIENDAS = ['MANDARINA', 'INDSTORE', 'SUCURSAL']
 
@@ -174,6 +175,29 @@ function NuevoPedidoContenido() {
   const [avisoComprobante, setAvisoComprobante] = useState(false)
   const creadoRef = useRef(false)
 
+  // 📌 Fotos del chat (lib/fotoDesdeInbox.js): PAGO → comprobante, PRODUCTO →
+  // foto de pecho de un personalizado. `fotoFrente` = { url, n } hasta que el
+  // vendedor agrega ese producto al pedido.
+  const [fotoFrente, setFotoFrente] = useState(null)
+  const [avisoFoto, setAvisoFoto] = useState('')
+  // Las fotos esperan a que se conteste «¿recuperar el pedido?»: recuperar
+  // reemplaza pagos y productos, y se llevaría la foto recién puesta.
+  const fotosEnEsperaRef = useRef([])
+  const listoRef = useRef(false)
+  const aplicarFoto = useCallback(({ destino, url }) => {
+    if (destino === 'pago') {
+      setPagos(p => agregarFotoPago(p, url))
+      setAvisoFoto('📷 Foto del chat lista como comprobante de pago (paso 3). Escribe el monto ahí.')
+    } else {
+      setFotoFrente({ url, n: Date.now() })
+      setAvisoFoto('📷 Foto del chat lista como PECHO de un producto personalizado (paso 2). Completa el resto.')
+    }
+  }, [])
+  const recibirFoto = useCallback((f) => {
+    if (listoRef.current) aplicarFoto(f)
+    else fotosEnEsperaRef.current.push(f)
+  }, [aplicarFoto])
+
   // Los modales de esta pantalla se portan como diálogos (lib/useDialogo.js):
   // el foco entra y Escape cierra cuando cerrar no pierde nada.
   //   · ¿Recuperar el pedido? → SIN Escape: hay que contestar, o el borrador
@@ -200,6 +224,10 @@ function NuevoPedidoContenido() {
     // convierte antes de armar la URL; acá NO se vuelve a tocar. Si viene algo
     // que no calza, se deja el campo vacío a propósito: un valor inválido
     // precargado traba el formulario y es peor que no precargar nada.
+    // 📌 Las fotos que trae la URL esperan su turno (ver `recibirFoto`).
+    const fotosUrl = fotosDeUrl(searchParams)
+    if (fotosUrl.pago) fotosEnEsperaRef.current.push({ destino: 'pago', url: fotosUrl.pago })
+    if (fotosUrl.producto) fotosEnEsperaRef.current.push({ destino: 'producto', url: fotosUrl.producto })
     const celularUrl = searchParams?.get('celular') || ''
     const nombreUrl  = searchParams?.get('nombre') || ''
     // 📝 Formulario de WhatsApp (inbox, 14-nov-2026): el cliente ya llenó sus
@@ -402,6 +430,32 @@ function NuevoPedidoContenido() {
     }, 500)
     return () => clearTimeout(t)
   }, [llave, listoParaGuardar, JSON.stringify(estadoBorrador)])
+
+  // 📌 Contestada la pregunta del borrador (o sin borrador), entran las fotos
+  // que esperaban. Va DESPUÉS de recuperar: suma sobre lo recuperado.
+  useEffect(() => {
+    if (!listoParaGuardar) return
+    listoRef.current = true
+    const espera = fotosEnEsperaRef.current
+    fotosEnEsperaRef.current = []
+    espera.forEach(aplicarFoto)
+  }, [listoParaGuardar, aplicarFoto])
+
+  // 📌 Con el formulario YA abierto, el inbox manda la foto por postMessage
+  // para sumarla sin borrar lo escrito. Solo en modo embed y solo de quien nos
+  // enmarca (lo valida `leerFotoPedido`).
+  useEffect(() => {
+    if (!esEmbed) return
+    const alMensaje = (e) => { const f = leerFotoPedido(e); if (f) recibirFoto(f) }
+    window.addEventListener('message', alMensaje)
+    return () => window.removeEventListener('message', alMensaje)
+  }, [esEmbed, recibirFoto])
+
+  useEffect(() => {
+    if (!avisoFoto) return
+    const t = setTimeout(() => setAvisoFoto(''), 9000)
+    return () => clearTimeout(t)
+  }, [avisoFoto])
 
   function recuperarBorrador() {
     const d = borradorOfrecido?.datos
@@ -895,6 +949,16 @@ function NuevoPedidoContenido() {
             </div>
           )}
 
+          {avisoFoto && (
+            <div role="status" className="bg-mandarina-500/10 border border-mandarina-500/40 text-mandarina-300 text-sm px-4 py-3 rounded-xl mb-4 flex items-start gap-2">
+              <span className="flex-1">{avisoFoto}</span>
+              <button type="button" onClick={() => setAvisoFoto('')} aria-label="Cerrar aviso"
+                className="text-mandarina-400 hover:text-white -my-2 -mr-2 min-w-[40px] min-h-[40px] flex items-center justify-center transition-colors">
+                <span aria-hidden="true">✕</span>
+              </button>
+            </div>
+          )}
+
           {avisoComprobante && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-sm px-4 py-3 rounded-xl mb-4 flex items-start gap-2">
               <span className="flex-1">Pedido recuperado. Vuelve a subir la foto del comprobante de pago.</span>
@@ -1241,6 +1305,8 @@ function NuevoPedidoContenido() {
                 soloPersonalizado={isYAW}
                 onAdd={item => setItems(p => [...p, normalizarItem(item)])}
                 onPendiente={reportarPendiente}
+                fotoFrente={fotoFrente}
+                onFrenteUsada={() => setFotoFrente(null)}
               />
               {items.length === 0 && (
                 <div className="card p-6 text-center text-gray-500 border-dashed">

@@ -56,13 +56,21 @@ function armarItemPersonalizado(nombre, data, fotos) {
 // onPendiente(clave, {item, faltan, tocado} | null): cada formulario abierto
 // avisa lo que tiene escrito, para que "Siguiente" no lo pierda (ver
 // lib/productoPendiente.js).
-export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = false, onPendiente }) {
+// `fotoFrente` = { url, n } | null: una foto del chat elegida como PRODUCTO en el
+// inbox (lib/fotoDesdeInbox.js). Abre el personalizado con esa foto en PECHO;
+// `onFrenteUsada` avisa cuando ese producto ya se agregó al pedido.
+export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = false, onPendiente, fotoFrente = null, onFrenteUsada }) {
   const [query, setQuery] = useState('')
   const [productos, setProductos] = useState([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(null)
-  const [showPersonalizado, setShowPersonalizado] = useState(soloPersonalizado)
+  const [showPersonalizado, setShowPersonalizado] = useState(soloPersonalizado || !!fotoFrente)
   const debounceRef = useRef(null)
+  useEffect(() => {
+    if (!fotoFrente) return
+    setSelected(null)
+    setShowPersonalizado(true)
+  }, [fotoFrente?.n])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Si soloPersonalizado, no hay nada más que hacer en este efecto
   useEffect(() => {
@@ -133,8 +141,10 @@ export default function BuscadorProductos({ tienda, onAdd, soloPersonalizado = f
 
       {showPersonalizado && (
         <ProductoPersonalizado
+          fotoFrente={fotoFrente}
           onAdd={data => {
             onAdd(data)
+            if (fotoFrente) onFrenteUsada?.()
             // Si soloPersonalizado, mantener el form abierto para poder agregar más
             if (!soloPersonalizado) setShowPersonalizado(false)
           }}
@@ -393,12 +403,17 @@ function ProductoDetail({ producto, onAdd, onCancel, onPendiente }) {
   )
 }
 
-function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false, onPendiente }) {
+function ProductoPersonalizado({ onAdd, onCancel, ocultarCancelar = false, onPendiente, fotoFrente = null }) {
   const [catalogoProductos, setCatalogoProductos] = useState([])
   const [nombre, setNombre] = useState('')
   // FIX: defaults correctos — cantidad 0, precio 0, área vacía
   const [data, setData] = useState({ color: '', talla: '', cantidad: '', precio: '', area: '', detalle: '' })
-  const [fotos, setFotos] = useState({})
+  const [fotos, setFotos] = useState(() => (fotoFrente?.url ? { fotoPecho: fotoFrente.url } : {}))
+  // Otra foto del chat elegida como PRODUCTO con este formulario abierto: va al
+  // PECHO sin tocar lo que ya se escribió.
+  useEffect(() => {
+    if (fotoFrente?.url) setFotos(f => ({ ...f, fotoPecho: fotoFrente.url }))
+  }, [fotoFrente?.n])  // eslint-disable-line react-hooks/exhaustive-deps
   const [creando, setCreando] = useState(false)
   const [errorCatalogo, setErrorCatalogo] = useState('')
   const uid = useId()
