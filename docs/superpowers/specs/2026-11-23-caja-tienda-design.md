@@ -77,6 +77,19 @@ el CRM que cada salida de efectivo llegó a sus manos o al banco.
 5. El cierre queda **firmado** con su nombre y la hora, y ya no se puede cambiar.
    Si se equivocó, el admin lo reabre y queda registrado quién y cuándo.
 
+**Jackeline no escribe los cobros**: salen solos de los pagos que registró en el
+CRM. En la noche escribe un solo número, cuánto contó.
+
+**Abonos y saldos (pregunta de Rodrigo):** la caja cuenta plata recibida, no
+pedidos. Cada abono o pago del saldo es su propia fila en `crm.pagos`, con su
+`fecha`, y cae en el cierre en que entró. Abono de $20 el lunes → cierre del lunes.
+Saldo de $30 el jueves al retirar → cierre del jueves si es en efectivo, o «Por
+confirmar» si es transferencia. Retirar el pedido no es plata. El pago queda a
+nombre de quien tiene la sesión abierta al registrarlo (`pagos.vendedor_id` =
+`user.id`, verificado en `pedido/[id]/page.js` y `nuevo-pedido/page.js`). Por eso
+la regla es que quien recibe la plata la registra. Si la registra otro, la caja de
+Jackeline muestra un sobrante, y eso sirve de alarma.
+
 Durante el día puede anotar **salidas de caja** (un taxi, útiles…) con monto,
 motivo y foto opcional del recibo. Esas restan del esperado.
 
