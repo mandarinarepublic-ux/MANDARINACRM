@@ -515,6 +515,17 @@ El detalle está en `wa-inbox-next/docs/HANDOFF-2026-11-23-fotos-pedido.md`.
   `inbox-media` y solo mensajes de quien nos enmarca desde un inbox nuestro.
   ☠️ Las fotos esperan a que se conteste «¿recuperar el pedido?»: recuperar reemplaza pagos y
   productos y se llevaría la foto. Probado por Rodrigo en prod.
+- `a2b2a53c..7a98f632` (24-nov): **💵 Caja de la tienda** (`/dashboard/caja`).
+  - **Qué hace:** cierre diario con arqueo a ciegas. La responsable escribe solo cuánto contó y no ve el esperado hasta guardar. El excedente sobre el fondo de $20 sale a 💵 sobre o a 🏦 depósito, y el ADMIN confirma sobres, depósitos y transferencias en «Por confirmar».
+  - **Diseño y plan:** `docs/superpowers/specs/2026-11-23-caja-tienda-design.md` y `plans/2026-11-23-caja-tienda.md`.
+  - **Tablas:** `crm.cajas`, `cierres_caja`, `cierre_pagos`, `movimientos_caja` y `verificaciones_banco`, en `docs/sql/2026-11-23-caja-tienda.sql`.
+  - **Código:** lo puro está en `lib/caja.js` (en centavos y con tests) y la base en `lib/db/caja.js`.
+  - **No toca nada existente:** `crm.pagos` y los pedidos no se modifican. Los cobros se leen de `crm.pagos`: EFECTIVO, PAGADO y con `vendedor_id` igual a la responsable.
+  - **Caja 1 «Tienda»:** su responsable es Jackeline (`uuid-007`, acceso `CAJA`). Le falta hacer el ARRANQUE, en el que cuenta todo el cajón.
+  - **Caja 2 «PRUEBA»** (Andrés Admin): sirvió para la prueba en prod y está `activa=false`. Tiene 3 cierres y 4 movimientos de prueba.
+  - **Probado en prod:** arranque, doble toque (409), tope del sobre, faltante con motivo obligatorio, confirmar, reposición, reabrir solo el último y el 409 al reabrir con un depósito pendiente.
+  - ☠️ Un ADMIN que también es responsable ve «Mi caja / Control».
+  - ⚠️ El CRM no valida en el servidor `foto_comprobante_url` de `/api/pagos` y `/api/pedidos`. La caja solo enlaza URLs `https://` (`urlSegura`).
 
 ---
 
