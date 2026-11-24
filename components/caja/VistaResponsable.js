@@ -2,12 +2,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import InputDinero from '@/components/InputDinero'
 import { subirFoto } from '@/lib/subirImagen'
-import { formatFechaCorta } from '@/lib/parseFecha'
+import { formatFechaCorta, fechaISOEcuador } from '@/lib/parseFecha'
 import { aCentavos, textoDiferencia } from '@/lib/caja'
 
 const money = (n) => `$${(Number(n) || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-// Día de calendario de Ecuador (UTC-5, sin horario de verano), como "2026-11-22".
-const diaEc = (iso) => new Date(new Date(iso).getTime() - 5 * 3600000).toISOString().slice(0, 10)
+// Día de calendario de Ecuador, como "2026-11-22" (helper de lib/parseFecha.js).
+const diaEc = fechaISOEcuador
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const diaMes = (iso) => { const d = diaEc(iso); return `${Number(d.slice(8, 10))} ${MESES[Number(d.slice(5, 7)) - 1]}` }
 
@@ -186,7 +186,7 @@ function Firma({ pendiente, caja, recargar }) {
   }
 
   // Si el servidor manda la fecha de cada cobro, se avisa de los días sin cierre.
-  const desde = (pendiente.pagos || []).map((p) => p.fecha).filter(Boolean).sort()[0]
+  const desde = (pendiente.pagos || []).map((p) => p.fecha).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))[0]
   const avisoDia = !arranque && desde && diaEc(desde) < diaEc(pendiente.contado_en)
   return (
     <div className="space-y-3">
