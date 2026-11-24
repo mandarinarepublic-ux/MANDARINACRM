@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import InputDinero from '@/components/InputDinero'
 import { formatFechaCorta } from '@/lib/parseFecha'
-import { aDolares, textoDiferencia, aCentavos } from '@/lib/caja'
+import { aDolares, textoDiferencia, aCentavos, urlSegura } from '@/lib/caja'
 import { money, llamar, Alerta, Ticket, PASTILLA, estadoDiferencia } from './comunes'
 
 const TABS = [['confirmar', 'Por confirmar'], ['cierres', 'Cierres'], ['ajustes', 'Ajustes']]
@@ -24,7 +24,7 @@ function ItemConfirmar({ it, ocupado, actuar }) {
   const enviando = ocupado === it.clave
 
   const titulo = esTransf ? '🔁 Transferencia' : it.tipo === 'SOBRE' ? '💵 Sobre' : '🏦 Depósito'
-  const foto = esTransf ? it.foto_comprobante_url : it.foto_url
+  const foto = urlSegura(esTransf ? it.foto_comprobante_url : it.foto_url)
   const botones = esTransf
     ? [['✓ Llegó', { accion: 'verificar-transferencia', pagoId: it.pago_id, resultado: 'LLEGO' }, 'btn-primary'],
       ['✗ No llegó', { accion: 'verificar-transferencia', pagoId: it.pago_id, resultado: 'NO_LLEGO' }, 'btn-secondary']]
@@ -164,7 +164,7 @@ function FilaCierre({ c, caja, puedeReabrir, abierto, alternar, ocupado, actuar 
               <Ticket c={c} caja={caja} contoTxt="Contó" />
               {c.motivo && <div className="text-sm text-gray-400">Motivo: {c.motivo}</div>}
               {c.firmado_por_nombre && <div className="text-xs text-gray-500">Firmó {c.firmado_por_nombre}</div>}
-              {salida?.foto_url && <a className="text-sm text-mandarina-400 underline" href={salida.foto_url} target="_blank" rel="noreferrer">Ver papeleta</a>}
+              {urlSegura(salida?.foto_url) && <a className="text-sm text-mandarina-400 underline" href={urlSegura(salida.foto_url)} target="_blank" rel="noreferrer">Ver papeleta</a>}
               {!puedeReabrir ? null : confirmando ? (
                 <div className="space-y-2">
                   <div className="text-sm text-amber-300">El cierre vuelve a quedar sin firmar y la responsable tendrá que cerrar de nuevo. ¿Reabrir?</div>

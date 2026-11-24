@@ -63,3 +63,9 @@ test('ajustes: entre 0 y 500', () => {
   assert.match(err({ accion: 'ajustes', cajaId: 2, fondo_fijo: '20' }), /tolerancia/i)
   assert.match(err({ accion: 'ajustes', fondo_fijo: '20', tolerancia: '5' }), /caja/i)
 })
+
+import { urlSegura } from '../lib/caja.js'
+test('urlSegura solo deja pasar https', () => {
+  assert.equal(urlSegura('https://res.cloudinary.com/x.jpg'), 'https://res.cloudinary.com/x.jpg')
+  for (const malo of ['javascript:alert(1)', 'JAVASCRIPT:alert(1)', 'http://x', '', null, undefined, 5]) assert.equal(urlSegura(malo), null)
+})
