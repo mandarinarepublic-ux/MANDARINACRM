@@ -127,11 +127,13 @@ POR CONFIRMAR (admin)
 
 ## Primer día: arqueo de arranque (decidió Rodrigo, opción A)
 
-El día que arranca el módulo, Rodrigo y Jackeline cuentan juntos todo el cajón.
-Ese total se registra como **cierre cero / saldo inicial**, firmado por los dos.
-Rodrigo retira todo menos el fondo fijo de $20, y ese retiro queda como un
-movimiento «sobre efectivo» ya recibido por él. Desde el día siguiente corre el
-cierre diario normal. Lo anterior al arranque no se intenta cuadrar contra los
+Rodrigo NO cuenta al inicio del día, ni en el arranque: «yo no tengo tiempo para
+contar el dinero al inicio del día». El día que arranca el módulo, **Jackeline
+cuenta sola** todo el cajón y lo registra como **cierre cero / saldo inicial**.
+Deja el fondo fijo de $20 y el resto va a un sobre (movimiento «sobre efectivo»).
+Rodrigo lo cuenta y lo marca recibido cuando pasa, igual que cualquier otro sobre.
+Si no coincide, anota cuánto había. Desde ahí corre el cierre diario normal.
+Nadie cuenta al abrir: la apertura sale del cierre anterior. Lo anterior al arranque no se intenta cuadrar contra los
 pagos del CRM: queda contado una sola vez y nada más.
 
 ## Reglas del corte (calls mías tras la revisión, práctica de POS «por turno»)
