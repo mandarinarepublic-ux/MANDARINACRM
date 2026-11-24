@@ -502,6 +502,20 @@ El detalle de la sesión está en `wa-inbox-next/docs/HANDOFF-2026-11-21-ux-firm
 - `b2865b6c` — «✏️ Editar productos del pedido» dentro del inbox abría el CRM completo, porque
   el enlace perdía `?embed=1`. Estaba así desde julio.
 
+## Sesión 23-nov-2026 (cambios en el CRM)
+
+El detalle está en `wa-inbox-next/docs/HANDOFF-2026-11-23-fotos-pedido.md`.
+
+- `15d7ae8b` — **Fotos del chat en el pedido nuevo.** El «📌 Usar» del inbox manda una foto del
+  cliente como **PAGO** (comprobante de una TRANSFERENCIA, sin monto) o **PRODUCTO** (Pecho de un
+  personalizado). Entra por la URL (`fotoPago` / `fotoFrente`) o por postMessage
+  `{tipo:'foto-pedido'}` si el formulario ya estaba abierto, y se SUMA sin borrar.
+  Se guarda la URL de `inbox-media` tal cual, sin pasar por Cloudinary.
+  La validación está en `lib/fotoDesdeInbox.js`, con pruebas: solo fotos públicas de
+  `inbox-media` y solo mensajes de quien nos enmarca desde un inbox nuestro.
+  ☠️ Las fotos esperan a que se conteste «¿recuperar el pedido?»: recuperar reemplaza pagos y
+  productos y se llevaría la foto. Probado por Rodrigo en prod.
+
 ---
 
 ## Pendientes vivos
