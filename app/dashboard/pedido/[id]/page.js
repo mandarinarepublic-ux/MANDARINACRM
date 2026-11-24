@@ -734,7 +734,7 @@ export default function PedidoDetailPage() {
                       <span className="text-xl flex-shrink-0">{cfg.icon}</span>
                       <div className="flex-1 min-w-0">
                         <div className={`text-sm font-semibold ${cfg.color}`}>{cfg.label}</div>
-                        {pago.FECHA_PAGO && <div className="text-xs text-gray-500">{pago.FECHA_PAGO.split(' ')[0]}</div>}
+                        {pago.FECHA_PAGO && <div className="text-xs text-gray-500">{formatFechaCorta(pago.FECHA_PAGO)}</div>}
                         {pago.NOTAS && <div className="text-xs text-gray-400 mt-0.5">{pago.NOTAS}</div>}
                         {pago.TIPO_PAGO === 'TRANSFERENCIA' && pago.ESTADO_PAGO === 'PENDIENTE' && (
                           <div className="mt-1.5">
@@ -908,7 +908,7 @@ export default function PedidoDetailPage() {
                 </div>
                 <div className="text-xs text-gray-500">
                   Registrado: {pagoEditando.original.TIPO_PAGO} ${parseFloat(pagoEditando.original.MONTO || 0).toFixed(2)}
-                  {pagoEditando.original.FECHA_PAGO && ` · ${String(pagoEditando.original.FECHA_PAGO).split(/[ T]/)[0]}`}
+                  {pagoEditando.original.FECHA_PAGO && ` · ${formatFechaCorta(pagoEditando.original.FECHA_PAGO)}`}
                 </div>
 
                 <div role="group" aria-labelledby="etq-tipo-corregir">
