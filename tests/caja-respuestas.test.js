@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { respuestaResponsable } from '../lib/caja.js'
 
 const caja = { id: 1, nombre: 'Tienda', fondo_fijo: 20, tolerancia: 5, responsable_usuario_id: 'U1', inicio: '2026-11-01T10:00:00Z', cobros: [{ esperado: 99 }] }
-const cierreContado = { id: 9, tipo: 'NORMAL', estado: 'CONTADO', esperado: 120, contado: 118, diferencia: -2, pagos: [], salidas: [], salida: null }
+const cierreContado = { id: 9, tipo: 'NORMAL', estado: 'CONTADO', esperado: 120, contado: 118, diferencia: -2, salidas: 0, pagos: [], salidas_lista: [], salida: null }
 const salida = { id: 3, tipo: 'SALIDA', monto: 4, motivo: 'Cinta' }
 const deposito = { id: 5, tipo: 'DEPOSITO', monto: 50, foto_url: null }
 const depositoConFoto = { id: 6, tipo: 'DEPOSITO', monto: 30, foto_url: 'https://x/y.jpg' }

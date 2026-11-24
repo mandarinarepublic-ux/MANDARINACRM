@@ -1,6 +1,6 @@
 // /api/caja/cierre — guardar el conteo (POST) y firmarlo con su excedente (PATCH).
 import {
-  errorConteoAbierto, aCentavos, validarMonto, calcularCierre, calcularArranque, validarSalidaExcedente,
+  errorConteoAbierto, aCentavos, validarMonto, calcularCierre, calcularArranque, cuentaDeArranque, validarSalidaExcedente,
 } from '@/lib/caja'
 import {
   cierreAbierto, periodoAbierto, crearCierreContado, cerrarCierre,
@@ -28,12 +28,15 @@ export async function POST(req) {
     const fondoFijoC = aCentavos(caja.fondo_fijo)
     const toleranciaC = aCentavos(caja.tolerancia)
     const tipo = caja.inicio ? 'NORMAL' : 'ARRANQUE'
-    const { aperturaC, cobros, salidas } = await periodoAbierto(caja)
-    const calc = calcularCierre({
-      aperturaC, cobrosC: cobros.map((c) => aCentavos(c.monto)), salidasC: salidas.map((s) => aCentavos(s.monto)),
-      contadoC, fondoFijoC, toleranciaC,
-    })
-    const cierre = await crearCierreContado({ caja, tipo, aperturaC, cobros, salidas, contadoC, calc, usuario })
+    // Solo se amarran al cierre los movimientos que entraron en esta cuenta (ver crearCierreContado).
+    const { aperturaC, cobros, salidas, reposiciones, absorbidos } = await periodoAbierto(caja)
+    const calc = tipo === 'ARRANQUE'
+      ? cuentaDeArranque({ contadoC, fondoFijoC })
+      : calcularCierre({
+        aperturaC, cobrosC: cobros.map((c) => aCentavos(c.monto)), salidasC: salidas.map((s) => aCentavos(s.monto)),
+        contadoC, fondoFijoC, toleranciaC,
+      })
+    const cierre = await crearCierreContado({ caja, tipo, aperturaC, cobros, salidas, reposiciones, absorbidos, contadoC, calc, usuario })
     return Response.json({ cierre, calc })
   } catch (e) {
     return errorRuta('POST /api/caja/cierre', e)

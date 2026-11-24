@@ -126,6 +126,7 @@ function FilaCierre({ c, caja, puedeReabrir, abierto, alternar, ocupado, actuar 
   const arranque = c.tipo === 'ARRANQUE'
   const estado = estadoDiferencia(c, caja.tolerancia)
   const salida = c.salida
+  const sobrePendiente = salida?.tipo === 'SOBRE' && salida.confirmacion === 'PENDIENTE'
   const celda = 'px-2 py-2 whitespace-nowrap tabular-nums text-right'
   return (
     <>
@@ -167,7 +168,11 @@ function FilaCierre({ c, caja, puedeReabrir, abierto, alternar, ocupado, actuar 
               {urlSegura(salida?.foto_url) && <a className="text-sm text-mandarina-400 underline" href={urlSegura(salida.foto_url)} target="_blank" rel="noreferrer">Ver papeleta</a>}
               {!puedeReabrir ? null : confirmando ? (
                 <div className="space-y-2">
-                  <div className="text-sm text-amber-300">El cierre vuelve a quedar sin firmar y la responsable tendrá que cerrar de nuevo. ¿Reabrir?</div>
+                  <div className="text-sm text-amber-300">
+                    El cierre vuelve a quedar sin firmar y la responsable tendrá que cerrar de nuevo.
+                    {sobrePendiente && <> Se anula el sobre de {money(salida.monto)}: esa plata tiene que volver al cajón antes de contar de nuevo.</>}
+                    {' '}¿Reabrir?
+                  </div>
                   <div className="flex gap-2">
                     <button type="button" className="btn-primary" disabled={ocupado === `c${c.id}`}
                       onClick={() => actuar(`c${c.id}`, { accion: 'reabrir', cierreId: c.id })}>
@@ -179,7 +184,7 @@ function FilaCierre({ c, caja, puedeReabrir, abierto, alternar, ocupado, actuar 
               ) : (
                 <button type="button" className="btn-secondary" onClick={() => setConfirmando(true)}>Reabrir</button>
               )}
-              {estado === 'FUERA' && <div className="text-xs text-red-300">Este cierre pasó de la tolerancia.</div>}
+              {!arranque && estado === 'FUERA' && <div className="text-xs text-red-300">Este cierre pasó de la tolerancia.</div>}
             </div>
           </td>
         </tr>

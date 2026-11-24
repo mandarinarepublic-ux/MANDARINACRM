@@ -17,6 +17,8 @@ export async function llamar(url, metodo, cuerpo) {
 }
 
 export function estadoDiferencia(c, tolerancia) {
+  // el arranque no tiene período anterior: nunca hay aviso de tolerancia
+  if (c.tipo === 'ARRANQUE') return 'CUADRA'
   const dif = aCentavos(c.diferencia)
   if (dif === 0) return 'CUADRA'
   return Math.abs(dif) > aCentavos(tolerancia) ? 'FUERA' : 'DENTRO'
@@ -62,7 +64,7 @@ export function Ticket({ c, caja, contoTxt = 'Contaste' }) {
           <Fila k="Total cobros" v={`+${money(c.cobros_efectivo)}`} />
           <div className="py-1">
             <div className="text-xs text-gray-500 mb-0.5">Salidas</div>
-            {c.salidas?.length ? c.salidas.map((s) => (
+            {c.salidas_lista?.length ? c.salidas_lista.map((s) => (
               <div key={s.id} className="flex justify-between gap-2 text-sm text-gray-300 pl-2">
                 <span className="min-w-0 break-words">{s.motivo}</span><span className="tabular-nums shrink-0">-{money(s.monto)}</span>
               </div>

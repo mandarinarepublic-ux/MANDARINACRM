@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import {
   aCentavos, aDolares, validarMonto, calcularCierre, calcularArranque,
   validarSalidaExcedente, aperturaSiguiente, seleccionarCobros, pagosCambiados,
-  textoDiferencia,
+  textoDiferencia, cuentaDeArranque, errorReabrirPorSalida,
 } from '../lib/caja.js'
 
 test('aCentavos y aDolares convierten sin errores de coma flotante', () => {
@@ -120,4 +120,37 @@ test('textoDiferencia', () => {
   assert.equal(textoDiferencia(-800), 'Falta $8,00')
   assert.equal(textoDiferencia(150), 'Sobra $1,50')
   assert.equal(textoDiferencia(0), 'Cuadra')
+})
+
+test('validarMonto acepta un separador al final a medio teclear ("12." / "12,")', () => {
+  assert.deepEqual(validarMonto('12.'), { ok: true, centavos: 1200 })
+  assert.deepEqual(validarMonto('12,'), { ok: true, centavos: 1200 })
+  assert.deepEqual(validarMonto('0,', { permitirCero: true }), { ok: true, centavos: 0 })
+  assert.equal(validarMonto('0.').ok, false)
+  for (const malo of ['.', ',', '.5', '12.345', '12..', '1.2.3']) assert.equal(validarMonto(malo).ok, false, malo)
+})
+
+test('cuentaDeArranque: esperado = contado, diferencia 0, sin aviso de tolerancia', () => {
+  assert.deepEqual(cuentaDeArranque({ contadoC: 5000, fondoFijoC: 2000 }), {
+    cobrosEfectivoC: 0, salidasC: 0, esperadoC: 5000, diferenciaC: 0, estado: 'CUADRA', requiereMotivo: false, excedenteC: 3000,
+  })
+  const poco = cuentaDeArranque({ contadoC: 1000, fondoFijoC: 2000 })
+  assert.equal(poco.esperadoC, 1000)
+  assert.equal(poco.diferenciaC, 0)
+  assert.equal(poco.excedenteC, 0)
+})
+
+test('errorReabrirPorSalida: el depósito pendiente bloquea, el sobre pendiente no', () => {
+  assert.equal(errorReabrirPorSalida(null), null)
+  assert.equal(errorReabrirPorSalida({ tipo: 'SOBRE', confirmacion: 'PENDIENTE' }), null)
+  const dep = errorReabrirPorSalida({ tipo: 'DEPOSITO', confirmacion: 'PENDIENTE' })
+  assert.equal(dep.status, 409)
+  assert.equal(dep.message, 'El depósito ya salió del cajón: confírmalo o márcalo «no cuadra» antes de reabrir')
+  for (const confirmacion of ['OK', 'NO_CUADRA']) {
+    for (const tipo of ['SOBRE', 'DEPOSITO']) {
+      const e = errorReabrirPorSalida({ tipo, confirmacion })
+      assert.equal(e.status, 409)
+      assert.equal(e.message, 'El sobre/depósito ya fue confirmado')
+    }
+  }
 })
