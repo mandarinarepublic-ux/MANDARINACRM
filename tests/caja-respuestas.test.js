@@ -32,3 +32,19 @@ test('con un cierre CONTADO sí muestra el esperado', () => {
   assert.ok(JSON.stringify(r).includes('esperado'))
   assert.equal(r.pendienteCerrar.id, 9)
 })
+
+import { errorConteoAbierto, errorDeInsercionCierre } from '../lib/caja.js'
+
+test('doble toque: conteo abierto da 409 con el mensaje exacto', () => {
+  assert.equal(errorConteoAbierto(null), null)
+  const e = errorConteoAbierto({ id: 1 })
+  assert.equal(e.status, 409)
+  assert.equal(e.message, 'Ya hay un conteo guardado sin cerrar')
+})
+
+test('el índice único (23505) se vuelve 409; otros errores no', () => {
+  assert.equal(errorDeInsercionCierre({ code: '23505' }).status, 409)
+  const otro = errorDeInsercionCierre({ code: 'XX000', message: 'boom' })
+  assert.equal(otro.status, undefined)
+  assert.equal(otro.message, 'boom')
+})

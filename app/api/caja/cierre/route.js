@@ -1,6 +1,6 @@
 // /api/caja/cierre — guardar el conteo (POST) y firmarlo con su excedente (PATCH).
 import {
-  aCentavos, validarMonto, calcularCierre, calcularArranque, validarSalidaExcedente, aperturaSiguiente,
+  errorConteoAbierto, aCentavos, validarMonto, calcularCierre, calcularArranque, validarSalidaExcedente, aperturaSiguiente,
 } from '@/lib/caja'
 import {
   cierreAbierto, ultimoCierreCerrado, salidaDeCierre, cobrosPendientes, movimientosSinCierre,
@@ -23,7 +23,8 @@ export async function POST(req) {
     if (!m.ok) return bad(m.error)
     const contadoC = m.centavos
 
-    if (await cierreAbierto(caja.id)) return bad('Ya hay un conteo guardado sin cerrar', 409)
+    const yaAbierto = errorConteoAbierto(await cierreAbierto(caja.id))
+    if (yaAbierto) throw yaAbierto
 
     const fondoFijoC = aCentavos(caja.fondo_fijo)
     const toleranciaC = aCentavos(caja.tolerancia)

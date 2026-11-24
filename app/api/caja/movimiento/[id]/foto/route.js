@@ -9,6 +9,7 @@ export async function POST(req, { params }) {
   try {
     const ctx = await contextoResponsable()
     if (!ctx.ok) return ctx.res
+    if (!/^[1-9]\d*$/.test(String(params.id))) return Response.json({ error: 'Movimiento no encontrado' }, { status: 404 })
     const body = await req.json().catch(() => ({}))
     if (!esHttps(body?.fotoUrl)) return Response.json({ error: 'La foto no es válida.' }, { status: 400 })
     const movimiento = await ponerFotoMovimiento(params.id, body.fotoUrl, ctx.usuario.id)
