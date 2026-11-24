@@ -121,7 +121,7 @@ function PorConfirmar({ datos, ocupado, actuar }) {
   )
 }
 
-function FilaCierre({ c, caja, abierto, alternar, ocupado, actuar }) {
+function FilaCierre({ c, caja, puedeReabrir, abierto, alternar, ocupado, actuar }) {
   const [confirmando, setConfirmando] = useState(false)
   const arranque = c.tipo === 'ARRANQUE'
   const estado = estadoDiferencia(c, caja.tolerancia)
@@ -165,7 +165,7 @@ function FilaCierre({ c, caja, abierto, alternar, ocupado, actuar }) {
               {c.motivo && <div className="text-sm text-gray-400">Motivo: {c.motivo}</div>}
               {c.firmado_por_nombre && <div className="text-xs text-gray-500">Firmó {c.firmado_por_nombre}</div>}
               {salida?.foto_url && <a className="text-sm text-mandarina-400 underline" href={salida.foto_url} target="_blank" rel="noreferrer">Ver papeleta</a>}
-              {confirmando ? (
+              {!puedeReabrir ? null : confirmando ? (
                 <div className="space-y-2">
                   <div className="text-sm text-amber-300">El cierre vuelve a quedar sin firmar y la responsable tendrá que cerrar de nuevo. ¿Reabrir?</div>
                   <div className="flex gap-2">
@@ -208,8 +208,8 @@ function Cierres({ datos, ocupado, actuar }) {
               </tr>
             </thead>
             <tbody>
-              {cierres.map((c) => (
-                <FilaCierre key={c.id} c={c} caja={caja} abierto={abiertoId === c.id}
+              {cierres.map((c, i) => (
+                <FilaCierre key={c.id} c={c} caja={caja} puedeReabrir={i === 0} abierto={abiertoId === c.id}
                   alternar={() => setAbiertoId(abiertoId === c.id ? null : c.id)} ocupado={ocupado} actuar={actuar} />
               ))}
             </tbody>

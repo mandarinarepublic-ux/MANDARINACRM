@@ -22,7 +22,7 @@ export default function CajaPage() {
 
   if (rol === null) return <div className="p-4 text-sm text-gray-500">Cargando…</div>
   return (
-    <div className="max-w-xl mx-auto p-3 sm:p-4">
+    <div className={`${rol === 'ADMIN' ? 'max-w-5xl' : 'max-w-xl'} mx-auto p-3 sm:p-4`}>
       {rol === 'ADMIN' ? <VistaAdmin /> : <VistaResponsable />}
     </div>
   )
