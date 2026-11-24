@@ -1,10 +1,9 @@
 // /api/caja/cierre — guardar el conteo (POST) y firmarlo con su excedente (PATCH).
 import {
-  errorConteoAbierto, aCentavos, validarMonto, calcularCierre, calcularArranque, validarSalidaExcedente, aperturaSiguiente,
+  errorConteoAbierto, aCentavos, validarMonto, calcularCierre, calcularArranque, validarSalidaExcedente,
 } from '@/lib/caja'
 import {
-  cierreAbierto, ultimoCierreCerrado, salidaDeCierre, cobrosPendientes, movimientosSinCierre,
-  crearCierreContado, cerrarCierre,
+  cierreAbierto, periodoAbierto, crearCierreContado, cerrarCierre,
 } from '@/lib/db/caja'
 import { contextoResponsable, errorRuta, esHttps } from '@/lib/cajaRuta'
 
@@ -28,26 +27,8 @@ export async function POST(req) {
 
     const fondoFijoC = aCentavos(caja.fondo_fijo)
     const toleranciaC = aCentavos(caja.tolerancia)
-    let tipo, aperturaC, cobros, salidas
-    if (!caja.inicio) {
-      tipo = 'ARRANQUE'; aperturaC = 0; cobros = []; salidas = []
-    } else {
-      tipo = 'NORMAL'
-      const ultimo = await ultimoCierreCerrado(caja.id)
-      if (ultimo) {
-        const sal = await salidaDeCierre(ultimo.id)
-        const repos = await movimientosSinCierre(caja.id, 'REPOSICION')
-        aperturaC = aperturaSiguiente({
-          contadoC: aCentavos(ultimo.contado),
-          salidaC: aCentavos(sal?.monto || 0),
-          reposicionesC: repos.map((r) => aCentavos(r.monto)),
-        })
-      } else {
-        aperturaC = 0
-      }
-      cobros = await cobrosPendientes(caja)
-      salidas = await movimientosSinCierre(caja.id, 'SALIDA')
-    }
+    const tipo = caja.inicio ? 'NORMAL' : 'ARRANQUE'
+    const { aperturaC, cobros, salidas } = await periodoAbierto(caja)
     const calc = calcularCierre({
       aperturaC, cobrosC: cobros.map((c) => aCentavos(c.monto)), salidasC: salidas.map((s) => aCentavos(s.monto)),
       contadoC, fondoFijoC, toleranciaC,
