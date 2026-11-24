@@ -7,87 +7,8 @@ import { useNuevosPedidos } from '@/lib/useNuevosPedidos'
 import { NotifContainer, useNotifs } from '@/components/NotifToast'
 import ConnectionBanner from '@/components/ConnectionBanner'
 import ToastHost from '@/components/ToastHost'
-
-const NAV_ALL = [
-  { href:'/dashboard',              label:'Inicio',       icon:'🏠', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
-  { href:'/dashboard/tablero',      label:'Tablero',      icon:'📊', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
-  // Plan de fábrica (9-nov-2026): CORTE · DISEÑO · CONFECCIÓN + QUÉ SE HACE HOY. Solo guía.
-  { href:'/dashboard/plan-fabrica', label:'Plan de fábrica', icon:'🏭', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
-  { href:'/dashboard/calendario',   label:'Calendario',   icon:'📅', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
-  // `oAcceso`: ademas del rol, lo ve quien tenga ese permiso marcado por persona.
-  // Asi los de DISEÑO pueden vender sin dejar de ser produccion (21-ago-2026).
-  { href:'/dashboard/nuevo-pedido', label:'Nueva Venta',  icon:'➕', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'], oAcceso:'VENTAS' },
-  // Link de pago Payphone (10-nov-2026): celular + valor → se manda por el WhatsApp del vendedor.
-  { href:'/dashboard/link-pago',    label:'Link de pago', icon:'💳', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'], oAcceso:'VENTAS' },
-  { href:'/dashboard/mis-pedidos',  label:'Mis Pedidos',  icon:'📦', roles:['VENDEDOR'], oAcceso:'VENTAS' },
-  { href:'/dashboard/historial',    label:'Historial',    icon:'📋', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','DESPACHO','CORTE'] },
-  // Consultar guías (20-nov-2026): ¿ya salió?, ¿con qué guía? Solo lectura, con el alcance del Historial.
-  { href:'/dashboard/guias',        label:'Guías',        icon:'🔎', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW','DESPACHO'], oAcceso:'VENTAS' },
-  { href:'/dashboard/catalogo',     label:'Catálogo',     icon:'🛍️', roles:['ADMIN','VENDEDOR'] },
-  { href:'/dashboard/producto-nuevo', label:'Subir producto', icon:'🏷️', roles:['ADMIN'] },
-  { href:'/dashboard/cotizacion',   label:'Cotización',   icon:'📄', roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'] },
-  { href:'/dashboard/corte',       label:'Corte',        icon:'✂️', roles:['ADMIN','CORTE'] },
-  { href:'/dashboard/produccion',   label:'Producción',   icon:'🏭', roles:['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','CORTE'] },
-  { href:'/dashboard/impresion',    label:'Imprimir',     icon:'🖨️', roles:['ADMIN','ESTAMPADO','SUBLIMACION','BORDADO','DISEÑO','CORTE'] },
-  { href:'/dashboard/despacho',     label:'Despacho',     icon:'🚚', roles:['ADMIN','DESPACHO'] },
-  { href:'/dashboard/tipos-prenda', label:'Tipos de prenda', icon:'👕', roles:['ADMIN'] },
-  { href:'/dashboard/promo-seguimiento', label:'Promo del seguimiento', icon:'🎁', roles:['ADMIN'] },
-  { href:'/dashboard/auto',         label:'AUTO',         icon:'🤖', roles:['ADMIN'] },
-  { href:'/dashboard/pauta',        label:'Pauta',        icon:'📣', roles:['ADMIN'] },
-  // Caja de la tienda (23-nov-2026): la responsable cierra el día; el admin controla. Permiso CAJA.
-  { href:'/dashboard/caja', label:'Caja', icon:'💵', roles:['ADMIN'], oAcceso:'CAJA' },
-  // Reporte de links de pago Payphone + dLocal (13-nov-2026): ¿se pagan? + balance. Solo ADMIN.
-  { href:'/dashboard/reporte-pagos', label:'Reporte de pagos', icon:'💰', roles:['ADMIN'] },
-  { href:'/dashboard/errores',      label:'Errores',      icon:'🩺', roles:['ADMIN'] },
-  { href:'/dashboard/tareas',       label:'Tareas automáticas', icon:'⏱️', roles:['ADMIN'] },
-  { href:'/dashboard/usuarios',     label:'Usuarios',     icon:'👥', roles:['ADMIN'] },
-  // Los inbox son OTRAS aplicaciones: se abren en pestaña nueva y no se pintan
-  // como "activas" nunca. Quién las ve NO depende del rol sino de `accesos`,
-  // que se marca por persona en la pantalla de Usuarios.
-  { href:'https://inbox.apps.mandarinaec.com',     label:'Inbox Mandarina', icon:'🍊', externo:true, acceso:'INBOX_MANDARINA' },
-  { href:'https://ind-inbox.apps.mandarinaec.com', label:'Inbox Indstore',  icon:'🏪', externo:true, acceso:'INBOX_INDSTORE' },
-  // El panel del club de premios (15-oct-2026) es otra app en premios.apps.mandarinaec.com:
-  // entra con esta MISMA sesión (cookie de .apps.mandarinaec.com) y relee el rol en la base.
-  { href:'https://premios.apps.mandarinaec.com/admin', label:'Club de premios', icon:'🎁', externo:true, roles:['ADMIN'], oAcceso:['CLUB_MANDARINA','CLUB_INDSTORE'] },
-  // Lector del QR de los comprobantes de transferencia (20-oct-2026): página aparte,
-  // sin sesión, todo se lee en el celular. Repo: Desktop\LECTOR-QR-PAGOS.
-  { href:'https://lector-qr-pagos.vercel.app', label:'Validar comprobante', icon:'🧾', externo:true, roles:['ADMIN','VENDEDOR','VENDEDOR_YAW'], oAcceso:'VENTAS' },
-]
-
-const ROL_PRIORITY = {
-  VENDEDOR:    ['nuevo-pedido','link-pago','mis-pedidos','lector-qr','historial','guias','cotizacion','catalogo','tablero'],
-  VENDEDOR_YAW:['nuevo-pedido','link-pago','lector-qr','historial','guias','cotizacion','tablero'],
-  DISEÑO:      ['produccion','plan-fabrica','tablero','historial','impresion'],
-  ESTAMPADO:   ['produccion','plan-fabrica','tablero','historial','impresion'],
-  SUBLIMACION: ['produccion','plan-fabrica','tablero','historial','impresion'],
-  BORDADO:     ['produccion','plan-fabrica','tablero','historial','impresion'],
-  CORTE:       ['corte','plan-fabrica','tablero','historial'],
-  DESPACHO:    ['despacho','guias','plan-fabrica','tablero','historial'],
-  ADMIN:       ['tablero','plan-fabrica','nuevo-pedido','link-pago','historial','produccion','despacho','usuarios'],
-}
-
-function getNavItems(user) {
-  const rol = user?.rol
-  const accesos = Array.isArray(user?.accesos) ? user.accesos : []
-  // Tres formas de ganarse un item del menu:
-  //   `acceso`  → SOLO por permiso de persona (los inbox, que no son del CRM).
-  //   `oAcceso` → por rol O por permiso: la venta, que hace DISEÑO ademas de
-  //                su trabajo. Sin este 'o' habria que darles rol VENDEDOR y
-  //                perderian la bandeja de Produccion.
-  //   `roles`   → solo por rol, como siempre.
-  const all = NAV_ALL.filter(n => {
-    if (n.acceso) return accesos.includes(n.acceso)
-    if (n.roles?.includes(rol)) return true
-    // `oAcceso` puede ser uno o varios: basta tener cualquiera (el club: Mandarina o IND).
-    return n.oAcceso ? [].concat(n.oAcceso).some(a => accesos.includes(a)) : false
-  })
-  const priority = ROL_PRIORITY[rol] || []
-  if (!priority.length) return all
-  const inicio = all.find(n => n.href === '/dashboard')
-  const prioItems = priority.map(slug => all.find(n => n.href.includes(slug))).filter(Boolean)
-  const rest = all.filter(n => n.href !== '/dashboard' && !prioItems.includes(n))
-  return [inicio, ...prioItems, ...rest].filter(Boolean)
-}
+// Qué opciones ve cada quien, sus grupos y el buscador: lib/menu.js (con tests).
+import { getNavItems, agruparMenu, buscarEnMenu } from '@/lib/menu'
 
 // Componente separado con useSearchParams — DEBE estar en <Suspense>
 function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
@@ -152,6 +73,67 @@ function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
   return null
 }
 
+// Lista del menú. Con pocas opciones (vendedores, taller) es la lista plana de
+// siempre. Con muchas (admin, 24-nov-2026) va en grupos con título y con un
+// buscador arriba: se escribe «caj» y queda solo Caja; Enter abre la primera.
+function ListaMenu({ items, rol, menuOpen, setMenuOpen, variant, busqueda, setBusqueda, inputRef, onIr }) {
+  const enlace = (item) => (
+    <Suspense key={item.href} fallback={variant === 'menu'
+      ? <div className="flex items-center gap-4 px-4 py-3.5 text-gray-500 text-sm"><span aria-hidden="true">{item.icon}</span> {item.label}</div>
+      : <div className="flex items-center gap-3 px-3 py-2.5 text-gray-500 text-sm"><span aria-hidden="true">{item.icon}</span> {item.label}</div>}>
+      <ActiveLink item={item} rol={rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant={variant} />
+    </Suspense>
+  )
+  const secciones = agruparMenu(items)
+  if (!secciones) return items.map(enlace)
+
+  const buscando = busqueda.trim() !== ''
+  const resultados = buscando ? buscarEnMenu(items, busqueda) : []
+  const idInput = `buscar-menu-${variant}`
+  return (
+    <>
+      {/* Pegado arriba: al bajar por el menú, el buscador no se va. */}
+      <div className="sticky top-0 z-10 bg-gray-900 pb-2">
+        <label htmlFor={idInput} className="sr-only">Buscar en el menú</label>
+        <input ref={inputRef} id={idInput} type="search" value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              const primero = buscarEnMenu(items, busqueda)[0]
+              if (primero) { e.preventDefault(); onIr(primero) }
+            } else if (e.key === 'Escape' && busqueda) {
+              // Primero borra lo escrito; un segundo Escape ya cierra el menú.
+              e.stopPropagation(); setBusqueda('')
+            }
+          }}
+          placeholder={variant === 'sidebar' ? 'Buscar…   Ctrl+K' : 'Buscar en el menú…'}
+          autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="go"
+          // 16px en el celular: con menos, el iPhone hace zoom al tocar el campo.
+          className={`w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mandarina-500 ${variant === 'menu' ? 'text-base' : 'text-sm'}`} />
+        <span className="sr-only" aria-live="polite">
+          {buscando ? (resultados.length === 1 ? '1 opción' : `${resultados.length} opciones`) : ''}
+        </span>
+      </div>
+      {buscando
+        ? (resultados.length
+            ? <div className="space-y-1">{resultados.map(enlace)}</div>
+            : <p className="px-3 py-2 text-sm text-gray-500">Nada con «{busqueda.trim()}».</p>)
+        : secciones.map(s => (
+            <div key={s.id} role={s.titulo ? 'group' : undefined}
+              aria-labelledby={s.titulo ? `menu-${variant}-${s.id}` : undefined}>
+              {s.titulo && (
+                <div id={`menu-${variant}-${s.id}`}
+                  className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  {s.titulo}
+                </div>
+              )}
+              <div className="space-y-1">{s.items.map(enlace)}</div>
+            </div>
+          ))}
+    </>
+  )
+}
+
 // Spinner de pantalla completa mientras se lee la sesión. role="status" + texto
 // oculto: sin eso un lector de pantalla no dice nada y parece colgado.
 function CargandoPantalla() {
@@ -195,6 +177,28 @@ function DashboardChrome({ children }) {
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [letraGrande, setLetraGrande] = useState(false)
+  // Buscador del menú (solo aparece cuando el menú va en grupos).
+  const [busqueda, setBusqueda] = useState('')
+  const buscarEscritorioRef = useRef(null)
+  const buscarMovilRef = useRef(null)
+  const pathname = usePathname()
+  // Al cambiar de pantalla, el buscador se limpia y el menú vuelve a sus grupos.
+  useEffect(() => { setBusqueda('') }, [pathname])
+
+  // Ctrl+K (⌘K en Mac) lleva al buscador del menú. Si el menú es plano no hay
+  // buscador y la tecla queda para el navegador.
+  useEffect(() => {
+    const alTeclear = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || String(e.key).toLowerCase() !== 'k') return
+      const escritorio = window.matchMedia('(min-width: 768px)').matches
+      if (!(escritorio ? buscarEscritorioRef.current : buscarMovilRef.current)) return
+      e.preventDefault()
+      if (escritorio) { buscarEscritorioRef.current.focus(); buscarEscritorioRef.current.select() }
+      else { setMenuOpen(true); setTimeout(() => buscarMovilRef.current?.focus(), 50) }
+    }
+    document.addEventListener('keydown', alTeclear)
+    return () => document.removeEventListener('keydown', alTeclear)
+  }, [])
 
   // Foco del menú del celular: al abrir entra al menú (✕), al cerrar vuelve al
   // ☰. Sin esto, con teclado o lector de pantalla el foco quedaba DETRÁS del
@@ -212,7 +216,7 @@ function DashboardChrome({ children }) {
         if (e.key === 'Escape') { setMenuOpen(false); return }
         // Tab no se escapa del menú mientras está abierto (es modal).
         if (e.key !== 'Tab' || !cajonRef.current) return
-        const enfocables = cajonRef.current.querySelectorAll('a[href], button:not([disabled])')
+        const enfocables = cajonRef.current.querySelectorAll('a[href], button:not([disabled]), input:not([disabled])')
         if (!enfocables.length) return
         const primero = enfocables[0]
         const ultimo = enfocables[enfocables.length - 1]
@@ -273,6 +277,13 @@ function DashboardChrome({ children }) {
   }
 
   const navItems = getNavItems(user)
+  // Enter en el buscador: abre la primera opción encontrada.
+  function irA(item) {
+    setBusqueda('')
+    setMenuOpen(false)
+    if (item.externo) window.open(item.href, '_blank', 'noopener,noreferrer')
+    else router.push(item.href)
+  }
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -362,13 +373,8 @@ function DashboardChrome({ children }) {
             overscroll-contain: al llegar al final de la lista, el dedo no arrastra
             la página de atrás (ni dispara el "tirar para recargar"). */}
         <nav aria-label="Menú principal" className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 space-y-1">
-          {navItems.map(item => (
-            <Suspense key={item.href} fallback={
-              <div className="flex items-center gap-4 px-4 py-3.5 text-gray-500 text-sm"><span aria-hidden="true">{item.icon}</span> {item.label}</div>
-            }>
-              <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="menu" />
-            </Suspense>
-          ))}
+          <ListaMenu items={navItems} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="menu"
+            busqueda={busqueda} setBusqueda={setBusqueda} inputRef={buscarMovilRef} onIr={irA} />
         </nav>
 
         {/* Footer del drawer */}
@@ -392,13 +398,8 @@ function DashboardChrome({ children }) {
         </Link>
         {/* min-h-0 es CRUCIAL en flex-col: permite que flex-1 comprima el nav en lugar de estirarlo */}
         <nav aria-label="Menú principal" className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1">
-          {navItems.map(item => (
-            <Suspense key={item.href} fallback={
-              <div className="flex items-center gap-3 px-3 py-2.5 text-gray-500 text-sm"><span aria-hidden="true">{item.icon}</span> {item.label}</div>
-            }>
-              <ActiveLink item={item} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="sidebar" />
-            </Suspense>
-          ))}
+          <ListaMenu items={navItems} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="sidebar"
+            busqueda={busqueda} setBusqueda={setBusqueda} inputRef={buscarEscritorioRef} onIr={irA} />
         </nav>
         <div className="border-t border-gray-800 pt-4 mt-4">
           <div className="px-3 py-2 mb-2">
