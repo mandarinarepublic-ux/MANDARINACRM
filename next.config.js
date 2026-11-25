@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 // build: 2026-06-26
 const nextConfig = {
+  // Qué versión trae el código de la pestaña. app/dashboard/layout.js lo compara
+  // con /api/auth/yo y, si lo publicado es otro, ofrece «Hay una versión nueva».
+  env: { BUILD_CLIENTE: process.env.VERCEL_GIT_COMMIT_SHA || '' },
+
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Don't bundle server-only modules on client side

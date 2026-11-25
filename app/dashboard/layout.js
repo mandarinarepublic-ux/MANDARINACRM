@@ -9,6 +9,8 @@ import ConnectionBanner from '@/components/ConnectionBanner'
 import ToastHost from '@/components/ToastHost'
 // Qué opciones ve cada quien, sus grupos y el buscador: lib/menu.js (con tests).
 import { getNavItems, agruparMenu, buscarEnMenu } from '@/lib/menu'
+// Permisos al día desde la base y aviso de versión nueva: lib/sesionCliente.js.
+import { refrescarUsuario, hayVersionNueva } from '@/lib/sesionCliente'
 
 // Componente separado con useSearchParams — DEBE estar en <Suspense>
 function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
@@ -256,6 +258,40 @@ function DashboardChrome({ children }) {
     setUser(JSON.parse(stored))
   }, [])
 
+  // Ponerse al día con la base: lo guardado en `mp_user` es una copia de cuando
+  // la persona ENTRÓ, así que un permiso marcado después en Usuarios no salía en
+  // el menú hasta cerrar sesión (Jackeline y CAJA, 24-nov-2026). Se consulta al
+  // abrir, cada 5 minutos y al volver a la pestaña. La misma consulta dice qué
+  // versión está publicada; si es otra, sale el botón para actualizar. No se
+  // recarga sola: podría haber un pedido a medio llenar.
+  const [versionNueva, setVersionNueva] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    async function ponerseAlDia() {
+      try {
+        const r = await fetch('/api/auth/yo', { cache: 'no-store' })
+        const data = await r.json().catch(() => ({}))
+        if (!vivo) return
+        if (hayVersionNueva(process.env.BUILD_CLIENTE, data?.build)) setVersionNueva(true)
+        if (!r.ok || !data?.user) return
+        const nuevo = refrescarUsuario(JSON.parse(localStorage.getItem('mp_user') || 'null'), data.user)
+        if (nuevo) {
+          localStorage.setItem('mp_user', JSON.stringify(nuevo))
+          setUser(nuevo)
+        }
+      } catch {}
+    }
+    ponerseAlDia()
+    const cada5min = setInterval(ponerseAlDia, 5 * 60 * 1000)
+    const alVolver = () => { if (document.visibilityState === 'visible') ponerseAlDia() }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => {
+      vivo = false
+      clearInterval(cada5min)
+      document.removeEventListener('visibilitychange', alVolver)
+    }
+  }, [])
+
   // Cerrar sesión de verdad: además de olvidar al usuario en el navegador, hay
   // que pedirle al servidor que borre la cookie firmada, que es la credencial.
   async function logout() {
@@ -296,6 +332,13 @@ function DashboardChrome({ children }) {
 
       {/* Banner de conexión (offline / reconectado) — fijo arriba */}
       <ConnectionBanner />
+
+      {versionNueva && (
+        <button type="button" onClick={() => window.location.reload()}
+          className="fixed z-[250] left-1/2 -translate-x-1/2 bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] whitespace-nowrap px-4 py-2.5 rounded-full bg-mandarina-500 hover:bg-mandarina-600 text-white text-sm font-semibold shadow-lg shadow-black/40 transition-colors">
+          🔄 Hay una versión nueva · Actualizar
+        </button>
+      )}
 
       {/* MOBILE TOP BAR
           paddingTop = margen seguro: con la PWA a pantalla completa
