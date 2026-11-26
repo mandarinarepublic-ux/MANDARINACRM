@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { GRUPOS } from '@/lib/conexiones'
+import { GRUPOS, enlacePago } from '@/lib/conexiones'
 
 // Tablero tipo panel de auto: una luz por servicio del que depende la empresa.
 // Lo llena la rutina de Claude (7:00 y 15:00). Ver lib/conexiones.js.
@@ -66,9 +66,11 @@ export default function PanelConexiones({ headers }) {
               {suyas.map(c => {
                 const l = LUZ[c.estado] || LUZ.gris
                 const open = abierta === c.servicio
+                const pago = enlacePago(c)
                 return (
-                  <button key={c.servicio} type="button" onClick={() => setAbierta(open ? null : c.servicio)}
-                    className={`text-left rounded-xl border ${l.borde} bg-black/40 px-3 py-2 transition hover:bg-black/60 ${open ? 'col-span-2 sm:col-span-3' : ''}`}>
+                  <div key={c.servicio} className={`rounded-xl border ${l.borde} bg-black/40 transition hover:bg-black/60 ${open ? 'col-span-2 sm:col-span-3' : ''}`}>
+                  <button type="button" onClick={() => setAbierta(open ? null : c.servicio)}
+                    className="w-full text-left px-3 py-2">
                     <div className="flex items-center gap-2">
                       <span className={`inline-block h-3 w-3 shrink-0 rounded-full ${l.bg}`} style={{ boxShadow: l.glow }} />
                       <span className="text-xs font-semibold text-gray-100 truncate">{c.nombre}</span>
@@ -80,6 +82,14 @@ export default function PanelConexiones({ headers }) {
                       </p>
                     )}
                   </button>
+                  {pago && (
+                    // Enlace FUERA del botón: un <a> dentro de <button> es HTML inválido.
+                    <a href={pago} target="_blank" rel="noopener noreferrer"
+                      className="mx-3 mb-2 flex items-center justify-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-500">
+                      💳 Pagar en Meta
+                    </a>
+                  )}
+                  </div>
                 )
               })}
             </div>

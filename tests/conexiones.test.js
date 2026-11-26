@@ -58,3 +58,14 @@ test('la alerta pone los rojos primero y dice que algo está parado', () => {
 test('resumen cuenta por color', () => {
   assert.deepEqual(resumen([{ estado: 'verde' }, { estado: 'rojo' }, { estado: 'verde' }]), { verde: 2, amarillo: 0, rojo: 1, gris: 0 })
 })
+
+// 26-nov-2026: botón de pago directo a la facturación de la WABA cuando WhatsApp cae.
+test('el botón de pago solo aparece con WhatsApp en rojo o amarillo', async () => {
+  const { enlacePago } = await import('../lib/conexiones.js')
+  const ind = enlacePago({ servicio: 'whatsapp_ind', estado: 'rojo' })
+  assert.match(ind, /asset_id=1043571971409840/)
+  assert.match(ind, /account_type=whatsapp-business-account/)
+  assert.match(enlacePago({ servicio: 'whatsapp_mandi', estado: 'amarillo' }), /asset_id=1250794910496982/)
+  assert.equal(enlacePago({ servicio: 'whatsapp_ind', estado: 'verde' }), null)
+  assert.equal(enlacePago({ servicio: 'vercel', estado: 'rojo' }), null)
+})
