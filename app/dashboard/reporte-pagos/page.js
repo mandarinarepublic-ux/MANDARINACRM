@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 
 /**
@@ -60,6 +60,70 @@ function fmtCelular(c) {
   return '+' + d
 }
 
+// Lo que la pasarela dice de quién pagó, en el orden en que se pinta (27-nov-2026).
+const DATOS_PAGADOR = [
+  ['pagador_nombre', 'Nombre (pasarela)'], ['pagador_email', 'Email'], ['pagador_telefono', 'Teléfono (pasarela)'],
+  ['pagador_documento', 'Cédula / documento'], ['tarjeta', 'Tarjeta'], ['tarjeta_tipo', 'Tipo'],
+  ['tarjeta_ultimos', 'Últimos 4'], ['transaction_id', '# transacción'], ['autorizacion', 'Autorización'],
+  ['externo_id', 'Id en dLocal'], ['client_tx_id', 'Id del link'],
+]
+
+// Payphone manda en `pagador` el email y dLocal el nombre (columna vieja): se
+// muestra solo si no repite lo que ya está en las columnas nuevas.
+const pagadorViejo = (l) => l.pagador && l.pagador !== l.pagador_email && l.pagador !== l.pagador_nombre ? l.pagador : null
+
+function DetalleLink({ l }) {
+  const [crudo, setCrudo] = useState(undefined)   // undefined = sin pedir · null = no hay
+  const [cargando, setCargando] = useState(false)
+  const [err, setErr] = useState('')
+  async function verCrudo() {
+    setCargando(true); setErr('')
+    try {
+      const r = await fetch('/api/reporte-pagos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'datos_pasarela', id: l.id }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo leer')
+      setCrudo(d.datos)
+    } catch (e) { setErr(e.message) } finally { setCargando(false) }
+  }
+  const filas = DATOS_PAGADOR.filter(([k]) => l[k])
+  const viejo = pagadorViejo(l)
+  return (
+    <div className="space-y-2">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
+        {l.cliente_nombre && (
+          <div><dt className="text-gray-500">Cliente ({l.cliente_fuente})</dt><dd className="text-white">{l.cliente_nombre}</dd></div>
+        )}
+        <div><dt className="text-gray-500">Celular del link</dt><dd className="text-white">{fmtCelular(l.celular)}</dd></div>
+        {filas.map(([k, txt]) => (
+          <div key={k}><dt className="text-gray-500">{txt}</dt><dd className="text-white break-all">{l[k]}</dd></div>
+        ))}
+        {viejo && <div><dt className="text-gray-500">Pagador</dt><dd className="text-white break-all">{viejo}</dd></div>}
+        {l.pagado_en && <div><dt className="text-gray-500">Pagó</dt><dd className="text-white">{fmtFecha(l.pagado_en)}</dd></div>}
+        {l.link && (
+          <div><dt className="text-gray-500">Link</dt><dd><a href={l.link} target="_blank" rel="noopener noreferrer" className="text-mandarina-400 hover:underline break-all">{l.link}</a></dd></div>
+        )}
+      </dl>
+      {!l.con_datos_pasarela ? (
+        <p className="text-gray-500">
+          {l.estado === 'PAGADO' && l.proveedor === 'PAYPHONE'
+            ? 'Los datos completos de Payphone se traen solos con 🔄 Actualizar (de a 10 por vuelta).'
+            : 'La pasarela no mandó más datos de este link.'}
+        </p>
+      ) : crudo === undefined ? (
+        <button onClick={verCrudo} disabled={cargando} className="text-mandarina-400 hover:underline disabled:opacity-50">
+          {cargando ? '⏳ Leyendo…' : 'Ver todo lo que mandó la pasarela'}
+        </button>
+      ) : (
+        <pre className="bg-gray-950 border border-gray-800 rounded-lg p-2 overflow-x-auto text-[11px] text-gray-300 max-h-72">{JSON.stringify(crudo, null, 2)}</pre>
+      )}
+      {err && <p className="text-red-400">⚠️ {err}</p>}
+    </div>
+  )
+}
+
 function Tarjeta({ titulo, valor, sub, tono = 'text-white' }) {
   return (
     <div className="card p-3">
@@ -114,6 +178,10 @@ export default function ReportePagosPage() {
   const [tienda, setTienda] = useState('')
   const [vendedor, setVendedor] = useState('')
   const [estado, setEstado] = useState('')
+  // Buscador (27-nov-2026): con texto busca en TODA la historia, no en el rango.
+  const [busca, setBusca] = useState('')
+  const [q, setQ] = useState('')
+  const [abierto, setAbierto] = useState(null)
 
   const [datos, setDatos] = useState(null)
   const [cargando, setCargando] = useState(false)
@@ -146,13 +214,23 @@ export default function ReportePagosPage() {
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
     try {
-      const q = new URLSearchParams({ desde, hasta, por, proveedor, tienda, vendedor, estado })
-      const r = await fetch(`/api/reporte-pagos?${q}`, { cache: 'no-store' })
+      const params = new URLSearchParams({ desde, hasta, por, proveedor, tienda, vendedor, estado, q })
+      const r = await fetch(`/api/reporte-pagos?${params}`, { cache: 'no-store' })
       const d = await r.json().catch(() => ({}))
       if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo cargar el reporte')
       setDatos(d)
     } catch (e) { setError(e.message) } finally { setCargando(false) }
-  }, [desde, hasta, por, proveedor, tienda, vendedor, estado])
+  }, [desde, hasta, por, proveedor, tienda, vendedor, estado, q])
+
+  // Se busca al dejar de escribir (350 ms), no con cada tecla. Menos de 3
+  // caracteres no busca: «09» trae medio reporte.
+  useEffect(() => {
+    const t = busca.trim()
+    const listo = t.length >= 3 ? t : ''
+    if (listo === q) return
+    const id = setTimeout(() => setQ(listo), 350)
+    return () => clearTimeout(id)
+  }, [busca, q])
 
   const sincronizar = useCallback(async () => {
     setSincronizando(true); setAvisosSync([])
@@ -225,7 +303,7 @@ export default function ReportePagosPage() {
     if (primera) { setPrimera(false); sincronizar(); return }
     cargar()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desde, hasta, por, proveedor, tienda, vendedor, estado])
+  }, [desde, hasta, por, proveedor, tienda, vendedor, estado, q])
 
   const t = datos?.resumen?.total
   const avisos = [...new Set([...(datos?.avisos || []), ...avisosSync])]
@@ -237,13 +315,14 @@ export default function ReportePagosPage() {
   // aunque el panel esté cerrado. Un reporte filtrado se ve igual que uno completo.
   const nombreVendedor = (id) => id === 'SIN_VENDEDOR' ? 'Sin vendedor' : ((datos?.vendedores || []).find(v => String(v.id) === String(id))?.nombre || id)
   const chips = [
+    q && { clave: 'q', txt: `🔍 «${q}» en toda la historia`, quitar: () => { setBusca(''); setQ('') } },
     por !== 'creado' && { clave: 'por', txt: 'Por fecha de pago', quitar: () => setPor('creado') },
     proveedor && { clave: 'proveedor', txt: NOMBRE_PROV[proveedor] || proveedor, quitar: () => setProveedor('') },
     tienda && { clave: 'tienda', txt: tienda === 'SIN_TIENDA' ? 'Sin tienda' : (NOMBRE_TIENDA[tienda] || tienda), quitar: () => setTienda('') },
     vendedor && { clave: 'vendedor', txt: nombreVendedor(vendedor), quitar: () => setVendedor('') },
     estado && { clave: 'estado', txt: (ESTADO[estado]?.txt || estado).replace(/^\S+\s/, ''), quitar: () => setEstado('') },
   ].filter(Boolean)
-  const limpiarFiltros = () => { setPor('creado'); setProveedor(''); setTienda(''); setVendedor(''); setEstado('') }
+  const limpiarFiltros = () => { setBusca(''); setQ(''); setPor('creado'); setProveedor(''); setTienda(''); setVendedor(''); setEstado('') }
   const fDia = (d) => new Date(`${d}T12:00:00Z`).toLocaleDateString('es-EC', { day: 'numeric', month: 'short', timeZone: 'UTC' })
   const rangoTxt = desde === hasta ? fDia(desde) : `${fDia(desde)} – ${fDia(hasta)}`
   const VISTAS = [{ k: 'proveedor', txt: 'Pasarela' }, { k: 'tienda', txt: 'Tienda' }, { k: 'vendedor', txt: 'Vendedor' }]
@@ -366,7 +445,16 @@ export default function ReportePagosPage() {
       {/* ── 2. Período y filtros: UNA fila; el resto se despliega ── */}
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-gray-200 mb-2">Links del período</h2>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="mb-2">
+          <label htmlFor="buscar-pago" className="sr-only">Buscar un pago</label>
+          <input id="buscar-pago" type="search" className="input" value={busca} enterKeyHint="search"
+            autoComplete="off" spellCheck={false}
+            onChange={e => setBusca(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { const t = busca.trim(); setQ(t.length >= 3 ? t : '') } }}
+            placeholder="🔍 Buscar: celular, nombre, email, cédula, últimos 4, # transacción, valor…" />
+          {busca.trim() && busca.trim().length < 3 && <p className="text-[11px] text-gray-500 mt-1">Escribe al menos 3 letras o números.</p>}
+        </div>
+        <div className={`flex flex-wrap items-center gap-2 ${q ? 'opacity-50' : ''}`} title={q ? 'Mientras buscas, se busca en toda la historia' : undefined}>
           <div className="flex rounded-xl border border-gray-700 overflow-hidden" role="group" aria-label="Período">
             {ps.map(p => (
               <button key={p.k} onClick={() => { setDesde(p.desde); setHasta(p.hasta) }} aria-pressed={presetActivo === p.k}
@@ -487,11 +575,17 @@ export default function ReportePagosPage() {
 
           {/* Detalle */}
           <div className="mt-6 flex items-baseline justify-between mb-2">
-            <h2 className="text-sm font-semibold text-gray-200">Detalle <span className="text-gray-500 font-normal">· {datos.filas.length} links</span></h2>
+            <h2 className="text-sm font-semibold text-gray-200">
+              {datos.q ? <>Resultados de «{datos.q}»</> : 'Detalle'} <span className="text-gray-500 font-normal" aria-live="polite">· {datos.filas.length} links{datos.q ? ' en toda la historia' : ''}</span>
+            </h2>
             {cargando && <span className="text-xs text-gray-500">⏳</span>}
           </div>
           {datos.filas.length === 0 ? (
-            <div className="card p-4 text-sm text-gray-400">No hay links en este período con estos filtros. Prueba otro rango o quita filtros.</div>
+            <div className="card p-4 text-sm text-gray-400">
+              {datos.q
+                ? <>Ningún pago con «{datos.q}». Prueba con otro dato: el celular, un apellido, el valor o el # de transacción.</>
+                : 'No hay links en este período con estos filtros. Prueba otro rango o quita filtros.'}
+            </div>
           ) : (
             <div className="card overflow-x-auto">
               <table className="w-full text-xs">
@@ -508,14 +602,23 @@ export default function ReportePagosPage() {
                 <tbody>
                   {datos.filas.map(l => {
                     const est = ESTADO[l.estado] || ESTADO.PENDIENTE
+                    const nombre = l.cliente_nombre || l.pagador_nombre
+                    const estaAbierto = abierto === l.id
                     return (
-                      <tr key={l.id} className="border-t border-gray-800/70 text-gray-300 align-top">
+                      <Fragment key={l.id}>
+                      <tr className="border-t border-gray-800/70 text-gray-300 align-top">
                         <td className="py-2 px-3 whitespace-nowrap text-gray-400">{fmtFecha(l.creado_en)}</td>
                         <td className="py-2 px-3">
-                          <div className="text-white whitespace-nowrap">{fmtCelular(l.celular)}</div>
+                          {nombre && <div className="text-white font-semibold">{nombre}</div>}
+                          <div className={nombre ? 'text-gray-400 whitespace-nowrap' : 'text-white whitespace-nowrap'}>{fmtCelular(l.celular)}</div>
                           {l.estado === 'PAGADO' && (
-                            <div className="text-gray-500">Pagó {fmtFecha(l.pagado_en)}{l.tarjeta ? `, ${l.tarjeta}` : ''}</div>
+                            <div className="text-gray-500">Pagó {fmtFecha(l.pagado_en)}{l.tarjeta ? `, ${l.tarjeta}` : ''}{l.tarjeta_ultimos ? ` ···${l.tarjeta_ultimos}` : ''}</div>
                           )}
+                          {(l.pagador_email || pagadorViejo(l)) && <div className="text-gray-500 break-all">{l.pagador_email || pagadorViejo(l)}</div>}
+                          <button onClick={() => setAbierto(estaAbierto ? null : l.id)} aria-expanded={estaAbierto}
+                            className="mt-1 text-mandarina-400 hover:underline">
+                            {estaAbierto ? 'Ocultar datos ▴' : 'Ver datos ▾'}
+                          </button>
                         </td>
                         <td className="py-2 px-3 hidden md:table-cell">
                           <div>{NOMBRE_TIENDA[l.tienda] || 'Sin tienda'}</div>
@@ -532,6 +635,12 @@ export default function ReportePagosPage() {
                           <span className={`inline-block whitespace-nowrap font-semibold px-2 py-0.5 rounded-lg border ${est.cls}`}>{est.txt}</span>
                         </td>
                       </tr>
+                      {estaAbierto && (
+                        <tr className="bg-gray-900/60">
+                          <td colSpan={6} className="px-3 py-3"><DetalleLink l={l} /></td>
+                        </tr>
+                      )}
+                      </Fragment>
                     )
                   })}
                 </tbody>

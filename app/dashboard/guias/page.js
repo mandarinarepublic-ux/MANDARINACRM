@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import ConsultarGuia from '@/components/ConsultarGuia'
 import { formatFechaCorta } from '@/lib/parseFecha'
 
 /**
@@ -114,6 +115,7 @@ export default function GuiasPage() {
                           {g.transportista}{g.fecha && ` · ${formatFechaCorta(g.fecha)}`}{g.registrado_por && ` · por ${g.registrado_por}`}
                         </div>
                       </div>
+                      <ConsultarGuia numero={g.numero} transportista={g.transportista} className="shrink-0" />
                       {g.foto && (
                         <a href={g.foto} target="_blank" rel="noopener noreferrer" className="text-xs text-mandarina-400 hover:underline shrink-0 min-h-[40px] inline-flex items-center px-1">ver foto</a>
                       )}

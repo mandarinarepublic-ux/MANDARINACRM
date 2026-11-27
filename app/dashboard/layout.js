@@ -8,7 +8,7 @@ import { NotifContainer, useNotifs } from '@/components/NotifToast'
 import ConnectionBanner from '@/components/ConnectionBanner'
 import ToastHost from '@/components/ToastHost'
 // Qué opciones ve cada quien, sus grupos y el buscador: lib/menu.js (con tests).
-import { getNavItems, agruparMenu, buscarEnMenu } from '@/lib/menu'
+import { getNavItems, agruparMenu, buscarEnMenu, pareceBusquedaDePedido, MAX_PEDIDOS_MENU } from '@/lib/menu'
 // Permisos al día desde la base y aviso de versión nueva: lib/sesionCliente.js.
 import { refrescarUsuario, hayVersionNueva } from '@/lib/sesionCliente'
 
@@ -78,7 +78,41 @@ function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
 // Lista del menú. Con pocas opciones (vendedores, taller) es la lista plana de
 // siempre. Con muchas (admin, 24-nov-2026) va en grupos con título y con un
 // buscador arriba: se escribe «caj» y queda solo Caja; Enter abre la primera.
-function ListaMenu({ items, rol, menuOpen, setMenuOpen, variant, busqueda, setBusqueda, inputRef, onIr }) {
+const ESTADO_PEDIDO_CLS = {
+  COMPLETADO: 'text-emerald-300', ENTREGADO: 'text-emerald-300', DESPACHO: 'text-purple-300',
+  EN_FABRICA: 'text-amber-300', CANCELADO: 'text-red-300',
+}
+
+// Pedidos encontrados desde el buscador del menú (27-nov-2026).
+function PedidosDelMenu({ pedidos, variant, onIrPedido }) {
+  if (!pedidos?.texto) return null
+  return (
+    <div role="group" aria-labelledby={`menu-${variant}-pedidos`}>
+      <div id={`menu-${variant}-pedidos`} className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+        Pedidos
+      </div>
+      {pedidos.buscando && <p role="status" className="px-3 py-2 text-sm text-gray-500">Buscando…</p>}
+      {!pedidos.buscando && pedidos.error && <p className="px-3 py-2 text-sm text-red-400">⚠️ {pedidos.error}</p>}
+      {!pedidos.buscando && !pedidos.error && !pedidos.lista.length && (
+        <p className="px-3 py-2 text-sm text-gray-500">Ningún pedido con «{pedidos.texto}».</p>
+      )}
+      <div className="space-y-1">
+        {pedidos.lista.map(p => (
+          <button key={p.pedido_id} type="button" onClick={() => onIrPedido(p.pedido_id)}
+            className={`w-full text-left rounded-xl hover:bg-gray-800 transition-colors ${variant === 'menu' ? 'px-4 py-2.5' : 'px-3 py-2'}`}>
+            <div className="flex items-baseline gap-2">
+              <span className="text-sm font-semibold text-white">📦 {p.pedido_id}</span>
+              <span className={`text-[11px] font-semibold ${ESTADO_PEDIDO_CLS[p.estado] || 'text-gray-400'}`}>{p.estado}</span>
+            </div>
+            {p.cliente && <div className="text-xs text-gray-400 truncate">{p.cliente}</div>}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ListaMenu({ items, rol, menuOpen, setMenuOpen, variant, busqueda, setBusqueda, inputRef, onIr, pedidos, onIrPedido }) {
   const enlace = (item) => (
     <Suspense key={item.href} fallback={variant === 'menu'
       ? <div className="flex items-center gap-4 px-4 py-3.5 text-gray-500 text-sm"><span aria-hidden="true">{item.icon}</span> {item.label}</div>
@@ -101,14 +135,16 @@ function ListaMenu({ items, rol, menuOpen, setMenuOpen, variant, busqueda, setBu
           onChange={e => setBusqueda(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter') {
+              // Primero una opción del menú; si no hay, el primer pedido encontrado.
               const primero = buscarEnMenu(items, busqueda)[0]
               if (primero) { e.preventDefault(); onIr(primero) }
+              else if (pedidos?.lista?.[0] && !pedidos.buscando) { e.preventDefault(); onIrPedido(pedidos.lista[0].pedido_id) }
             } else if (e.key === 'Escape' && busqueda) {
               // Primero borra lo escrito; un segundo Escape ya cierra el menú.
               e.stopPropagation(); setBusqueda('')
             }
           }}
-          placeholder={variant === 'sidebar' ? 'Buscar…   Ctrl+K' : 'Buscar en el menú…'}
+          placeholder={variant === 'sidebar' ? 'Buscar o # pedido…   Ctrl+K' : 'Buscar en el menú o un pedido…'}
           autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="go"
           // 16px en el celular: con menos, el iPhone hace zoom al tocar el campo.
           className={`w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mandarina-500 ${variant === 'menu' ? 'text-base' : 'text-sm'}`} />
@@ -117,9 +153,13 @@ function ListaMenu({ items, rol, menuOpen, setMenuOpen, variant, busqueda, setBu
         </span>
       </div>
       {buscando
-        ? (resultados.length
-            ? <div className="space-y-1">{resultados.map(enlace)}</div>
-            : <p className="px-3 py-2 text-sm text-gray-500">Nada con «{busqueda.trim()}».</p>)
+        ? (
+          <>
+            {resultados.length > 0 && <div className="space-y-1">{resultados.map(enlace)}</div>}
+            {!resultados.length && !pedidos?.texto && <p className="px-3 py-2 text-sm text-gray-500">Nada con «{busqueda.trim()}».</p>}
+            <PedidosDelMenu pedidos={pedidos} variant={variant} onIrPedido={onIrPedido} />
+          </>
+        )
         : secciones.map(s => (
             <div key={s.id} role={s.titulo ? 'group' : undefined}
               aria-labelledby={s.titulo ? `menu-${variant}-${s.id}` : undefined}>
@@ -186,6 +226,31 @@ function DashboardChrome({ children }) {
   const pathname = usePathname()
   // Al cambiar de pantalla, el buscador se limpia y el menú vuelve a sus grupos.
   useEffect(() => { setBusqueda('') }, [pathname])
+
+  // Números de pedido desde el buscador del menú (27-nov-2026): se busca al dejar
+  // de escribir, UNA vez (el menú del celular y el de escritorio comparten esto).
+  // El alcance lo pone /api/guias con la cookie: un vendedor ve solo lo suyo.
+  const VACIO = { texto: '', buscando: false, lista: [], error: '' }
+  const [pedidosMenu, setPedidosMenu] = useState(VACIO)
+  useEffect(() => {
+    const t = busqueda.trim()
+    if (!pareceBusquedaDePedido(t)) { setPedidosMenu(VACIO); return }
+    let vivo = true
+    setPedidosMenu({ texto: t, buscando: true, lista: [], error: '' })
+    const id = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/guias?q=${encodeURIComponent(t)}`, { cache: 'no-store' })
+        const j = await r.json().catch(() => ({}))
+        if (!vivo) return
+        if (!r.ok) throw new Error(j.error || `Error ${r.status}`)
+        setPedidosMenu({ texto: t, buscando: false, lista: (j.resultados || []).slice(0, MAX_PEDIDOS_MENU), error: '' })
+      } catch (e) {
+        if (vivo) setPedidosMenu({ texto: t, buscando: false, lista: [], error: e.message })
+      }
+    }, 300)
+    return () => { vivo = false; clearTimeout(id) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busqueda])
 
   // Ctrl+K (⌘K en Mac) lleva al buscador del menú. Si el menú es plano no hay
   // buscador y la tecla queda para el navegador.
@@ -320,6 +385,11 @@ function DashboardChrome({ children }) {
     if (item.externo) window.open(item.href, '_blank', 'noopener,noreferrer')
     else router.push(item.href)
   }
+  function irAPedido(id) {
+    setBusqueda('')
+    setMenuOpen(false)
+    router.push(`/dashboard/pedido/${encodeURIComponent(id)}`)
+  }
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -417,7 +487,8 @@ function DashboardChrome({ children }) {
             la página de atrás (ni dispara el "tirar para recargar"). */}
         <nav aria-label="Menú principal" className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 space-y-1">
           <ListaMenu items={navItems} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="menu"
-            busqueda={busqueda} setBusqueda={setBusqueda} inputRef={buscarMovilRef} onIr={irA} />
+            busqueda={busqueda} setBusqueda={setBusqueda} inputRef={buscarMovilRef} onIr={irA}
+            pedidos={pedidosMenu} onIrPedido={irAPedido} />
         </nav>
 
         {/* Footer del drawer */}
@@ -442,7 +513,8 @@ function DashboardChrome({ children }) {
         {/* min-h-0 es CRUCIAL en flex-col: permite que flex-1 comprima el nav en lugar de estirarlo */}
         <nav aria-label="Menú principal" className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1">
           <ListaMenu items={navItems} rol={user.rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant="sidebar"
-            busqueda={busqueda} setBusqueda={setBusqueda} inputRef={buscarEscritorioRef} onIr={irA} />
+            busqueda={busqueda} setBusqueda={setBusqueda} inputRef={buscarEscritorioRef} onIr={irA}
+            pedidos={pedidosMenu} onIrPedido={irAPedido} />
         </nav>
         <div className="border-t border-gray-800 pt-4 mt-4">
           <div className="px-3 py-2 mb-2">

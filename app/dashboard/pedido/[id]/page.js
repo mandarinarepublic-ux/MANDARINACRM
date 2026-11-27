@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import ConsultarGuia from '@/components/ConsultarGuia'
 import ItemDetalle from '@/components/pedido/ItemDetalle'
 import { ESTADO_LABELS, ESTADO_LABELS_LARGO } from '@/lib/labels'
 import { parseFecha, formatFechaHumana, formatFechaCorta } from '@/lib/parseFecha'
@@ -624,6 +625,7 @@ export default function PedidoDetailPage() {
                     {/* formatFechaCorta y no split(' '): Supabase manda ISO sin espacios y salía la cadena entera */}
                     {pedido.GUIA_FECHA && <span> · Despachado el {formatFechaCorta(pedido.GUIA_FECHA) || pedido.GUIA_FECHA}</span>}
                   </div>
+                  <ConsultarGuia numero={pedido.GUIA_NUMERO} transportista={pedido.GUIA_TRANSPORTISTA} className="mt-2" />
                 </div>
                 {pedido.GUIA_FOTO_URL && (
                   // Enlace y no img con onClick: así se llega con teclado y el
@@ -1007,6 +1009,7 @@ export default function PedidoDetailPage() {
                   Guía:
                   <span className="text-white font-mono ml-2">{pedido.GUIA_NUMERO || '-'}</span>
                   {pedido.GUIA_TRANSPORTISTA && <span className="text-gray-500 ml-2">· {pedido.GUIA_TRANSPORTISTA}</span>}
+                  <ConsultarGuia numero={pedido.GUIA_NUMERO} transportista={pedido.GUIA_TRANSPORTISTA} className="ml-3 align-middle" />
                 </div>
                 {pedido.GUIA_FECHA && (
                   <div className="text-base text-gray-400 mt-1">

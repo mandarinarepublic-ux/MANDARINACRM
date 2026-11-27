@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import ConsultarGuia from '@/components/ConsultarGuia'
 import { coincideBusqueda } from '@/lib/buscarPedido'
 import { parseFecha, formatFechaDia, formatFechaCorta, inicioDiaEcuador, finDiaEcuador } from '@/lib/parseFecha'
 import { imagenAncho } from '@/lib/imagenes'
@@ -470,6 +471,7 @@ export default function DespachosPage() {
                               <div className="text-white font-mono font-bold"># {p.GUIA_NUMERO}</div>
                               <div className="text-xs text-gray-400">{p.GUIA_TRANSPORTISTA}{p.GUIA_FECHA ? ` · ${formatFechaCorta(p.GUIA_FECHA) || p.GUIA_FECHA}` : ''}</div>
                             </div>
+                            <ConsultarGuia numero={p.GUIA_NUMERO} transportista={p.GUIA_TRANSPORTISTA} className="flex-shrink-0" />
                             {p.GUIA_FOTO_URL && (
                               // Enlace en vez de img con onClick: se alcanza con teclado
                               // y se puede abrir en otra pestaña como cualquier link.
