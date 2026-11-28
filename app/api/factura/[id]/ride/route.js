@@ -107,8 +107,20 @@ function renderRideHtml(id, doc) {
 <body>
   <div class="actions">
     <button class="btn" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
-    <button class="btn sec" onclick="history.back()">← Volver</button>
+    <button class="btn sec" onclick="cerrarRide()">✕ Cerrar</button>
   </div>
+  <script>
+    // El RIDE se abre en una PESTAÑA NUEVA desde el pedido: ahí history.back()
+    // no tiene a dónde volver y el botón no hacía nada. Se cierra la pestaña;
+    // si el navegador no deja (llegó escribiendo la URL), se vuelve atrás o al CRM.
+    function cerrarRide() {
+      window.close();
+      setTimeout(function () {
+        if (history.length > 1) history.back();
+        else location.href = '/dashboard';
+      }, 300);
+    }
+  </script>
   <div class="sheet">
     <div class="top">
       <div class="brand">
