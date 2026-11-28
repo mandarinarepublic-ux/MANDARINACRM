@@ -76,8 +76,9 @@ function ActiveLink({ item, rol, menuOpen, setMenuOpen, variant }) {
 }
 
 // Lista del menú. Con pocas opciones (vendedores, taller) es la lista plana de
-// siempre. Con muchas (admin, 24-nov-2026) va en grupos con título y con un
-// buscador arriba: se escribe «caj» y queda solo Caja; Enter abre la primera.
+// siempre; con muchas (admin, 24-nov-2026) va en grupos con título. El buscador
+// de arriba va en TODOS los perfiles (27-nov-2026): «caj» deja solo Caja, un
+// número abre el pedido; Enter abre la primera.
 const ESTADO_PEDIDO_CLS = {
   COMPLETADO: 'text-emerald-300', ENTREGADO: 'text-emerald-300', DESPACHO: 'text-purple-300',
   EN_FABRICA: 'text-amber-300', CANCELADO: 'text-red-300',
@@ -120,8 +121,10 @@ function ListaMenu({ items, rol, menuOpen, setMenuOpen, variant, busqueda, setBu
       <ActiveLink item={item} rol={rol} menuOpen={menuOpen} setMenuOpen={setMenuOpen} variant={variant} />
     </Suspense>
   )
+  // Con pocas opciones (vendedores, taller) no hay grupos: lista plana. El
+  // buscador va SIEMPRE, en todos los perfiles (27-nov-2026): sirve igual para
+  // opciones del menú y para números de pedido.
   const secciones = agruparMenu(items)
-  if (!secciones) return items.map(enlace)
 
   const buscando = busqueda.trim() !== ''
   const resultados = buscando ? buscarEnMenu(items, busqueda) : []
@@ -160,7 +163,9 @@ function ListaMenu({ items, rol, menuOpen, setMenuOpen, variant, busqueda, setBu
             <PedidosDelMenu pedidos={pedidos} variant={variant} onIrPedido={onIrPedido} />
           </>
         )
-        : secciones.map(s => (
+        : !secciones
+          ? <div className="space-y-1">{items.map(enlace)}</div>
+          : secciones.map(s => (
             <div key={s.id} role={s.titulo ? 'group' : undefined}
               aria-labelledby={s.titulo ? `menu-${variant}-${s.id}` : undefined}>
               {s.titulo && (
@@ -219,7 +224,7 @@ function DashboardChrome({ children }) {
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [letraGrande, setLetraGrande] = useState(false)
-  // Buscador del menú (solo aparece cuando el menú va en grupos).
+  // Buscador del menú (en todos los perfiles).
   const [busqueda, setBusqueda] = useState('')
   const buscarEscritorioRef = useRef(null)
   const buscarMovilRef = useRef(null)
@@ -252,8 +257,8 @@ function DashboardChrome({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busqueda])
 
-  // Ctrl+K (⌘K en Mac) lleva al buscador del menú. Si el menú es plano no hay
-  // buscador y la tecla queda para el navegador.
+  // Ctrl+K (⌘K en Mac) lleva al buscador del menú (en embed no hay menú y la
+  // tecla queda para el navegador).
   useEffect(() => {
     const alTeclear = (e) => {
       if (!(e.ctrlKey || e.metaKey) || String(e.key).toLowerCase() !== 'k') return
