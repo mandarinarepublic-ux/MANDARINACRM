@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { requireAdmin } from '@/lib/auth'
+import { rechazoSiPedidoAjeno } from '@/lib/pedidoAjeno'
 import { logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { parseSubestados, serializeSubestados } from '@/lib/subestados'
@@ -25,6 +26,9 @@ export async function PATCH(req, { params }) {
     // Buscar el ítem (se necesita para logs y auto-avance; las escrituras van por repo).
     const item = await getItemById(id)
     if (!item) return Response.json({ error: 'Ítem no encontrado' }, { status: 404 })
+    // Un vendedor modifica solo prendas de SUS pedidos.
+    const ajeno = await rechazoSiPedidoAjeno(item.PEDIDO_ID)
+    if (ajeno) return ajeno
     const bodyKeys = Object.keys(body).filter(k => !k.startsWith('_'))
 
     // ── CASO 1: solo NOTAS_AREA ──────────────────────────────────────────────

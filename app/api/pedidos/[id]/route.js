@@ -12,6 +12,7 @@ import { recalcTotalesSeguro } from '@/lib/db/totales'
 import { notificarGuiaDespachada } from '@/lib/telegram'
 import { ESTADOS_QUE_EXIGEN_PAGO, transferenciaSinConfirmar } from '@/lib/transferenciaTienda'
 import { puedeAbrirPedido } from '@/lib/tiendasUsuario'
+import { rechazoSiPedidoAjeno } from '@/lib/pedidoAjeno'
 
 // Detalle de UN pedido (join acotado a ese id vía getPedidoById). Las pantallas
 // de detalle y edición antes bajaban la lista COMPLETA con join de 5 tablas solo
@@ -51,6 +52,9 @@ export async function PATCH(req, { params }) {
     // Lectura vía repo (respeta DATA_BACKEND) para diffear contra el valor actual.
     const pedido = await getPedidoById(id)
     if (!pedido) return Response.json({ error: 'Pedido no encontrado' }, { status: 404 })
+    // Un vendedor modifica solo los suyos (VER_TODAS_LAS_VENTAS es para mirar).
+    const ajeno = await rechazoSiPedidoAjeno(pedido)
+    if (ajeno) return ajeno
 
     const now = fechaAhora()
     const changes = []

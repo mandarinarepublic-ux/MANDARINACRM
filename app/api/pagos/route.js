@@ -1,6 +1,7 @@
 import { logCambio } from '@/lib/pedidos'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { createPago, recalcPago } from '@/lib/db/pagos'
+import { rechazoSiPedidoAjeno } from '@/lib/pedidoAjeno'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,12 @@ export async function POST(req) {
   try {
     const body = await req.json()
     const { pedidoId, tipo, monto, fotoComprobante, notas, vendedorId, vendedorNombre } = body
+
+    // Un vendedor registra abonos solo en SUS pedidos.
+    if (pedidoId) {
+      const ajeno = await rechazoSiPedidoAjeno(String(pedidoId))
+      if (ajeno) return ajeno
+    }
 
     if (!pedidoId || !tipo || !monto || parseFloat(monto) <= 0) {
       return Response.json({ error: 'Faltan datos requeridos' }, { status: 400 })

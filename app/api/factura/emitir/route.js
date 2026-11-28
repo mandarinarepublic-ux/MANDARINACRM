@@ -3,6 +3,7 @@ import { emitirFacturaDatil, datilDirectoActivo } from '@/lib/datil'
 import { registrarEvento } from '@/lib/eventos'
 import { getPedidoById } from '@/lib/db/pedidos'
 import { decidirEmision } from '@/lib/facturas-visibilidad'
+import { rechazoSiPedidoAjeno } from '@/lib/pedidoAjeno'
 
 // Punto ÚNICO de emisión de factura. Emite directo en Dátil (lib/datil.js).
 //
@@ -39,7 +40,11 @@ export async function POST(req) {
     //
     // La decisión vive en lib/facturas-visibilidad.js porque acá no se puede
     // probar sin emitir de verdad.
-    const decision = decidirEmision(await getPedidoById(pedidoId))
+    const pedidoLeido = await getPedidoById(pedidoId)
+    // Un vendedor factura solo SUS pedidos.
+    const ajeno = await rechazoSiPedidoAjeno(pedidoLeido)
+    if (ajeno) return ajeno
+    const decision = decidirEmision(pedidoLeido)
     if (decision.accion === 'NO_EXISTE') {
       return Response.json({ ok: false, error: `El pedido ${pedidoId} no existe` }, { status: 404 })
     }

@@ -589,7 +589,12 @@ export default function PedidoDetailPage() {
     }
   }
 
-  const canAddAbono = ['ADMIN', 'VENDEDOR', 'VENDEDOR_YAW'].includes(user?.rol)
+  // Pedido de OTRO vendedor (lo abre quien tiene VER_TODAS_LAS_VENTAS): se ve
+  // completo pero no se modifica. El servidor lo exige igual (lib/pedidoAjeno.js);
+  // esto solo evita ofrecer botones que van a responder 403. (27-nov-2026)
+  const esPedidoAjeno = user?.rol === 'VENDEDOR' && !!pedido.VENDEDOR_ID
+    && pedido.VENDEDOR_ID !== user?.nombre && pedido.VENDEDOR_ID !== user?.id
+  const canAddAbono = ['ADMIN', 'VENDEDOR', 'VENDEDOR_YAW'].includes(user?.rol) && !esPedidoAjeno
 
   const tiendaColor = pedido.TIENDA_ID === 'MANDARINA' ? '#FF6B00' : '#E91E8C'
   const canEditItems = user?.rol === 'ADMIN' || ['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO'].includes(user?.rol)
@@ -1313,7 +1318,12 @@ export default function PedidoDetailPage() {
         {/* Fila 2: factura. Solo aparece si FALTA la factura — si ya existe, el
             botón no se dibuja y arriba se ve la tarjeta azul con el RIDE.
             La regla vive en lib/facturas-visibilidad.js, donde se puede probar. */}
-        {botonFactura(pedido, user?.rol) && (
+        {esPedidoAjeno && (
+          <div role="note" className="mb-2 rounded-xl px-3 py-2 text-xs border border-sky-500/30 bg-sky-500/10 text-sky-300">
+            👁️ Pedido de {pedido.VENDEDOR_ID}: lo puedes ver, pero no modificar.
+          </div>
+        )}
+        {!esPedidoAjeno && botonFactura(pedido, user?.rol) && (
           <div className="flex gap-2">
             <button onClick={emitirFactura} disabled={enviandoFactura}
               className={botonFactura(pedido, user?.rol) === 'PENDIENTE'

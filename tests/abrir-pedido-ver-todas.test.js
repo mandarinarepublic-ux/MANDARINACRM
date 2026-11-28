@@ -31,3 +31,19 @@ test('los demás roles no se restringen aquí', () => {
   assert.equal(puedeAbrirPedido({ ROL: 'ADMIN' }, { vendedorId: 'X', tiendaId: 'YAW' }), true)
   assert.equal(puedeAbrirPedido({ ROL: 'DESPACHO' }, { vendedorId: 'X', tiendaId: 'MANDARINA' }), true)
 })
+
+// ── Modificar: solo los suyos, aunque vea los de todos (27-nov-2026) ─────────
+import { puedeModificarPedido } from '../lib/tiendasUsuario.js'
+
+test('Jackeline modifica los suyos (por nombre o por id) y NO los de otros', () => {
+  assert.equal(puedeModificarPedido(jackeline, { vendedorId: 'JACKELINE BARRETO' }), true)
+  assert.equal(puedeModificarPedido(jackeline, { vendedorId: 'u-jac' }), true)
+  assert.equal(puedeModificarPedido(jackeline, { vendedorId: 'GRACE VEGA' }), false)
+  assert.equal(puedeModificarPedido(jackeline, { vendedorId: '' }), false)
+})
+
+test('modificar: el espacio de Clever cuenta y los demás roles no se frenan aquí', () => {
+  assert.equal(puedeModificarPedido(clever, { vendedorId: 'Clever ' }), true)
+  assert.equal(puedeModificarPedido({ ROL: 'ADMIN' }, { vendedorId: 'X' }), true)
+  assert.equal(puedeModificarPedido({ ROL: 'DISEÑO' }, { vendedorId: 'X' }), true)
+})
