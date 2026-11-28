@@ -13,6 +13,7 @@ import ConversacionPanel from '@/components/pedido/ConversacionPanel'
 import Origen from './Origen'
 import { capturarHojasComoJpg, pesoKbDataUrl, dejarPintar } from '@/lib/generarPdf'
 import { enviarHojaPedido, avisarHojaFallida } from '@/lib/aviso-padre'
+import { numeroWhatsapp, mensajeWhatsappPedido, urlWhatsapp, dataUrlABlob } from '@/lib/whatsappPedido'
 import { botonFactura } from '@/lib/facturas-visibilidad'
 import { MOTIVOS, etiquetaMotivo } from '@/lib/motivos-factura'
 import { pideConfirmacion } from '@/lib/estados-finales'
@@ -84,6 +85,10 @@ export default function PedidoDetailPage() {
   // Envío de la hoja al chat. Solo existe en modo embed (ver enviarHojaAlInbox).
   const [enviandoHoja, setEnviandoHoja] = useState(false)
   const [hojaEstado, setHojaEstado] = useState(null)   // { tipo: 'ok'|'error', texto }
+  // Botón 📱 WA: texto + foto de la hoja (27-nov-2026).
+  const [enviandoWa, setEnviandoWa] = useState(false)
+  const [waEstado, setWaEstado] = useState(null)       // { tipo, texto, url? }
+  const [waCompartir, setWaCompartir] = useState(null) // { archivo, texto } listo para compartir
 
   useEffect(() => {
     const stored = localStorage.getItem('mp_user')
@@ -190,16 +195,92 @@ export default function PedidoDetailPage() {
     finally { setGeneratingPdf(false) }
   }
 
-  function sendWhatsApp() {
+  // 📱 WA (27-nov-2026): texto + foto de la hoja del cliente. wa.me no lleva
+  // fotos, así que (ver lib/whatsappPedido.js):
+  //  - celular → menú de compartir del teléfono con la foto y el texto;
+  //  - computadora → la foto va al portapapeles y WhatsApp se abre con el texto;
+  //    allá se pega con Ctrl+V. Nunca en silencio: el aviso dice qué pasó.
+  async function sendWhatsApp() {
+    if (enviandoWa) return
     if (!cliente) { alert('No hay datos del cliente'); return }
-    const cel = (cliente.CELULAR || '').replace(/\D/g, '')
-    if (!cel) { alert('El cliente no tiene celular'); return }
-    const num = cel.startsWith('0') ? '593' + cel.slice(1) : '593' + cel
-    const msg = encodeURIComponent(
-      `Hola ${cliente.NOMBRE} 👋\n\n¡Tu pedido *${pedido.PEDIDO_ID}* ha sido registrado! 🎉\n\n` +
-      `💰 Total: $${parseFloat(pedido.MONTO_TOTAL||0).toFixed(2)}\n\nGracias por tu compra 🍊`
-    )
-    window.open(`https://wa.me/${num}?text=${msg}`, '_blank')
+    const num = numeroWhatsapp(cliente.CELULAR)
+    if (!num) { alert('El cliente no tiene celular'); return }
+    const texto = mensajeWhatsappPedido({ cliente, pedido })
+    const url = urlWhatsapp(num, texto)
+    const ids = paginarItemsCliente(items).map((_, i) => `pdf-gracias-${i}`)
+    const capturar = async () => { await dejarPintar(); return capturarHojasComoJpg(ids) }
+    const esCelular = typeof window.matchMedia === 'function'
+      && window.matchMedia('(pointer: coarse)').matches && typeof navigator.share === 'function'
+
+    setEnviandoWa(true); setWaEstado(null); setWaCompartir(null)
+    try {
+      if (!ids.length) { window.open(url, '_blank'); setWaEstado({ tipo: 'error', texto: '⚠️ Este pedido no tiene hoja: se abrió WhatsApp solo con el texto.' }); return }
+
+      if (esCelular) {
+        const jpg = await capturar()
+        const archivo = new File([await dataUrlABlob(jpg)], `${pedido.PEDIDO_ID}.jpg`, { type: 'image/jpeg' })
+        if (!navigator.canShare?.({ files: [archivo] })) {
+          window.open(url, '_blank')
+          setWaEstado({ tipo: 'error', texto: '⚠️ Este celular no deja compartir fotos desde el navegador: se abrió WhatsApp solo con el texto. Manda la hoja con ⬇️ PDF.' })
+          return
+        }
+        await compartirEnCelular({ archivo, texto })
+        return
+      }
+
+      // Computadora. El portapapeles se pide YA (dentro del clic) con la foto
+      // como promesa: si se espera a tenerla, el navegador niega el permiso.
+      let copiada = false, motivo = ''
+      try {
+        if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) throw new Error('este navegador no copia fotos')
+        const png = capturar().then(jpg => dataUrlABlob(jpg, 'image/png'))
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+        copiada = true
+      } catch (e) { motivo = e?.message || 'error desconocido' }
+
+      let descargada = false
+      if (!copiada) {
+        // Plan B: bajar la foto para arrastrarla al chat.
+        try {
+          const a = document.createElement('a')
+          a.href = await capturar(); a.download = `${pedido.PEDIDO_ID}.jpg`; a.click()
+          descargada = true
+        } catch (e) { motivo += ` · ${e?.message || 'tampoco se pudo descargar'}` }
+      }
+      const ventana = window.open(url, '_blank')
+      const enlace = ventana ? null : url   // ventana bloqueada: queda el enlace
+      setWaEstado(copiada
+        ? { tipo: 'ok', texto: '📋 Hoja copiada. En el chat de WhatsApp pégala con Ctrl+V: el texto queda como pie de foto.', url: enlace }
+        : descargada
+          ? { tipo: 'error', texto: `⚠️ No se pudo copiar la foto (${motivo}). Se descargó la hoja: arrástrala al chat de WhatsApp.`, url: enlace }
+          : { tipo: 'error', texto: `⚠️ NO se preparó la foto (${motivo}). WhatsApp va solo con el texto.`, url: enlace })
+    } catch (e) {
+      window.open(url, '_blank')
+      setWaEstado({ tipo: 'error', texto: `⚠️ NO se preparó la foto — se abrió WhatsApp solo con el texto. ${e?.message || 'error desconocido'}` })
+    } finally {
+      setEnviandoWa(false)
+    }
+  }
+
+  // Compartir pide un toque "fresco": si la foto tardó en prepararse, el
+  // teléfono lo niega y queda un botón para tocar de nuevo (ya con la foto lista).
+  async function compartirEnCelular({ archivo, texto }) {
+    // Algunas versiones de WhatsApp botan el texto al recibir una foto: queda
+    // copiado por si hay que pegarlo.
+    navigator.clipboard?.writeText?.(texto).catch(() => {})
+    try {
+      await navigator.share({ files: [archivo], text: texto })
+      setWaCompartir(null)
+      setWaEstado({ tipo: 'ok', texto: '✅ Listo. Si el texto no salió junto a la foto, ya está copiado: pégalo en el chat.' })
+    } catch (e) {
+      if (e?.name === 'AbortError') { setWaCompartir(null); setWaEstado(null); return }
+      if (e?.name === 'NotAllowedError') {
+        setWaCompartir({ archivo, texto })
+        setWaEstado({ tipo: 'ok', texto: '📸 La hoja está lista. Toca «Compartir por WhatsApp» y elige el chat del cliente.' })
+        return
+      }
+      setWaEstado({ tipo: 'error', texto: `⚠️ No se pudo compartir: ${e?.message || 'error desconocido'}` })
+    }
   }
 
   // Manda la hoja del cliente al inbox como foto, para que la reenvíe por
@@ -1181,10 +1262,33 @@ export default function PedidoDetailPage() {
             </div>
           </>
         )}
+        {/* Aviso del botón 📱 WA: qué pasó con la foto (nunca en silencio). */}
+        {waEstado && (
+          <div role={waEstado.tipo === 'ok' ? 'status' : 'alert'} className={`mb-2 rounded-xl px-3 py-2 text-xs border flex flex-wrap items-center gap-2 ${
+            waEstado.tipo === 'ok'
+              ? 'bg-green-500/10 border-green-500/30 text-green-400'
+              : 'bg-red-500/10 border-red-500/30 text-red-400'
+          }`}>
+            <span className="flex-1 min-w-0">{waEstado.texto}</span>
+            {waEstado.url && (
+              <a href={waEstado.url} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Abrir WhatsApp</a>
+            )}
+            {waCompartir && (
+              <button onClick={() => compartirEnCelular(waCompartir)}
+                className="px-3 py-1.5 rounded-lg font-semibold text-white" style={{ backgroundColor: '#25D366' }}>
+                📤 Compartir por WhatsApp
+              </button>
+            )}
+            <button onClick={() => { setWaEstado(null); setWaCompartir(null) }} aria-label="Cerrar aviso" className="px-1 text-gray-400 hover:text-white">✕</button>
+          </div>
+        )}
         {/* Fila 1: acciones principales */}
         <div className="flex gap-2 mb-2">
           {!['DISEÑO','ESTAMPADO','SUBLIMACION','BORDADO','DESPACHO'].includes(user?.rol) && (
-            <button onClick={sendWhatsApp} className="btn-secondary flex-1 text-sm">📱 WA</button>
+            <button onClick={sendWhatsApp} disabled={enviandoWa} aria-busy={enviandoWa}
+              className="btn-secondary flex-1 text-sm disabled:opacity-60 disabled:cursor-wait">
+              {enviandoWa ? '⏳ Hoja…' : '📱 WA'}
+            </button>
           )}
           <button onClick={()=>setShowPdfPreview(true)} className="btn-secondary flex-1 text-sm">👁️ PDF</button>
           {user?.rol==='DESPACHO'&&pedido?.ESTADO_PEDIDO!=='COMPLETADO'&&(
