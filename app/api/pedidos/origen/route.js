@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { getSupabase } from '@/lib/supabase'
 import { sesionActual } from '@/lib/auth'
 import { getUsuarioById } from '@/lib/db/usuarios'
+import { puedeAbrirPedido } from '@/lib/tiendasUsuario'
 
 // Roles de producción: ven el pedido para fabricarlo, no para saber de dónde
 // vino. La pantalla ya les oculta el acordeón; esto lo hace cumplir del lado del
@@ -53,9 +54,9 @@ export async function GET(req) {
       }
       // Un VENDEDOR solo ve el origen de SUS pedidos. VENDEDOR_ID guarda el
       // nombre o el uuid según cómo se creó, así que se comparan los dos.
-      if (usuario?.ROL === 'VENDEDOR') {
-        const suyo = p.vendedor_id === usuario.USUARIO_ID || p.vendedor_id === usuario.NOMBRE
-        if (!suyo) return Response.json({ error: 'Este pedido es de otro vendedor' }, { status: 403 })
+      // Con VER_TODAS_LAS_VENTAS, los de todos de sus tiendas (como el Historial).
+      if (!puedeAbrirPedido(usuario, { vendedorId: p.vendedor_id, tiendaId: p.tienda_id })) {
+        return Response.json({ error: 'Este pedido es de otro vendedor' }, { status: 403 })
       }
     }
 

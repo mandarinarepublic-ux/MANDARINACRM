@@ -11,6 +11,7 @@ import { useEstadoPantalla, useScrollGuardado } from '@/lib/useEstadoPantalla'
 import AvisoFiltros from '@/components/AvisoFiltros'
 import BarraFiltros from '@/components/BarraFiltros'
 import { AREAS_FILTRABLES } from '@/lib/areas-filtrables'
+import { veTodasLasVentas } from '@/lib/tiendasUsuario'
 
 const ESTADOS = ['TODOS','PENDIENTE_FABRICA','EN_FABRICA','DESPACHO','COMPLETADO','ENTREGADO']
 // El guardado a mano de los filtros se fue a lib/estado-pantalla.js, compartido
@@ -194,6 +195,8 @@ export default function HistorialPage() {
   }
 
   const isYAW = user?.rol === 'VENDEDOR_YAW'
+  // Quien ve las ventas de TODOS necesita saber de quién es cada una (27-nov-2026).
+  const muestraVendedor = (user?.rol !== 'VENDEDOR' && !isYAW) || veTodasLasVentas(user)
   const hayFecha = fechaDesde || fechaHasta
 
   // Ya viene filtrado por el servidor: estado, tienda, pago, fechas, búsqueda y
@@ -433,7 +436,7 @@ export default function HistorialPage() {
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className="font-mono text-sm font-medium text-white">{p.PEDIDO_ID}</span>
                             {!isYAW && <span className="text-gray-600 text-xs">{p.TIENDA_ID === 'MANDARINA' ? '🍊' : '🏪'}</span>}
-                            {user?.rol !== 'VENDEDOR' && !isYAW && p.VENDEDOR_ID && (
+                            {muestraVendedor && p.VENDEDOR_ID && (
                               <span className="text-xs text-gray-600 font-mono">{p.VENDEDOR_ID}</span>
                             )}
                           </div>

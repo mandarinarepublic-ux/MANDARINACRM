@@ -11,6 +11,7 @@ import { createPago } from '@/lib/db/pagos'
 import { recalcTotalesSeguro } from '@/lib/db/totales'
 import { notificarGuiaDespachada } from '@/lib/telegram'
 import { ESTADOS_QUE_EXIGEN_PAGO, transferenciaSinConfirmar } from '@/lib/transferenciaTienda'
+import { puedeAbrirPedido } from '@/lib/tiendasUsuario'
 
 // Detalle de UN pedido (join acotado a ese id vía getPedidoById). Las pantallas
 // de detalle y edición antes bajaban la lista COMPLETA con join de 5 tablas solo
@@ -28,9 +29,9 @@ export async function GET(req, { params }) {
     const sesionId = sesion?.id
     if (sesionId) {
       const usuario = await getUsuarioById(sesionId).catch(() => null)
-      if (usuario?.ROL === 'VENDEDOR') {
-        const suyo = pedido.VENDEDOR_ID === usuario.USUARIO_ID || pedido.VENDEDOR_ID === usuario.NOMBRE
-        if (!suyo) return Response.json({ error: 'Este pedido es de otro vendedor' }, { status: 403 })
+      // Con VER_TODAS_LAS_VENTAS abre los de todos, de sus tiendas (como el Historial).
+      if (!puedeAbrirPedido(usuario, { vendedorId: pedido.VENDEDOR_ID, tiendaId: pedido.TIENDA_ID })) {
+        return Response.json({ error: 'Este pedido es de otro vendedor' }, { status: 403 })
       }
     }
 
